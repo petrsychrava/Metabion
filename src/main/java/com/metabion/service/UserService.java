@@ -26,6 +26,7 @@ import java.util.Locale;
 public class UserService {
 
     private static final Duration VERIFICATION_TTL = Duration.ofHours(48);
+    private static final String DEFAULT_USER_ROLE = "PATIENT";
 
     private final UserRepository users;
     private final VerificationTokenRepository verifTokens;
@@ -45,6 +46,7 @@ public class UserService {
 
     public void register(RegisterRequest req) {
         var email = normalize(req.email());
+        // BCrypt has a limit of 72 bytes for the password
         if (req.password().getBytes(StandardCharsets.UTF_8).length > 72) {
             throw new ValidationException("password exceeds 72 bytes");
         }
@@ -57,7 +59,7 @@ public class UserService {
         var user = new User();
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(req.password()));
-        user.addRole("PATIENT");
+        user.addRole(DEFAULT_USER_ROLE);
         users.save(user);
 
         issueVerificationToken(user);
