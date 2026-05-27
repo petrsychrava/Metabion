@@ -32,7 +32,7 @@ public class UserService {
     private final VerificationTokenRepository verifTokens;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
-    private final SecureRandom random = new SecureRandom();
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     public UserService(UserRepository users,
                        VerificationTokenRepository verifTokens,
@@ -100,7 +100,7 @@ public class UserService {
 
     private String generateToken() {
         var bytes = new byte[32];
-        random.nextBytes(bytes);
+        RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
