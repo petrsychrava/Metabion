@@ -19,10 +19,11 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 public class SecurityConfig {
 
     private static final String[] PUBLIC_AUTH_POSTS = {
-        "/api/auth/register",
-        "/api/auth/login",
-        "/api/auth/forgot-password",
-        "/api/auth/reset-password"
+            "/api/auth/register",
+            "/api/auth/login",
+            "/api/auth/forgot-password",
+            "/api/auth/reset-password",
+            "/api/auth/verify"
     };
 
     @Bean
@@ -45,7 +46,6 @@ public class SecurityConfig {
             )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
-                .requestMatchers("/api/auth/verify").permitAll()
                 .requestMatchers("/api/auth/logout").authenticated()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().denyAll()
