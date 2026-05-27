@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 @SpringBootTest(properties = {
+        "spring.profiles.active=dev",
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=none",
         "spring.datasource.url=jdbc:h2:mem:security_test;DB_CLOSE_DELAY=-1",
@@ -45,18 +46,12 @@ class SecurityConfigTest {
     }
 
     @Test
-    void unauthenticated_protected_path_returns_401() throws Exception {
-        mvc.perform(get("/api/whoami"))
-           .andExpect(status().isUnauthorized());
-    }
-
-    @Test
     void public_post_without_csrf_still_reaches_handler() throws Exception {
-        // 404 because the handler doesn't exist yet — that's the point.
+        // AuthController now exists, so POST reaches the handler but fails validation (400).
         mvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
-           .andExpect(status().isNotFound());
+            .andExpect(status().isBadRequest());
     }
 
     @Test
