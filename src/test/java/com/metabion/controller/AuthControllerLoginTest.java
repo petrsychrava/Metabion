@@ -2,10 +2,7 @@ package com.metabion.controller;
 
 import com.metabion.dto.LoginRequest;
 import com.metabion.dto.LoginResponse;
-import com.metabion.service.MfaChallengeService;
 import com.metabion.service.SecurityService;
-import com.metabion.service.UserService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -15,20 +12,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AuthControllerLoginTest {
 
     @Mock
-    private UserService userService;
-
-    @Mock
     private SecurityService securityService;
-
-    @Mock
-    private MfaChallengeService mfaChallengeService;
 
     @InjectMocks
     private AuthController authController;
@@ -38,7 +29,10 @@ class AuthControllerLoginTest {
         var request = new LoginRequest("user@example.com", "password123");
         var response = LoginResponse.authenticated("user@example.com", List.of("USER"));
 
-        when(securityService.login(any(LoginRequest.class), any(), any()))
+        when(securityService.login(
+                argThat(r -> r != null && "user@example.com".equals(r.email())),
+                any(jakarta.servlet.http.HttpServletRequest.class),
+                any(jakarta.servlet.http.HttpServletResponse.class)))
                 .thenReturn(response);
 
         var result = authController.login(request, mock(jakarta.servlet.http.HttpServletRequest.class),
@@ -49,14 +43,20 @@ class AuthControllerLoginTest {
         assertThat(result.getBody().status()).isEqualTo("AUTHENTICATED");
         assertThat(result.getBody().email()).isEqualTo("user@example.com");
 
-        verify(securityService).login(any(LoginRequest.class), any(), any());
+        verify(securityService).login(
+                argThat(r -> r != null && "user@example.com".equals(r.email())),
+                any(jakarta.servlet.http.HttpServletRequest.class),
+                any(jakarta.servlet.http.HttpServletResponse.class));
     }
 
     @Test
     void loginReturns401OnBadCredentials() {
         var request = new LoginRequest("user@example.com", "wrongpassword");
 
-        when(securityService.login(any(LoginRequest.class), any(), any()))
+        when(securityService.login(
+                argThat(r -> r != null && "user@example.com".equals(r.email())),
+                any(jakarta.servlet.http.HttpServletRequest.class),
+                any(jakarta.servlet.http.HttpServletResponse.class)))
                 .thenThrow(new org.springframework.security.authentication.BadCredentialsException("Invalid credentials"));
 
         var result = authController.login(request, mock(jakarta.servlet.http.HttpServletRequest.class),
@@ -64,7 +64,10 @@ class AuthControllerLoginTest {
 
         assertThat(result.getStatusCode().value()).isEqualTo(401);
 
-        verify(securityService).login(any(LoginRequest.class), any(), any());
+        verify(securityService).login(
+                argThat(r -> r != null && "user@example.com".equals(r.email())),
+                any(jakarta.servlet.http.HttpServletRequest.class),
+                any(jakarta.servlet.http.HttpServletResponse.class));
     }
 
     @Test
@@ -73,7 +76,10 @@ class AuthControllerLoginTest {
         var response = LoginResponse.mfaRequired("admin@example.com",
                 List.of("ADMIN"), "challenge-123", List.of("totp"));
 
-        when(securityService.login(any(LoginRequest.class), any(), any()))
+        when(securityService.login(
+                argThat(r -> r != null && "admin@example.com".equals(r.email())),
+                any(jakarta.servlet.http.HttpServletRequest.class),
+                any(jakarta.servlet.http.HttpServletResponse.class)))
                 .thenReturn(response);
 
         var result = authController.login(request, mock(jakarta.servlet.http.HttpServletRequest.class),

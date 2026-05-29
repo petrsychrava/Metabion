@@ -7,16 +7,15 @@ import com.metabion.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.transaction.Transactional;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -33,7 +32,7 @@ public class SecurityService {
      * When the email is not found, we still run BCrypt against this hash so that
      * the response time is the same whether the account exists or not.
      */
-    private static final String DUMMY_HASH =
+    public static final String DUMMY_HASH =
         "$2a$12$WApznUPhDubN0eFkT2PMeOlxBk2M3PqL8RKT3NlbWgSgY8w5kIi2y";
 
     private final UserRepository users;
@@ -52,7 +51,7 @@ public class SecurityService {
         this.holderStrategy = SecurityContextHolder.getContextHolderStrategy();
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = BadCredentialsException.class)
     public LoginResponse login(LoginRequest req,
                                HttpServletRequest httpReq,
                                HttpServletResponse httpResp) {
@@ -65,6 +64,9 @@ public class SecurityService {
 
         if (userOpt.isEmpty() || !passwordOk) {
             userOpt.ifPresent(this::recordFailure);
+            if (userOpt.isPresent()) {
+                users.flush();
+            }
             throw new BadCredentialsException("Invalid credentials");
         }
 
@@ -80,6 +82,7 @@ public class SecurityService {
         // Success — clear lockout state.
         user.setFailedLoginAttempts(0);
         user.setLockedUntil(null);
+        users.save(user);
 
         if (mfa.isRequired(user)) {
             var challengeId = UUID.randomUUID().toString();

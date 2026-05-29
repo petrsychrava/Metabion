@@ -2,7 +2,6 @@ package com.metabion.service;
 
 import com.metabion.domain.User;
 import com.metabion.dto.LoginRequest;
-import com.metabion.dto.LoginResponse;
 import com.metabion.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -16,7 +15,6 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -71,9 +69,10 @@ class SecurityServiceTest {
                 .hasMessage("Invalid credentials");
 
         // Dummy hash should have been used for timing equalization.
-        verify(encoder).matches(eq("password"), eq(
-            "$2a$12$WApznUPhDubN0eFkT2PMeOlxBk2M3PqL8RKT3NlbWgSgY8w5kIi2y"));
+        verify(encoder).matches(eq("password"), eq(SecurityService.DUMMY_HASH));
+        // No user found, so no save or flush.
         verify(users, never()).save(any());
+        verify(users, never()).flush();
     }
 
     @Test
@@ -87,6 +86,8 @@ class SecurityServiceTest {
                 .hasMessage("Invalid credentials");
 
         assertThat(testUser.getFailedLoginAttempts()).isEqualTo(1);
+        // Flush ensures lockout state is persisted to database.
+        verify(users).flush();
     }
 
     @Test
@@ -100,7 +101,9 @@ class SecurityServiceTest {
                 .isInstanceOf(BadCredentialsException.class)
                 .hasMessage("Invalid credentials");
 
+        // Password was correct but user disabled — no save or flush.
         verify(users, never()).save(any());
+        verify(users, never()).flush();
     }
 
     @Test
@@ -114,7 +117,9 @@ class SecurityServiceTest {
                 .isInstanceOf(BadCredentialsException.class)
                 .hasMessage("Invalid credentials");
 
+        // Password was correct but user locked — no save or flush.
         verify(users, never()).save(any());
+        verify(users, never()).flush();
     }
 
     @Test
@@ -133,9 +138,10 @@ class SecurityServiceTest {
         assertThat(response.challengeId()).isNull();
         assertThat(response.methods()).isNull();
 
-        // Failure state should be cleared.
+        // Failure state should be cleared and persisted.
         assertThat(testUser.getFailedLoginAttempts()).isEqualTo(0);
         assertThat(testUser.getLockedUntil()).isNull();
+        verify(users).save(testUser);
     }
 
     @Test
@@ -151,6 +157,7 @@ class SecurityServiceTest {
 
         assertThat(testUser.getFailedLoginAttempts()).isEqualTo(0);
         assertThat(testUser.getLockedUntil()).isNull();
+        verify(users).save(testUser);
     }
 
     @Test
@@ -165,6 +172,8 @@ class SecurityServiceTest {
         assertThat(response.status()).isEqualTo("MFA_REQUIRED");
         assertThat(response.challengeId()).isNotNull();
         assertThat(response.methods()).containsExactly("totp");
+        // MFA path still persists cleared failure state before returning.
+        verify(users).save(testUser);
     }
 
     @Test
@@ -200,5 +209,27 @@ class SecurityServiceTest {
         securityService.logout(httpReq, httpResp);
 
         verify(httpResp).addCookie(any());
+    }
+
+    @Test
+    void loginSucceedsAfterLockoutExpires() {
+        // User was locked but lockout period has expired
+        testUser.setFailedLoginAttempts(5);
+        testUser.setLockedUntil(Instant.now().minusSeconds(300)); // expired 5 min ago
+
+        var req = new LoginRequest("test@example.com", "correct");
+        when(users.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(encoder.matches("correct", testUser.getPasswordHash())).thenReturn(true);
+        when(mfa.isRequired(testUser)).thenReturn(false);
+        when(httpReq.getSession(true)).thenReturn(mock(jakarta.servlet.http.HttpSession.class));
+
+        var response = securityService.login(req, httpReq, httpResp);
+
+        assertThat(response.status()).isEqualTo("AUTHENTICATED");
+        assertThat(response.email()).isEqualTo("test@example.com");
+        // Lockout state should be cleared on successful login
+        assertThat(testUser.getFailedLoginAttempts()).isEqualTo(0);
+        assertThat(testUser.getLockedUntil()).isNull();
+        verify(users).save(testUser);
     }
 }
