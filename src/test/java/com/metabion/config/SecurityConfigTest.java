@@ -78,4 +78,40 @@ class SecurityConfigTest {
                 .andExpect(header().string("Strict-Transport-Security",
                         containsString("max-age=31536000")));
     }
+
+    @Test
+    void mvc_public_get_routes_are_accessible() throws Exception {
+        mvc.perform(get("/login")).andExpect(status().isOk());
+        mvc.perform(get("/register")).andExpect(status().isOk());
+        mvc.perform(get("/forgot-password")).andExpect(status().isOk());
+        mvc.perform(get("/reset-password").param("token", "abc")).andExpect(status().isOk());
+    }
+
+    @Test
+    void app_requires_authentication() throws Exception {
+        mvc.perform(get("/app"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void mvc_post_login_without_csrf_is_forbidden() throws Exception {
+        mvc.perform(post("/login")
+                        .param("email", "user@example.com")
+                        .param("password", "SecurePass123"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void mvc_post_register_without_csrf_is_forbidden() throws Exception {
+        mvc.perform(post("/register")
+                        .param("email", "user@example.com")
+                        .param("password", "SecurePass123"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void static_css_is_public() throws Exception {
+        mvc.perform(get("/css/app.css"))
+                .andExpect(status().isOk());
+    }
 }

@@ -2,6 +2,7 @@ package com.metabion.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -31,6 +32,22 @@ public class SecurityConfig {
             "/api/auth/login",
             "/api/auth/forgot-password",
             "/api/auth/reset-password"
+    };
+
+    private static final String[] PUBLIC_MVC_GETS = {
+            "/",
+            "/login",
+            "/register",
+            "/verify",
+            "/forgot-password",
+            "/reset-password"
+    };
+
+    private static final String[] PUBLIC_STATIC = {
+            "/css/**",
+            "/js/**",
+            "/images/**",
+            "/favicon.ico"
     };
 
     @Bean
@@ -76,8 +93,11 @@ public class SecurityConfig {
                         .maximumSessions(3)
                 )
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(PUBLIC_STATIC).permitAll()
+                        .requestMatchers(HttpMethod.GET, PUBLIC_MVC_GETS).permitAll()
                         .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
                         .requestMatchers("/api/auth/verify").permitAll()
+                        .requestMatchers("/app", "/logout").authenticated()
                         .requestMatchers("/api/auth/logout").authenticated()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().denyAll()
