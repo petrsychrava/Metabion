@@ -133,6 +133,11 @@ public class SecurityService {
         context.setAuthentication(auth);
         holderStrategy.setContext(context);
 
+        var existingSession = req.getSession(false);
+        if (existingSession != null) {
+            req.changeSessionId();
+        }
+
         // Persist the SecurityContext into HttpSession so it survives across requests.
         contextRepository.saveContext(context, req, resp);
 

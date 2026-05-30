@@ -30,9 +30,9 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<Void> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<Map<String, String>> register(@Valid @RequestBody RegisterRequest request) {
         userService.register(request);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(Map.of("status", "ok"));
     }
 
     @GetMapping("/verify")
