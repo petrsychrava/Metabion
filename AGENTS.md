@@ -126,6 +126,7 @@ Security-sensitive changes need extra care and focused verification.
 ## Working Conventions for Agents
 
 - Read the relevant code before proposing or making changes.
+- Prefer IntelliJ IDEA MCP tools for project file reading, navigation, and manipulation when available; fall back to shell tools only when IDEA MCP is unavailable, incomplete, or less suitable for the task.
 - Respect existing user changes in the worktree; do not revert unrelated modifications.
 - Prefer small, focused edits over broad refactors.
 - Keep responses concise and include the verification command and result when code was changed.
