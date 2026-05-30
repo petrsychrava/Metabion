@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head(${title} + ' - Metabion')}"></head>
+<body>
+<main class="page">
+    <section class="panel auth-panel">
+        <div th:replace="~{layout :: brand}"></div>
+        <h1 th:text="${title}">Result</h1>
+        <p class="muted" th:text="${message}">Status message.</p>
+        <a class="button-link" th:href="@{${href}}" th:text="${action}">Continue</a>
+    </section>
+</main>
+</body>
+</html>
