@@ -10,11 +10,15 @@ import com.metabion.service.SecurityService;
 import com.metabion.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -59,7 +63,7 @@ public class WebAuthController {
             model.addAttribute("loginForm", new LoginForm(email, ""));
             model.addAttribute("error", "Additional verification is not available in this web interface yet.");
             return "login";
-        } catch (RuntimeException ex) {
+        } catch (AuthenticationException ex) {
             model.addAttribute("loginForm", new LoginForm(email, ""));
             model.addAttribute("error", "Invalid email or password.");
             return "login";
@@ -76,10 +80,13 @@ public class WebAuthController {
     }
 
     @PostMapping("/register")
-    public String registerSubmit(@RequestParam String email,
-                                 @RequestParam String password,
+    public String registerSubmit(@Valid @ModelAttribute("registerForm") RegisterRequest registerForm,
+                                 BindingResult bindingResult,
                                  Model model) {
-        userService.register(new RegisterRequest(email, password));
+        if (bindingResult.hasErrors()) {
+            return "register";
+        }
+        userService.register(registerForm);
         result(model, "Check your email", "If the address can be registered, a verification link has been sent.",
                 "/login", "Sign in");
         return "result";
@@ -123,11 +130,15 @@ public class WebAuthController {
     }
 
     @PostMapping("/reset-password")
-    public String resetPasswordSubmit(@RequestParam String token,
-                                      @RequestParam String newPassword,
+    public String resetPasswordSubmit(@Valid @ModelAttribute("resetPasswordForm") ResetPasswordRequest resetPasswordForm,
+                                      BindingResult bindingResult,
                                       Model model) {
+        if (bindingResult.hasErrors()) {
+            model.addAttribute("token", resetPasswordForm.token());
+            return "reset-password";
+        }
         try {
-            userService.resetPassword(new ResetPasswordRequest(token, newPassword));
+            userService.resetPassword(resetPasswordForm);
             result(model, "Password reset", "Your password has been changed. You can now sign in.",
                     "/login", "Sign in");
         } catch (InvalidTokenException ex) {

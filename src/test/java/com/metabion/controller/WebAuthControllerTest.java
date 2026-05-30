@@ -17,9 +17,11 @@ import org.springframework.web.servlet.view.RedirectView;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -170,6 +172,17 @@ class WebAuthControllerTest {
     }
 
     @Test
+    void post_login_unexpected_runtime_exception_propagates() {
+        when(securityService.login(any(), any(), any()))
+                .thenThrow(new IllegalStateException("session store unavailable"));
+
+        assertThatThrownBy(() -> mvc.perform(post("/login")
+                        .param("email", "user@example.com")
+                        .param("password", "SecurePass123")))
+                .hasCauseInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void post_register_delegates_and_shows_check_email() throws Exception {
         mvc.perform(post("/register")
                         .param("email", "new@example.com")
@@ -180,6 +193,30 @@ class WebAuthControllerTest {
 
         verify(userService).register(argThat(r -> "new@example.com".equals(r.email())
                 && "SecurePass123".equals(r.password())));
+    }
+
+    @Test
+    void post_register_with_short_password_rerenders_form_and_does_not_call_service() throws Exception {
+        mvc.perform(post("/register")
+                        .param("email", "new@example.com")
+                        .param("password", "short"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("register"))
+                .andExpect(model().attributeHasFieldErrors("registerForm", "password"));
+
+        verify(userService, never()).register(any());
+    }
+
+    @Test
+    void post_register_with_malformed_email_rerenders_form_and_does_not_call_service() throws Exception {
+        mvc.perform(post("/register")
+                        .param("email", "not-an-email")
+                        .param("password", "SecurePass123"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("register"))
+                .andExpect(model().attributeHasFieldErrors("registerForm", "email"));
+
+        verify(userService, never()).register(any());
     }
 
     @Test
@@ -224,6 +261,19 @@ class WebAuthControllerTest {
 
         verify(userService).resetPassword(argThat(r -> "reset-token".equals(r.token())
                 && "SecurePass123".equals(r.newPassword())));
+    }
+
+    @Test
+    void post_reset_password_with_short_password_rerenders_form_and_does_not_call_service() throws Exception {
+        mvc.perform(post("/reset-password")
+                        .param("token", "reset-token")
+                        .param("newPassword", "short"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("reset-password"))
+                .andExpect(model().attribute("token", "reset-token"))
+                .andExpect(model().attributeHasFieldErrors("resetPasswordForm", "newPassword"));
+
+        verify(userService, never()).resetPassword(any());
     }
 
     @Test
