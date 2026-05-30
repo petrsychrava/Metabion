@@ -43,6 +43,13 @@ public class SecurityConfig {
             "/reset-password"
     };
 
+    private static final String[] PUBLIC_MVC_POSTS = {
+            "/login",
+            "/register",
+            "/forgot-password",
+            "/reset-password"
+    };
+
     private static final String[] PUBLIC_STATIC = {
             "/css/**",
             "/js/**",
@@ -95,6 +102,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_STATIC).permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_MVC_GETS).permitAll()
+                        .requestMatchers(HttpMethod.POST, PUBLIC_MVC_POSTS).permitAll()
                         .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
                         .requestMatchers("/api/auth/verify").permitAll()
                         .requestMatchers("/app", "/logout").authenticated()

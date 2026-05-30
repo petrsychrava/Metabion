@@ -1,11 +1,21 @@
 package com.metabion.config;
 
+import com.metabion.dto.LoginResponse;
+import com.metabion.service.SecurityService;
+import com.metabion.service.UserService;
+
+import java.util.List;
+
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import jakarta.servlet.Filter;
@@ -38,6 +48,12 @@ class SecurityConfigTest {
 
     @MockitoBean
     FindByIndexNameSessionRepository<Session> sessions;
+
+    @MockitoBean
+    UserService userService;
+
+    @MockitoBean
+    SecurityService securityService;
 
     private MockMvc mvc;
 
@@ -107,6 +123,37 @@ class SecurityConfigTest {
                         .param("email", "user@example.com")
                         .param("password", "SecurePass123"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void mvc_post_register_with_csrf_reaches_controller() throws Exception {
+        mvc.perform(post("/register")
+                        .with(csrf())
+                        .param("email", "user@example.com")
+                        .param("password", "SecurePass123"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("result"));
+
+        verify(userService).register(any());
+    }
+
+    @Test
+    void mvc_post_login_with_csrf_reaches_controller() throws Exception {
+        when(securityService.login(any(), any(), any()))
+                .thenReturn(LoginResponse.mfaRequired(
+                        "user@example.com",
+                        List.of("PATIENT"),
+                        "challenge-id",
+                        List.of("totp")));
+
+        mvc.perform(post("/login")
+                        .with(csrf())
+                        .param("email", "user@example.com")
+                        .param("password", "SecurePass123"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("login"));
+
+        verify(securityService).login(any(), any(), any());
     }
 
     @Test
