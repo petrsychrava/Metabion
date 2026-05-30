@@ -28,7 +28,7 @@ public class SmtpEmailService implements EmailService {
         msg.setTo(to);
         msg.setSubject("Verify your Metabion account");
         msg.setText("Click to verify (link expires in 48 hours):\n\n" +
-                    baseUrl + "/api/auth/verify?token=" +
+                    baseUrl + "/verify?token=" +
                     URLEncoder.encode(token, StandardCharsets.UTF_8));
         mail.send(msg);
     }
