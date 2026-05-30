@@ -12,6 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
@@ -50,7 +51,7 @@ class AuthControllerLoginTest {
     }
 
     @Test
-    void loginReturns401OnBadCredentials() {
+    void loginPropagatesBadCredentialsToGlobalHandler() {
         var request = new LoginRequest("user@example.com", "wrongpassword");
 
         when(securityService.login(
@@ -59,10 +60,9 @@ class AuthControllerLoginTest {
                 any(jakarta.servlet.http.HttpServletResponse.class)))
                 .thenThrow(new org.springframework.security.authentication.BadCredentialsException("Invalid credentials"));
 
-        var result = authController.login(request, mock(jakarta.servlet.http.HttpServletRequest.class),
-                mock(jakarta.servlet.http.HttpServletResponse.class));
-
-        assertThat(result.getStatusCode().value()).isEqualTo(401);
+        assertThatThrownBy(() -> authController.login(request, mock(jakarta.servlet.http.HttpServletRequest.class),
+                mock(jakarta.servlet.http.HttpServletResponse.class)))
+                .isInstanceOf(org.springframework.security.authentication.BadCredentialsException.class);
 
         verify(securityService).login(
                 argThat(r -> r != null && "user@example.com".equals(r.email())),

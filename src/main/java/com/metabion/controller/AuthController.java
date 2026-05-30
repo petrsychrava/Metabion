@@ -5,8 +5,6 @@ import com.metabion.dto.LoginRequest;
 import com.metabion.dto.LoginResponse;
 import com.metabion.dto.RegisterRequest;
 import com.metabion.dto.ResetPasswordRequest;
-import com.metabion.exception.InvalidTokenException;
-import com.metabion.exception.ValidationException;
 import com.metabion.service.SecurityService;
 import com.metabion.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,22 +31,14 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<Void> register(@Valid @RequestBody RegisterRequest request) {
-        try {
-            userService.register(request);
-            return ResponseEntity.status(HttpStatus.OK).build();
-        } catch (ValidationException e) {
-            return ResponseEntity.badRequest().build();
-        }
+        userService.register(request);
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/verify")
     public ResponseEntity<Void> verify(@RequestParam String token) {
-        try {
-            userService.verify(token);
-            return ResponseEntity.status(HttpStatus.OK).build();
-        } catch (InvalidTokenException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+        userService.verify(token);
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/forgot-password")
@@ -59,26 +49,16 @@ public class AuthController {
 
     @PostMapping("/reset-password")
     public ResponseEntity<Map<String, String>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        try {
-            userService.resetPassword(request);
-            return ResponseEntity.ok(Map.of("status", "password_reset"));
-        } catch (ValidationException e) {
-            return ResponseEntity.badRequest().build();
-        } catch (InvalidTokenException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+        userService.resetPassword(request);
+        return ResponseEntity.ok(Map.of("status", "password_reset"));
     }
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request,
                                                HttpServletRequest req,
                                                HttpServletResponse resp) {
-        try {
-            var loginResponse = securityService.login(request, req, resp);
-            return ResponseEntity.ok(loginResponse);
-        } catch (org.springframework.security.authentication.BadCredentialsException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+        var loginResponse = securityService.login(request, req, resp);
+        return ResponseEntity.ok(loginResponse);
     }
 
     @PostMapping("/logout")

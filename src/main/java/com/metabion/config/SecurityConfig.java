@@ -15,6 +15,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
@@ -53,46 +54,48 @@ public class SecurityConfig {
 
     @Bean
     public DaoAuthenticationProvider daoAuthenticationProvider(UserDetailsService userDetailsService,
-                                                              PasswordEncoder passwordEncoder) {
+                                                               PasswordEncoder passwordEncoder) {
         var provider = new DaoAuthenticationProvider(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder);
         return provider;
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, RateLimitingFilter rateLimitingFilter) throws Exception {
         http
-            .csrf(csrf -> csrf
-                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                .ignoringRequestMatchers(PUBLIC_AUTH_POSTS)
-                .ignoringRequestMatchers(req -> "GET".equalsIgnoreCase(req.getMethod()))
-            )
-            .sessionManagement(s -> s
-                .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
-                .sessionFixation(sf -> sf.changeSessionId())
-                .maximumSessions(3)
-            )
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
-                .requestMatchers("/api/auth/logout").authenticated()
-                .requestMatchers("/api/**").authenticated()
-                .anyRequest().denyAll()
-            )
-            .headers(headers -> headers
-                .httpStrictTransportSecurity(h -> h
-                    .includeSubDomains(true)
-                    .maxAgeInSeconds(31_536_000))
-                .frameOptions(frame -> frame.sameOrigin())
-                .contentTypeOptions(opts -> {})
-                .referrerPolicy(r -> r.policy(
-                    org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter
-                        .ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
-            )
-            .exceptionHandling(ex -> ex
-                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
-            .formLogin(form -> form.disable())
-            .httpBasic(basic -> basic.disable())
-            .logout(logout -> logout.disable());
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .ignoringRequestMatchers(PUBLIC_AUTH_POSTS)
+                        .ignoringRequestMatchers(req -> "GET".equalsIgnoreCase(req.getMethod()))
+                )
+                .sessionManagement(s -> s
+                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+                        .sessionFixation(sf -> sf.changeSessionId())
+                        .maximumSessions(3)
+                )
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
+                        .requestMatchers("/api/auth/logout").authenticated()
+                        .requestMatchers("/api/**").authenticated()
+                        .anyRequest().denyAll()
+                )
+                .headers(headers -> headers
+                        .httpStrictTransportSecurity(h -> h
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31_536_000))
+                        .frameOptions(frame -> frame.sameOrigin())
+                        .contentTypeOptions(opts -> {
+                        })
+                        .referrerPolicy(r -> r.policy(
+                                org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter
+                                        .ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                )
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
+                .formLogin(form -> form.disable())
+                .httpBasic(basic -> basic.disable())
+                .logout(logout -> logout.disable());
 
         return http.build();
     }

@@ -42,6 +42,7 @@ class AuthControllerRecoveryTest {
         validator.afterPropertiesSet();
         mvc = MockMvcBuilders
                 .standaloneSetup(new AuthController(userService, securityService))
+                .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
     }
@@ -89,7 +90,7 @@ class AuthControllerRecoveryTest {
     }
 
     @Test
-    void reset_password_invalid_token_returns_401() throws Exception {
+    void reset_password_invalid_token_returns_400() throws Exception {
         doThrow(new InvalidTokenException())
                 .when(userService).resetPassword(any(ResetPasswordRequest.class));
 
@@ -97,7 +98,8 @@ class AuthControllerRecoveryTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 new ResetPasswordRequest("bad-token", "NewPassword123"))))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_token"));
     }
 
     @Test
@@ -109,6 +111,7 @@ class AuthControllerRecoveryTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 new ResetPasswordRequest("token", "é".repeat(37)))))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("validation_failed"));
     }
 }

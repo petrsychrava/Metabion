@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -36,14 +37,13 @@ class AuthControllerTest {
     }
 
     @Test
-    void registerReturns400OnValidationException() {
+    void registerPropagatesValidationExceptionToGlobalHandler() {
         var request = new RegisterRequest("user@example.com", "SecurePass123");
         doThrow(new ValidationException("invalid input"))
                 .when(userService).register(any(RegisterRequest.class));
 
-        var response = authController.register(request);
-
-        assertThat(response.getStatusCode().value()).isEqualTo(400);
+        assertThatThrownBy(() -> authController.register(request))
+                .isInstanceOf(ValidationException.class);
     }
 
     @Test
@@ -57,34 +57,29 @@ class AuthControllerTest {
     }
 
     @Test
-    void verifyReturns401OnInvalidToken() {
+    void verifyPropagatesInvalidTokenToGlobalHandler() {
         doThrow(new InvalidTokenException())
                 .when(userService).verify(eq("badToken"));
 
-        var response = authController.verify("badToken");
-
-        assertThat(response.getStatusCode().value()).isEqualTo(401);
+        assertThatThrownBy(() -> authController.verify("badToken"))
+                .isInstanceOf(InvalidTokenException.class);
     }
 
     @Test
-    void verifyReturns401WhenTokenNotFound() {
+    void verifyPropagatesMissingTokenToGlobalHandler() {
         doThrow(new InvalidTokenException())
                 .when(userService).verify(eq("nonExistent"));
 
-        var response = authController.verify("nonExistent");
-
-        assertThat(response.getStatusCode().value()).isEqualTo(401);
+        assertThatThrownBy(() -> authController.verify("nonExistent"))
+                .isInstanceOf(InvalidTokenException.class);
     }
 
     @Test
-    void verifyReturns400WhenTokenIsNull() {
-        // The controller expects @RequestParam String token, which throws IllegalStateException if missing
-        // but when null is passed directly, it depends on the service behavior
+    void verifyPropagatesNullTokenToGlobalHandler() {
         doThrow(new InvalidTokenException())
                 .when(userService).verify(eq(null));
 
-        var response = authController.verify(null);
-
-        assertThat(response.getStatusCode().value()).isEqualTo(401);
+        assertThatThrownBy(() -> authController.verify(null))
+                .isInstanceOf(InvalidTokenException.class);
     }
 }
