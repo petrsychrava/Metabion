@@ -12,6 +12,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
+import org.springframework.session.FindByIndexNameSessionRepository;
+import org.springframework.session.Session;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -39,6 +42,9 @@ class LoginIntegrationTest {
 
     @Autowired
     PasswordEncoder passwordEncoder;
+
+    @MockitoBean
+    FindByIndexNameSessionRepository<Session> sessions;
 
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -118,16 +124,25 @@ class LoginIntegrationTest {
         var requestWithCorrectPassword = new LoginRequest("test@example.com", "test_password");
 
         for (int i = 0; i < 5; i++) {
+            var remoteAddr = "203.0.113." + i;
             mockMvc.perform(post("/api/auth/login")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(requestWithWrongPassword)))
+                            .content(objectMapper.writeValueAsString(requestWithWrongPassword))
+                            .with(req -> {
+                                req.setRemoteAddr(remoteAddr);
+                                return req;
+                            }))
                     .andExpect(status().isUnauthorized());
         }
 
         // 6th attempt with correct password should still fail (user is now locked)
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestWithCorrectPassword)))
+                        .content(objectMapper.writeValueAsString(requestWithCorrectPassword))
+                        .with(req -> {
+                            req.setRemoteAddr("203.0.113.250");
+                            return req;
+                        }))
                 .andExpect(status().isUnauthorized());
 
         // Verify user is actually locked in database

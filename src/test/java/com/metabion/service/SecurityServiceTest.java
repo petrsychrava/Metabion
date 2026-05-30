@@ -5,21 +5,28 @@ import com.metabion.dto.LoginRequest;
 import com.metabion.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -31,6 +38,9 @@ class SecurityServiceTest {
 
     @Mock
     private PasswordEncoder encoder;
+
+    @Mock
+    private AuthenticationManager authenticationManager;
 
     @Mock
     private MfaChallengeService mfa;
@@ -79,15 +89,15 @@ class SecurityServiceTest {
     void loginWithWrongPasswordThrowsBadCredentialsAndRecordsFailure() {
         var req = new LoginRequest("test@example.com", "wrong");
         when(users.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
-        when(encoder.matches("wrong", testUser.getPasswordHash())).thenReturn(false);
+        when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Invalid credentials"));
 
         assertThatThrownBy(() -> securityService.login(req, httpReq, httpResp))
                 .isInstanceOf(BadCredentialsException.class)
                 .hasMessage("Invalid credentials");
 
         assertThat(testUser.getFailedLoginAttempts()).isEqualTo(1);
-        // Flush ensures lockout state is persisted to database.
-        verify(users).flush();
+        // Failure state should be persisted.
+        verify(users).save(testUser);
     }
 
     @Test
@@ -101,7 +111,8 @@ class SecurityServiceTest {
                 .isInstanceOf(BadCredentialsException.class)
                 .hasMessage("Invalid credentials");
 
-        // Password was correct but user disabled — no save or flush.
+        // Password was correct but user disabled - no save or flush.
+        verify(authenticationManager, never()).authenticate(any());
         verify(users, never()).save(any());
         verify(users, never()).flush();
     }
@@ -117,7 +128,8 @@ class SecurityServiceTest {
                 .isInstanceOf(BadCredentialsException.class)
                 .hasMessage("Invalid credentials");
 
-        // Password was correct but user locked — no save or flush.
+        // Password was correct but user locked - no save or flush.
+        verify(authenticationManager, never()).authenticate(any());
         verify(users, never()).save(any());
         verify(users, never()).flush();
     }
@@ -126,9 +138,9 @@ class SecurityServiceTest {
     void loginWithValidCredentialsReturnsAuthenticated() {
         var req = new LoginRequest("test@example.com", "correct");
         when(users.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
-        when(encoder.matches("correct", testUser.getPasswordHash())).thenReturn(true);
+        when(authenticationManager.authenticate(any())).thenReturn(authenticatedUser());
         when(mfa.isRequired(testUser)).thenReturn(false);
-        when(httpReq.getSession(true)).thenReturn(mock(jakarta.servlet.http.HttpSession.class));
+        when(httpReq.getSession(anyBoolean())).thenReturn(mock(HttpSession.class));
 
         var response = securityService.login(req, httpReq, httpResp);
 
@@ -149,9 +161,9 @@ class SecurityServiceTest {
         testUser.setFailedLoginAttempts(3);
         var req = new LoginRequest("test@example.com", "correct");
         when(users.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
-        when(encoder.matches("correct", testUser.getPasswordHash())).thenReturn(true);
+        when(authenticationManager.authenticate(any())).thenReturn(authenticatedUser());
         when(mfa.isRequired(testUser)).thenReturn(false);
-        when(httpReq.getSession(true)).thenReturn(mock(jakarta.servlet.http.HttpSession.class));
+        when(httpReq.getSession(anyBoolean())).thenReturn(mock(HttpSession.class));
 
         securityService.login(req, httpReq, httpResp);
 
@@ -164,7 +176,7 @@ class SecurityServiceTest {
     void loginTriggersMfaWhenRequired() {
         var req = new LoginRequest("test@example.com", "correct");
         when(users.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
-        when(encoder.matches("correct", testUser.getPasswordHash())).thenReturn(true);
+        when(authenticationManager.authenticate(any())).thenReturn(authenticatedUser());
         when(mfa.isRequired(testUser)).thenReturn(true);
 
         var response = securityService.login(req, httpReq, httpResp);
@@ -178,10 +190,11 @@ class SecurityServiceTest {
 
     @Test
     void repeatedFailuresLockUserAfterFiveAttempts() {
+        when(users.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Invalid credentials"));
+
         for (int i = 1; i <= 5; i++) {
             var req = new LoginRequest("test@example.com", "wrong");
-            when(users.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
-            when(encoder.matches("wrong", testUser.getPasswordHash())).thenReturn(false);
 
             assertThatThrownBy(() -> securityService.login(req, httpReq, httpResp))
                     .isInstanceOf(BadCredentialsException.class);
@@ -193,7 +206,7 @@ class SecurityServiceTest {
 
     @Test
     void logoutInvalidatesSession() {
-        var session = mock(jakarta.servlet.http.HttpSession.class);
+        var session = mock(HttpSession.class);
         when(httpReq.getSession(false)).thenReturn(session);
 
         securityService.logout(httpReq, httpResp);
@@ -219,9 +232,9 @@ class SecurityServiceTest {
 
         var req = new LoginRequest("test@example.com", "correct");
         when(users.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
-        when(encoder.matches("correct", testUser.getPasswordHash())).thenReturn(true);
+        when(authenticationManager.authenticate(any())).thenReturn(authenticatedUser());
         when(mfa.isRequired(testUser)).thenReturn(false);
-        when(httpReq.getSession(true)).thenReturn(mock(jakarta.servlet.http.HttpSession.class));
+        when(httpReq.getSession(anyBoolean())).thenReturn(mock(HttpSession.class));
 
         var response = securityService.login(req, httpReq, httpResp);
 
@@ -231,5 +244,13 @@ class SecurityServiceTest {
         assertThat(testUser.getFailedLoginAttempts()).isEqualTo(0);
         assertThat(testUser.getLockedUntil()).isNull();
         verify(users).save(testUser);
+    }
+
+    private Authentication authenticatedUser() {
+        return UsernamePasswordAuthenticationToken.authenticated(
+                testUser.getEmail(),
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_USER"))
+        );
     }
 }

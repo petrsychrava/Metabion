@@ -1,14 +1,20 @@
 package com.metabion.service;
 
 import com.metabion.domain.AccountVerification;
+import com.metabion.domain.PasswordReset;
 import com.metabion.domain.User;
+import com.metabion.dto.ForgotPasswordRequest;
 import com.metabion.dto.RegisterRequest;
+import com.metabion.dto.ResetPasswordRequest;
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.exception.ValidationException;
+import com.metabion.repository.PasswordResetRepository;
 import com.metabion.repository.UserRepository;
 import com.metabion.repository.VerificationTokenRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.session.FindByIndexNameSessionRepository;
+import org.springframework.session.Session;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -20,38 +26,44 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @Transactional
 public class UserService {
 
     private static final Duration VERIFICATION_TTL = Duration.ofHours(48);
+    private static final Duration RESET_TTL = Duration.ofHours(24);
     private static final String DEFAULT_USER_ROLE = "PATIENT";
 
     private final UserRepository users;
     private final VerificationTokenRepository verifTokens;
+    private final PasswordResetRepository resetTokens;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
+    private final FindByIndexNameSessionRepository<? extends Session> sessions;
     private static final SecureRandom RANDOM = new SecureRandom();
 
     public UserService(UserRepository users,
                        VerificationTokenRepository verifTokens,
+                       PasswordResetRepository resetTokens,
                        EmailService emailService,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder,
+                       FindByIndexNameSessionRepository<? extends Session> sessions) {
         this.users = users;
         this.verifTokens = verifTokens;
+        this.resetTokens = resetTokens;
         this.emailService = emailService;
         this.passwordEncoder = passwordEncoder;
+        this.sessions = sessions;
     }
 
     public void register(RegisterRequest req) {
         var email = normalize(req.email());
-        // BCrypt has a limit of 72 bytes for the password
         if (req.password().getBytes(StandardCharsets.UTF_8).length > 72) {
             throw new ValidationException("password exceeds 72 bytes");
         }
 
-        // If the address is already taken, do nothing and return — caller sees the same generic 200.
         if (users.existsByEmail(email)) {
             return;
         }
@@ -68,7 +80,7 @@ public class UserService {
     public void verify(String tokenPlain) {
         var hash = sha256Hex(tokenPlain);
         var token = verifTokens.findByTokenHash(hash)
-            .orElseThrow(InvalidTokenException::new);
+                .orElseThrow(InvalidTokenException::new);
 
         if (token.isExpired() || token.isConsumed()) {
             throw new InvalidTokenException();
@@ -77,11 +89,51 @@ public class UserService {
         token.consume();
         var user = token.getUser();
         user.setEnabled(true);
-        // user and token saved via dirty checking
+    }
+
+    public void requestPasswordReset(ForgotPasswordRequest req) {
+        var email = normalize(req.email());
+        var user = users.findByEmail(email).orElse(null);
+        passwordEncoder.matches(generateToken(), SecurityService.DUMMY_HASH);
+        if (user == null) {
+            return;
+        }
+
+        resetTokens.markAllConsumedForUser(user.getId(), Instant.now());
+
+        var plain = generateToken();
+        var reset = new PasswordReset();
+        reset.setUser(user);
+        reset.setTokenHash(sha256Hex(plain));
+        reset.setExpiresAt(Instant.now().plus(RESET_TTL));
+        resetTokens.save(reset);
+
+        var recipient = user.getEmail();
+        CompletableFuture.runAsync(() -> emailService.sendPasswordReset(recipient, plain));
+    }
+
+    public void resetPassword(ResetPasswordRequest req) {
+        if (req.newPassword().getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new ValidationException("password exceeds 72 bytes");
+        }
+
+        var hash = sha256Hex(req.token());
+        var token = resetTokens.findByTokenHash(hash)
+                .orElseThrow(InvalidTokenException::new);
+        if (token.isExpired() || token.isConsumed()) {
+            throw new InvalidTokenException();
+        }
+
+        token.consume();
+        var user = token.getUser();
+        user.setPasswordHash(passwordEncoder.encode(req.newPassword()));
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
+
+        invalidateAllSessionsForUser(user);
     }
 
     private void issueVerificationToken(User user) {
-        // mark any earlier unconsumed tokens as consumed first
         verifTokens.markAllConsumedForUser(user.getId(), Instant.now());
 
         var plain = generateToken();
@@ -92,6 +144,13 @@ public class UserService {
         verifTokens.save(token);
 
         emailService.sendVerification(user.getEmail(), plain);
+    }
+
+    private void invalidateAllSessionsForUser(User user) {
+        var byPrincipal = sessions.findByPrincipalName(user.getEmail());
+        for (var sessionId : byPrincipal.keySet()) {
+            sessions.deleteById(sessionId);
+        }
     }
 
     static String normalize(String email) {

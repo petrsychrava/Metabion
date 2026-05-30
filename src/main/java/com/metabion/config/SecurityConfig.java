@@ -4,15 +4,23 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+
+import com.metabion.repository.UserRepository;
 
 @Configuration
 @EnableWebSecurity
@@ -31,39 +39,66 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public UserDetailsService userDetailsService(UserRepository users) {
+        return email -> users.findByEmail(email)
+                .map(user -> org.springframework.security.core.userdetails.User
+                        .withUsername(user.getEmail())
+                        .password(user.getPasswordHash())
+                        .disabled(!user.isEnabled())
+                        .accountLocked(user.isLocked())
+                        .authorities(user.roleNames().stream()
+                                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                                .toList())
+                        .build())
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+    }
+
+    @Bean
+    public DaoAuthenticationProvider daoAuthenticationProvider(UserDetailsService userDetailsService,
+                                                               PasswordEncoder passwordEncoder) {
+        var provider = new DaoAuthenticationProvider(userDetailsService);
+        provider.setPasswordEncoder(passwordEncoder);
+        return provider;
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http, RateLimitingFilter rateLimitingFilter) throws Exception {
         http
-            .csrf(csrf -> csrf
-                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                .ignoringRequestMatchers(PUBLIC_AUTH_POSTS)
-                .ignoringRequestMatchers(req -> "GET".equalsIgnoreCase(req.getMethod()))
-            )
-            .sessionManagement(s -> s
-                .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
-                .sessionFixation(sf -> sf.changeSessionId())
-                .maximumSessions(3)
-            )
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
-                .requestMatchers("/api/auth/logout").authenticated()
-                .requestMatchers("/api/**").authenticated()
-                .anyRequest().denyAll()
-            )
-            .headers(headers -> headers
-                .httpStrictTransportSecurity(h -> h
-                    .includeSubDomains(true)
-                    .maxAgeInSeconds(31_536_000))
-                .frameOptions(frame -> frame.sameOrigin())
-                .contentTypeOptions(opts -> {})
-                .referrerPolicy(r -> r.policy(
-                    org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter
-                        .ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
-            )
-            .exceptionHandling(ex -> ex
-                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
-            .formLogin(form -> form.disable())
-            .httpBasic(basic -> basic.disable())
-            .logout(logout -> logout.disable());
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                        .ignoringRequestMatchers(PUBLIC_AUTH_POSTS)
+                        .ignoringRequestMatchers(req -> "GET".equalsIgnoreCase(req.getMethod()))
+                )
+                .sessionManagement(s -> s
+                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+                        .sessionFixation(sf -> sf.changeSessionId())
+                        .maximumSessions(3)
+                )
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
+                        .requestMatchers("/api/auth/verify").permitAll()
+                        .requestMatchers("/api/auth/logout").authenticated()
+                        .requestMatchers("/api/**").authenticated()
+                        .anyRequest().denyAll()
+                )
+                .headers(headers -> headers
+                        .httpStrictTransportSecurity(h -> h
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31_536_000))
+                        .frameOptions(frame -> frame.sameOrigin())
+                        .contentTypeOptions(opts -> {
+                        })
+                        .referrerPolicy(r -> r.policy(
+                                org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter
+                                        .ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                )
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
+                .formLogin(form -> form.disable())
+                .httpBasic(basic -> basic.disable())
+                .logout(logout -> logout.disable());
 
         return http.build();
     }
