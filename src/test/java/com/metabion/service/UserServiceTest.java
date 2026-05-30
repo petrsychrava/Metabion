@@ -5,6 +5,7 @@ import com.metabion.domain.User;
 import com.metabion.dto.RegisterRequest;
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.exception.ValidationException;
+import com.metabion.repository.PasswordResetRepository;
 import com.metabion.repository.UserRepository;
 import com.metabion.repository.VerificationTokenRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +15,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.session.FindByIndexNameSessionRepository;
+import org.springframework.session.Session;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -33,6 +36,12 @@ class UserServiceTest {
 
     @Mock
     private VerificationTokenRepository verifTokens;
+
+    @Mock
+    private PasswordResetRepository resetTokens;
+
+    @Mock
+    private FindByIndexNameSessionRepository<Session> sessions;
 
     @Mock
     private EmailService emailService;

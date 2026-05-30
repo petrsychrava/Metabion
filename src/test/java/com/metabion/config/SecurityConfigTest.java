@@ -16,6 +16,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
+import org.springframework.session.FindByIndexNameSessionRepository;
+import org.springframework.session.Session;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -33,6 +36,9 @@ class SecurityConfigTest {
     @Autowired
     WebApplicationContext context;
 
+    @MockitoBean
+    FindByIndexNameSessionRepository<Session> sessions;
+
     private MockMvc mvc;
 
     @BeforeEach
@@ -49,27 +55,27 @@ class SecurityConfigTest {
     void public_post_without_csrf_still_reaches_handler() throws Exception {
         // AuthController now exists, so POST reaches the handler but fails validation (400).
         mvc.perform(post("/api/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}"))
-            .andExpect(status().isBadRequest());
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
     void protected_post_without_csrf_is_forbidden() throws Exception {
         mvc.perform(post("/api/whoami").with(user("alice")))
-           .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden());
     }
 
     @Test
     void protected_post_with_csrf_is_allowed_but_405() throws Exception {
         mvc.perform(post("/api/whoami").with(user("alice")).with(csrf()))
-           .andExpect(status().isMethodNotAllowed());
+                .andExpect(status().isMethodNotAllowed());
     }
 
     @Test
     void hsts_header_is_set() throws Exception {
         mvc.perform(get("/api/whoami").secure(true))
-           .andExpect(header().string("Strict-Transport-Security",
-                                      containsString("max-age=31536000")));
+                .andExpect(header().string("Strict-Transport-Security",
+                        containsString("max-age=31536000")));
     }
 }

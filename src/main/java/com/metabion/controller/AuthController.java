@@ -1,8 +1,10 @@
 package com.metabion.controller;
 
+import com.metabion.dto.ForgotPasswordRequest;
 import com.metabion.dto.LoginRequest;
 import com.metabion.dto.LoginResponse;
 import com.metabion.dto.RegisterRequest;
+import com.metabion.dto.ResetPasswordRequest;
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.exception.ValidationException;
 import com.metabion.service.SecurityService;
@@ -49,10 +51,28 @@ public class AuthController {
         }
     }
 
+    @PostMapping("/forgot-password")
+    public Map<String, String> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        userService.requestPasswordReset(request);
+        return Map.of("status", "ok");
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Map<String, String>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        try {
+            userService.resetPassword(request);
+            return ResponseEntity.ok(Map.of("status", "password_reset"));
+        } catch (ValidationException e) {
+            return ResponseEntity.badRequest().build();
+        } catch (InvalidTokenException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+    }
+
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request,
-                                                HttpServletRequest req,
-                                                HttpServletResponse resp) {
+                                               HttpServletRequest req,
+                                               HttpServletResponse resp) {
         try {
             var loginResponse = securityService.login(request, req, resp);
             return ResponseEntity.ok(loginResponse);
