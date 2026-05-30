@@ -126,13 +126,35 @@ Security-sensitive changes need extra care and focused verification.
 ## Working Conventions for Agents
 
 - Read the relevant code before proposing or making changes.
-- Prefer IntelliJ IDEA MCP tools for project file reading, navigation, and manipulation when available; fall back to shell tools only when IDEA MCP is unavailable, incomplete, or less suitable for the task.
 - Respect existing user changes in the worktree; do not revert unrelated modifications.
 - Prefer small, focused edits over broad refactors.
 - Keep responses concise and include the verification command and result when code was changed.
 - If tests cannot be run, state why and describe the residual risk.
 - For multi-phase work, consult `IMPLEMENTATION_PLAN.md` and the relevant file in `plans/` before implementation.
 - Prefer live repository state over memory or assumptions.
+
+## Tooling Priority for Agents
+
+Use IntelliJ IDEA MCP tools first for repository work whenever they are available and functioning.
+
+Prefer IDEA MCP over shell commands for:
+
+- Reading project files.
+- Searching project files or symbols.
+- Editing or creating project files.
+- Inspecting file problems, compiler diagnostics, and IDE analysis.
+- Building or compiling changed files when IDEA MCP can validate the change.
+
+Do not use shell commands for those tasks while IDEA MCP tools are available and suitable.
+
+Shell commands are allowed for tasks IDEA MCP does not cover well, including:
+
+- Git operations such as `git status`, `git diff`, `git add`, `git commit`, and `git log`.
+- Gradle commands when an exact test, build, or run command is needed.
+- Environment, process, filesystem size, or dependency-cache checks.
+- Commands explicitly requested by the user.
+
+If an IDEA MCP tool fails, retry once or use the closest IDEA MCP alternative before falling back to shell. When falling back to shell for a task normally covered by IDEA MCP, state the reason.
 
 ## Commit and Pull Request Guidelines
 
