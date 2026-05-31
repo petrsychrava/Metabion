@@ -56,15 +56,6 @@ class UserRepositoryTest {
     }
 
     @Test
-    void unsupportedRoleIsRejected() {
-        var user = buildUser("e@x.com");
-
-        assertThatThrownBy(() -> user.addRole("USER"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Unsupported role: USER");
-    }
-
-    @Test
     void emailIsNormalizedBeforePersisting() {
         users.saveAndFlush(buildUser("  C@X.COM  "));
 

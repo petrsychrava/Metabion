@@ -69,10 +69,6 @@ public class User {
         this.roles.add(new UserRole(this, role));
     }
 
-    public void addRole(String role) {
-        addRole(RoleName.from(role));
-    }
-
     public boolean hasRole(RoleName role) {
         return roles.stream()
                 .anyMatch(userRole -> userRole.getRole().equals(role.name()));
