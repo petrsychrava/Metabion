@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mail.MailAuthenticationException;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
 import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
@@ -178,6 +180,19 @@ class SecurityConfigTest {
 
         verify(userService).register(argThat(request -> "browser@example.com".equals(request.email())
                 && "SecurePass123".equals(request.password())));
+    }
+
+    @Test
+    void mvc_register_mail_failure_renders_service_unavailable_page() throws Exception {
+        doThrow(new MailAuthenticationException("smtp rejected credentials"))
+                .when(userService).register(any());
+
+        mvc.perform(post("/register")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("email=mail%40example.com&password=SecurePass123"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(view().name("result"));
     }
 
     @Test

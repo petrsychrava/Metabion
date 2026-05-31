@@ -5,6 +5,7 @@ import com.metabion.exception.ValidationException;
 import com.metabion.service.RateLimitedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mail.MailException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -47,6 +48,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ValidationException.class)
     public ResponseEntity<Map<String, String>> validation(ValidationException e) {
         return ResponseEntity.badRequest().body(Map.of("error", "validation_failed"));
+    }
+
+    @ExceptionHandler(MailException.class)
+    public ResponseEntity<Map<String, String>> mailUnavailable(MailException e) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(Map.of("error", "mail_unavailable"));
     }
 
     @ExceptionHandler(RateLimitedException.class)

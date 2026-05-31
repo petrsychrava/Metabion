@@ -42,7 +42,8 @@ public class SecurityConfig {
             "/register/",
             "/verify",
             "/forgot-password",
-            "/reset-password"
+            "/reset-password",
+            "/error"
     };
 
     private static final String[] PUBLIC_MVC_POSTS = {
@@ -104,6 +105,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_STATIC).permitAll()
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_MVC_GETS).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_MVC_POSTS).permitAll()
                         .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
