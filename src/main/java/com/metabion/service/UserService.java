@@ -2,6 +2,7 @@ package com.metabion.service;
 
 import com.metabion.domain.AccountVerification;
 import com.metabion.domain.PasswordReset;
+import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.ForgotPasswordRequest;
@@ -9,6 +10,7 @@ import com.metabion.dto.RegisterRequest;
 import com.metabion.dto.ResetPasswordRequest;
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.exception.ValidationException;
+import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.PasswordResetRepository;
 import com.metabion.repository.UserRepository;
 import com.metabion.repository.VerificationTokenRepository;
@@ -40,6 +42,7 @@ public class UserService {
     private final UserRepository users;
     private final VerificationTokenRepository verifTokens;
     private final PasswordResetRepository resetTokens;
+    private final PatientProfileRepository patientProfiles;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
     private final FindByIndexNameSessionRepository<? extends Session> sessions;
@@ -48,12 +51,14 @@ public class UserService {
     public UserService(UserRepository users,
                        VerificationTokenRepository verifTokens,
                        PasswordResetRepository resetTokens,
+                       PatientProfileRepository patientProfiles,
                        EmailService emailService,
                        PasswordEncoder passwordEncoder,
                        FindByIndexNameSessionRepository<? extends Session> sessions) {
         this.users = users;
         this.verifTokens = verifTokens;
         this.resetTokens = resetTokens;
+        this.patientProfiles = patientProfiles;
         this.emailService = emailService;
         this.passwordEncoder = passwordEncoder;
         this.sessions = sessions;
@@ -74,6 +79,7 @@ public class UserService {
         user.setPasswordHash(passwordEncoder.encode(req.password()));
         user.addRole(DEFAULT_USER_ROLE);
         users.save(user);
+        patientProfiles.save(new PatientProfile(user));
 
         issueVerificationToken(user);
     }

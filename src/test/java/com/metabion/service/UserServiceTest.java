@@ -1,10 +1,12 @@
 package com.metabion.service;
 
 import com.metabion.domain.AccountVerification;
+import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.RegisterRequest;
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.exception.ValidationException;
+import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
 import com.metabion.repository.VerificationTokenRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +33,9 @@ class UserServiceTest {
 
     @Mock
     private VerificationTokenRepository verifTokens;
+
+    @Mock
+    private PatientProfileRepository patientProfiles;
 
     @Mock
     private EmailService emailService;
@@ -78,7 +83,28 @@ class UserServiceTest {
         userService.register(request);
 
         verify(users, never()).save(any());
+        verify(patientProfiles, never()).save(any());
         verify(emailService, never()).sendVerification(anyString(), anyString());
+    }
+
+    @Test
+    void registerCreatesPatientProfileForNewPatient() {
+        var request = new RegisterRequest("new@example.com", "correct horse battery staple");
+        when(users.existsByEmail("new@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("correct horse battery staple")).thenReturn("encoded");
+        when(users.save(any(User.class))).thenAnswer(i -> {
+            var u = i.getArgument(0, User.class);
+            u.setId(10L);
+            return u;
+        });
+
+        userService.register(request);
+
+        verify(patientProfiles).save(argThat(profile -> {
+            var user = profile.getUser();
+            return "new@example.com".equals(user.getEmail())
+                    && user.hasRole(RoleName.PATIENT);
+        }));
     }
 
     @Test

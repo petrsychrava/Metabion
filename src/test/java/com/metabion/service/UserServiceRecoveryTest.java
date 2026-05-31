@@ -6,6 +6,7 @@ import com.metabion.dto.ForgotPasswordRequest;
 import com.metabion.dto.ResetPasswordRequest;
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.exception.ValidationException;
+import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.PasswordResetRepository;
 import com.metabion.repository.UserRepository;
 import com.metabion.repository.VerificationTokenRepository;
@@ -48,6 +49,9 @@ class UserServiceRecoveryTest {
     private PasswordResetRepository resetTokens;
 
     @Mock
+    private PatientProfileRepository patientProfiles;
+
+    @Mock
     private EmailService emailService;
 
     @Mock
@@ -61,7 +65,7 @@ class UserServiceRecoveryTest {
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(users, verifTokens, resetTokens, emailService, passwordEncoder, sessions);
+        userService = new UserService(users, verifTokens, resetTokens, patientProfiles, emailService, passwordEncoder, sessions);
 
         user = new User();
         user.setId(42L);
