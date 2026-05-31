@@ -17,7 +17,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -89,6 +91,31 @@ class StaffInvitationServiceTest {
     }
 
     @Test
+    void createInvitationSendsEmailAfterTransactionCommit() {
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            var admin = user("admin@example.com", true, RoleName.ADMIN);
+            when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+            when(users.findByEmail("expert@example.com")).thenReturn(Optional.empty());
+
+            service.createInvitation("admin@example.com",
+                    new CreateStaffInvitationRequest("expert@example.com", Set.of("PHYSICIAN")));
+
+            verify(emailService, never()).sendStaffInvitation(any(), any());
+
+            var synchronizations = TransactionSynchronizationManager.getSynchronizations();
+            assertThat(synchronizations).hasSize(1);
+            synchronizations.getFirst().afterCommit();
+
+            var tokenCaptor = ArgumentCaptor.forClass(String.class);
+            verify(emailService).sendStaffInvitation(eq("expert@example.com"), tokenCaptor.capture());
+            assertThat(tokenCaptor.getValue()).hasSize(43);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
     void createInvitationRejectsEmptyRoles() {
         assertThatThrownBy(() -> service.createInvitation("admin@example.com",
                 new CreateStaffInvitationRequest("expert@example.com", Set.of())))
@@ -107,6 +134,22 @@ class StaffInvitationServiceTest {
 
         assertThatThrownBy(() -> service.createInvitation("admin@example.com",
                 new CreateStaffInvitationRequest("admin2@example.com", Set.of("ADMIN"))))
+                .isInstanceOf(StaffInvitationException.class)
+                .hasMessage("Only nutrition specialist, physician, and coordinator roles can be invited.");
+    }
+
+    @Test
+    void createInvitationRejectsNullRoleEntry() {
+        assertThatThrownBy(() -> service.createInvitation("admin@example.com",
+                new CreateStaffInvitationRequest("expert@example.com", new LinkedHashSet<>(Arrays.asList("PHYSICIAN", null)))))
+                .isInstanceOf(StaffInvitationException.class)
+                .hasMessage("Only nutrition specialist, physician, and coordinator roles can be invited.");
+    }
+
+    @Test
+    void createInvitationRejectsBlankRoleEntry() {
+        assertThatThrownBy(() -> service.createInvitation("admin@example.com",
+                new CreateStaffInvitationRequest("expert@example.com", Set.of(" "))))
                 .isInstanceOf(StaffInvitationException.class)
                 .hasMessage("Only nutrition specialist, physician, and coordinator roles can be invited.");
     }
@@ -182,22 +225,35 @@ class StaffInvitationServiceTest {
         when(invitations.findByTokenHash(UserService.sha256Hex("valid-token"))).thenReturn(Optional.of(invitation));
         when(users.findByEmail("expert@example.com")).thenReturn(Optional.empty());
         when(passwordEncoder.encode("SecurePass123")).thenReturn("encoded-password");
-        when(users.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0, User.class));
+        when(users.saveAndFlush(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0, User.class));
 
         var response = service.acceptInvitation(new AcceptStaffInvitationRequest("valid-token", "SecurePass123"));
 
         assertThat(response.status()).isEqualTo("invitation_accepted");
 
         var userCaptor = ArgumentCaptor.forClass(User.class);
-        verify(users).save(userCaptor.capture());
+        verify(users).saveAndFlush(userCaptor.capture());
         var savedUser = userCaptor.getValue();
         assertThat(savedUser.getEmail()).isEqualTo("expert@example.com");
         assertThat(savedUser.isEnabled()).isTrue();
         assertThat(savedUser.getPasswordHash()).isEqualTo("encoded-password");
         assertThat(savedUser.roleNames()).containsExactlyInAnyOrder("PHYSICIAN", "COORDINATOR");
 
-        verify(staffProfiles).save(any(StaffProfile.class));
+        verify(staffProfiles).saveAndFlush(any(StaffProfile.class));
         assertThat(invitation.getAcceptedAt()).isNotNull();
+    }
+
+    @Test
+    void acceptInvitationTranslatesUserCreationIntegrityViolationToCompletionConflict() {
+        var invitation = invitation("expert@example.com", "valid-token", Instant.now().plusSeconds(3600), RoleName.PHYSICIAN);
+        when(invitations.findByTokenHash(UserService.sha256Hex("valid-token"))).thenReturn(Optional.of(invitation));
+        when(users.findByEmail("expert@example.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode("SecurePass123")).thenReturn("encoded-password");
+        when(users.saveAndFlush(any(User.class))).thenThrow(new DataIntegrityViolationException("duplicate email"));
+
+        assertThatThrownBy(() -> service.acceptInvitation(new AcceptStaffInvitationRequest("valid-token", "SecurePass123")))
+                .isInstanceOf(StaffInvitationException.class)
+                .hasMessage("This invitation cannot be completed. Contact an administrator.");
     }
 
     @Test
@@ -243,7 +299,7 @@ class StaffInvitationServiceTest {
                 .isInstanceOf(StaffInvitationException.class)
                 .hasMessage("This invitation cannot be completed. Contact an administrator.");
 
-        verify(users, never()).save(any());
+        verify(users, never()).saveAndFlush(any());
     }
 
     @Test

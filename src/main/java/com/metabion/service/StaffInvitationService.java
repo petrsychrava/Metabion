@@ -13,8 +13,11 @@ import com.metabion.repository.StaffInvitationRepository;
 import com.metabion.repository.StaffProfileRepository;
 import com.metabion.repository.UserRepository;
 import jakarta.transaction.Transactional;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
@@ -69,7 +72,7 @@ public class StaffInvitationService {
             invitation.addRole(role);
         }
         invitations.save(invitation);
-        emailService.sendStaffInvitation(email, token);
+        sendInvitationEmailAfterCommit(email, token);
 
         return new StaffInvitationResponse("invitation_created");
     }
@@ -96,11 +99,29 @@ public class StaffInvitationService {
         for (var role : invitation.roles()) {
             user.addRole(role);
         }
-        users.save(user);
-        staffProfiles.save(new StaffProfile(user));
+        try {
+            users.saveAndFlush(user);
+            staffProfiles.saveAndFlush(new StaffProfile(user));
+        } catch (DataIntegrityViolationException ex) {
+            throw StaffInvitationException.completionConflict();
+        }
         invitation.accept(now);
 
         return new StaffInvitationResponse("invitation_accepted");
+    }
+
+    private void sendInvitationEmailAfterCommit(String email, String token) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            emailService.sendStaffInvitation(email, token);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                emailService.sendStaffInvitation(email, token);
+            }
+        });
     }
 
     private static Set<RoleName> parseRoles(Set<String> requestedRoles) {
