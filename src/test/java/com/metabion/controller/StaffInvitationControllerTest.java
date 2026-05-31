@@ -111,6 +111,19 @@ class StaffInvitationControllerTest {
     }
 
     @Test
+    void unauthenticated_cannot_create_staff_invitation_with_csrf() throws Exception {
+        var request = new CreateStaffInvitationRequest(
+                "expert@example.com",
+                Set.of("PHYSICIAN"));
+
+        mvc.perform(post("/api/admin/staff-invitations")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void public_accept_does_not_require_authentication_or_csrf() throws Exception {
         var request = new AcceptStaffInvitationRequest("token", "SecurePass123");
 
