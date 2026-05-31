@@ -5,6 +5,7 @@ import com.metabion.service.SecurityService;
 import com.metabion.service.UserService;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
@@ -15,6 +16,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -43,6 +45,9 @@ import org.springframework.web.context.WebApplicationContext;
         "spring.autoconfigure.exclude=org.springframework.boot.session.jdbc.autoconfigure.JdbcSessionAutoConfiguration"
 })
 class SecurityConfigTest {
+
+    private static final Pattern CSRF_TOKEN_VALUE =
+            Pattern.compile("name=\"_csrf\"[^>]*value=\"([^\"]+)\"");
 
     @Autowired
     WebApplicationContext context;
@@ -113,6 +118,13 @@ class SecurityConfigTest {
     }
 
     @Test
+    void mvc_register_page_renders_real_csrf_field() throws Exception {
+        mvc.perform(get("/register"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("name=\"_csrf\"")));
+    }
+
+    @Test
     void app_requires_authentication() throws Exception {
         mvc.perform(get("/app"))
                 .andExpect(status().isUnauthorized());
@@ -144,6 +156,27 @@ class SecurityConfigTest {
                 .andExpect(view().name("result"));
 
         verify(userService).register(argThat(request -> "user@example.com".equals(request.email())
+                && "SecurePass123".equals(request.password())));
+    }
+
+    @Test
+    void mvc_register_browser_form_submission_reaches_controller() throws Exception {
+        var page = mvc.perform(get("/register"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse();
+        var matcher = CSRF_TOKEN_VALUE.matcher(page.getContentAsString());
+        org.assertj.core.api.Assertions.assertThat(matcher.find()).isTrue();
+
+        mvc.perform(post("/register")
+                        .cookie(page.getCookies())
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("_csrf=" + matcher.group(1)
+                                + "&email=browser%40example.com&password=SecurePass123"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("result"));
+
+        verify(userService).register(argThat(request -> "browser@example.com".equals(request.email())
                 && "SecurePass123".equals(request.password())));
     }
 
