@@ -16,7 +16,7 @@ Metabion already has session-based authentication, `users`, `user_roles`, regist
 
 The current role model stores role names as strings in `user_roles`. Spring Security maps those strings into `ROLE_*` authorities during authentication. Patient registration currently assigns the `PATIENT` role.
 
-The new design should preserve this authentication model and add fine-grained authorization as a separate domain slice.
+The new design should preserve this authentication model and add fine-grained authorization as a separate domain slice. `users` remains the account and authentication identity for everyone. Patient and staff profile tables provide domain identities for authorization and future clinical data.
 
 ## Chosen Approach
 
@@ -36,13 +36,13 @@ Assignments are modeled separately:
 - cohort patient membership
 - cohort staff assignment
 
-The design treats cohorts as patient grouping units, not care-team aggregates. Staff assignments are separate rows that grant access to patients in the cohort. This keeps the model useful for clinical-study groupings such as study arms, sites, pilots, or operational cohorts without forcing future study-management concepts into the cohort table too early.
+The design treats cohorts as patient grouping units, not care-team aggregates. Staff assignments are separate rows that grant access to patients in the cohort. Assignment tables reference `patient_profiles` and `staff_profiles`, not raw `users` ids, so clinical authorization does not depend directly on the authentication table. This keeps the model useful for clinical-study groupings such as study arms, sites, pilots, or operational cohorts without forcing future study-management concepts into the cohort table too early.
 
 ## Alternatives Considered
 
 ### Method Security First
 
-Enable Spring method security and annotate endpoints or services with expressions such as `@PreAuthorize("@accessControl.canAccessPatient(authentication, #patientId)")`.
+Enable Spring method security and annotate endpoints or services with expressions such as `@PreAuthorize("@accessControl.canAccessPatientProfile(authentication, #patientProfileId)")`.
 
 This is idiomatic and can be added later, but it still needs the same assignment model underneath. Starting with a plain service keeps the first implementation easier to test and avoids spreading expression logic before real patient-data services exist.
 
@@ -66,6 +66,19 @@ Expected fields:
 - `updated_at`
 
 The profile gives patient-specific identity without overloading the generic `users` table. Registration should create a `PatientProfile` when it creates a patient account so access checks do not have to handle registered patients without profiles.
+
+### `staff_profiles`
+
+One row per clinical staff user.
+
+Expected fields:
+
+- `id`
+- `user_id` unique foreign key to `users(id)`
+- `created_at`
+- `updated_at`
+
+The profile gives staff-specific domain identity without turning `users` into a mixed authentication and clinical-staff table. Users with `NUTRITION_SPECIALIST`, `PHYSICIAN`, or `COORDINATOR` should have a `StaffProfile`. `ADMIN` users only need a staff profile when they also participate as clinical staff.
 
 ### `cohorts`
 
@@ -106,14 +119,14 @@ Expected fields:
 
 - `id`
 - `patient_profile_id`
-- `staff_user_id`
+- `staff_profile_id`
 - `assigned_by_user_id`, nullable only for system/bootstrap-created rows
 - `assigned_at`
 - `ended_at`
 
-The staff user must have one of `NUTRITION_SPECIALIST`, `PHYSICIAN`, or `COORDINATOR`. Administrators do not need assignment rows because they have global access.
+The staff profile's user must have one of `NUTRITION_SPECIALIST`, `PHYSICIAN`, or `COORDINATOR`. Administrators do not need assignment rows because they have global access.
 
-The database should prevent more than one active direct assignment for the same patient/staff pair, while allowing historical ended rows.
+The database should prevent more than one active direct assignment for the same patient profile/staff profile pair, while allowing historical ended rows.
 
 ### `cohort_staff_assignments`
 
@@ -123,14 +136,14 @@ Expected fields:
 
 - `id`
 - `cohort_id`
-- `staff_user_id`
+- `staff_profile_id`
 - `assigned_by_user_id`, nullable only for system/bootstrap-created rows
 - `assigned_at`
 - `ended_at`
 
-The staff user must have one of `NUTRITION_SPECIALIST`, `PHYSICIAN`, or `COORDINATOR`. A coordinator assigned to a cohort can manage assignments within that cohort, but cannot grant access outside their own scope.
+The staff profile's user must have one of `NUTRITION_SPECIALIST`, `PHYSICIAN`, or `COORDINATOR`. A coordinator assigned to a cohort can manage assignments within that cohort, but cannot grant access outside their own scope.
 
-The database should prevent more than one active staff assignment for the same cohort/staff pair, while allowing historical ended rows.
+The database should prevent more than one active staff assignment for the same cohort/staff profile pair, while allowing historical ended rows.
 
 ## Access Rules
 
@@ -141,7 +154,7 @@ Given an authenticated user and a target patient profile:
 1. If the user has `ADMIN`, allow.
 2. If the user has `PATIENT`, allow only when the target profile belongs to the same user.
 3. If the user has `NUTRITION_SPECIALIST`, `PHYSICIAN`, or `COORDINATOR`, allow when an active direct assignment exists.
-4. If the user has `NUTRITION_SPECIALIST`, `PHYSICIAN`, or `COORDINATOR`, allow when the staff user has an active assignment to a cohort where the patient has an active membership.
+4. If the user has `NUTRITION_SPECIALIST`, `PHYSICIAN`, or `COORDINATOR`, allow when the user's staff profile has an active assignment to a cohort where the patient has an active membership.
 5. Otherwise deny.
 
 Patients do not receive broad cohort access from cohort membership. Patient access remains self-only.
@@ -151,7 +164,7 @@ Patients do not receive broad cohort access from cohort membership. Patient acce
 Given an authenticated user and a target cohort:
 
 1. If the user has `ADMIN`, allow.
-2. If the user has `COORDINATOR`, `NUTRITION_SPECIALIST`, or `PHYSICIAN`, allow when the user has an active staff assignment to the cohort.
+2. If the user has `COORDINATOR`, `NUTRITION_SPECIALIST`, or `PHYSICIAN`, allow when the user's staff profile has an active assignment to the cohort.
 3. Otherwise deny.
 
 ### Cohort and Assignment Management
@@ -178,6 +191,7 @@ The enum should centralize role strings and Spring Security authority conversion
 Add entities for:
 
 - `PatientProfile`
+- `StaffProfile`
 - `Cohort`
 - `PatientCohortMembership`
 - `PatientExpertAssignment`
@@ -190,6 +204,7 @@ Entities should follow existing JPA conventions, use constructor injection in se
 Add repositories with focused existence checks for access decisions:
 
 - find patient profile by user id
+- find staff profile by user id
 - determine active direct assignment
 - determine active cohort-based assignment
 - determine active cohort staff assignment
@@ -201,13 +216,14 @@ Repository methods should express the access predicates directly instead of forc
 
 Add a service with focused methods such as:
 
-- `canAccessPatient(Authentication authentication, Long patientUserId)`
 - `canAccessPatientProfile(Authentication authentication, Long patientProfileId)`
 - `canAccessCohort(Authentication authentication, Long cohortId)`
 - `canManageCohort(Authentication authentication, Long cohortId)`
 - `canManageAssignments(Authentication authentication, Long cohortId)`
 
-The service resolves the authenticated principal to a `User` and applies the access rules above. It should return booleans and avoid deciding endpoint response shape. Controllers and future application services can translate denial into `403` or scoped `404` policies.
+`canAccessPatientProfile(...)` is the canonical patient access check. Callers that only have a patient user's `users.id` should first resolve the corresponding `PatientProfile`, or a clearly named convenience method can be added later if implementation shows repeated need.
+
+The service resolves the authenticated principal to a `User`, resolves the corresponding patient or staff profile when needed, and applies the access rules above. It should return booleans and avoid deciding endpoint response shape. Controllers and future application services can translate denial into `403` or scoped `404` policies.
 
 If user resolution starts duplicating across services, add a small `CurrentUserService` helper. Do not add it unless it removes real duplication.
 
@@ -239,6 +255,7 @@ Repository and persistence tests should cover:
 - supported role values persist correctly
 - unsupported role values are rejected at the domain or service boundary
 - patient profile is tied to a patient user
+- staff profile is tied to a staff-role user
 - direct assignment grants access
 - ended direct assignment does not grant access
 - cohort membership plus staff assignment grants access
@@ -278,6 +295,7 @@ In scope:
 
 - five role values
 - patient profile creation for registered patients
+- staff profile support for nutrition specialists, physicians, and coordinators
 - direct patient-to-staff assignment
 - cohort membership
 - cohort staff assignment
@@ -303,9 +321,9 @@ Patients only access their own data:
 
 Experts and coordinators only access assigned patients or cohorts:
 
-- direct assignment grants patient access
-- shared active cohort membership plus active staff assignment grants patient access
-- staff cohort access requires active cohort staff assignment
+- direct patient profile to staff profile assignment grants patient access
+- shared active cohort membership plus active staff profile assignment grants patient access
+- staff cohort access requires active cohort staff profile assignment
 
 Roles for patient, nutrition specialist, physician, coordinator, and admin are modeled:
 
