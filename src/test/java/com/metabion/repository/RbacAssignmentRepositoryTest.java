@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Propagation;
@@ -54,6 +55,9 @@ class RbacAssignmentRepositoryTest {
 
     @Autowired
     CohortStaffAssignmentRepository cohortStaffAssignments;
+
+    @Autowired
+    JdbcTemplate jdbc;
 
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
@@ -100,6 +104,60 @@ class RbacAssignmentRepositoryTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> profile.setUser(null))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void databaseRejectsProfileRowsForUsersWithoutRequiredRole() {
+        var patientOnly = createUser("db-profile-patient@example.com", RoleName.PATIENT);
+        var staffOnly = createUser("db-profile-staff@example.com", RoleName.PHYSICIAN);
+        var adminOnly = createUser("db-profile-admin@example.com", RoleName.ADMIN);
+
+        assertThatThrownBy(() -> jdbc.update(
+                "insert into patient_profiles (user_id) values (?)", staffOnly.getId()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update(
+                "insert into staff_profiles (user_id) values (?)", patientOnly.getId()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update(
+                "insert into staff_profiles (user_id) values (?)", adminOnly.getId()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void databaseRejectsProfileUpdatesThatWouldUseInvalidRole() {
+        var patient = createUser("db-profile-update-patient@example.com", RoleName.PATIENT);
+        var staff = createUser("db-profile-update-staff@example.com", RoleName.PHYSICIAN);
+        var admin = createUser("db-profile-update-admin@example.com", RoleName.ADMIN);
+
+        jdbc.update("insert into patient_profiles (user_id) values (?)", patient.getId());
+        jdbc.update("insert into staff_profiles (user_id) values (?)", staff.getId());
+
+        assertThatThrownBy(() -> jdbc.update(
+                "update patient_profiles set user_id = ? where user_id = ?", staff.getId(), patient.getId()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update(
+                "update staff_profiles set user_id = ? where user_id = ?", admin.getId(), staff.getId()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void databaseRejectsRoleChangesThatWouldInvalidateExistingProfiles() {
+        var patient = createUser("db-role-guard-patient@example.com", RoleName.PATIENT);
+        var staff = createUser("db-role-guard-staff@example.com", RoleName.PHYSICIAN);
+
+        jdbc.update("insert into patient_profiles (user_id) values (?)", patient.getId());
+        jdbc.update("insert into staff_profiles (user_id) values (?)", staff.getId());
+
+        assertThatThrownBy(() -> jdbc.update(
+                "delete from user_roles where user_id = ? and role = ?", patient.getId(), RoleName.PATIENT.name()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update(
+                "update user_roles set role = ? where user_id = ? and role = ?",
+                RoleName.ADMIN.name(), staff.getId(), RoleName.PHYSICIAN.name()))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -214,6 +272,35 @@ class RbacAssignmentRepositoryTest {
         assertThat(cohortStaffAssignments.saveAndFlush(
                 new CohortStaffAssignment(cohort, staff, assignedBy)).isActive())
                 .isTrue();
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void assignmentIntervalsRejectEndingBeforeAssignment() {
+        var patient = createPatientProfile("interval-patient@example.com");
+        var staff = createStaffProfile("interval-staff@example.com");
+        var assignedBy = createUser("interval-admin@example.com", RoleName.ADMIN);
+        var cohort = cohorts.saveAndFlush(new Cohort("Interval cohort"));
+        var assignedAt = Instant.parse("2026-05-31T10:00:00Z");
+        var endedAt = assignedAt.minusSeconds(1);
+
+        var directAssignment = new PatientExpertAssignment(patient, staff, assignedBy);
+        directAssignment.setAssignedAt(assignedAt);
+        directAssignment.setEndedAt(endedAt);
+        assertThatThrownBy(() -> patientExpertAssignments.saveAndFlush(directAssignment))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        var membership = new PatientCohortMembership(patient, cohort, assignedBy);
+        membership.setAssignedAt(assignedAt);
+        membership.setEndedAt(endedAt);
+        assertThatThrownBy(() -> patientCohortMemberships.saveAndFlush(membership))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        var staffAssignment = new CohortStaffAssignment(cohort, staff, assignedBy);
+        staffAssignment.setAssignedAt(assignedAt);
+        staffAssignment.setEndedAt(endedAt);
+        assertThatThrownBy(() -> cohortStaffAssignments.saveAndFlush(staffAssignment))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private PatientProfile createPatientProfile(String email) {

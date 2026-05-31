@@ -16,6 +16,119 @@ CREATE TABLE staff_profiles (
     updated_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
+CREATE FUNCTION require_patient_profile_role()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM user_roles
+        WHERE user_id = NEW.user_id
+          AND role = 'PATIENT'
+    ) THEN
+        RAISE EXCEPTION 'Patient profile requires PATIENT role'
+            USING ERRCODE = '23514';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_patient_profiles_require_patient_role
+    BEFORE INSERT OR UPDATE OF user_id ON patient_profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION require_patient_profile_role();
+
+CREATE FUNCTION require_staff_profile_role()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM user_roles
+        WHERE user_id = NEW.user_id
+          AND role IN ('NUTRITION_SPECIALIST', 'PHYSICIAN', 'COORDINATOR')
+    ) THEN
+        RAISE EXCEPTION 'Staff profile requires a clinical staff role'
+            USING ERRCODE = '23514';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_staff_profiles_require_clinical_staff_role
+    BEFORE INSERT OR UPDATE OF user_id ON staff_profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION require_staff_profile_role();
+
+CREATE FUNCTION protect_profile_role_integrity()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'DELETE'
+        AND NOT EXISTS (
+            SELECT 1
+            FROM users
+            WHERE id = OLD.user_id
+        ) THEN
+        RETURN OLD;
+    END IF;
+
+    IF OLD.role = 'PATIENT'
+        AND EXISTS (
+            SELECT 1
+            FROM patient_profiles
+            WHERE user_id = OLD.user_id
+        )
+        AND NOT (
+            EXISTS (
+                SELECT 1
+                FROM user_roles
+                WHERE user_id = OLD.user_id
+                  AND role = 'PATIENT'
+                  AND NOT (user_id = OLD.user_id AND role = OLD.role)
+            )
+            OR (TG_OP = 'UPDATE' AND NEW.user_id = OLD.user_id AND NEW.role = 'PATIENT')
+        ) THEN
+        RAISE EXCEPTION 'Cannot remove PATIENT role while patient profile exists'
+            USING ERRCODE = '23514';
+    END IF;
+
+    IF OLD.role IN ('NUTRITION_SPECIALIST', 'PHYSICIAN', 'COORDINATOR')
+        AND EXISTS (
+            SELECT 1
+            FROM staff_profiles
+            WHERE user_id = OLD.user_id
+        )
+        AND NOT (
+            EXISTS (
+                SELECT 1
+                FROM user_roles
+                WHERE user_id = OLD.user_id
+                  AND role IN ('NUTRITION_SPECIALIST', 'PHYSICIAN', 'COORDINATOR')
+                  AND NOT (user_id = OLD.user_id AND role = OLD.role)
+            )
+            OR (
+                TG_OP = 'UPDATE'
+                AND NEW.user_id = OLD.user_id
+                AND NEW.role IN ('NUTRITION_SPECIALIST', 'PHYSICIAN', 'COORDINATOR')
+            )
+        ) THEN
+        RAISE EXCEPTION 'Cannot remove clinical staff role while staff profile exists'
+            USING ERRCODE = '23514';
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_user_roles_protect_profile_role_integrity
+    BEFORE DELETE OR UPDATE OF user_id, role ON user_roles
+    FOR EACH ROW
+    EXECUTE FUNCTION protect_profile_role_integrity();
+
 CREATE TABLE cohorts (
     id          BIGSERIAL PRIMARY KEY,
     name        VARCHAR(255) NOT NULL,

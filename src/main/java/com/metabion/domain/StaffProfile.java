@@ -56,10 +56,10 @@ public class StaffProfile {
     }
 
     public void setUser(User user) {
-        if (user == null || !user.hasAnyRole(
-                RoleName.NUTRITION_SPECIALIST,
-                RoleName.PHYSICIAN,
-                RoleName.COORDINATOR)) {
+        if (user == null || user.getRoles().stream()
+                .map(UserRole::getRole)
+                .map(RoleName::from)
+                .noneMatch(RoleName::isClinicalStaff)) {
             throw new IllegalArgumentException("Staff profile requires a clinical staff role");
         }
         this.user = user;
