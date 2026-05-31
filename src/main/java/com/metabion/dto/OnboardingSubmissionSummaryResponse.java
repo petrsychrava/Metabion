@@ -3,7 +3,7 @@ package com.metabion.dto;
 import com.metabion.domain.IbdDiagnosisType;
 import com.metabion.domain.OnboardingReviewStatus;
 import com.metabion.domain.OnboardingSubmission;
-import com.metabion.domain.PatientProfile;
+import com.metabion.domain.User;
 
 import java.time.Instant;
 
@@ -23,11 +23,15 @@ public record OnboardingSubmissionSummaryResponse(
         return new OnboardingSubmissionSummaryResponse(
                 submission.getId(),
                 patientProfile == null ? null : patientProfile.getId(),
-                patientProfile == null ? null : patientProfile.getUser().getEmail(),
+                patientProfile == null ? null : email(patientProfile.getUser()),
                 submission.getOnboardingContext(),
                 submission.getVersion(),
                 submission.getSubmittedAt(),
                 submission.getDiagnosisType(),
                 submission.getReviewStatus());
+    }
+
+    private static String email(User user) {
+        return user == null ? null : user.getEmail();
     }
 }

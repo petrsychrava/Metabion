@@ -155,6 +155,18 @@ class OnboardingServiceTest {
         assertThat(response.reviewStatus()).isEqualTo(OnboardingReviewStatus.REVIEWED);
     }
 
+    @Test
+    void submissionSummaryResponseAllowsMissingPatientUser() {
+        var patientProfile = new PatientProfile();
+        patientProfile.setId(10L);
+        var submission = new OnboardingSubmission(patientProfile, "default", 2);
+
+        var response = OnboardingSubmissionSummaryResponse.from(submission);
+
+        assertThat(response.patientProfileId()).isEqualTo(10L);
+        assertThat(response.patientEmail()).isNull();
+    }
+
     static OnboardingSubmissionRequest validRequest() {
         return new OnboardingSubmissionRequest(
                 "default",
