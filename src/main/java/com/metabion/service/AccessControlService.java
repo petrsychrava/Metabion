@@ -72,10 +72,8 @@ public class AccessControlService {
             return true;
         }
 
-        if (user.hasRole(RoleName.PATIENT)) {
-            return patientProfiles.findById(patientProfileId)
-                    .map(profile -> profile.getUser().getId().equals(user.getId()))
-                    .orElse(false);
+        if (user.hasRole(RoleName.PATIENT) && ownsPatientProfile(user, patientProfileId)) {
+            return true;
         }
 
         if (user.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN, RoleName.COORDINATOR)) {
@@ -85,6 +83,12 @@ public class AccessControlService {
         }
 
         return false;
+    }
+
+    private boolean ownsPatientProfile(User user, Long patientProfileId) {
+        return patientProfiles.findById(patientProfileId)
+                .map(profile -> profile.getUser().getId().equals(user.getId()))
+                .orElse(false);
     }
 
     private boolean canAccessCohort(User user, Long cohortId) {

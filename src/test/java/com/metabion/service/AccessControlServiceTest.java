@@ -79,6 +79,21 @@ class AccessControlServiceTest {
     }
 
     @Test
+    void multiRolePatientStaffCanAccessDirectlyAssignedPatient() {
+        var staffUser = user(9L, "multi-role@example.com", RoleName.PATIENT);
+        staffUser.addRole(RoleName.PHYSICIAN);
+        var staffProfile = staffProfile(90L, staffUser);
+        var otherPatient = user(10L, "other-patient@example.com", RoleName.PATIENT);
+        var targetProfile = patientProfile(12L, otherPatient);
+        when(users.findByEmail("multi-role@example.com")).thenReturn(Optional.of(staffUser));
+        when(patientProfiles.findById(12L)).thenReturn(Optional.of(targetProfile));
+        when(staffProfiles.findByUserId(9L)).thenReturn(Optional.of(staffProfile));
+        when(directAssignments.existsActiveAssignment(12L, 90L)).thenReturn(true);
+
+        assertThat(accessControlService.canAccessPatientProfile(auth("multi-role@example.com"), 12L)).isTrue();
+    }
+
+    @Test
     void staffCanAccessPatientThroughAssignedCohort() {
         var staffUser = user(3L, "physician@example.com", RoleName.PHYSICIAN);
         var staffProfile = staffProfile(30L, staffUser);
