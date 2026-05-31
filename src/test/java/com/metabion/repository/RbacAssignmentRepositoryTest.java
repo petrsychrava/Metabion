@@ -8,6 +8,7 @@ import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.StaffProfile;
 import com.metabion.domain.User;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -58,6 +59,9 @@ class RbacAssignmentRepositoryTest {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    EntityManager entityManager;
 
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
@@ -158,6 +162,36 @@ class RbacAssignmentRepositoryTest {
                 "update user_roles set role = ? where user_id = ? and role = ?",
                 RoleName.ADMIN.name(), staff.getId(), RoleName.PHYSICIAN.name()))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deletingPatientUserCascadesProfileAndRoles() {
+        var patient = createUser("delete-patient-profile@example.com", RoleName.PATIENT);
+        var patientId = patient.getId();
+        patientProfiles.saveAndFlush(new PatientProfile(patient));
+        entityManager.clear();
+
+        users.deleteById(patientId);
+        users.flush();
+
+        assertThat(users.findById(patientId)).isEmpty();
+        assertThat(patientProfiles.findByUserId(patientId)).isEmpty();
+        assertThat(countRoles(patientId)).isZero();
+    }
+
+    @Test
+    void deletingStaffUserCascadesProfileAndRoles() {
+        var staff = createUser("delete-staff-profile@example.com", RoleName.PHYSICIAN);
+        var staffId = staff.getId();
+        staffProfiles.saveAndFlush(new StaffProfile(staff));
+        entityManager.clear();
+
+        users.deleteById(staffId);
+        users.flush();
+
+        assertThat(users.findById(staffId)).isEmpty();
+        assertThat(staffProfiles.findByUserId(staffId)).isEmpty();
+        assertThat(countRoles(staffId)).isZero();
     }
 
     @Test
@@ -315,5 +349,9 @@ class RbacAssignmentRepositoryTest {
         var user = users.saveAndFlush(new User(email, "hash"));
         user.addRole(role);
         return users.saveAndFlush(user);
+    }
+
+    private Long countRoles(Long userId) {
+        return jdbc.queryForObject("select count(*) from user_roles where user_id = ?", Long.class, userId);
     }
 }

@@ -1,6 +1,9 @@
 package com.metabion.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
+
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
@@ -42,7 +45,8 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "user", cascade = {CascadeType.PERSIST, CascadeType.MERGE}, fetch = FetchType.LAZY)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Set<UserRole> roles = new HashSet<>();
 
     public User() {}
