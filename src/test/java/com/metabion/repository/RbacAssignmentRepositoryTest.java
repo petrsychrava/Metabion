@@ -166,6 +166,54 @@ class RbacAssignmentRepositoryTest {
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void roleAssignmentsReferenceSeededRoleRows() {
+        assertThat(jdbc.queryForObject("select count(*) from roles", Long.class))
+                .isEqualTo(5);
+        assertThat(jdbc.queryForObject(
+                "select clinical_staff from roles where code = ?",
+                Boolean.class,
+                RoleName.PHYSICIAN.name()))
+                .isTrue();
+        assertThat(jdbc.queryForObject(
+                "select clinical_staff from roles where code = ?",
+                Boolean.class,
+                RoleName.ADMIN.name()))
+                .isFalse();
+
+        var user = createUser("unknown-role@example.com", RoleName.PATIENT);
+
+        assertThatThrownBy(() -> jdbc.update(
+                "insert into user_roles (user_id, role) values (?, ?)",
+                user.getId(),
+                "UNKNOWN_ROLE"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void staffProfileRoleValidationUsesRolesMetadata() {
+        jdbc.update("""
+                insert into roles (code, clinical_staff)
+                values (?, true)
+                """, "DIETITIAN");
+        var userId = jdbc.queryForObject(
+                "insert into users (email, password_hash, enabled) values (?, ?, true) returning id",
+                Long.class,
+                "dietitian@example.com",
+                "hash");
+        jdbc.update("insert into user_roles (user_id, role) values (?, ?)", userId, "DIETITIAN");
+
+        jdbc.update("insert into staff_profiles (user_id) values (?)", userId);
+
+        assertThat(jdbc.queryForObject(
+                "select count(*) from staff_profiles where user_id = ?",
+                Long.class,
+                userId))
+                .isOne();
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void deletingPatientUserCascadesProfileAndRoles() {
         var patient = createUser("delete-patient-profile@example.com", RoleName.PATIENT);
         var patientId = patient.getId();
