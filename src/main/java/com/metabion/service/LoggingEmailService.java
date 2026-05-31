@@ -6,9 +6,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-
 @Service
 @Profile("dev")
 public class LoggingEmailService implements EmailService {
@@ -24,12 +21,12 @@ public class LoggingEmailService implements EmailService {
     @Override
     public void sendVerification(String to, String token) {
         log.info("[DEV] Verification email would be sent to {} with link {}", to,
-                baseUrl + "/verify?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8));
+                baseUrl + "/verify?token=<redacted>");
     }
 
     @Override
     public void sendPasswordReset(String to, String token) {
         log.info("[DEV] Password reset email would be sent to {} with link {}", to,
-                baseUrl + "/reset-password?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8));
+                baseUrl + "/reset-password?token=<redacted>");
     }
 }

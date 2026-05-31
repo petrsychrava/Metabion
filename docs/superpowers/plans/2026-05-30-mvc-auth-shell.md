@@ -26,7 +26,7 @@
 - Create `src/main/resources/templates/app.html`: minimal authenticated page.
 - Create `src/main/resources/static/css/app.css`: shared styling.
 - Modify `src/main/java/com/metabion/service/SmtpEmailService.java`: verification links point to `/verify`.
-- Modify `src/main/java/com/metabion/service/LoggingEmailService.java`: log full MVC links.
+- Modify `src/main/java/com/metabion/service/LoggingEmailService.java`: log MVC route previews with redacted tokens.
 - Create `src/test/java/com/metabion/controller/WebAuthControllerTest.java`: standalone MVC controller tests for service delegation and views.
 - Modify `src/test/java/com/metabion/config/SecurityConfigTest.java`: route/security assertions for MVC routes and CSRF behavior.
 - Create `src/test/java/com/metabion/service/SmtpEmailServiceTest.java`: email-link route assertions.
@@ -1210,7 +1210,7 @@ baseUrl + "/reset-password?token=" +
 
 - [ ] **Step 4: Improve dev logging links**
 
-Update `LoggingEmailService` to inject `app.base-url` and log full MVC links:
+Update `LoggingEmailService` to inject `app.base-url` and log MVC route previews with redacted token values:
 
 ```java
 package com.metabion.service;
@@ -1220,9 +1220,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
-
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
 @Service
 @Profile("dev")
@@ -1239,13 +1236,13 @@ public class LoggingEmailService implements EmailService {
     @Override
     public void sendVerification(String to, String token) {
         log.info("[DEV] Verification email would be sent to {} with link {}", to,
-                baseUrl + "/verify?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8));
+                baseUrl + "/verify?token=<redacted>");
     }
 
     @Override
     public void sendPasswordReset(String to, String token) {
         log.info("[DEV] Password reset email would be sent to {} with link {}", to,
-                baseUrl + "/reset-password?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8));
+                baseUrl + "/reset-password?token=<redacted>");
     }
 }
 ```

@@ -160,7 +160,7 @@ Email links should land on MVC pages because they are clicked by users in a brow
 - Verification links as `${app.base-url}/verify?token=...`.
 - Password reset links as `${app.base-url}/reset-password?token=...`.
 
-`LoggingEmailService` should also log full MVC links in the dev profile, not raw tokens only. This keeps local development behavior close to real email behavior while avoiding SMTP setup.
+`LoggingEmailService` should log the same MVC route shapes in the dev profile with token values redacted. It must not write live verification or reset tokens to logs.
 
 The existing REST endpoints remain available for API compatibility and tests:
 
@@ -245,7 +245,7 @@ Tests should cover:
 - `POST /reset-password` uses `UserService.resetPassword(...)` and renders or redirects to a success result.
 - SMTP verification links point to `/verify?token=...`.
 - SMTP password reset links continue to point to `/reset-password?token=...`.
-- Dev logging email links point to the same MVC routes as SMTP links.
+- Dev logging email messages mention the same MVC routes as SMTP links, with token values redacted.
 - `POST /logout` invokes the logout path and redirects to `/login`.
 - Templates render without missing model attributes.
 - Existing REST auth tests continue to pass.
