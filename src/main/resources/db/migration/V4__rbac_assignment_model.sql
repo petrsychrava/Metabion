@@ -30,7 +30,9 @@ CREATE TABLE patient_cohort_memberships (
     cohort_id           BIGINT NOT NULL REFERENCES cohorts(id) ON DELETE CASCADE,
     assigned_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
     assigned_at         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    ended_at            TIMESTAMP WITH TIME ZONE
+    ended_at            TIMESTAMP WITH TIME ZONE,
+    CONSTRAINT chk_patient_cohort_memberships_interval
+        CHECK (ended_at IS NULL OR ended_at >= assigned_at)
 );
 
 CREATE UNIQUE INDEX uq_pcm_active_patient_cohort
@@ -46,7 +48,9 @@ CREATE TABLE patient_expert_assignments (
     staff_profile_id    BIGINT NOT NULL REFERENCES staff_profiles(id) ON DELETE CASCADE,
     assigned_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
     assigned_at         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    ended_at            TIMESTAMP WITH TIME ZONE
+    ended_at            TIMESTAMP WITH TIME ZONE,
+    CONSTRAINT chk_patient_expert_assignments_interval
+        CHECK (ended_at IS NULL OR ended_at >= assigned_at)
 );
 
 CREATE UNIQUE INDEX uq_pea_active_patient_staff
@@ -62,7 +66,9 @@ CREATE TABLE cohort_staff_assignments (
     staff_profile_id    BIGINT NOT NULL REFERENCES staff_profiles(id) ON DELETE CASCADE,
     assigned_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
     assigned_at         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    ended_at            TIMESTAMP WITH TIME ZONE
+    ended_at            TIMESTAMP WITH TIME ZONE,
+    CONSTRAINT chk_cohort_staff_assignments_interval
+        CHECK (ended_at IS NULL OR ended_at >= assigned_at)
 );
 
 CREATE UNIQUE INDEX uq_csa_active_cohort_staff

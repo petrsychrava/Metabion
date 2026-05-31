@@ -35,7 +35,7 @@ public class PatientProfile {
     }
 
     public PatientProfile(User user) {
-        this.user = user;
+        setUser(user);
     }
 
     @PreUpdate
@@ -56,6 +56,9 @@ public class PatientProfile {
     }
 
     public void setUser(User user) {
+        if (user == null || !user.hasRole(RoleName.PATIENT)) {
+            throw new IllegalArgumentException("Patient profile requires PATIENT role");
+        }
         this.user = user;
     }
 

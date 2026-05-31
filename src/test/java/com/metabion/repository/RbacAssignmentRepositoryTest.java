@@ -76,6 +76,33 @@ class RbacAssignmentRepositoryTest {
     }
 
     @Test
+    void patientProfileRejectsUserWithoutPatientRole() {
+        var staffUser = createUser("patient-profile-staff@example.com", RoleName.PHYSICIAN);
+        var profile = new PatientProfile();
+
+        assertThatThrownBy(() -> new PatientProfile(staffUser))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> profile.setUser(staffUser))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> profile.setUser(null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void staffProfileRejectsUserWithoutClinicalStaffRole() {
+        var patientUser = createUser("staff-profile-patient@example.com", RoleName.PATIENT);
+        var adminUser = createUser("staff-profile-admin@example.com", RoleName.ADMIN);
+        var profile = new StaffProfile();
+
+        assertThatThrownBy(() -> new StaffProfile(patientUser))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> profile.setUser(adminUser))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> profile.setUser(null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void activeDirectAssignmentPredicateHonorsEndedAt() {
         var patient = createPatientProfile("direct-patient@example.com");
         var staff = createStaffProfile("direct-staff@example.com");
@@ -106,10 +133,16 @@ class RbacAssignmentRepositoryTest {
 
         assertThat(cohortStaffAssignments.existsActiveAssignmentForPatient(patient.getId(), staff.getId()))
                 .isTrue();
+        assertThat(patientCohortMemberships.existsActiveMembership(patient.getId(), cohort.getId()))
+                .isTrue();
+        assertThat(cohortStaffAssignments.existsActiveAssignment(cohort.getId(), staff.getId()))
+                .isTrue();
 
         membership.setEndedAt(Instant.now());
         patientCohortMemberships.saveAndFlush(membership);
 
+        assertThat(patientCohortMemberships.existsActiveMembership(patient.getId(), cohort.getId()))
+                .isFalse();
         assertThat(cohortStaffAssignments.existsActiveAssignmentForPatient(patient.getId(), staff.getId()))
                 .isFalse();
 
@@ -118,6 +151,8 @@ class RbacAssignmentRepositoryTest {
         staffAssignment.setEndedAt(Instant.now());
         cohortStaffAssignments.saveAndFlush(staffAssignment);
 
+        assertThat(cohortStaffAssignments.existsActiveAssignment(cohort.getId(), staff.getId()))
+                .isFalse();
         assertThat(cohortStaffAssignments.existsActiveAssignmentForPatient(patient.getId(), staff.getId()))
                 .isFalse();
     }
@@ -144,6 +179,41 @@ class RbacAssignmentRepositoryTest {
         assertThatThrownBy(() -> cohortStaffAssignments.saveAndFlush(
                 new CohortStaffAssignment(cohort, staff, assignedBy)))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void endedAssignmentsAllowNewActiveRowsForSameScope() {
+        var patient = createPatientProfile("reassign-patient@example.com");
+        var staff = createStaffProfile("reassign-staff@example.com");
+        var assignedBy = createUser("reassign-admin@example.com", RoleName.ADMIN);
+        var cohort = cohorts.saveAndFlush(new Cohort("Reassignment cohort"));
+
+        var directAssignment = patientExpertAssignments.saveAndFlush(
+                new PatientExpertAssignment(patient, staff, assignedBy));
+        directAssignment.setEndedAt(Instant.now());
+        patientExpertAssignments.saveAndFlush(directAssignment);
+
+        assertThat(patientExpertAssignments.saveAndFlush(
+                new PatientExpertAssignment(patient, staff, assignedBy)).isActive())
+                .isTrue();
+
+        var membership = patientCohortMemberships.saveAndFlush(
+                new PatientCohortMembership(patient, cohort, assignedBy));
+        membership.setEndedAt(Instant.now());
+        patientCohortMemberships.saveAndFlush(membership);
+
+        assertThat(patientCohortMemberships.saveAndFlush(
+                new PatientCohortMembership(patient, cohort, assignedBy)).isActive())
+                .isTrue();
+
+        var staffAssignment = cohortStaffAssignments.saveAndFlush(
+                new CohortStaffAssignment(cohort, staff, assignedBy));
+        staffAssignment.setEndedAt(Instant.now());
+        cohortStaffAssignments.saveAndFlush(staffAssignment);
+
+        assertThat(cohortStaffAssignments.saveAndFlush(
+                new CohortStaffAssignment(cohort, staff, assignedBy)).isActive())
+                .isTrue();
     }
 
     private PatientProfile createPatientProfile(String email) {

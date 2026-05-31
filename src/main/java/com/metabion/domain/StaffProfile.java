@@ -35,7 +35,7 @@ public class StaffProfile {
     }
 
     public StaffProfile(User user) {
-        this.user = user;
+        setUser(user);
     }
 
     @PreUpdate
@@ -56,6 +56,12 @@ public class StaffProfile {
     }
 
     public void setUser(User user) {
+        if (user == null || !user.hasAnyRole(
+                RoleName.NUTRITION_SPECIALIST,
+                RoleName.PHYSICIAN,
+                RoleName.COORDINATOR)) {
+            throw new IllegalArgumentException("Staff profile requires a clinical staff role");
+        }
         this.user = user;
     }
 
