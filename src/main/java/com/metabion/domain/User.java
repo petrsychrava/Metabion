@@ -61,8 +61,26 @@ public class User {
         return lockedUntil != null && lockedUntil.isAfter(Instant.now());
     }
 
-    public void addRole(String role) {
+    public void addRole(RoleName role) {
         this.roles.add(new UserRole(this, role));
+    }
+
+    public void addRole(String role) {
+        addRole(RoleName.from(role));
+    }
+
+    public boolean hasRole(RoleName role) {
+        return roles.stream()
+                .anyMatch(userRole -> userRole.getRole().equals(role.name()));
+    }
+
+    public boolean hasAnyRole(RoleName... roleNames) {
+        for (RoleName roleName : roleNames) {
+            if (hasRole(roleName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public List<String> roleNames() {

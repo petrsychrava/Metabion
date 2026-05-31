@@ -1,5 +1,6 @@
 package com.metabion.service;
 
+import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.LoginRequest;
 import com.metabion.repository.UserRepository;
@@ -65,7 +66,7 @@ class SecurityServiceTest {
         testUser.setEnabled(true);
         testUser.setFailedLoginAttempts(0);
         testUser.setLockedUntil(null);
-        testUser.addRole("USER");
+        testUser.addRole(RoleName.PATIENT);
     }
 
     @Test
@@ -146,7 +147,7 @@ class SecurityServiceTest {
 
         assertThat(response.status()).isEqualTo("AUTHENTICATED");
         assertThat(response.email()).isEqualTo("test@example.com");
-        assertThat(response.roles()).containsExactly("USER");
+        assertThat(response.roles()).containsExactly("PATIENT");
         assertThat(response.challengeId()).isNull();
         assertThat(response.methods()).isNull();
 
@@ -250,7 +251,7 @@ class SecurityServiceTest {
         return UsernamePasswordAuthenticationToken.authenticated(
                 testUser.getEmail(),
                 null,
-                List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                List.of(new SimpleGrantedAuthority(RoleName.PATIENT.authority()))
         );
     }
 }

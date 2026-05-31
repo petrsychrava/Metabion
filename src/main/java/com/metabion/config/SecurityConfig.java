@@ -21,6 +21,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 
+import com.metabion.domain.RoleName;
 import com.metabion.repository.UserRepository;
 
 @Configuration
@@ -72,7 +73,7 @@ public class SecurityConfig {
                         .disabled(!user.isEnabled())
                         .accountLocked(user.isLocked())
                         .authorities(user.roleNames().stream()
-                                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                                .map(role -> new SimpleGrantedAuthority(RoleName.from(role).authority()))
                                 .toList())
                         .build())
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));

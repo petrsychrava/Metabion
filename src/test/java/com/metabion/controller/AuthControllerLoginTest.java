@@ -2,6 +2,7 @@ package com.metabion.controller;
 
 import com.metabion.dto.LoginRequest;
 import com.metabion.dto.LoginResponse;
+import com.metabion.domain.RoleName;
 import com.metabion.service.SecurityService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +29,7 @@ class AuthControllerLoginTest {
     @Test
     void loginReturns200OnSuccess() {
         var request = new LoginRequest("user@example.com", "password123");
-        var response = LoginResponse.authenticated("user@example.com", List.of("USER"));
+        var response = LoginResponse.authenticated("user@example.com", List.of(RoleName.PATIENT.name()));
 
         when(securityService.login(
                 argThat(r -> r != null && "user@example.com".equals(r.email())),
