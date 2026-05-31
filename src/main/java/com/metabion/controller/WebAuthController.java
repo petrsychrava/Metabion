@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -177,7 +178,7 @@ public class WebAuthController {
     @GetMapping("/app")
     public String app(Authentication authentication, Model model) {
         model.addAttribute("email", authentication.getName());
-        model.addAttribute("roles", List.of());
+        model.addAttribute("roles", roles(authentication));
         return "app";
     }
 
@@ -189,6 +190,15 @@ public class WebAuthController {
 
     private boolean isRateLimited(HttpServletRequest request, String endpoint) {
         return endpoint.equals(request.getAttribute(RateLimitingFilter.RATE_LIMITED_ENDPOINT_ATTRIBUTE));
+    }
+
+    private List<String> roles(Authentication authentication) {
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(authority -> authority != null && authority.startsWith("ROLE_"))
+                .map(authority -> authority.substring("ROLE_".length()))
+                .sorted()
+                .toList();
     }
 
     private void result(Model model, String title, String message, String href, String action) {

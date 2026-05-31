@@ -9,6 +9,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
 
@@ -16,6 +19,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
 class AuthControllerLoginTest {
@@ -105,12 +112,16 @@ class AuthControllerLoginTest {
     }
 
     @Test
-    void meReturns200WithAuthenticatedEmail() {
-        var result = authController.me("user@example.com");
+    void meReturns200WithAuthenticatedEmailAndRoles() throws Exception {
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", "ROLE_PATIENT");
+        auth.setAuthenticated(true);
 
-        assertThat(result.getStatusCode().value()).isEqualTo(200);
-        assertThat(result.getBody()).isNotNull();
-        assertThat(result.getBody().get("email")).isEqualTo("user@example.com");
+        mockMvc().perform(get("/api/auth/me")
+                        .with(user("patient@example.com").roles("PATIENT"))
+                        .principal(auth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("patient@example.com"))
+                .andExpect(jsonPath("$.roles[0]").value("PATIENT"));
     }
 
     @Test
@@ -118,5 +129,11 @@ class AuthControllerLoginTest {
         var result = authController.me(null);
 
         assertThat(result.getStatusCode().value()).isEqualTo(401);
+    }
+
+    private MockMvc mockMvc() {
+        return MockMvcBuilders
+                .standaloneSetup(authController)
+                .build();
     }
 }

@@ -118,13 +118,14 @@ class WebAuthControllerTest {
 
     @Test
     void app_renders_authenticated_shell() throws Exception {
-        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PHYSICIAN", "ROLE_COORDINATOR");
         auth.setAuthenticated(true);
 
         mvc.perform(get("/app").principal(auth))
                 .andExpect(status().isOk())
                 .andExpect(view().name("app"))
-                .andExpect(model().attribute("email", "user@example.com"));
+                .andExpect(model().attribute("email", "user@example.com"))
+                .andExpect(model().attribute("roles", List.of("COORDINATOR", "PHYSICIAN")));
     }
 
     @Test
