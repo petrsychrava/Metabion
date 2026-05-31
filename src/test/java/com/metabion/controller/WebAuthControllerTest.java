@@ -3,6 +3,7 @@ package com.metabion.controller;
 import com.metabion.dto.LoginForm;
 import com.metabion.dto.LoginResponse;
 import com.metabion.exception.InvalidTokenException;
+import com.metabion.config.RateLimitingFilter;
 import com.metabion.service.SecurityService;
 import com.metabion.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -172,6 +173,20 @@ class WebAuthControllerTest {
     }
 
     @Test
+    void post_login_rate_limited_rerenders_generic_error_and_does_not_call_service() throws Exception {
+        mvc.perform(post("/login")
+                        .requestAttr(RateLimitingFilter.RATE_LIMITED_ENDPOINT_ATTRIBUTE, "login")
+                        .param("email", "user@example.com")
+                        .param("password", "wrong-password"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("login"))
+                .andExpect(model().attribute("loginForm", new LoginForm("user@example.com", "")))
+                .andExpect(model().attribute("error", "Invalid email or password."));
+
+        verify(securityService, never()).login(any(), any(), any());
+    }
+
+    @Test
     void post_login_unexpected_runtime_exception_propagates() {
         when(securityService.login(any(), any(), any()))
                 .thenThrow(new IllegalStateException("session store unavailable"));
@@ -220,6 +235,19 @@ class WebAuthControllerTest {
     }
 
     @Test
+    void post_register_rate_limited_shows_generic_result_and_does_not_call_service() throws Exception {
+        mvc.perform(post("/register")
+                        .requestAttr(RateLimitingFilter.RATE_LIMITED_ENDPOINT_ATTRIBUTE, "register")
+                        .param("email", "new@example.com")
+                        .param("password", "SecurePass123"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("result"))
+                .andExpect(model().attribute("title", "Check your email"));
+
+        verify(userService, never()).register(any());
+    }
+
+    @Test
     void verify_success_renders_result() throws Exception {
         mvc.perform(get("/verify").param("token", "verify-token"))
                 .andExpect(status().isOk())
@@ -251,6 +279,18 @@ class WebAuthControllerTest {
     }
 
     @Test
+    void post_forgot_password_rate_limited_shows_generic_result_and_does_not_call_service() throws Exception {
+        mvc.perform(post("/forgot-password")
+                        .requestAttr(RateLimitingFilter.RATE_LIMITED_ENDPOINT_ATTRIBUTE, "forgot-password")
+                        .param("email", "user@example.com"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("result"))
+                .andExpect(model().attribute("title", "Check your email"));
+
+        verify(userService, never()).requestPasswordReset(any());
+    }
+
+    @Test
     void post_reset_password_delegates_and_shows_success() throws Exception {
         mvc.perform(post("/reset-password")
                         .param("token", "reset-token")
@@ -272,6 +312,19 @@ class WebAuthControllerTest {
                 .andExpect(view().name("reset-password"))
                 .andExpect(model().attribute("token", "reset-token"))
                 .andExpect(model().attributeHasFieldErrors("resetPasswordForm", "newPassword"));
+
+        verify(userService, never()).resetPassword(any());
+    }
+
+    @Test
+    void post_reset_password_rate_limited_shows_generic_result_and_does_not_call_service() throws Exception {
+        mvc.perform(post("/reset-password")
+                        .requestAttr(RateLimitingFilter.RATE_LIMITED_ENDPOINT_ATTRIBUTE, "reset-password")
+                        .param("token", "reset-token")
+                        .param("newPassword", "SecurePass123"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("result"))
+                .andExpect(model().attribute("title", "Request received"));
 
         verify(userService, never()).resetPassword(any());
     }

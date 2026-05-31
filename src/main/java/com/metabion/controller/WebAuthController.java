@@ -5,6 +5,7 @@ import com.metabion.dto.LoginForm;
 import com.metabion.dto.LoginRequest;
 import com.metabion.dto.RegisterRequest;
 import com.metabion.dto.ResetPasswordRequest;
+import com.metabion.config.RateLimitingFilter;
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.service.SecurityService;
 import com.metabion.service.UserService;
@@ -55,6 +56,11 @@ public class WebAuthController {
                               HttpServletRequest request,
                               HttpServletResponse response,
                               Model model) {
+        if (isRateLimited(request, "login")) {
+            model.addAttribute("loginForm", new LoginForm(email, ""));
+            model.addAttribute("error", "Invalid email or password.");
+            return "login";
+        }
         try {
             var result = securityService.login(new LoginRequest(email, password), request, response);
             if ("AUTHENTICATED".equals(result.status())) {
@@ -82,7 +88,13 @@ public class WebAuthController {
     @PostMapping("/register")
     public String registerSubmit(@Valid @ModelAttribute("registerForm") RegisterRequest registerForm,
                                  BindingResult bindingResult,
+                                 HttpServletRequest request,
                                  Model model) {
+        if (isRateLimited(request, "register")) {
+            result(model, "Check your email", "If the address can be registered, a verification link has been sent.",
+                    "/login", "Sign in");
+            return "result";
+        }
         if (bindingResult.hasErrors()) {
             return "register";
         }
@@ -115,8 +127,10 @@ public class WebAuthController {
     }
 
     @PostMapping("/forgot-password")
-    public String forgotPasswordSubmit(@RequestParam String email, Model model) {
-        userService.requestPasswordReset(new ForgotPasswordRequest(email));
+    public String forgotPasswordSubmit(@RequestParam String email, HttpServletRequest request, Model model) {
+        if (!isRateLimited(request, "forgot-password")) {
+            userService.requestPasswordReset(new ForgotPasswordRequest(email));
+        }
         result(model, "Check your email", "If an account exists, reset instructions have been sent.",
                 "/login", "Back to sign in");
         return "result";
@@ -132,7 +146,13 @@ public class WebAuthController {
     @PostMapping("/reset-password")
     public String resetPasswordSubmit(@Valid @ModelAttribute("resetPasswordForm") ResetPasswordRequest resetPasswordForm,
                                       BindingResult bindingResult,
+                                      HttpServletRequest request,
                                       Model model) {
+        if (isRateLimited(request, "reset-password")) {
+            result(model, "Request received", "If the reset link can be processed, your request has been accepted.",
+                    "/login", "Back to sign in");
+            return "result";
+        }
         if (bindingResult.hasErrors()) {
             model.addAttribute("token", resetPasswordForm.token());
             return "reset-password";
@@ -165,6 +185,10 @@ public class WebAuthController {
         return authentication != null
                 && authentication.isAuthenticated()
                 && !(authentication instanceof AnonymousAuthenticationToken);
+    }
+
+    private boolean isRateLimited(HttpServletRequest request, String endpoint) {
+        return endpoint.equals(request.getAttribute(RateLimitingFilter.RATE_LIMITED_ENDPOINT_ATTRIBUTE));
     }
 
     private void result(Model model, String title, String message, String href, String action) {

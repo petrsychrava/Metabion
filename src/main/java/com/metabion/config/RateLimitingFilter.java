@@ -28,6 +28,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class RateLimitingFilter extends OncePerRequestFilter {
 
+    public static final String RATE_LIMITED_ENDPOINT_ATTRIBUTE = "metabion.rateLimitedEndpoint";
+
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final int MAX_BUCKETS = 10_000;
     private static final Duration BUCKET_IDLE_TTL = Duration.ofHours(2);
@@ -59,11 +61,20 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         for (var key : keysFor(endpoint, wrapped)) {
             var bucket = bucketFor(key, now);
             if (!bucket.tryConsume(1)) {
-                writeRateLimitedResponse(endpoint, response);
+                if (isApiRequest(wrapped)) {
+                    writeRateLimitedResponse(endpoint, response);
+                } else {
+                    wrapped.setAttribute(RATE_LIMITED_ENDPOINT_ATTRIBUTE, endpoint);
+                    filterChain.doFilter(wrapped, response);
+                }
                 return;
             }
         }
         filterChain.doFilter(wrapped, response);
+    }
+
+    private boolean isApiRequest(HttpServletRequest request) {
+        return request.getRequestURI().startsWith("/api/");
     }
 
     private String endpointFor(HttpServletRequest request) {

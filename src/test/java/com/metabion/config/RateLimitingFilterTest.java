@@ -140,7 +140,7 @@ class RateLimitingFilterTest {
                             return req;
                         }))
                 .andExpect(status().isUnauthorized())
-                .andExpect(content().json("{\"error\":\"invalid_credentials\"}"));
+                .andExpect(content().json("{\"status\":\"rate_limited:login\"}"));
 
         org.assertj.core.api.Assertions.assertThat(controller.mvcLoginAttempts()).isEqualTo(5);
     }
@@ -168,7 +168,7 @@ class RateLimitingFilterTest {
                             return req;
                         }))
                 .andExpect(status().isUnauthorized())
-                .andExpect(content().json("{\"error\":\"invalid_credentials\"}"));
+                .andExpect(content().json("{\"status\":\"rate_limited:login\"}"));
 
         org.assertj.core.api.Assertions.assertThat(controller.mvcLoginAttempts()).isEqualTo(10);
     }
@@ -194,7 +194,7 @@ class RateLimitingFilterTest {
                             return req;
                         }))
                 .andExpect(status().isOk())
-                .andExpect(content().json("{\"status\":\"ok\"}"));
+                .andExpect(content().json("{\"status\":\"rate_limited:register\"}"));
 
         org.assertj.core.api.Assertions.assertThat(controller.mvcRegisterAttempts()).isEqualTo(10);
     }
@@ -222,7 +222,7 @@ class RateLimitingFilterTest {
                             return req;
                         }))
                 .andExpect(status().isOk())
-                .andExpect(content().json("{\"status\":\"ok\"}"));
+                .andExpect(content().json("{\"status\":\"rate_limited:forgot-password\"}"));
 
         org.assertj.core.api.Assertions.assertThat(controller.mvcForgotPasswordAttempts()).isEqualTo(5);
     }
@@ -249,7 +249,7 @@ class RateLimitingFilterTest {
                             return req;
                         }))
                 .andExpect(status().isOk())
-                .andExpect(content().json("{\"status\":\"ok\"}"));
+                .andExpect(content().json("{\"status\":\"rate_limited:reset-password\"}"));
 
         org.assertj.core.api.Assertions.assertThat(controller.mvcResetPasswordAttempts()).isEqualTo(20);
     }
@@ -325,26 +325,43 @@ class RateLimitingFilterTest {
 
         @PostMapping("/login")
         ResponseEntity<Map<String, String>> mvcLogin() {
+            var rateLimited = rateLimitedEndpoint();
+            if (rateLimited != null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("status", "rate_limited:" + rateLimited));
+            }
             mvcLoginAttempts.incrementAndGet();
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "invalid_credentials"));
         }
 
         @PostMapping("/register")
-        Map<String, String> mvcRegister() {
+        ResponseEntity<Map<String, String>> mvcRegister() {
+            var rateLimited = rateLimitedEndpoint();
+            if (rateLimited != null) {
+                return ResponseEntity.ok(Map.of("status", "rate_limited:" + rateLimited));
+            }
             mvcRegisterAttempts.incrementAndGet();
-            return Map.of("status", "ok");
+            return ResponseEntity.ok(Map.of("status", "ok"));
         }
 
         @PostMapping("/forgot-password")
-        Map<String, String> mvcForgotPassword() {
+        ResponseEntity<Map<String, String>> mvcForgotPassword() {
+            var rateLimited = rateLimitedEndpoint();
+            if (rateLimited != null) {
+                return ResponseEntity.ok(Map.of("status", "rate_limited:" + rateLimited));
+            }
             mvcForgotPasswordAttempts.incrementAndGet();
-            return Map.of("status", "ok");
+            return ResponseEntity.ok(Map.of("status", "ok"));
         }
 
         @PostMapping("/reset-password")
-        Map<String, String> mvcResetPassword() {
+        ResponseEntity<Map<String, String>> mvcResetPassword() {
+            var rateLimited = rateLimitedEndpoint();
+            if (rateLimited != null) {
+                return ResponseEntity.ok(Map.of("status", "rate_limited:" + rateLimited));
+            }
             mvcResetPasswordAttempts.incrementAndGet();
-            return Map.of("status", "password_reset");
+            return ResponseEntity.ok(Map.of("status", "password_reset"));
         }
 
         int loginAttempts() {
@@ -370,6 +387,16 @@ class RateLimitingFilterTest {
 
         int mvcResetPasswordAttempts() {
             return mvcResetPasswordAttempts.get();
+        }
+
+        private String rateLimitedEndpoint() {
+            var attributes = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+            if (attributes instanceof org.springframework.web.context.request.ServletRequestAttributes servlet) {
+                var value = servlet.getRequest()
+                        .getAttribute(RateLimitingFilter.RATE_LIMITED_ENDPOINT_ATTRIBUTE);
+                return value == null ? null : value.toString();
+            }
+            return null;
         }
     }
 }
