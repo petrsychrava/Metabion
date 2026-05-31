@@ -3,6 +3,7 @@ package com.metabion.controller;
 import com.metabion.config.RateLimitingFilter;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.SecurityService;
+import com.metabion.service.StaffInvitationService;
 import com.metabion.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,9 @@ class WebAuthTemplateTest {
 
     @MockitoBean
     SecurityService securityService;
+
+    @MockitoBean
+    StaffInvitationService staffInvitationService;
 
     @MockitoBean
     UserRepository userRepository;
@@ -110,6 +114,29 @@ class WebAuthTemplateTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Signed in")))
                 .andExpect(content().string(containsString("user@example.com")))
+                .andExpect(content().string(containsString("name=\"_csrf\"")));
+    }
+
+    @Test
+    void admin_staff_invitation_template_renders_form() throws Exception {
+        var auth = new TestingAuthenticationToken("admin@example.com", "password", "ROLE_ADMIN");
+        auth.setAuthenticated(true);
+
+        mvc.perform(get("/admin/staff-invitations/new").principal(auth).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Invite staff")))
+                .andExpect(content().string(containsString("name=\"email\"")))
+                .andExpect(content().string(containsString("name=\"roles\"")))
+                .andExpect(content().string(containsString("name=\"_csrf\"")));
+    }
+
+    @Test
+    void staff_invitation_accept_template_renders_form() throws Exception {
+        mvc.perform(get("/staff-invitations/accept").param("token", "abc").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Accept invitation")))
+                .andExpect(content().string(containsString("name=\"token\"")))
+                .andExpect(content().string(containsString("value=\"abc\"")))
                 .andExpect(content().string(containsString("name=\"_csrf\"")));
     }
 }

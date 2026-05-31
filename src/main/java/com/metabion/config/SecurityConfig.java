@@ -45,6 +45,7 @@ public class SecurityConfig {
             "/verify",
             "/forgot-password",
             "/reset-password",
+            "/staff-invitations/accept",
             "/error"
     };
 
@@ -52,7 +53,8 @@ public class SecurityConfig {
             "/login",
             "/register",
             "/forgot-password",
-            "/reset-password"
+            "/reset-password",
+            "/staff-invitations/accept"
     };
 
     private static final String[] PUBLIC_STATIC = {

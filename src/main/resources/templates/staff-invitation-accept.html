@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head('Accept invitation - Metabion')}"></head>
+<body>
+<main class="page">
+    <section class="panel auth-panel">
+        <div th:replace="~{layout :: brand}"></div>
+        <h1>Accept invitation</h1>
+        <p class="muted">Create your staff account password.</p>
+        <p class="error" th:if="${error}" th:text="${error}">Invitation error.</p>
+
+        <form th:action="@{/staff-invitations/accept}" th:object="${form}" method="post" class="form">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <input type="hidden" th:field="*{token}" th:value="${token}">
+
+            <div class="field">
+                <label for="password">Password</label>
+                <input id="password" type="password" th:field="*{password}" autocomplete="new-password"
+                       minlength="12" maxlength="72" required>
+                <p class="hint">Use at least 12 characters.</p>
+                <p class="error" th:if="${#fields.hasErrors('password')}" th:errors="*{password}">Password error</p>
+            </div>
+
+            <button type="submit">Accept invitation</button>
+        </form>
+    </section>
+</main>
+</body>
+</html>
