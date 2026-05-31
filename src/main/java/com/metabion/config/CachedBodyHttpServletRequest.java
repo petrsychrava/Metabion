@@ -101,14 +101,15 @@ class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
 
     private Map<String, String[]> parseParameters() {
         var parsed = new LinkedHashMap<String, ArrayList<String>>();
-        super.getParameterMap().forEach((name, values) -> {
-            var list = parsed.computeIfAbsent(name, ignored -> new ArrayList<>());
-            for (var value : values) {
-                addValue(list, value);
-            }
-        });
         parsePairs(getQueryString(), parsed);
         parsePairs(new String(body, charset()), parsed);
+        super.getParameterMap().forEach((name, values) -> {
+            if (parsed.containsKey(name)) {
+                return;
+            }
+            var list = parsed.computeIfAbsent(name, ignored -> new ArrayList<>());
+            Collections.addAll(list, values);
+        });
 
         var result = new LinkedHashMap<String, String[]>();
         parsed.forEach((name, values) -> result.put(name, values.toArray(String[]::new)));
@@ -126,13 +127,7 @@ class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
             }
             var name = urlDecode(parts[0]);
             var value = parts.length == 2 ? urlDecode(parts[1]) : "";
-            addValue(parsed.computeIfAbsent(name, ignored -> new ArrayList<>()), value);
-        }
-    }
-
-    private void addValue(ArrayList<String> values, String value) {
-        if (!values.contains(value)) {
-            values.add(value);
+            parsed.computeIfAbsent(name, ignored -> new ArrayList<>()).add(value);
         }
     }
 

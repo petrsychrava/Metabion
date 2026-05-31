@@ -8,6 +8,7 @@ import java.util.List;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -134,7 +135,8 @@ class SecurityConfigTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("result"));
 
-        verify(userService).register(any());
+        verify(userService).register(argThat(request -> "user@example.com".equals(request.email())
+                && "SecurePass123".equals(request.password())));
     }
 
     @Test
@@ -153,7 +155,8 @@ class SecurityConfigTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("login"));
 
-        verify(securityService).login(any(), any(), any());
+        verify(securityService).login(argThat(request -> "user@example.com".equals(request.email())
+                && "SecurePass123".equals(request.password())), any(), any());
     }
 
     @Test
