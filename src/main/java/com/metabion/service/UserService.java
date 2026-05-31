@@ -2,6 +2,7 @@ package com.metabion.service;
 
 import com.metabion.domain.AccountVerification;
 import com.metabion.domain.PasswordReset;
+import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.ForgotPasswordRequest;
 import com.metabion.dto.RegisterRequest;
@@ -34,7 +35,7 @@ public class UserService {
 
     private static final Duration VERIFICATION_TTL = Duration.ofHours(48);
     private static final Duration RESET_TTL = Duration.ofHours(24);
-    private static final String DEFAULT_USER_ROLE = "PATIENT";
+    private static final RoleName DEFAULT_USER_ROLE = RoleName.PATIENT;
 
     private final UserRepository users;
     private final VerificationTokenRepository verifTokens;
