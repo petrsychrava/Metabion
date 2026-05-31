@@ -102,7 +102,6 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_STATIC).permitAll()
-                        .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_MVC_GETS).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_MVC_POSTS).permitAll()
                         .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
