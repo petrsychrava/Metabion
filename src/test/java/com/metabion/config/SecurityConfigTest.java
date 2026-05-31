@@ -129,8 +129,8 @@ class SecurityConfigTest {
     void mvc_post_register_with_csrf_reaches_controller() throws Exception {
         mvc.perform(post("/register")
                         .with(csrf())
-                        .param("email", "user@example.com")
-                        .param("password", "SecurePass123"))
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("email=user%40example.com&password=SecurePass123"))
                 .andExpect(status().isOk())
                 .andExpect(view().name("result"));
 
@@ -148,8 +148,8 @@ class SecurityConfigTest {
 
         mvc.perform(post("/login")
                         .with(csrf())
-                        .param("email", "user@example.com")
-                        .param("password", "SecurePass123"))
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("email=user%40example.com&password=SecurePass123"))
                 .andExpect(status().isOk())
                 .andExpect(view().name("login"));
 
