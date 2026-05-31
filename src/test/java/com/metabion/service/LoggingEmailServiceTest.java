@@ -36,7 +36,8 @@ class LoggingEmailServiceTest {
 
         service.sendStaffInvitation("expert@example.com", "plain-token");
 
-        assertThat(output).contains("/staff-invitations/accept?token=<redacted>");
+        assertThat(output).contains("http://localhost:8080/staff-invitations/accept?token=<redacted>");
+        assertThat(output).doesNotContain("/api/staff-invitations/accept");
         assertThat(output).doesNotContain("plain-token");
     }
 }
