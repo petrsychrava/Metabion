@@ -47,6 +47,10 @@ tasks.named('test') {
     finalizedBy 'jacocoTestReport'
 }
 
+bootRun {
+    args = ["--spring.profiles.active=dev"]
+}
+
 tasks.named('jacocoTestReport') {
     reports {
         html.required = true
