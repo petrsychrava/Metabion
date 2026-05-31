@@ -30,6 +30,8 @@ The role model remains based on `users` and `user_roles`, but supported values b
 - `COORDINATOR`
 - `ADMIN`
 
+Users may have multiple roles. For example, a user can be both `PHYSICIAN` and `COORDINATOR`, or both `ADMIN` and `PHYSICIAN`. Profile rows follow role categories: a user with `PATIENT` should have a `PatientProfile`; a user with any clinical staff role should have a `StaffProfile`; a mixed patient/staff user may have both.
+
 Assignments are modeled separately:
 
 - direct patient-to-staff assignment
@@ -65,7 +67,7 @@ Expected fields:
 - `created_at`
 - `updated_at`
 
-The profile gives patient-specific identity without overloading the generic `users` table. Registration should create a `PatientProfile` when it creates a patient account so access checks do not have to handle registered patients without profiles.
+The profile gives patient-specific identity without overloading the generic `users` table. Registration should create a `PatientProfile` when it creates a patient account so access checks do not have to handle registered patients without profiles. A user with `PATIENT` plus other roles still keeps a patient profile for patient-scoped access.
 
 ### `staff_profiles`
 
@@ -78,7 +80,7 @@ Expected fields:
 - `created_at`
 - `updated_at`
 
-The profile gives staff-specific domain identity without turning `users` into a mixed authentication and clinical-staff table. Users with `NUTRITION_SPECIALIST`, `PHYSICIAN`, or `COORDINATOR` should have a `StaffProfile`. `ADMIN` users only need a staff profile when they also participate as clinical staff.
+The profile gives staff-specific domain identity without turning `users` into a mixed authentication and clinical-staff table. Users with `NUTRITION_SPECIALIST`, `PHYSICIAN`, or `COORDINATOR` should have a `StaffProfile`. `ADMIN` users only need a staff profile when they also participate as clinical staff or hold a clinical staff role.
 
 ### `cohorts`
 
@@ -253,6 +255,7 @@ Session-based authentication, CSRF policy, login timing equalization, generic lo
 Repository and persistence tests should cover:
 
 - supported role values persist correctly
+- multiple roles can be assigned to one user
 - unsupported role values are rejected at the domain or service boundary
 - patient profile is tied to a patient user
 - staff profile is tied to a staff-role user
@@ -294,6 +297,7 @@ Full implementation verification should end with:
 In scope:
 
 - five role values
+- multiple roles per user
 - patient profile creation for registered patients
 - staff profile support for nutrition specialists, physicians, and coordinators
 - direct patient-to-staff assignment
