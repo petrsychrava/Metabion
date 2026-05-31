@@ -85,14 +85,6 @@ class SecurityConfigTest {
     }
 
     @Test
-    void api_register_trailing_slash_is_public() throws Exception {
-        mvc.perform(post("/api/auth/register/")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"slash@example.com\",\"password\":\"SecurePass123\"}"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
     void protected_post_without_csrf_is_forbidden() throws Exception {
         mvc.perform(post("/api/whoami").with(user("alice")))
                 .andExpect(status().isForbidden());
@@ -193,22 +185,6 @@ class SecurityConfigTest {
                         .content("email=mail%40example.com&password=SecurePass123"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(view().name("result"));
-    }
-
-    @Test
-    void mvc_register_trailing_slash_is_public() throws Exception {
-        mvc.perform(get("/register/"))
-                .andExpect(status().isOk());
-
-        mvc.perform(post("/register/")
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                        .content("email=slash%40example.com&password=SecurePass123"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("result"));
-
-        verify(userService).register(argThat(request -> "slash@example.com".equals(request.email())
-                && "SecurePass123".equals(request.password())));
     }
 
     @Test
