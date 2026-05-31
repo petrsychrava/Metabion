@@ -32,7 +32,8 @@ public class SecurityConfig {
             "/api/auth/register",
             "/api/auth/login",
             "/api/auth/forgot-password",
-            "/api/auth/reset-password"
+            "/api/auth/reset-password",
+            "/api/staff-invitations/accept"
     };
 
     private static final String[] PUBLIC_MVC_GETS = {
@@ -107,6 +108,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, PUBLIC_MVC_POSTS).permitAll()
                         .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
                         .requestMatchers("/api/auth/verify").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/admin/staff-invitations").hasRole("ADMIN")
+                        .requestMatchers("/admin/staff-invitations/**").hasRole("ADMIN")
                         .requestMatchers("/app", "/logout").authenticated()
                         .requestMatchers("/api/auth/logout").authenticated()
                         .requestMatchers("/api/**").authenticated()

@@ -2,6 +2,7 @@ package com.metabion.config;
 
 import com.metabion.dto.LoginResponse;
 import com.metabion.service.SecurityService;
+import com.metabion.service.StaffInvitationService;
 import com.metabion.service.UserService;
 
 import java.util.List;
@@ -63,6 +64,9 @@ class SecurityConfigTest {
     @MockitoBean
     SecurityService securityService;
 
+    @MockitoBean
+    StaffInvitationService staffInvitationService;
+
     private MockMvc mvc;
 
     @BeforeEach
@@ -94,6 +98,23 @@ class SecurityConfigTest {
     void protected_post_with_csrf_is_allowed_but_405() throws Exception {
         mvc.perform(post("/api/whoami").with(user("alice")).with(csrf()))
                 .andExpect(status().isMethodNotAllowed());
+    }
+
+    @Test
+    void public_staff_invitation_accept_without_csrf_reaches_handler() throws Exception {
+        mvc.perform(post("/api/staff-invitations/accept")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void admin_staff_invitation_create_without_csrf_is_forbidden_for_admin() throws Exception {
+        mvc.perform(post("/api/admin/staff-invitations")
+                        .with(user("admin@example.com").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test

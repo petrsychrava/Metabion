@@ -1,6 +1,7 @@
 package com.metabion.controller;
 
 import com.metabion.exception.InvalidTokenException;
+import com.metabion.exception.StaffInvitationException;
 import com.metabion.exception.ValidationException;
 import com.metabion.service.RateLimitedException;
 import org.springframework.http.HttpStatus;
@@ -31,6 +32,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidTokenException.class)
     public ResponseEntity<Map<String, String>> invalidToken(InvalidTokenException e) {
         return ResponseEntity.badRequest().body(INVALID_TOKEN);
+    }
+
+    @ExceptionHandler(StaffInvitationException.class)
+    public ResponseEntity<Map<String, String>> staffInvitation(StaffInvitationException e) {
+        return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
