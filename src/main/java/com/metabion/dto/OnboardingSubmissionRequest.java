@@ -14,10 +14,10 @@ import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.Year;
 import java.time.ZoneId;
-import java.time.DateTimeException;
 
 public record OnboardingSubmissionRequest(
         @Size(max = 100) String onboardingContext,
@@ -54,7 +54,7 @@ public record OnboardingSubmissionRequest(
             return true;
         }
         try {
-            ZoneId.of(timezone);
+            ZoneId.of(timezone.trim());
             return true;
         } catch (DateTimeException ex) {
             return false;

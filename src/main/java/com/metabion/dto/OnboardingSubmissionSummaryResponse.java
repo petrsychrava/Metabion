@@ -11,7 +11,7 @@ public record OnboardingSubmissionSummaryResponse(
         Long id,
         Long patientProfileId,
         String patientEmail,
-        String context,
+        String onboardingContext,
         int version,
         Instant submittedAt,
         IbdDiagnosisType diagnosisType,
