@@ -37,4 +37,19 @@ class SmtpEmailServiceTest {
         assertThat(captor.getValue().getText())
                 .contains("http://localhost:8080/reset-password?token=reset+token");
     }
+
+    @Test
+    void staff_invitation_email_points_to_mvc_accept_route() {
+        var mailSender = mock(JavaMailSender.class);
+        var service = new SmtpEmailService(mailSender, "http://localhost:8080");
+
+        service.sendStaffInvitation("expert@example.com", "plain token");
+
+        var captor = forClass(SimpleMailMessage.class);
+        verify(mailSender).send(captor.capture());
+        assertThat(captor.getValue().getTo()).containsExactly("expert@example.com");
+        assertThat(captor.getValue().getSubject()).isEqualTo("Set up your Metabion staff account");
+        assertThat(captor.getValue().getText())
+                .contains("http://localhost:8080/staff-invitations/accept?token=plain+token");
+    }
 }

@@ -43,4 +43,15 @@ public class SmtpEmailService implements EmailService {
                     URLEncoder.encode(token, StandardCharsets.UTF_8));
         mail.send(msg);
     }
+
+    @Override
+    public void sendStaffInvitation(String to, String token) {
+        var msg = new SimpleMailMessage();
+        msg.setTo(to);
+        msg.setSubject("Set up your Metabion staff account");
+        msg.setText("Click to set up your staff account (link expires in 7 days):\n\n" +
+                    baseUrl + "/staff-invitations/accept?token=" +
+                    URLEncoder.encode(token, StandardCharsets.UTF_8));
+        mail.send(msg);
+    }
 }

@@ -29,4 +29,10 @@ public class LoggingEmailService implements EmailService {
         log.info("[DEV] Password reset email would be sent to {} with link {}", to,
                 baseUrl + "/reset-password?token=<redacted>");
     }
+
+    @Override
+    public void sendStaffInvitation(String to, String token) {
+        log.info("[DEV] Staff invitation email would be sent to {} with link {}", to,
+                baseUrl + "/staff-invitations/accept?token=<redacted>");
+    }
 }

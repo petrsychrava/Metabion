@@ -29,4 +29,14 @@ class LoggingEmailServiceTest {
         assertThat(output).contains("http://localhost:8080/reset-password?token=<redacted>");
         assertThat(output).doesNotContain("reset-token");
     }
+
+    @Test
+    void staff_invitation_log_uses_mvc_route_without_token(CapturedOutput output) {
+        var service = new LoggingEmailService("http://localhost:8080");
+
+        service.sendStaffInvitation("expert@example.com", "plain-token");
+
+        assertThat(output).contains("/staff-invitations/accept?token=<redacted>");
+        assertThat(output).doesNotContain("plain-token");
+    }
 }
