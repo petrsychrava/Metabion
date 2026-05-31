@@ -3,6 +3,7 @@ package com.metabion.controller;
 import com.metabion.dto.AcceptStaffInvitationRequest;
 import com.metabion.dto.CreateStaffInvitationRequest;
 import com.metabion.exception.StaffInvitationException;
+import com.metabion.exception.ValidationException;
 import com.metabion.service.StaffInvitationService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
@@ -80,6 +81,9 @@ public class StaffInvitationWebController {
             staffInvitationService.acceptInvitation(form);
             result(model, "Invitation accepted", "Your staff account is ready. You can now sign in.",
                     "/login", "Sign in");
+        } catch (ValidationException ex) {
+            model.addAttribute("error", ex.getMessage());
+            return "staff-invitation-accept";
         } catch (StaffInvitationException ex) {
             result(model, "Invitation link invalid", "This invitation link is invalid or expired.",
                     "/login", "Back to sign in");

@@ -3,6 +3,7 @@ package com.metabion.controller;
 import com.metabion.dto.AcceptStaffInvitationRequest;
 import com.metabion.dto.CreateStaffInvitationRequest;
 import com.metabion.exception.StaffInvitationException;
+import com.metabion.exception.ValidationException;
 import com.metabion.service.SecurityService;
 import com.metabion.service.StaffInvitationService;
 import com.metabion.service.UserService;
@@ -23,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -111,6 +113,16 @@ class StaffInvitationWebControllerTest {
     }
 
     @Test
+    void non_admin_cannot_post_admin_invitation() throws Exception {
+        mvc.perform(post("/admin/staff-invitations")
+                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(csrf())
+                        .param("email", "expert@example.com")
+                        .param("roles", "PHYSICIAN"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void non_admin_cannot_open_admin_invite_form() throws Exception {
         mvc.perform(get("/admin/staff-invitations/new")
                         .with(user("patient@example.com").roles("PATIENT"))
@@ -142,6 +154,35 @@ class StaffInvitationWebControllerTest {
         verify(staffInvitationService).acceptInvitation(new AcceptStaffInvitationRequest(
                 "invite-token",
                 "SecurePass123"));
+    }
+
+    @Test
+    void public_accept_post_with_short_password_rerenders_form_without_calling_service() throws Exception {
+        mvc.perform(post("/staff-invitations/accept")
+                        .with(csrf())
+                        .param("token", "invite-token")
+                        .param("password", "too-short"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("staff-invitation-accept"))
+                .andExpect(model().attribute("token", "invite-token"))
+                .andExpect(model().attribute("error", "Review the invitation details."));
+
+        verify(staffInvitationService, never()).acceptInvitation(any());
+    }
+
+    @Test
+    void public_accept_post_with_service_validation_error_rerenders_form_with_message() throws Exception {
+        doThrow(new ValidationException("password exceeds 72 bytes"))
+                .when(staffInvitationService).acceptInvitation(any());
+
+        mvc.perform(post("/staff-invitations/accept")
+                        .with(csrf())
+                        .param("token", "invite-token")
+                        .param("password", "SecurePass123"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("staff-invitation-accept"))
+                .andExpect(model().attribute("token", "invite-token"))
+                .andExpect(model().attribute("error", "password exceeds 72 bytes"));
     }
 
     @Test

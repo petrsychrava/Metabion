@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -135,6 +136,20 @@ class StaffInvitationControllerTest {
 
         verify(staffInvitationService).acceptInvitation(argThat(invitation ->
                 "token".equals(invitation.token()) && "SecurePass123".equals(invitation.password())));
+    }
+
+    @Test
+    void public_accept_with_short_password_returns_validation_failure() throws Exception {
+        var request = new AcceptStaffInvitationRequest("token", "too-short");
+
+        mvc.perform(post("/api/staff-invitations/accept")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("validation_failed"))
+                .andExpect(jsonPath("$.fields.password").exists());
+
+        verify(staffInvitationService, never()).acceptInvitation(any());
     }
 
     @Test
