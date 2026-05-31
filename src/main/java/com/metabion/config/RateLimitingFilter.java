@@ -81,13 +81,21 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         if (!"POST".equalsIgnoreCase(request.getMethod())) {
             return null;
         }
-        return switch (request.getRequestURI()) {
+        return switch (normalizedPath(request)) {
             case "/api/auth/login", "/login" -> "login";
             case "/api/auth/register", "/register" -> "register";
             case "/api/auth/forgot-password", "/forgot-password" -> "forgot-password";
             case "/api/auth/reset-password", "/reset-password" -> "reset-password";
             default -> null;
         };
+    }
+
+    private String normalizedPath(HttpServletRequest request) {
+        var uri = request.getRequestURI();
+        if (uri.length() > 1 && uri.endsWith("/")) {
+            return uri.substring(0, uri.length() - 1);
+        }
+        return uri;
     }
 
     private List<Key> keysFor(String endpoint, CachedBodyHttpServletRequest request) {

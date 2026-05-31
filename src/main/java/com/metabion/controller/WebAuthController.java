@@ -76,7 +76,7 @@ public class WebAuthController {
         }
     }
 
-    @GetMapping("/register")
+    @GetMapping({"/register", "/register/"})
     public String register(Authentication authentication, Model model) {
         if (isAuthenticated(authentication)) {
             return "redirect:/app";
@@ -85,7 +85,7 @@ public class WebAuthController {
         return "register";
     }
 
-    @PostMapping("/register")
+    @PostMapping({"/register", "/register/"})
     public String registerSubmit(@Valid @ModelAttribute("registerForm") RegisterRequest registerForm,
                                  BindingResult bindingResult,
                                  HttpServletRequest request,

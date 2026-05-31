@@ -29,6 +29,7 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_AUTH_POSTS = {
             "/api/auth/register",
+            "/api/auth/register/",
             "/api/auth/login",
             "/api/auth/forgot-password",
             "/api/auth/reset-password"
@@ -38,6 +39,7 @@ public class SecurityConfig {
             "/",
             "/login",
             "/register",
+            "/register/",
             "/verify",
             "/forgot-password",
             "/reset-password"
@@ -46,6 +48,7 @@ public class SecurityConfig {
     private static final String[] PUBLIC_MVC_POSTS = {
             "/login",
             "/register",
+            "/register/",
             "/forgot-password",
             "/reset-password"
     };

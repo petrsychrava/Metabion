@@ -29,7 +29,7 @@ public class AuthController {
         this.securityService = securityService;
     }
 
-    @PostMapping("/register")
+    @PostMapping({"/register", "/register/"})
     public ResponseEntity<Map<String, String>> register(@Valid @RequestBody RegisterRequest request) {
         userService.register(request);
         return ResponseEntity.ok(Map.of("status", "ok"));
