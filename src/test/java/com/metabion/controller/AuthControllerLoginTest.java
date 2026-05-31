@@ -131,6 +131,16 @@ class AuthControllerLoginTest {
         assertThat(result.getStatusCode().value()).isEqualTo(401);
     }
 
+    @Test
+    void meReturns401WhenAuthenticationIsNotAuthenticated() {
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", "ROLE_PATIENT");
+        auth.setAuthenticated(false);
+
+        var result = authController.me(auth);
+
+        assertThat(result.getStatusCode().value()).isEqualTo(401);
+    }
+
     private MockMvc mockMvc() {
         return MockMvcBuilders
                 .standaloneSetup(authController)

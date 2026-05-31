@@ -71,7 +71,7 @@ public class AuthController {
 
     @GetMapping("/me")
     public ResponseEntity<Map<String, Object>> me(Authentication authentication) {
-        if (authentication == null) {
+        if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         return ResponseEntity.ok(Map.of(
