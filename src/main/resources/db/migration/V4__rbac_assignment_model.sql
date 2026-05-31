@@ -124,8 +124,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_user_roles_protect_profile_role_integrity
-    BEFORE DELETE OR UPDATE OF user_id, role ON user_roles
+CREATE CONSTRAINT TRIGGER trg_user_roles_protect_profile_role_integrity
+    AFTER DELETE OR UPDATE ON user_roles
+    DEFERRABLE INITIALLY DEFERRED
     FOR EACH ROW
     EXECUTE FUNCTION protect_profile_role_integrity();
 

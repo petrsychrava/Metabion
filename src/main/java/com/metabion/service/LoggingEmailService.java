@@ -21,12 +21,12 @@ public class LoggingEmailService implements EmailService {
     @Override
     public void sendVerification(String to, String token) {
         log.info("[DEV] Verification email would be sent to {} with link {}", to,
-                baseUrl + "/verify?token=" + token);
+                baseUrl + "/verify?token=<redacted>");
     }
 
     @Override
     public void sendPasswordReset(String to, String token) {
         log.info("[DEV] Password reset email would be sent to {} with link {}", to,
-                baseUrl + "/reset-password?token=" + token);
+                baseUrl + "/reset-password?token=<redacted>");
     }
 }

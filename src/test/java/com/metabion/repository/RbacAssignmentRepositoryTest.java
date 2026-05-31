@@ -165,6 +165,7 @@ class RbacAssignmentRepositoryTest {
     }
 
     @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void deletingPatientUserCascadesProfileAndRoles() {
         var patient = createUser("delete-patient-profile@example.com", RoleName.PATIENT);
         var patientId = patient.getId();
@@ -180,6 +181,7 @@ class RbacAssignmentRepositoryTest {
     }
 
     @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void deletingStaffUserCascadesProfileAndRoles() {
         var staff = createUser("delete-staff-profile@example.com", RoleName.PHYSICIAN);
         var staffId = staff.getId();
@@ -192,6 +194,24 @@ class RbacAssignmentRepositoryTest {
         assertThat(users.findById(staffId)).isEmpty();
         assertThat(staffProfiles.findByUserId(staffId)).isEmpty();
         assertThat(countRoles(staffId)).isZero();
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void deletingUserWithLoadedRolesCascadesProfileAndRoles() {
+        var patient = createUser("delete-loaded-patient-profile@example.com", RoleName.PATIENT);
+        var patientId = patient.getId();
+        patientProfiles.saveAndFlush(new PatientProfile(patient));
+        entityManager.clear();
+
+        var loaded = users.findByEmail("delete-loaded-patient-profile@example.com").orElseThrow();
+        assertThat(loaded.roleNames()).containsExactly(RoleName.PATIENT.name());
+
+        users.delete(loaded);
+
+        assertThat(users.findById(patientId)).isEmpty();
+        assertThat(patientProfiles.findByUserId(patientId)).isEmpty();
+        assertThat(countRoles(patientId)).isZero();
     }
 
     @Test

@@ -45,7 +45,7 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
-    @OneToMany(mappedBy = "user", cascade = {CascadeType.PERSIST, CascadeType.MERGE}, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Set<UserRole> roles = new HashSet<>();
 
