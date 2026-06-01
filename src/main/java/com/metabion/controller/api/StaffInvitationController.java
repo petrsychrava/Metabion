@@ -1,4 +1,4 @@
-package com.metabion.controller;
+package com.metabion.controller.api;
 
 import com.metabion.dto.AcceptStaffInvitationRequest;
 import com.metabion.dto.CreateStaffInvitationRequest;

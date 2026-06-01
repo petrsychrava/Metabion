@@ -1,4 +1,4 @@
-package com.metabion.controller;
+package com.metabion.controller.api;
 
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.service.RateLimitedException;

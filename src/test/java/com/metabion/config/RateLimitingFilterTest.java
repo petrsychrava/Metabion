@@ -1,6 +1,6 @@
 package com.metabion.config;
 
-import com.metabion.controller.GlobalExceptionHandler;
+import com.metabion.controller.api.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;

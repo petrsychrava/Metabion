@@ -1,4 +1,4 @@
-package com.metabion.controller;
+package com.metabion.controller.api;
 
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.exception.StaffInvitationException;
@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-@RestControllerAdvice
+@RestControllerAdvice(basePackages = "com.metabion.controller.api")
 public class GlobalExceptionHandler {
 
     private static final Map<String, String> INVALID_CREDENTIALS = Map.of("error", "invalid_credentials");

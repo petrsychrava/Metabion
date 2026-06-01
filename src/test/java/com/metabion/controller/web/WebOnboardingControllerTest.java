@@ -1,4 +1,4 @@
-package com.metabion.controller;
+package com.metabion.controller.web;
 
 import com.metabion.domain.OnboardingReviewStatus;
 import com.metabion.domain.AdvancedTherapyExposure;
@@ -156,6 +156,19 @@ class WebOnboardingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("clinical-onboarding"))
                 .andExpect(model().attributeExists("submissions"));
+    }
+
+    @Test
+    void clinicalReviewListForbiddenForPatientRendersWebError() throws Exception {
+        doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user cannot review onboarding submissions"))
+                .when(onboardingService).listReviewable(any(), eq(null), eq(null));
+
+        mvc.perform(get("/app/clinical/onboarding")
+                        .with(user("patient@example.com").roles("PATIENT")))
+                .andExpect(status().isForbidden())
+                .andExpect(view().name("result"))
+                .andExpect(content().string(containsString("Access denied")))
+                .andExpect(content().string(containsString("You do not have access to this page.")));
     }
 
     @Test

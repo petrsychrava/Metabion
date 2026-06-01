@@ -1,4 +1,4 @@
-package com.metabion.controller;
+package com.metabion.controller.api;
 
 import com.metabion.dto.RegisterRequest;
 import com.metabion.exception.InvalidTokenException;

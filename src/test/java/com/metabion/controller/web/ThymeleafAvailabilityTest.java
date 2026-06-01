@@ -1,4 +1,4 @@
-package com.metabion.controller;
+package com.metabion.controller.web;
 
 import org.junit.jupiter.api.Test;
 import org.thymeleaf.spring6.SpringTemplateEngine;

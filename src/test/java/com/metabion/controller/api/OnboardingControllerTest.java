@@ -1,4 +1,4 @@
-package com.metabion.controller;
+package com.metabion.controller.api;
 
 import com.metabion.domain.AdvancedTherapyExposure;
 import com.metabion.domain.DiseaseActivityEstimate;

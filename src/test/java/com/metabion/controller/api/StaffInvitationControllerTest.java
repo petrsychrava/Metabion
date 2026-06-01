@@ -1,4 +1,4 @@
-package com.metabion.controller;
+package com.metabion.controller.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.metabion.dto.AcceptStaffInvitationRequest;

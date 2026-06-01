@@ -1,4 +1,4 @@
-package com.metabion.controller;
+package com.metabion.controller.web;
 
 import com.metabion.config.RateLimitingFilter;
 import com.metabion.repository.UserRepository;

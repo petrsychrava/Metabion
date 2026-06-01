@@ -1,4 +1,4 @@
-package com.metabion.controller;
+package com.metabion.controller.web;
 
 import com.metabion.dto.ForgotPasswordRequest;
 import com.metabion.dto.LoginForm;

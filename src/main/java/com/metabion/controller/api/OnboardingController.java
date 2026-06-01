@@ -1,4 +1,4 @@
-package com.metabion.controller;
+package com.metabion.controller.api;
 
 import com.metabion.domain.OnboardingReviewStatus;
 import com.metabion.dto.OnboardingReviewRequest;
