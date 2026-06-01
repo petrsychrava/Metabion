@@ -135,6 +135,27 @@ input:focus {
     outline: 3px solid rgba(45, 143, 204, 0.16);
 }
 
+select,
+textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    color: var(--text);
+    font: inherit;
+}
+
+textarea {
+    min-height: 96px;
+    resize: vertical;
+}
+
+select:focus,
+textarea:focus {
+    border-color: var(--focus);
+    outline: 3px solid rgba(45, 143, 204, 0.16);
+}
+
 button,
 .button-link {
     border: 0;
@@ -174,6 +195,34 @@ button:hover,
 
 a {
     color: var(--accent-dark);
+}
+
+.table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.table th,
+.table td {
+    border-bottom: 1px solid var(--border);
+    padding: 10px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.details {
+    display: grid;
+    gap: 8px 16px;
+    grid-template-columns: max-content 1fr;
+}
+
+.details dt {
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.details dd {
+    margin: 0;
 }
 
 @media (max-width: 520px) {
