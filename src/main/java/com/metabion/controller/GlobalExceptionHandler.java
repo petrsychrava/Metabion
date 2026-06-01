@@ -12,6 +12,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 import java.util.Optional;
@@ -60,6 +61,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> mailUnavailable(MailException e) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(Map.of("error", "mail_unavailable"));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> responseStatus(ResponseStatusException e) {
+        var statusCode = e.getStatusCode();
+        var error = "request_failed";
+        if (statusCode.isSameCodeAs(HttpStatus.FORBIDDEN)) {
+            error = "forbidden";
+        } else if (statusCode.isSameCodeAs(HttpStatus.NOT_FOUND)) {
+            error = "not_found";
+        } else if (statusCode.isSameCodeAs(HttpStatus.UNAUTHORIZED)) {
+            error = "unauthorized";
+        }
+        return ResponseEntity.status(statusCode).body(Map.of("error", error));
     }
 
     @ExceptionHandler(RateLimitedException.class)
