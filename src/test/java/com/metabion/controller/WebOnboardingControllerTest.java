@@ -1,7 +1,13 @@
 package com.metabion.controller;
 
 import com.metabion.domain.OnboardingReviewStatus;
+import com.metabion.domain.AdvancedTherapyExposure;
+import com.metabion.domain.DiseaseActivityEstimate;
+import com.metabion.domain.IbdDiagnosisType;
+import com.metabion.domain.Sex;
+import com.metabion.domain.SteroidUse;
 import com.metabion.dto.OnboardingReviewRequest;
+import com.metabion.dto.OnboardingSubmissionResponse;
 import com.metabion.service.OnboardingService;
 import com.metabion.service.SecurityService;
 import com.metabion.service.UserService;
@@ -20,14 +26,21 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -146,6 +159,22 @@ class WebOnboardingControllerTest {
     }
 
     @Test
+    void clinicalReviewDetailRendersCompleteSubmissionBaseline() throws Exception {
+        when(onboardingService.getReviewable(any(), eq(99L))).thenReturn(fullSubmissionResponse());
+
+        mvc.perform(get("/app/clinical/onboarding/99")
+                        .with(user("doctor@example.com").roles("PHYSICIAN")))
+                .andExpect(status().isOk())
+                .andExpect(view().name("clinical-onboarding-detail"))
+                .andExpect(content().string(containsString("1990-01-01")))
+                .andExpect(content().string(containsString("Europe/Prague")))
+                .andExpect(content().string(containsString("Ileocolonic")))
+                .andExpect(content().string(containsString("NEVER_USED")))
+                .andExpect(content().string(containsString("4.2")))
+                .andExpect(content().string(containsString("Recent outpatient labs")));
+    }
+
+    @Test
     void clinicalReviewPostDelegatesToService() throws Exception {
         mvc.perform(post("/app/clinical/onboarding/99/review")
                         .with(user("doctor@example.com").roles("PHYSICIAN"))
@@ -157,5 +186,39 @@ class WebOnboardingControllerTest {
 
         verify(onboardingService).review(any(), eq(99L), eq(new OnboardingReviewRequest(
                 OnboardingReviewStatus.REVIEWED, "ok")));
+    }
+
+    private OnboardingSubmissionResponse fullSubmissionResponse() {
+        return new OnboardingSubmissionResponse(
+                99L,
+                10L,
+                "patient@example.com",
+                "study-a",
+                2,
+                Instant.parse("2026-05-31T11:00:00Z"),
+                Instant.parse("2026-05-31T12:00:00Z"),
+                LocalDate.of(1990, 1, 1),
+                Sex.FEMALE,
+                "CZ",
+                "Europe/Prague",
+                IbdDiagnosisType.CROHNS_DISEASE,
+                2018,
+                "Ileocolonic",
+                "Inflammatory",
+                DiseaseActivityEstimate.MILD,
+                "Mesalamine",
+                SteroidUse.NONE,
+                AdvancedTherapyExposure.NEVER_USED,
+                "Stable regimen",
+                LocalDate.of(2026, 5, 20),
+                new BigDecimal("4.2"),
+                new BigDecimal("120"),
+                new BigDecimal("13.8"),
+                new BigDecimal("4.3"),
+                "Recent outpatient labs",
+                OnboardingReviewStatus.PENDING_REVIEW,
+                null,
+                null,
+                null);
     }
 }

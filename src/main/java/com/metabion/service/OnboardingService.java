@@ -44,7 +44,7 @@ public class OnboardingService {
 
     public OnboardingSubmissionResponse submitForCurrentPatient(Authentication authentication,
                                                                OnboardingSubmissionRequest request) {
-        var patient = currentPatientProfile(authentication);
+        var patient = currentPatientProfileForSubmission(authentication);
         var context = normalizeContext(request.onboardingContext());
         var nextVersion = submissions.maxVersion(patient.getId(), context) + 1;
         var submission = new OnboardingSubmission(patient, context, nextVersion);
@@ -147,6 +147,12 @@ public class OnboardingService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user is not a patient");
         }
         return patientProfiles.findByUserId(user.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Patient profile not found"));
+    }
+
+    private PatientProfile currentPatientProfileForSubmission(Authentication authentication) {
+        var patient = currentPatientProfile(authentication);
+        return patientProfiles.lockById(patient.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Patient profile not found"));
     }
 

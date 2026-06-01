@@ -211,6 +211,7 @@ class OnboardingServiceTest {
         var patientProfile = patientProfile(10L, patientUser);
         when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
         when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patientProfile));
+        when(patientProfiles.lockById(10L)).thenReturn(Optional.of(patientProfile));
         when(submissions.maxVersion(10L, "study-a")).thenReturn(1);
         when(submissions.save(any(OnboardingSubmission.class))).thenAnswer(invocation -> invocation.getArgument(0));
         var request = new OnboardingSubmissionRequest(
@@ -241,6 +242,7 @@ class OnboardingServiceTest {
         assertThat(response.onboardingContext()).isEqualTo("study-a");
         assertThat(response.version()).isEqualTo(2);
         assertThat(response.reviewStatus()).isEqualTo(OnboardingReviewStatus.PENDING_REVIEW);
+        verify(patientProfiles).lockById(10L);
         verify(submissions).maxVersion(10L, "study-a");
     }
 
