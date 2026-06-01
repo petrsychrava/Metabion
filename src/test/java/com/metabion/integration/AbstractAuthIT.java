@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.icegreen.greenmail.util.GreenMail;
 import com.icegreen.greenmail.util.ServerSetupTest;
+import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.repository.UserRepository;
 import org.junit.jupiter.api.AfterAll;
@@ -160,7 +161,7 @@ abstract class AbstractAuthIT {
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setEnabled(true);
-        user.addRole("PATIENT");
+        user.addRole(RoleName.PATIENT);
         return users.saveAndFlush(user);
     }
 

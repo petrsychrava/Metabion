@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head('Onboarding history')}"></head>
+<body>
+<main class="app-page">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Metabion</p>
+            <h1>Onboarding history</h1>
+        </div>
+        <a class="button-link secondary" th:href="@{/app/onboarding(context=${context})}">Back</a>
+    </header>
+    <section class="panel app-panel">
+        <table class="table">
+            <thead><tr><th>Version</th><th>Context</th><th>Submitted</th><th>Status</th></tr></thead>
+            <tbody>
+            <tr th:each="submission : ${submissions}">
+                <td th:text="${submission.version()}">1</td>
+                <td th:text="${submission.onboardingContext()}">default</td>
+                <td th:text="${submission.submittedAt()}">date</td>
+                <td th:text="${submission.reviewStatus()}">PENDING_REVIEW</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+</main>
+</body>
+</html>

@@ -14,6 +14,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,6 +27,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class RateLimitingFilter extends OncePerRequestFilter {
+
+    public static final String RATE_LIMITED_ENDPOINT_ATTRIBUTE = "metabion.rateLimitedEndpoint";
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final int MAX_BUCKETS = 10_000;
@@ -56,11 +61,20 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         for (var key : keysFor(endpoint, wrapped)) {
             var bucket = bucketFor(key, now);
             if (!bucket.tryConsume(1)) {
-                writeRateLimitedResponse(endpoint, response);
+                if (isApiRequest(wrapped)) {
+                    writeRateLimitedResponse(endpoint, response);
+                } else {
+                    wrapped.setAttribute(RATE_LIMITED_ENDPOINT_ATTRIBUTE, endpoint);
+                    filterChain.doFilter(wrapped, response);
+                }
                 return;
             }
         }
         filterChain.doFilter(wrapped, response);
+    }
+
+    private boolean isApiRequest(HttpServletRequest request) {
+        return request.getRequestURI().startsWith("/api/");
     }
 
     private String endpointFor(HttpServletRequest request) {
@@ -68,10 +82,10 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             return null;
         }
         return switch (request.getRequestURI()) {
-            case "/api/auth/login" -> "login";
-            case "/api/auth/register" -> "register";
-            case "/api/auth/forgot-password" -> "forgot-password";
-            case "/api/auth/reset-password" -> "reset-password";
+            case "/api/auth/login", "/login" -> "login";
+            case "/api/auth/register", "/register" -> "register";
+            case "/api/auth/forgot-password", "/forgot-password" -> "forgot-password";
+            case "/api/auth/reset-password", "/reset-password" -> "reset-password";
             default -> null;
         };
     }
@@ -137,12 +151,46 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         if (request.body().length == 0) {
             return null;
         }
+        if (isFormUrlEncoded(request)) {
+            return emailFromFormBody(request);
+        }
         try {
             JsonNode root = OBJECT_MAPPER.readTree(request.body());
             var email = root.get("email");
             return email == null || email.isNull() ? null : email.asText();
         } catch (IOException e) {
             return null;
+        }
+    }
+
+    private boolean isFormUrlEncoded(HttpServletRequest request) {
+        var contentType = request.getContentType();
+        return contentType != null
+                && contentType.toLowerCase(Locale.ROOT).startsWith("application/x-www-form-urlencoded");
+    }
+
+    private String emailFromFormBody(CachedBodyHttpServletRequest request) {
+        var body = new String(request.body(), request.getCharacterEncoding() == null
+                ? StandardCharsets.UTF_8
+                : Charset.forName(request.getCharacterEncoding()));
+        for (var pair : body.split("&")) {
+            var parts = pair.split("=", 2);
+            if (parts.length != 2) {
+                continue;
+            }
+            var name = urlDecode(parts[0]);
+            if ("email".equals(name)) {
+                return urlDecode(parts[1]);
+            }
+        }
+        return null;
+    }
+
+    private String urlDecode(String value) {
+        try {
+            return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            return value;
         }
     }
 

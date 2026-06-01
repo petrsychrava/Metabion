@@ -1,5 +1,6 @@
 package com.metabion.repository;
 
+import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,12 +32,27 @@ class UserRepositoryTest {
     @Test
     void findByEmailReturnsUserWithRoles() {
         var user = buildUser("b@x.com");
-        user.addRole("PATIENT");
+        user.addRole(RoleName.PATIENT);
         users.save(user);
 
         var loaded = users.findByEmail("b@x.com").orElseThrow();
 
         assertThat(loaded.roleNames()).containsExactly("PATIENT");
+        assertThat(loaded.hasRole(RoleName.PATIENT)).isTrue();
+    }
+
+    @Test
+    void userCanHaveMultipleSupportedRoles() {
+        var user = buildUser("d@x.com");
+        user.addRole(RoleName.PHYSICIAN);
+        user.addRole(RoleName.COORDINATOR);
+        users.save(user);
+
+        var loaded = users.findByEmail("d@x.com").orElseThrow();
+
+        assertThat(loaded.roleNames()).containsExactly("COORDINATOR", "PHYSICIAN");
+        assertThat(loaded.hasAnyRole(RoleName.PHYSICIAN, RoleName.COORDINATOR)).isTrue();
+        assertThat(loaded.hasAnyRole(RoleName.PATIENT, RoleName.ADMIN)).isFalse();
     }
 
     @Test

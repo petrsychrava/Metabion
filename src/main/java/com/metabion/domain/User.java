@@ -1,6 +1,9 @@
 package com.metabion.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
+
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
@@ -42,7 +45,8 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Set<UserRole> roles = new HashSet<>();
 
     public User() {}
@@ -61,8 +65,22 @@ public class User {
         return lockedUntil != null && lockedUntil.isAfter(Instant.now());
     }
 
-    public void addRole(String role) {
+    public void addRole(RoleName role) {
         this.roles.add(new UserRole(this, role));
+    }
+
+    public boolean hasRole(RoleName role) {
+        return roles.stream()
+                .anyMatch(userRole -> userRole.getRole().equals(role.name()));
+    }
+
+    public boolean hasAnyRole(RoleName... roleNames) {
+        for (RoleName roleName : roleNames) {
+            if (hasRole(roleName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public List<String> roleNames() {

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head('Metabion App')}"></head>
+<body>
+<main class="app-page">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Metabion</p>
+            <h1>Account</h1>
+        </div>
+        <form th:action="@{/logout}" method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <button type="submit" class="secondary">Sign out</button>
+        </form>
+    </header>
+
+    <section class="panel app-panel">
+        <h2>Signed in</h2>
+        <p class="muted">You are signed in as <strong th:text="${email}">user@example.com</strong>.</p>
+    </section>
+</main>
+</body>
+</html>

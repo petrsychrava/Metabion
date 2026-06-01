@@ -12,9 +12,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -68,11 +70,22 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<Map<String, Object>> me(@AuthenticationPrincipal(expression =
-            "username") String email) {
-        if (email == null) {
+    public ResponseEntity<Map<String, Object>> me(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        return ResponseEntity.ok(Map.of("email", email));
+        return ResponseEntity.ok(Map.of(
+                "email", authentication.getName(),
+                "roles", roles(authentication)
+        ));
+    }
+
+    private List<String> roles(Authentication authentication) {
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(authority -> authority != null && authority.startsWith("ROLE_"))
+                .map(authority -> authority.substring("ROLE_".length()))
+                .sorted()
+                .toList();
     }
 }

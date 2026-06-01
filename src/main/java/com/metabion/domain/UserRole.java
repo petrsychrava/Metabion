@@ -23,9 +23,13 @@ public class UserRole {
     public UserRole() {
     }
 
-    public UserRole(User user, String role) {
+    public UserRole(User user, RoleName role) {
         this.user = user;
-        this.id = new UserRoleKey(user.getId(), role);
+        this.id = new UserRoleKey(user.getId(), role.name());
+    }
+
+    public UserRole(User user, String role) {
+        this(user, RoleName.from(role));
     }
 
     public UserRoleKey getId() {

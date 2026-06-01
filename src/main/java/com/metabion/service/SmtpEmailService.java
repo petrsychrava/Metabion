@@ -28,7 +28,7 @@ public class SmtpEmailService implements EmailService {
         msg.setTo(to);
         msg.setSubject("Verify your Metabion account");
         msg.setText("Click to verify (link expires in 48 hours):\n\n" +
-                    baseUrl + "/api/auth/verify?token=" +
+                    baseUrl + "/verify?token=" +
                     URLEncoder.encode(token, StandardCharsets.UTF_8));
         mail.send(msg);
     }
@@ -40,6 +40,17 @@ public class SmtpEmailService implements EmailService {
         msg.setSubject("Reset your Metabion password");
         msg.setText("Click to reset (link expires in 24 hours):\n\n" +
                     baseUrl + "/reset-password?token=" +
+                    URLEncoder.encode(token, StandardCharsets.UTF_8));
+        mail.send(msg);
+    }
+
+    @Override
+    public void sendStaffInvitation(String to, String token) {
+        var msg = new SimpleMailMessage();
+        msg.setTo(to);
+        msg.setSubject("Set up your Metabion staff account");
+        msg.setText("Click to set up your staff account (link expires in 7 days):\n\n" +
+                    baseUrl + "/staff-invitations/accept?token=" +
                     URLEncoder.encode(token, StandardCharsets.UTF_8));
         mail.send(msg);
     }

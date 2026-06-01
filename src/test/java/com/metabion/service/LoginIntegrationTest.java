@@ -1,6 +1,7 @@
 package com.metabion.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.LoginRequest;
 import com.metabion.repository.UserRepository;
@@ -67,7 +68,7 @@ class LoginIntegrationTest {
         testUser.setEmail("test@example.com");
         testUser.setPasswordHash(passwordEncoder.encode("test_password"));
         testUser.setEnabled(true);
-        testUser.addRole("USER");
+        testUser.addRole(RoleName.PATIENT);
         userRepository.save(testUser);
     }
 
@@ -82,7 +83,7 @@ class LoginIntegrationTest {
                 .andExpect(jsonPath("$.status").value("AUTHENTICATED"))
                 .andExpect(jsonPath("$.email").value("test@example.com"))
                 .andExpect(jsonPath("$.roles").isArray())
-                .andExpect(jsonPath("$.roles[0]").value("USER"));
+                .andExpect(jsonPath("$.roles[0]").value("PATIENT"));
     }
 
     @Test

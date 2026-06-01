@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Email;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.mail.MailAuthenticationException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
@@ -80,6 +81,13 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void mailFailureReturnsServiceUnavailable() throws Exception {
+        mvc.perform(post("/throw/mail"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().json("{\"error\":\"mail_unavailable\"}"));
+    }
+
+    @Test
     void validationFailureReturnsFieldMap() throws Exception {
         mvc.perform(post("/throw/validation")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -120,6 +128,11 @@ class GlobalExceptionHandlerTest {
         @PostMapping("/throw/invalid-token")
         void invalidToken() {
             throw new InvalidTokenException();
+        }
+
+        @PostMapping("/throw/mail")
+        void mail() {
+            throw new MailAuthenticationException("smtp rejected credentials");
         }
 
         @PostMapping("/throw/validation")
