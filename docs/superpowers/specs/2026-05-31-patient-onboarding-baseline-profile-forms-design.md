@@ -40,18 +40,19 @@ The chosen approach is more work than a single editable row, but it keeps clinic
 
 ## Data Model
 
-Add an onboarding domain centered on `OnboardingSubmission`.
+Add an onboarding domain centered on `OnboardingSubmission`, with stable patient demographics owned by `PatientProfile`.
 
 `OnboardingSubmission` references `patient_profile_id`, not `user_id`. It stores `onboarding_context` and a monotonically increasing `version` within each patient/context pair.
+The onboarding request captures patient profile fields, but the service writes those values to `PatientProfile` rather than duplicating stable demographics on every submission.
 
 Recommended columns:
 
-- Metadata: `id`, `patient_profile_id`, `onboarding_context`, `version`, `created_at`, `submitted_at`.
-- Patient profile: `date_of_birth`, `sex`, `country_region`, `timezone`.
-- IBD status: `diagnosis_type`, `diagnosis_year`, `disease_location`, `disease_behavior`, `activity_estimate`.
-- Medication context: `current_medications`, `steroid_use`, `advanced_therapy_exposure`, `medication_notes`.
-- Optional recent labs: `labs_collected_at`, `crp_mg_l`, `fecal_calprotectin_ug_g`, `hemoglobin_g_dl`, `albumin_g_dl`, `lab_notes`.
-- Review: `review_status`, `reviewed_by_user_id`, `reviewed_at`, `review_notes`.
+- `patient_profiles`: `date_of_birth`, `sex`, `country_region`, `timezone`.
+- `onboarding_submissions` metadata: `id`, `patient_profile_id`, `onboarding_context`, `version`, `created_at`, `submitted_at`.
+- `onboarding_submissions` IBD status: `diagnosis_type`, `diagnosis_year`, `disease_location`, `disease_behavior`, `activity_estimate`.
+- `onboarding_submissions` medication context: `current_medications`, `steroid_use`, `advanced_therapy_exposure`, `medication_notes`.
+- `onboarding_submissions` optional recent labs: `labs_collected_at`, `crp_mg_l`, `fecal_calprotectin_ug_g`, `hemoglobin_g_dl`, `albumin_g_dl`, `lab_notes`.
+- `onboarding_submissions` review: `review_status`, `reviewed_by_user_id`, `reviewed_at`, `review_notes`.
 
 Use enums for stable constrained values:
 

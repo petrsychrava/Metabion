@@ -48,6 +48,7 @@ public class OnboardingService {
         var context = normalizeContext(request.onboardingContext());
         var nextVersion = submissions.maxVersion(patient.getId(), context) + 1;
         var submission = new OnboardingSubmission(patient, context, nextVersion);
+        copyPatientProfile(request, patient);
         copyRequest(request, submission);
         return OnboardingSubmissionResponse.from(submissions.save(submission));
     }
@@ -184,10 +185,6 @@ public class OnboardingService {
     }
 
     private static void copyRequest(OnboardingSubmissionRequest request, OnboardingSubmission submission) {
-        submission.setDateOfBirth(request.dateOfBirth());
-        submission.setSex(request.sex());
-        submission.setCountryRegion(trimToNull(request.countryRegion()));
-        submission.setTimezone(trimToNull(request.timezone()));
         submission.setDiagnosisType(request.diagnosisType());
         submission.setDiagnosisYear(request.diagnosisYear());
         submission.setDiseaseLocation(trimToNull(request.diseaseLocation()));
@@ -203,5 +200,12 @@ public class OnboardingService {
         submission.setHemoglobinGDl(request.hemoglobinGDl());
         submission.setAlbuminGDl(request.albuminGDl());
         submission.setLabNotes(trimToNull(request.labNotes()));
+    }
+
+    private static void copyPatientProfile(OnboardingSubmissionRequest request, PatientProfile patient) {
+        patient.setDateOfBirth(request.dateOfBirth());
+        patient.setSex(request.sex());
+        patient.setCountryRegion(trimToNull(request.countryRegion()));
+        patient.setTimezone(trimToNull(request.timezone()));
     }
 }

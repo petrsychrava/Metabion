@@ -6,11 +6,6 @@ CREATE TABLE onboarding_submissions (
     created_at                  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     submitted_at                TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
-    date_of_birth               DATE NOT NULL,
-    sex                         VARCHAR(40) NOT NULL,
-    country_region              VARCHAR(100) NOT NULL,
-    timezone                    VARCHAR(100) NOT NULL,
-
     diagnosis_type              VARCHAR(60) NOT NULL,
     diagnosis_year              INT,
     disease_location            VARCHAR(120),
@@ -40,8 +35,6 @@ CREATE TABLE onboarding_submissions (
         CHECK (version > 0),
     CONSTRAINT chk_onboarding_submissions_context_not_blank
         CHECK (length(trim(onboarding_context)) > 0),
-    CONSTRAINT chk_onboarding_submissions_sex
-        CHECK (sex IN ('FEMALE', 'MALE', 'INTERSEX', 'PREFER_NOT_TO_SAY')),
     CONSTRAINT chk_onboarding_submissions_diagnosis_type
         CHECK (diagnosis_type IN ('CROHNS_DISEASE', 'ULCERATIVE_COLITIS', 'IBD_UNCLASSIFIED')),
     CONSTRAINT chk_onboarding_submissions_activity

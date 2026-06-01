@@ -58,10 +58,10 @@ public record OnboardingSubmissionResponse(
                 submission.getVersion(),
                 submission.getCreatedAt(),
                 submission.getSubmittedAt(),
-                submission.getDateOfBirth(),
-                submission.getSex(),
-                submission.getCountryRegion(),
-                submission.getTimezone(),
+                dateOfBirth(patientProfile),
+                sex(patientProfile),
+                countryRegion(patientProfile),
+                timezone(patientProfile),
                 submission.getDiagnosisType(),
                 submission.getDiagnosisYear(),
                 submission.getDiseaseLocation(),
@@ -89,6 +89,22 @@ public record OnboardingSubmissionResponse(
 
     private static String patientEmail(PatientProfile patientProfile) {
         return patientProfile == null ? null : email(patientProfile.getUser());
+    }
+
+    private static LocalDate dateOfBirth(PatientProfile patientProfile) {
+        return patientProfile == null ? null : patientProfile.getDateOfBirth();
+    }
+
+    private static Sex sex(PatientProfile patientProfile) {
+        return patientProfile == null ? null : patientProfile.getSex();
+    }
+
+    private static String countryRegion(PatientProfile patientProfile) {
+        return patientProfile == null ? null : patientProfile.getCountryRegion();
+    }
+
+    private static String timezone(PatientProfile patientProfile) {
+        return patientProfile == null ? null : patientProfile.getTimezone();
     }
 
     private static String email(User user) {

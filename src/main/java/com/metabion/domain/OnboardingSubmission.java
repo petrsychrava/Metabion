@@ -40,19 +40,6 @@ public class OnboardingSubmission {
     @Column(name = "submitted_at", nullable = false, updatable = false)
     private Instant submittedAt = Instant.now();
 
-    @Column(name = "date_of_birth", nullable = false)
-    private LocalDate dateOfBirth;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 40)
-    private Sex sex;
-
-    @Column(name = "country_region", nullable = false, length = 100)
-    private String countryRegion;
-
-    @Column(nullable = false, length = 100)
-    private String timezone;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "diagnosis_type", nullable = false, length = 60)
     private IbdDiagnosisType diagnosisType;
@@ -161,38 +148,6 @@ public class OnboardingSubmission {
 
     public void setSubmittedAt(Instant submittedAt) {
         this.submittedAt = submittedAt;
-    }
-
-    public LocalDate getDateOfBirth() {
-        return dateOfBirth;
-    }
-
-    public void setDateOfBirth(LocalDate dateOfBirth) {
-        this.dateOfBirth = dateOfBirth;
-    }
-
-    public Sex getSex() {
-        return sex;
-    }
-
-    public void setSex(Sex sex) {
-        this.sex = sex;
-    }
-
-    public String getCountryRegion() {
-        return countryRegion;
-    }
-
-    public void setCountryRegion(String countryRegion) {
-        this.countryRegion = countryRegion;
-    }
-
-    public String getTimezone() {
-        return timezone;
-    }
-
-    public void setTimezone(String timezone) {
-        this.timezone = timezone;
     }
 
     public IbdDiagnosisType getDiagnosisType() {

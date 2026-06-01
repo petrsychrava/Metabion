@@ -8,6 +8,8 @@
 
 **Tech Stack:** Java 25, Spring Boot 4.0.6, Spring MVC, Spring Security sessions, Spring Data JPA, Flyway, Thymeleaf, Jakarta Validation, JUnit 5, Spring Security Test, H2 and Testcontainers PostgreSQL.
 
+**Design amendment:** Stable patient profile fields (`date_of_birth`, `sex`, `country_region`, `timezone`) are owned by `patient_profiles`, not `onboarding_submissions`. The onboarding request may still capture these fields, but `OnboardingService` updates `PatientProfile` and stores only IBD status, medication context, labs, context/version, timestamps, and review metadata on each submission.
+
 ---
 
 ## File Structure

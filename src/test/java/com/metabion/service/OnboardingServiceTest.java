@@ -242,6 +242,10 @@ class OnboardingServiceTest {
         assertThat(response.onboardingContext()).isEqualTo("study-a");
         assertThat(response.version()).isEqualTo(2);
         assertThat(response.reviewStatus()).isEqualTo(OnboardingReviewStatus.PENDING_REVIEW);
+        assertThat(patientProfile.getDateOfBirth()).isEqualTo(LocalDate.of(1990, 1, 1));
+        assertThat(patientProfile.getSex()).isEqualTo(Sex.FEMALE);
+        assertThat(patientProfile.getCountryRegion()).isEqualTo("CZ");
+        assertThat(patientProfile.getTimezone()).isEqualTo("Europe/Prague");
         verify(patientProfiles).lockById(10L);
         verify(submissions).maxVersion(10L, "study-a");
     }
@@ -405,13 +409,13 @@ class OnboardingServiceTest {
 
         var patientProfile = new PatientProfile(patientUser);
         patientProfile.setId(10L);
+        patientProfile.setDateOfBirth(LocalDate.of(1990, 1, 1));
+        patientProfile.setSex(Sex.FEMALE);
+        patientProfile.setCountryRegion("CZ");
+        patientProfile.setTimezone("Europe/Prague");
 
         var submission = new OnboardingSubmission(patientProfile, "default", 2);
         submission.setSubmittedAt(Instant.parse("2026-05-31T12:00:00Z"));
-        submission.setDateOfBirth(LocalDate.of(1990, 1, 1));
-        submission.setSex(Sex.FEMALE);
-        submission.setCountryRegion("CZ");
-        submission.setTimezone("Europe/Prague");
         submission.setDiagnosisType(IbdDiagnosisType.CROHNS_DISEASE);
         submission.setDiagnosisYear(2018);
         submission.setDiseaseLocation("Ileocolonic");
@@ -449,15 +453,15 @@ class OnboardingServiceTest {
     private PatientProfile patientProfile(Long id, User user) {
         var profile = new PatientProfile(user);
         profile.setId(id);
+        profile.setDateOfBirth(LocalDate.of(1990, 1, 1));
+        profile.setSex(Sex.FEMALE);
+        profile.setCountryRegion("CZ");
+        profile.setTimezone("Europe/Prague");
         return profile;
     }
 
     private OnboardingSubmission submission(PatientProfile patient, String context, int version) {
         var submission = new OnboardingSubmission(patient, context, version);
-        submission.setDateOfBirth(LocalDate.of(1990, 1, 1));
-        submission.setSex(Sex.FEMALE);
-        submission.setCountryRegion("CZ");
-        submission.setTimezone("Europe/Prague");
         submission.setDiagnosisType(IbdDiagnosisType.CROHNS_DISEASE);
         submission.setDiagnosisYear(2018);
         submission.setActivityEstimate(DiseaseActivityEstimate.MILD);

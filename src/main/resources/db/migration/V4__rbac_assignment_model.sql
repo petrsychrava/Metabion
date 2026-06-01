@@ -3,10 +3,16 @@ ALTER TABLE user_roles
     CHECK (role IN ('PATIENT', 'NUTRITION_SPECIALIST', 'PHYSICIAN', 'COORDINATOR', 'ADMIN'));
 
 CREATE TABLE patient_profiles (
-    id          BIGSERIAL PRIMARY KEY,
-    user_id     BIGINT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    created_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    id              BIGSERIAL PRIMARY KEY,
+    user_id         BIGINT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    date_of_birth   DATE,
+    sex             VARCHAR(40),
+    country_region  VARCHAR(100),
+    timezone        VARCHAR(100),
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_patient_profiles_sex
+        CHECK (sex IS NULL OR sex IN ('FEMALE', 'MALE', 'INTERSEX', 'PREFER_NOT_TO_SAY'))
 );
 
 CREATE TABLE staff_profiles (

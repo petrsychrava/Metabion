@@ -105,7 +105,12 @@ class OnboardingSubmissionRepositoryTest {
     }
 
     private PatientProfile createPatient(String email) {
-        return patientProfiles.saveAndFlush(new PatientProfile(createUser(email, RoleName.PATIENT)));
+        var profile = new PatientProfile(createUser(email, RoleName.PATIENT));
+        profile.setDateOfBirth(LocalDate.of(1990, 1, 1));
+        profile.setSex(Sex.FEMALE);
+        profile.setCountryRegion("CZ");
+        profile.setTimezone("Europe/Prague");
+        return patientProfiles.saveAndFlush(profile);
     }
 
     private User createUser(String email, RoleName role) {
@@ -117,10 +122,6 @@ class OnboardingSubmissionRepositoryTest {
     private OnboardingSubmission validSubmission(PatientProfile patient, String context, int version) {
         var submission = new OnboardingSubmission(patient, context, version);
         submission.setSubmittedAt(OffsetDateTime.parse("2026-05-31T12:00:00Z").toInstant());
-        submission.setDateOfBirth(LocalDate.of(1990, 1, 1));
-        submission.setSex(Sex.FEMALE);
-        submission.setCountryRegion("CZ");
-        submission.setTimezone("Europe/Prague");
         submission.setDiagnosisType(IbdDiagnosisType.CROHNS_DISEASE);
         submission.setDiagnosisYear(2018);
         submission.setDiseaseLocation("Ileocolonic");
