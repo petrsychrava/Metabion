@@ -1,5 +1,6 @@
 package com.metabion.controller.web;
 
+import com.metabion.domain.RoleName;
 import com.metabion.dto.AcceptStaffInvitationRequest;
 import com.metabion.dto.CreateStaffInvitationRequest;
 import com.metabion.exception.StaffInvitationException;
@@ -15,16 +16,17 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
 @Controller
 public class StaffInvitationWebController {
 
-    private static final List<String> STAFF_ROLES = List.of(
-            "NUTRITION_SPECIALIST",
-            "PHYSICIAN",
-            "COORDINATOR");
+    private static final List<String> STAFF_ROLES = Arrays.stream(RoleName.values())
+            .filter(RoleName::isClinicalStaff)
+            .map(RoleName::getName)
+            .toList();
 
     private final StaffInvitationService staffInvitationService;
 
