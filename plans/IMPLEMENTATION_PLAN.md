@@ -65,14 +65,14 @@ The design keeps an MFA seam so TOTP can be bolted onto expert/admin roles later
 
 | # | Plan | Scope | Exit signal |
 |---|------|-------|-------------|
-| 01 | [Foundation](./plans/01-foundation.md) | Dependencies, properties, Flyway baseline | App boots; `flyway info` clean |
-| 02 | [Domain & Persistence](./plans/02-domain-persistence.md) | Entities + repositories, JPA validates schema | `@DataJpaTest` slice tests pass |
-| 03 | [Security Foundation](./plans/03-security-foundation.md) | `SecurityConfig`, password encoder, Spring Session, CSRF, cookie attrs | Protected paths → 401; public paths reachable |
-| 04 | [Registration & Verification](./plans/04-registration-verification.md) | `register` + `verify` endpoints, email service | Register → email arrives → verify enables account |
-| 05 | [Login, Logout, MFA seam](./plans/05-login-logout-mfa.md) | `SecurityService`, login/logout, `MfaChallengeService` | Session-authenticated round-trip works |
-| 06 | [Password Recovery](./plans/06-password-recovery.md) | `forgot-password` + `reset-password`, session invalidation on reset | Reset flow works end-to-end; old sessions die |
-| 07 | [Anti-abuse Hardening](./plans/07-anti-abuse-hardening.md) | Bucket4j, lockout, generic error mapping | Repeated failures → lockout; rate-limited bodies are identical to invalid-credentials |
-| 08 | [Integration & Verification](./plans/08-integration-verification.md) | Testcontainers + GreenMail E2E, timing test, session-fixation test | `./gradlew test` green; all 14 scenarios pass |
+| 01 | [Foundation](01-foundation.md) | Dependencies, properties, Flyway baseline | App boots; `flyway info` clean |
+| 02 | [Domain & Persistence](02-domain-persistence.md) | Entities + repositories, JPA validates schema | `@DataJpaTest` slice tests pass |
+| 03 | [Security Foundation](03-security-foundation.md) | `SecurityConfig`, password encoder, Spring Session, CSRF, cookie attrs | Protected paths → 401; public paths reachable |
+| 04 | [Registration & Verification](04-registration-verification.md) | `register` + `verify` endpoints, email service | Register → email arrives → verify enables account |
+| 05 | [Login, Logout, MFA seam](05-login-logout-mfa.md) | `SecurityService`, login/logout, `MfaChallengeService` | Session-authenticated round-trip works |
+| 06 | [Password Recovery](06-password-recovery.md) | `forgot-password` + `reset-password`, session invalidation on reset | Reset flow works end-to-end; old sessions die |
+| 07 | [Anti-abuse Hardening](07-anti-abuse-hardening.md) | Bucket4j, lockout, generic error mapping | Repeated failures → lockout; rate-limited bodies are identical to invalid-credentials |
+| 08 | [Integration & Verification](08-integration-verification.md) | Testcontainers + GreenMail E2E, timing test, session-fixation test | `./gradlew test` green; all 14 scenarios pass |
 
 Dependencies: 01 ◀ 02 ◀ 03 ◀ 04 ◀ 05 ◀ 06 ◀ 07 ◀ 08. Each phase assumes the previous is complete.
 
@@ -135,4 +135,4 @@ No patient-side contract changes are required for any of the above.
 
 ---
 
-*End of master plan. Begin at [phase 01](./plans/01-foundation.md).*
+*End of master plan. Begin at [phase 01](01-foundation.md).*
