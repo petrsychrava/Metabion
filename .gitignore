@@ -18,6 +18,8 @@ build/
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
+.idea/db-forest-config.xml
+.idea/sqldialects.xml
 
 ### Eclipse ###
 .apt_generated
