@@ -134,6 +134,18 @@ class WebOnboardingControllerTest {
     }
 
     @Test
+    void invalidPatientSubmissionRerendersFormWithShell() throws Exception {
+        mvc.perform(post("/app/onboarding")
+                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(csrf())
+                        .param("onboardingContext", "default"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("onboarding"))
+                .andExpect(content().string(containsString("class=\"sidebar\"")))
+                .andExpect(content().string(containsString("Education library - planned")));
+    }
+
+    @Test
     void patientSubmitRedirectPreservesNormalizedContext() throws Exception {
         mvc.perform(post("/app/onboarding")
                         .with(user("patient@example.com").roles("PATIENT"))
@@ -204,6 +216,21 @@ class WebOnboardingControllerTest {
 
         verify(onboardingService).review(any(), eq(99L), eq(new OnboardingReviewRequest(
                 OnboardingReviewStatus.REVIEWED, "ok")));
+    }
+
+    @Test
+    void invalidClinicalReviewRerendersDetailWithShell() throws Exception {
+        when(onboardingService.getReviewable(any(), eq(99L))).thenReturn(fullSubmissionResponse());
+
+        mvc.perform(post("/app/clinical/onboarding/99/review")
+                        .with(user("doctor@example.com").roles("PHYSICIAN"))
+                        .with(csrf())
+                        .param("reviewStatus", "PENDING_REVIEW")
+                        .param("reviewNotes", "needs a valid actionable status"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("clinical-onboarding-detail"))
+                .andExpect(content().string(containsString("class=\"sidebar\"")))
+                .andExpect(content().string(containsString("Assigned patient overview - planned")));
     }
 
     private OnboardingSubmissionResponse fullSubmissionResponse() {

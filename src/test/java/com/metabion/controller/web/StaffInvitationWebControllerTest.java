@@ -108,6 +108,22 @@ class StaffInvitationWebControllerTest {
     }
 
     @Test
+    void invalid_admin_post_rerenders_form_with_shell_and_roles() throws Exception {
+        mvc.perform(post("/app/staff-invitations")
+                        .with(user("admin@example.com").roles("ADMIN"))
+                        .with(csrf())
+                        .param("email", "")
+                        .param("roles", ""))
+                .andExpect(status().isOk())
+                .andExpect(view().name("admin-staff-invitation"))
+                .andExpect(model().attributeExists("form"))
+                .andExpect(content().string(containsString("class=\"sidebar\"")))
+                .andExpect(content().string(containsString("Content management - planned")))
+                .andExpect(model().attribute("staffRoles",
+                        contains("Nutrition specialist", "Physician", "Coordinator")));
+    }
+
+    @Test
     void admin_post_without_csrf_is_forbidden() throws Exception {
         mvc.perform(post("/app/staff-invitations")
                         .with(user("admin@example.com").roles("ADMIN"))
