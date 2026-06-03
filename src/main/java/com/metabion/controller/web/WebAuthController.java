@@ -31,10 +31,12 @@ public class WebAuthController {
 
     private final UserService userService;
     private final SecurityService securityService;
+    private final AppMenuCatalog appMenuCatalog;
 
-    public WebAuthController(UserService userService, SecurityService securityService) {
+    public WebAuthController(UserService userService, SecurityService securityService, AppMenuCatalog appMenuCatalog) {
         this.userService = userService;
         this.securityService = securityService;
+        this.appMenuCatalog = appMenuCatalog;
     }
 
     @GetMapping("/")
@@ -179,6 +181,9 @@ public class WebAuthController {
     public String app(Authentication authentication, Model model) {
         model.addAttribute("email", authentication.getName());
         model.addAttribute("roles", roles(authentication));
+        model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
+        model.addAttribute("dashboardItems", appMenuCatalog.dashboardItems(authentication));
+        model.addAttribute("activePath", "/app");
         return "app";
     }
 

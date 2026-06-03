@@ -41,12 +41,14 @@ class WebAuthControllerTest {
     @Mock
     SecurityService securityService;
 
+    AppMenuCatalog appMenuCatalog = new AppMenuCatalog();
+
     MockMvc mvc;
 
     @BeforeEach
     void setUp() {
         mvc = MockMvcBuilders
-                .standaloneSetup(new WebAuthController(userService, securityService))
+                .standaloneSetup(new WebAuthController(userService, securityService, appMenuCatalog))
                 .setViewResolvers((viewName, locale) -> {
                     if (viewName.startsWith("redirect:")) {
                         return new RedirectView(viewName.substring("redirect:".length()), true);
@@ -125,7 +127,68 @@ class WebAuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("app"))
                 .andExpect(model().attribute("email", "user@example.com"))
-                .andExpect(model().attribute("roles", List.of("COORDINATOR", "PHYSICIAN")));
+                .andExpect(model().attribute("roles", List.of("COORDINATOR", "PHYSICIAN")))
+                .andExpect(model().attribute("appMenuItems", List.of(
+                        new AppMenuItem("Home", "/app", false, false, "Application home"),
+                        new AppMenuItem("Onboarding review", "/app/clinical/onboarding", false, true, "Review patient onboarding submissions"),
+                        new AppMenuItem("Assigned patient overview", null, true, true, "Planned assigned patient overview"),
+                        new AppMenuItem("Red-flag monitoring", null, true, true, "Planned red-flag monitoring"),
+                        new AppMenuItem("Data completeness", null, true, false, "Planned data completeness checks"),
+                        new AppMenuItem("Protocol checkpoints", null, true, false, "Planned protocol checkpoint review"),
+                        new AppMenuItem("Cohort and participant management", null, true, false, "Planned cohort and participant tools"),
+                        new AppMenuItem("Research export and reports", null, true, false, "Planned export and reporting tools"),
+                        new AppMenuItem("Account", "/app/account", false, false, "Account settings"))))
+                .andExpect(model().attribute("dashboardItems", List.of(
+                        new AppMenuItem("Onboarding review", "/app/clinical/onboarding", false, true, "Review patient onboarding submissions"),
+                        new AppMenuItem("Assigned patient overview", null, true, true, "Planned assigned patient overview"),
+                        new AppMenuItem("Red-flag monitoring", null, true, true, "Planned red-flag monitoring"))))
+                .andExpect(model().attribute("activePath", "/app"));
+    }
+
+    @Test
+    void app_model_for_patient_contains_patient_items_only() throws Exception {
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", "ROLE_PATIENT");
+        auth.setAuthenticated(true);
+
+        mvc.perform(get("/app").principal(auth))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute("appMenuItems", List.of(
+                        new AppMenuItem("Home", "/app", false, false, "Application home"),
+                        new AppMenuItem("Onboarding", "/app/onboarding", false, true, "Continue the onboarding flow"),
+                        new AppMenuItem("Onboarding history", "/app/onboarding/history", false, false, "Review completed onboarding steps"),
+                        new AppMenuItem("Education library", null, true, true, "Planned patient education resources"),
+                        new AppMenuItem("Daily diet and symptom check-ins", null, true, true, "Planned daily tracking for diet and symptoms"),
+                        new AppMenuItem("Lab trends", null, true, true, "Planned laboratory trend views"),
+                        new AppMenuItem("Protocol phase", null, true, false, "Planned protocol progression details"),
+                        new AppMenuItem("Red-flag guidance", null, true, true, "Planned escalation guidance"),
+                        new AppMenuItem("Patient timeline", null, true, false, "Planned longitudinal patient timeline"),
+                        new AppMenuItem("Account", "/app/account", false, false, "Account settings"))))
+                .andExpect(model().attribute("dashboardItems", List.of(
+                        new AppMenuItem("Onboarding", "/app/onboarding", false, true, "Continue the onboarding flow"),
+                        new AppMenuItem("Education library", null, true, true, "Planned patient education resources"),
+                        new AppMenuItem("Daily diet and symptom check-ins", null, true, true, "Planned daily tracking for diet and symptoms"),
+                        new AppMenuItem("Lab trends", null, true, true, "Planned laboratory trend views"),
+                        new AppMenuItem("Red-flag guidance", null, true, true, "Planned escalation guidance"))))
+                .andExpect(model().attribute("activePath", "/app"));
+    }
+
+    @Test
+    void app_model_for_admin_contains_admin_items_only() throws Exception {
+        var auth = new TestingAuthenticationToken("admin@example.com", "password", "ROLE_ADMIN");
+        auth.setAuthenticated(true);
+
+        mvc.perform(get("/app").principal(auth))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute("appMenuItems", List.of(
+                        new AppMenuItem("Home", "/app", false, false, "Application home"),
+                        new AppMenuItem("Staff invitations", "/app/staff-invitations/new", false, true, "Invite staff members"),
+                        new AppMenuItem("Content management", null, true, false, "Planned content administration"),
+                        new AppMenuItem("Rule configuration", null, true, false, "Planned rule configuration"),
+                        new AppMenuItem("Audit review", null, true, false, "Planned audit review tools"),
+                        new AppMenuItem("Account", "/app/account", false, false, "Account settings"))))
+                .andExpect(model().attribute("dashboardItems", List.of(
+                        new AppMenuItem("Staff invitations", "/app/staff-invitations/new", false, true, "Invite staff members"))))
+                .andExpect(model().attribute("activePath", "/app"));
     }
 
     @Test
