@@ -18,9 +18,9 @@ Implemented authenticated routes include:
 - `/app/onboarding`
 - `/app/onboarding/history`
 - `/app/clinical/onboarding`
-- `/admin/staff-invitations/new`
+- `/app/staff-invitations/new`
 
-The new landing dashboard builds on those routes. It must not introduce routes for unimplemented planned features.
+The new landing dashboard builds on the authenticated app routes and should bring staff invitations into the app route space. It must not introduce routes for unimplemented planned features.
 
 ## Product Direction
 
@@ -56,6 +56,8 @@ Visible according to role relevance:
 Available items are normal links. Planned items are disabled, not clickable, and include the visible suffix `- planned`.
 
 The sidebar should not use `Patient`, `Clinical`, or `Administration` as first-level role containers in the first version. If navigation grows later, grouping should be by product area, such as `Program`, `Monitoring`, `Study operations`, or `Administration`.
+
+The sidebar should remain visible when users open implemented app workflows from the sidebar or dashboard cards. Linked pages should use the shared workbench shell, with the current menu item visually marked as active.
 
 ## Dashboard Model
 
@@ -106,7 +108,7 @@ Clinical/coordinator dashboard cards should emphasize review queues, assigned pa
 
 For `ADMIN` users:
 
-- `Staff invitations` -> `/admin/staff-invitations/new`
+- `Staff invitations` -> `/app/staff-invitations/new`
 - `Content management - planned`
 - `Rule configuration - planned`
 - `Audit review - planned`
@@ -132,13 +134,30 @@ Add a small navigation/catalog model, for example:
 - sidebar menu items
 - dashboard card items or sections
 
-Existing controllers for onboarding, clinical review, and staff invitations can remain responsible for their pages. The first implementation may apply the new full workbench shell only to `/app`; reuse across `/app/**` can be planned separately if it expands the change too much.
+Existing controllers for onboarding, clinical review, and staff invitations can remain responsible for their business flows, but their templates should render inside the shared workbench shell when reached from the authenticated app menu.
+
+The shared shell should apply to:
+
+- `/app`
+- `/app/onboarding`
+- `/app/onboarding/history`
+- `/app/clinical/onboarding`
+- `/app/clinical/onboarding/{id}`
+- `/app/staff-invitations/new`
+
+Move the MVC staff invitation UI into the app namespace:
+
+- replace `GET /admin/staff-invitations/new` with `GET /app/staff-invitations/new`
+- replace `POST /admin/staff-invitations` with `POST /app/staff-invitations`
+- keep `ROLE_ADMIN` authorization for both routes
+- do not keep `/admin/staff-invitations/**` as a duplicate UI route unless a later compatibility requirement appears
 
 ## Security
 
 Backend security remains the source of truth.
 
-- Existing route permissions stay unchanged.
+- Existing route permissions stay unchanged except for the MVC staff invitation route moving into the `/app` namespace.
+- Staff invitation MVC permissions move from `/admin/staff-invitations/**` to `/app/staff-invitations/**`, still requiring `ROLE_ADMIN`.
 - Planned items have no routes.
 - Planned items are disabled and not focusable as actions.
 - Staff invitation remains admin-only.
@@ -195,9 +214,12 @@ MVC/security tests should cover:
 - authenticated patient does not render clinical/admin items
 - authenticated clinical user `/app` renders onboarding review and clinical/study planned labels
 - authenticated admin `/app` renders staff invitations and admin planned labels only
+- authenticated admin can open `/app/staff-invitations/new`
+- non-admin users cannot open `/app/staff-invitations/new`
 - anonymous `/app` remains rejected by security
 - planned items are rendered disabled and non-clickable
 - sign-out form still includes CSRF
+- implemented app pages reached from the menu render the shared sidebar shell with the active item marked
 
 Full verification should run:
 
@@ -214,5 +236,7 @@ Full verification should run:
 - Planned items are visible for demos, disabled, and labeled with `- planned`.
 - Users see only items relevant to their roles.
 - Admin sees admin utilities only.
+- Staff invitation UI uses `/app/staff-invitations/**` as its canonical MVC route and stays admin-only.
+- Implemented app workflow pages preserve the workbench sidebar after navigation.
 - No planned-feature routes are introduced.
 - Existing auth, onboarding, clinical review, and staff invitation flows keep working.
