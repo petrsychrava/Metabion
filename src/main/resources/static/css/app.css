@@ -286,7 +286,8 @@ a {
 }
 
 .sidebar-nav a:hover,
-.sidebar-nav a.active {
+.sidebar-nav a.active,
+.sidebar-nav a[aria-current="page"] {
     background: #e7eee9;
     color: var(--accent-dark);
 }

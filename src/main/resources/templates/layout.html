@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="appShell(pageTitle, activePath, content)">
 <head th:fragment="head(pageTitle)">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title th:text="${pageTitle}">Metabion</title>
     <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
-<body th:fragment="appShell(pageTitle, activePath, content)">
+<body>
 <header class="brand" th:fragment="brand">
     <a th:href="@{/}" aria-label="Metabion home">Metabion</a>
 </header>
@@ -20,6 +20,7 @@
                     <a th:if="${item.linked()}"
                        th:href="${item.route()}"
                        th:classappend="${item.route() == activePath} ? ' active' : ''"
+                       th:attr="${item.route() == activePath} ? 'aria-current=page' : null"
                        th:text="${item.displayLabel()}">Menu item</a>
                     <span th:unless="${item.linked()}" class="disabled" th:text="${item.displayLabel()}">Planned item</span>
                 </li>
@@ -30,8 +31,8 @@
             <button type="submit" class="secondary">Sign out</button>
         </form>
     </aside>
-    <main class="workbench-main" th:insert="${content}">
-        <div th:remove="all"></div>
+    <main class="workbench-main">
+        <th:block th:replace="${content}"></th:block>
     </main>
 </div>
 </body>
