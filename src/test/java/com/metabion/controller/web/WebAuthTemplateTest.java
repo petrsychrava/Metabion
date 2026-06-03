@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -112,9 +113,25 @@ class WebAuthTemplateTest {
 
         mvc.perform(get("/app").principal(auth).with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Signed in")))
+                .andExpect(content().string(containsString("class=\"workbench\"")))
+                .andExpect(content().string(containsString("class=\"sidebar\"")))
+                .andExpect(content().string(containsString("Onboarding")))
+                .andExpect(content().string(containsString("Education library - planned")))
                 .andExpect(content().string(containsString("user@example.com")))
                 .andExpect(content().string(containsString("name=\"_csrf\"")));
+    }
+
+    @Test
+    void admin_app_template_renders_admin_dashboard_items() throws Exception {
+        var auth = new TestingAuthenticationToken("admin@example.com", "password", "ROLE_ADMIN");
+        auth.setAuthenticated(true);
+
+        mvc.perform(get("/app").principal(auth).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Staff invitations")))
+                .andExpect(content().string(containsString("/app/staff-invitations/new")))
+                .andExpect(content().string(containsString("Content management - planned")))
+                .andExpect(content().string(not(containsString("Onboarding review"))));
     }
 
     @Test

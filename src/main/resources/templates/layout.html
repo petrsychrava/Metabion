@@ -17,10 +17,13 @@
         <nav aria-label="Application sections">
             <ul class="sidebar-nav">
                 <li th:each="item : ${appMenuItems}">
-                    <a th:if="${item.linked()}"
+                    <a th:if="${item.linked() and item.route() == activePath}"
                        th:href="${item.route()}"
-                       th:classappend="${item.route() == activePath} ? ' active' : ''"
-                       th:attr="${item.route() == activePath} ? 'aria-current=page' : null"
+                       class="active"
+                       aria-current="page"
+                       th:text="${item.displayLabel()}">Menu item</a>
+                    <a th:if="${item.linked() and item.route() != activePath}"
+                       th:href="${item.route()}"
                        th:text="${item.displayLabel()}">Menu item</a>
                     <span th:unless="${item.linked()}" class="disabled" th:text="${item.displayLabel()}">Planned item</span>
                 </li>

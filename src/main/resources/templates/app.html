@@ -1,23 +1,42 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{layout :: head('Metabion App')}"></head>
-<body>
-<main class="app-page">
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell('Metabion Dashboard', '/app', ~{::content})}">
+<th:block th:fragment="content">
     <header class="app-header">
         <div>
             <p class="eyebrow">Metabion</p>
-            <h1>Account</h1>
+            <h1>Dashboard</h1>
+            <p class="muted">
+                Signed in as <strong th:text="${email}">user@example.com</strong>.
+            </p>
+            <p class="muted">
+                Roles:
+                <span th:each="role, roleStat : ${roles}">
+                    <span th:text="${role}">PATIENT</span><span th:if="${!roleStat.last}">, </span>
+                </span>
+            </p>
         </div>
-        <form th:action="@{/logout}" method="post">
-            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-            <button type="submit" class="secondary">Sign out</button>
-        </form>
     </header>
 
     <section class="panel app-panel">
-        <h2>Signed in</h2>
-        <p class="muted">You are signed in as <strong th:text="${email}">user@example.com</strong>.</p>
+        <h2>Workspace</h2>
+        <div class="dashboard-grid">
+            <th:block th:each="item : ${dashboardItems}">
+                <a th:if="${item.linked()}"
+                   class="dashboard-card"
+                   th:href="${item.route()}"
+                   style="color: inherit; text-decoration: none;">
+                    <h2 th:text="${item.displayLabel()}">Onboarding</h2>
+                    <p class="muted" th:text="${item.description()}">Continue the onboarding flow</p>
+                </a>
+                <article th:unless="${item.linked()}"
+                         class="dashboard-card"
+                         aria-disabled="true">
+                    <h2 th:text="${item.displayLabel()}">Education library - planned</h2>
+                    <p class="muted" th:text="${item.description()}">Planned patient education resources</p>
+                </article>
+            </th:block>
+        </div>
     </section>
-</main>
-</body>
+</th:block>
 </html>
