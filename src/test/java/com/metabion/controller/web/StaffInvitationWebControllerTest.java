@@ -125,6 +125,23 @@ class StaffInvitationWebControllerTest {
     }
 
     @Test
+    void admin_post_without_roles_rerenders_form_and_does_not_call_service() throws Exception {
+        mvc.perform(post("/app/staff-invitations")
+                        .with(user("admin@example.com").roles("ADMIN"))
+                        .with(csrf())
+                        .param("email", "expert@example.com"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("admin-staff-invitation"))
+                .andExpect(content().string(containsString("class=\"sidebar\"")))
+                .andExpect(content().string(containsString("Content management - planned")))
+                .andExpect(content().string(containsString("must not be empty")))
+                .andExpect(model().attribute("staffRoles",
+                        contains("Nutrition specialist", "Physician", "Coordinator")));
+
+        verify(staffInvitationService, never()).createInvitation(any(), any());
+    }
+
+    @Test
     void admin_post_without_csrf_is_forbidden() throws Exception {
         mvc.perform(post("/app/staff-invitations")
                         .with(user("admin@example.com").roles("ADMIN"))
