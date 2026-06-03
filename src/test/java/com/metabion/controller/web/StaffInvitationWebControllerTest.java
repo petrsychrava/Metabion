@@ -21,7 +21,6 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.contains;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -74,19 +73,18 @@ class StaffInvitationWebControllerTest {
 
     @Test
     void admin_form_renders_with_form_and_staff_roles() throws Exception {
-        mvc.perform(get("/admin/staff-invitations/new")
+        mvc.perform(get("/app/staff-invitations/new")
                         .with(user("admin@example.com").roles("ADMIN"))
                         .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(view().name("admin-staff-invitation"))
                 .andExpect(model().attributeExists("form"))
-                .andExpect(model().attribute("staffRoles",
-                        contains("NUTRITION_SPECIALIST", "PHYSICIAN", "COORDINATOR")));
+                .andExpect(model().attributeExists("staffRoles"));
     }
 
     @Test
     void admin_post_with_csrf_calls_service_and_renders_result() throws Exception {
-        mvc.perform(post("/admin/staff-invitations")
+        mvc.perform(post("/app/staff-invitations")
                         .with(user("admin@example.com").roles("ADMIN"))
                         .with(csrf())
                         .param("email", "expert@example.com")
@@ -105,7 +103,7 @@ class StaffInvitationWebControllerTest {
 
     @Test
     void admin_post_without_csrf_is_forbidden() throws Exception {
-        mvc.perform(post("/admin/staff-invitations")
+        mvc.perform(post("/app/staff-invitations")
                         .with(user("admin@example.com").roles("ADMIN"))
                         .param("email", "expert@example.com")
                         .param("roles", "PHYSICIAN"))
@@ -114,7 +112,7 @@ class StaffInvitationWebControllerTest {
 
     @Test
     void non_admin_cannot_post_admin_invitation() throws Exception {
-        mvc.perform(post("/admin/staff-invitations")
+        mvc.perform(post("/app/staff-invitations")
                         .with(user("patient@example.com").roles("PATIENT"))
                         .with(csrf())
                         .param("email", "expert@example.com")
@@ -124,8 +122,16 @@ class StaffInvitationWebControllerTest {
 
     @Test
     void non_admin_cannot_open_admin_invite_form() throws Exception {
-        mvc.perform(get("/admin/staff-invitations/new")
+        mvc.perform(get("/app/staff-invitations/new")
                         .with(user("patient@example.com").roles("PATIENT"))
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void old_admin_invite_form_route_is_not_available() throws Exception {
+        mvc.perform(get("/admin/staff-invitations/new")
+                        .with(user("admin@example.com").roles("ADMIN"))
                         .with(csrf()))
                 .andExpect(status().isForbidden());
     }

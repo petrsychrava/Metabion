@@ -122,7 +122,7 @@ class WebAuthTemplateTest {
         var auth = new TestingAuthenticationToken("admin@example.com", "password", "ROLE_ADMIN");
         auth.setAuthenticated(true);
 
-        mvc.perform(get("/admin/staff-invitations/new").principal(auth).with(csrf()))
+        mvc.perform(get("/app/staff-invitations/new").principal(auth).with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Invite staff")))
                 .andExpect(content().string(containsString("name=\"email\"")))

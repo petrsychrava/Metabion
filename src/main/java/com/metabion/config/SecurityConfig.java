@@ -116,7 +116,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, PUBLIC_STAFF_INVITATION_ACCEPT_POST).permitAll()
                         .requestMatchers("/api/auth/verify").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/admin/staff-invitations").hasRole("ADMIN")
-                        .requestMatchers("/admin/staff-invitations/**").hasRole("ADMIN")
+                        .requestMatchers("/app/staff-invitations/**").hasRole("ADMIN")
                         .requestMatchers("/app", "/app/**", "/logout").authenticated()
                         .requestMatchers("/api/auth/logout").authenticated()
                         .requestMatchers("/api/**").authenticated()

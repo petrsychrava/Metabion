@@ -9,7 +9,7 @@
         <p class="muted">Send an invitation to a clinical staff member.</p>
         <p class="error" th:if="${error}" th:text="${error}">Invitation error.</p>
 
-        <form th:action="@{/admin/staff-invitations}" th:object="${form}" method="post" class="form">
+        <form th:action="@{/app/staff-invitations}" th:object="${form}" method="post" class="form">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
             <div class="field">
                 <label for="email">Email</label>

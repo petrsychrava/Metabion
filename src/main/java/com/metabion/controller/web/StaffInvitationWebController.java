@@ -34,14 +34,14 @@ public class StaffInvitationWebController {
         this.staffInvitationService = staffInvitationService;
     }
 
-    @GetMapping("/admin/staff-invitations/new")
+    @GetMapping("/app/staff-invitations/new")
     public String newInvitation(Model model) {
         model.addAttribute("form", new CreateStaffInvitationRequest("", Set.of()));
         addStaffRoles(model);
         return "admin-staff-invitation";
     }
 
-    @PostMapping("/admin/staff-invitations")
+    @PostMapping("/app/staff-invitations")
     public String createInvitation(@Valid @ModelAttribute("form") CreateStaffInvitationRequest form,
                                    BindingResult bindingResult,
                                    Authentication authentication,
