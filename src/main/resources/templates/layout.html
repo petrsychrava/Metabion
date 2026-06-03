@@ -6,9 +6,33 @@
     <title th:text="${pageTitle}">Metabion</title>
     <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
-<body>
+<body th:fragment="appShell(pageTitle, activePath, content)">
 <header class="brand" th:fragment="brand">
     <a th:href="@{/}" aria-label="Metabion home">Metabion</a>
 </header>
+
+<div class="workbench">
+    <aside class="sidebar" aria-label="Application navigation">
+        <a class="sidebar-brand" th:href="@{/app}">Metabion</a>
+        <nav aria-label="Application sections">
+            <ul class="sidebar-nav">
+                <li th:each="item : ${appMenuItems}">
+                    <a th:if="${item.linked()}"
+                       th:href="${item.route()}"
+                       th:classappend="${item.route() == activePath} ? ' active' : ''"
+                       th:text="${item.displayLabel()}">Menu item</a>
+                    <span th:unless="${item.linked()}" class="disabled" th:text="${item.displayLabel()}">Planned item</span>
+                </li>
+            </ul>
+        </nav>
+        <form class="sidebar-logout" th:action="@{/logout}" method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <button type="submit" class="secondary">Sign out</button>
+        </form>
+    </aside>
+    <main class="workbench-main" th:insert="${content}">
+        <div th:remove="all"></div>
+    </main>
+</div>
 </body>
 </html>
