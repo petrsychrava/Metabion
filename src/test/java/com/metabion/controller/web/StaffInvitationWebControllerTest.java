@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -79,7 +80,8 @@ class StaffInvitationWebControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("admin-staff-invitation"))
                 .andExpect(model().attributeExists("form"))
-                .andExpect(model().attributeExists("staffRoles"));
+                .andExpect(model().attribute("staffRoles",
+                        contains("Nutrition specialist", "Physician", "Coordinator")));
     }
 
     @Test
