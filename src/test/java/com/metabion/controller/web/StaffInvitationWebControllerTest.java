@@ -112,13 +112,14 @@ class StaffInvitationWebControllerTest {
         mvc.perform(post("/app/staff-invitations")
                         .with(user("admin@example.com").roles("ADMIN"))
                         .with(csrf())
-                        .param("email", "")
-                        .param("roles", ""))
+                        .param("email", ""))
                 .andExpect(status().isOk())
                 .andExpect(view().name("admin-staff-invitation"))
                 .andExpect(model().attributeExists("form"))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
                 .andExpect(content().string(containsString("Content management - planned")))
+                .andExpect(content().string(containsString("must not be blank")))
+                .andExpect(content().string(containsString("must not be empty")))
                 .andExpect(model().attribute("staffRoles",
                         contains("Nutrition specialist", "Physician", "Coordinator")));
     }

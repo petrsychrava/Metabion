@@ -135,6 +135,8 @@ class WebOnboardingControllerTest {
 
     @Test
     void invalidPatientSubmissionRerendersFormWithShell() throws Exception {
+        when(onboardingService.getLatestForCurrentPatient(any(), eq("default"))).thenReturn(fullSubmissionResponse());
+
         mvc.perform(post("/app/onboarding")
                         .with(user("patient@example.com").roles("PATIENT"))
                         .with(csrf())
@@ -142,7 +144,10 @@ class WebOnboardingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("onboarding"))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
-                .andExpect(content().string(containsString("Education library - planned")));
+                .andExpect(content().string(containsString("Education library - planned")))
+                .andExpect(content().string(containsString("Latest baseline")))
+                .andExpect(content().string(containsString("must not be null")))
+                .andExpect(content().string(containsString("must not be blank")));
     }
 
     @Test
@@ -230,7 +235,8 @@ class WebOnboardingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("clinical-onboarding-detail"))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
-                .andExpect(content().string(containsString("Assigned patient overview - planned")));
+                .andExpect(content().string(containsString("Assigned patient overview - planned")))
+                .andExpect(content().string(containsString("reviewStatus must be REVIEWED or NEEDS_FOLLOW_UP")));
     }
 
     private OnboardingSubmissionResponse fullSubmissionResponse() {

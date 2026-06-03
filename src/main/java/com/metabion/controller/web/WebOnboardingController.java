@@ -42,14 +42,7 @@ public class WebOnboardingController {
         model.addAttribute("context", context);
         addOptions(model);
         addAppShell(model, authentication, "/app/onboarding");
-        try {
-            model.addAttribute("latest", onboardingService.getLatestForCurrentPatient(authentication, context));
-        } catch (ResponseStatusException ex) {
-            if (ex.getStatusCode() != HttpStatus.NOT_FOUND) {
-                throw ex;
-            }
-            model.addAttribute("latest", null);
-        }
+        addLatest(model, authentication, context);
         return "onboarding";
     }
 
@@ -63,6 +56,7 @@ public class WebOnboardingController {
         if (bindingResult.hasErrors()) {
             model.addAttribute("context", form.onboardingContext());
             addAppShell(model, authentication, "/app/onboarding");
+            addLatest(model, authentication, form.onboardingContext());
             return "onboarding";
         }
         onboardingService.submitForCurrentPatient(authentication, form);
@@ -163,5 +157,16 @@ public class WebOnboardingController {
     private void addAppShell(Model model, Authentication authentication, String activePath) {
         model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
         model.addAttribute("activePath", activePath);
+    }
+
+    private void addLatest(Model model, Authentication authentication, String context) {
+        try {
+            model.addAttribute("latest", onboardingService.getLatestForCurrentPatient(authentication, context));
+        } catch (ResponseStatusException ex) {
+            if (ex.getStatusCode() != HttpStatus.NOT_FOUND) {
+                throw ex;
+            }
+            model.addAttribute("latest", null);
+        }
     }
 }

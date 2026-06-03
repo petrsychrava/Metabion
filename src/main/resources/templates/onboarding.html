@@ -24,20 +24,25 @@
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
             <label class="field">Context <input th:field="*{onboardingContext}"></label>
             <label class="field">Date of birth <input type="date" th:field="*{dateOfBirth}" required></label>
+            <p class="error" th:if="${#fields.hasErrors('dateOfBirth')}" th:errors="*{dateOfBirth}">Date of birth error</p>
             <label class="field">Sex
                 <select th:field="*{sex}" required>
                     <option value="">Select</option>
                     <option th:each="option : ${sexOptions}" th:value="${option}" th:text="${option}"></option>
                 </select>
             </label>
+            <p class="error" th:if="${#fields.hasErrors('sex')}" th:errors="*{sex}">Sex error</p>
             <label class="field">Country/region <input th:field="*{countryRegion}" required></label>
+            <p class="error" th:if="${#fields.hasErrors('countryRegion')}" th:errors="*{countryRegion}">Country error</p>
             <label class="field">Timezone <input th:field="*{timezone}" required></label>
+            <p class="error" th:if="${#fields.hasErrors('timezone')}" th:errors="*{timezone}">Timezone error</p>
             <label class="field">Diagnosis
                 <select th:field="*{diagnosisType}" required>
                     <option value="">Select</option>
                     <option th:each="option : ${diagnosisTypes}" th:value="${option}" th:text="${option}"></option>
                 </select>
             </label>
+            <p class="error" th:if="${#fields.hasErrors('diagnosisType')}" th:errors="*{diagnosisType}">Diagnosis error</p>
             <label class="field">Diagnosis year <input type="number" th:field="*{diagnosisYear}"></label>
             <label class="field">Disease location <input th:field="*{diseaseLocation}"></label>
             <label class="field">Disease behavior <input th:field="*{diseaseBehavior}"></label>
@@ -47,6 +52,7 @@
                     <option th:each="option : ${activityOptions}" th:value="${option}" th:text="${option}"></option>
                 </select>
             </label>
+            <p class="error" th:if="${#fields.hasErrors('activityEstimate')}" th:errors="*{activityEstimate}">Activity error</p>
             <label class="field">Current medications <textarea th:field="*{currentMedications}"></textarea></label>
             <label class="field">Steroid use
                 <select th:field="*{steroidUse}" required>
@@ -54,12 +60,14 @@
                     <option th:each="option : ${steroidOptions}" th:value="${option}" th:text="${option}"></option>
                 </select>
             </label>
+            <p class="error" th:if="${#fields.hasErrors('steroidUse')}" th:errors="*{steroidUse}">Steroid use error</p>
             <label class="field">Advanced therapy exposure
                 <select th:field="*{advancedTherapyExposure}" required>
                     <option value="">Select</option>
                     <option th:each="option : ${advancedTherapyOptions}" th:value="${option}" th:text="${option}"></option>
                 </select>
             </label>
+            <p class="error" th:if="${#fields.hasErrors('advancedTherapyExposure')}" th:errors="*{advancedTherapyExposure}">Advanced therapy error</p>
             <label class="field">Medication notes <textarea th:field="*{medicationNotes}"></textarea></label>
             <label class="field">Labs collected at <input type="date" th:field="*{labsCollectedAt}"></label>
             <label class="field">CRP mg/L <input type="number" step="0.01" th:field="*{crpMgL}"></label>
