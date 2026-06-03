@@ -1,8 +1,7 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{layout :: head('Patient onboarding')}"></head>
-<body>
-<main class="app-page">
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell('Patient onboarding', ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
     <header class="app-header">
         <div>
             <p class="eyebrow">Metabion</p>
@@ -71,6 +70,5 @@
             <button type="submit">Submit baseline</button>
         </form>
     </section>
-</main>
-</body>
+</th:block>
 </html>

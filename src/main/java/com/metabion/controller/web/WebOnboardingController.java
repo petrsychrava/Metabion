@@ -27,9 +27,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class WebOnboardingController {
 
     private final OnboardingService onboardingService;
+    private final AppMenuCatalog appMenuCatalog;
 
-    public WebOnboardingController(OnboardingService onboardingService) {
+    public WebOnboardingController(OnboardingService onboardingService, AppMenuCatalog appMenuCatalog) {
         this.onboardingService = onboardingService;
+        this.appMenuCatalog = appMenuCatalog;
     }
 
     @GetMapping("/app/onboarding")
@@ -39,6 +41,7 @@ public class WebOnboardingController {
         model.addAttribute("onboardingForm", emptyForm(context));
         model.addAttribute("context", context);
         addOptions(model);
+        addAppShell(model, authentication, "/app/onboarding");
         try {
             model.addAttribute("latest", onboardingService.getLatestForCurrentPatient(authentication, context));
         } catch (ResponseStatusException ex) {
@@ -59,6 +62,7 @@ public class WebOnboardingController {
         addOptions(model);
         if (bindingResult.hasErrors()) {
             model.addAttribute("context", form.onboardingContext());
+            addAppShell(model, authentication, "/app/onboarding");
             return "onboarding";
         }
         onboardingService.submitForCurrentPatient(authentication, form);
@@ -72,6 +76,7 @@ public class WebOnboardingController {
                           Model model) {
         model.addAttribute("context", context);
         model.addAttribute("submissions", onboardingService.listHistoryForCurrentPatient(authentication, context));
+        addAppShell(model, authentication, "/app/onboarding/history");
         return "onboarding-history";
     }
 
@@ -84,6 +89,7 @@ public class WebOnboardingController {
         model.addAttribute("status", status);
         model.addAttribute("statuses", OnboardingReviewStatus.values());
         model.addAttribute("submissions", onboardingService.listReviewable(authentication, context, status));
+        addAppShell(model, authentication, "/app/clinical/onboarding");
         return "clinical-onboarding";
     }
 
@@ -95,6 +101,7 @@ public class WebOnboardingController {
                 OnboardingReviewStatus.REVIEWED,
                 OnboardingReviewStatus.NEEDS_FOLLOW_UP
         });
+        addAppShell(model, authentication, "/app/clinical/onboarding");
         return "clinical-onboarding-detail";
     }
 
@@ -107,6 +114,7 @@ public class WebOnboardingController {
         if (bindingResult.hasErrors()) {
             model.addAttribute("submission", onboardingService.getReviewable(authentication, id));
             model.addAttribute("reviewStatuses", reviewStatuses());
+            addAppShell(model, authentication, "/app/clinical/onboarding");
             return "clinical-onboarding-detail";
         }
         onboardingService.review(authentication, id, form);
@@ -150,5 +158,10 @@ public class WebOnboardingController {
                 OnboardingReviewStatus.REVIEWED,
                 OnboardingReviewStatus.NEEDS_FOLLOW_UP
         };
+    }
+
+    private void addAppShell(Model model, Authentication authentication, String activePath) {
+        model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
+        model.addAttribute("activePath", activePath);
     }
 }

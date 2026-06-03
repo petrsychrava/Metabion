@@ -22,6 +22,7 @@ import org.springframework.web.context.WebApplicationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -34,6 +35,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 @SpringBootTest(properties = {
         "spring.profiles.active=dev",
@@ -80,6 +82,8 @@ class StaffInvitationWebControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("admin-staff-invitation"))
                 .andExpect(model().attributeExists("form"))
+                .andExpect(content().string(containsString("class=\"sidebar\"")))
+                .andExpect(content().string(containsString("Content management - planned")))
                 .andExpect(model().attribute("staffRoles",
                         contains("Nutrition specialist", "Physician", "Coordinator")));
     }

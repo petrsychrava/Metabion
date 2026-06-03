@@ -85,7 +85,10 @@ class WebOnboardingControllerTest {
                         .with(user("patient@example.com").roles("PATIENT")))
                 .andExpect(status().isOk())
                 .andExpect(view().name("onboarding"))
-                .andExpect(model().attributeExists("onboardingForm"));
+                .andExpect(model().attributeExists("onboardingForm"))
+                .andExpect(content().string(containsString("class=\"sidebar\"")))
+                .andExpect(content().string(containsString("Onboarding history")))
+                .andExpect(content().string(containsString("Education library - planned")));
     }
 
     @Test
@@ -155,7 +158,9 @@ class WebOnboardingControllerTest {
                         .with(user("doctor@example.com").roles("PHYSICIAN")))
                 .andExpect(status().isOk())
                 .andExpect(view().name("clinical-onboarding"))
-                .andExpect(model().attributeExists("submissions"));
+                .andExpect(model().attributeExists("submissions"))
+                .andExpect(content().string(containsString("class=\"sidebar\"")))
+                .andExpect(content().string(containsString("Assigned patient overview - planned")));
     }
 
     @Test

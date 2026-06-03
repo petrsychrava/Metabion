@@ -29,15 +29,18 @@ public class StaffInvitationWebController {
             .toList();
 
     private final StaffInvitationService staffInvitationService;
+    private final AppMenuCatalog appMenuCatalog;
 
-    public StaffInvitationWebController(StaffInvitationService staffInvitationService) {
+    public StaffInvitationWebController(StaffInvitationService staffInvitationService, AppMenuCatalog appMenuCatalog) {
         this.staffInvitationService = staffInvitationService;
+        this.appMenuCatalog = appMenuCatalog;
     }
 
     @GetMapping("/app/staff-invitations/new")
-    public String newInvitation(Model model) {
+    public String newInvitation(Authentication authentication, Model model) {
         model.addAttribute("form", new CreateStaffInvitationRequest("", Set.of()));
         addStaffRoles(model);
+        addAppShell(model, authentication);
         return "admin-staff-invitation";
     }
 
@@ -49,6 +52,7 @@ public class StaffInvitationWebController {
         addStaffRoles(model);
         if (bindingResult.hasErrors()) {
             model.addAttribute("error", "Review the invitation details.");
+            addAppShell(model, authentication);
             return "admin-staff-invitation";
         }
 
@@ -58,6 +62,7 @@ public class StaffInvitationWebController {
             return "result";
         } catch (StaffInvitationException ex) {
             model.addAttribute("error", ex.getMessage());
+            addAppShell(model, authentication);
             return "admin-staff-invitation";
         }
     }
@@ -102,5 +107,10 @@ public class StaffInvitationWebController {
         model.addAttribute("message", message);
         model.addAttribute("href", href);
         model.addAttribute("action", action);
+    }
+
+    private void addAppShell(Model model, Authentication authentication) {
+        model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
+        model.addAttribute("activePath", "/app/staff-invitations/new");
     }
 }

@@ -1,11 +1,14 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{layout :: head('Invite staff - Metabion')}"></head>
-<body>
-<main class="page">
-    <section class="panel auth-panel">
-        <div th:replace="~{layout :: brand}"></div>
-        <h1>Invite staff</h1>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell('Invite staff - Metabion', ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Metabion</p>
+            <h1>Invite staff</h1>
+        </div>
+    </header>
+    <section class="panel app-panel">
         <p class="muted">Send an invitation to a clinical staff member.</p>
         <p class="error" th:if="${error}" th:text="${error}">Invitation error.</p>
 
@@ -29,6 +32,5 @@
             <button type="submit">Send invitation</button>
         </form>
     </section>
-</main>
-</body>
+</th:block>
 </html>

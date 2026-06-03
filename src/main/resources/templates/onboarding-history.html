@@ -1,8 +1,7 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{layout :: head('Onboarding history')}"></head>
-<body>
-<main class="app-page">
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell('Onboarding history', ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
     <header class="app-header">
         <div>
             <p class="eyebrow">Metabion</p>
@@ -23,6 +22,5 @@
             </tbody>
         </table>
     </section>
-</main>
-</body>
+</th:block>
 </html>
