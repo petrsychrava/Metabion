@@ -13,10 +13,6 @@ VALUES
     ('COORDINATOR', FALSE, TRUE),
     ('ADMIN', FALSE, FALSE);
 
--- Update user_roles to use the new roles table instead of hardcoded check constraint
-ALTER TABLE user_roles
-    DROP CONSTRAINT IF EXISTS chk_user_roles_role;
-
 ALTER TABLE user_roles
     ADD CONSTRAINT fk_user_roles_role
     FOREIGN KEY (role) REFERENCES roles(code);

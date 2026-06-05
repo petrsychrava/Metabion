@@ -1,11 +1,6 @@
 package com.metabion.controller.web;
 
-import com.metabion.domain.OnboardingReviewStatus;
-import com.metabion.domain.AdvancedTherapyExposure;
-import com.metabion.domain.DiseaseActivityEstimate;
-import com.metabion.domain.IbdDiagnosisType;
-import com.metabion.domain.Sex;
-import com.metabion.domain.SteroidUse;
+import com.metabion.domain.*;
 import com.metabion.dto.OnboardingReviewRequest;
 import com.metabion.dto.OnboardingSubmissionResponse;
 import com.metabion.service.OnboardingService;
@@ -82,7 +77,7 @@ class WebOnboardingControllerTest {
     @Test
     void patientOnboardingPageRendersForm() throws Exception {
         mvc.perform(get("/app/onboarding")
-                        .with(user("patient@example.com").roles("PATIENT")))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
                 .andExpect(status().isOk())
                 .andExpect(view().name("onboarding"))
                 .andExpect(model().attributeExists("onboardingForm"))
@@ -97,7 +92,7 @@ class WebOnboardingControllerTest {
                 .when(onboardingService).getLatestForCurrentPatient(any(), eq("default"));
 
         mvc.perform(get("/app/onboarding")
-                        .with(user("patient@example.com").roles("PATIENT")))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
                 .andExpect(status().isOk())
                 .andExpect(view().name("onboarding"));
     }
@@ -108,14 +103,14 @@ class WebOnboardingControllerTest {
                 .when(onboardingService).getLatestForCurrentPatient(any(), eq("default"));
 
         mvc.perform(get("/app/onboarding")
-                        .with(user("patient@example.com").roles("PATIENT")))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     void patientCanSubmitMvcFormWithCsrf() throws Exception {
         mvc.perform(post("/app/onboarding")
-                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf())
                         .param("onboardingContext", "default")
                         .param("dateOfBirth", "1990-01-01")
@@ -138,7 +133,7 @@ class WebOnboardingControllerTest {
         when(onboardingService.getLatestForCurrentPatient(any(), eq("default"))).thenReturn(fullSubmissionResponse());
 
         mvc.perform(post("/app/onboarding")
-                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf())
                         .param("onboardingContext", "default"))
                 .andExpect(status().isOk())
@@ -153,7 +148,7 @@ class WebOnboardingControllerTest {
     @Test
     void patientSubmitRedirectPreservesNormalizedContext() throws Exception {
         mvc.perform(post("/app/onboarding")
-                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf())
                         .param("onboardingContext", " Study-A ")
                         .param("dateOfBirth", "1990-01-01")
@@ -172,7 +167,7 @@ class WebOnboardingControllerTest {
     @Test
     void clinicalReviewListRenders() throws Exception {
         mvc.perform(get("/app/clinical/onboarding")
-                        .with(user("doctor@example.com").roles("PHYSICIAN")))
+                        .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name())))
                 .andExpect(status().isOk())
                 .andExpect(view().name("clinical-onboarding"))
                 .andExpect(model().attributeExists("submissions"))
@@ -186,7 +181,7 @@ class WebOnboardingControllerTest {
                 .when(onboardingService).listReviewable(any(), eq(null), eq(null));
 
         mvc.perform(get("/app/clinical/onboarding")
-                        .with(user("patient@example.com").roles("PATIENT")))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.getName())))
                 .andExpect(status().isForbidden())
                 .andExpect(view().name("result"))
                 .andExpect(content().string(containsString("Access denied")))
@@ -198,7 +193,7 @@ class WebOnboardingControllerTest {
         when(onboardingService.getReviewable(any(), eq(99L))).thenReturn(fullSubmissionResponse());
 
         mvc.perform(get("/app/clinical/onboarding/99")
-                        .with(user("doctor@example.com").roles("PHYSICIAN")))
+                        .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name())))
                 .andExpect(status().isOk())
                 .andExpect(view().name("clinical-onboarding-detail"))
                 .andExpect(content().string(containsString("1990-01-01")))
@@ -212,7 +207,7 @@ class WebOnboardingControllerTest {
     @Test
     void clinicalReviewPostDelegatesToService() throws Exception {
         mvc.perform(post("/app/clinical/onboarding/99/review")
-                        .with(user("doctor@example.com").roles("PHYSICIAN"))
+                        .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name()))
                         .with(csrf())
                         .param("reviewStatus", "REVIEWED")
                         .param("reviewNotes", "ok"))
@@ -228,7 +223,7 @@ class WebOnboardingControllerTest {
         when(onboardingService.getReviewable(any(), eq(99L))).thenReturn(fullSubmissionResponse());
 
         mvc.perform(post("/app/clinical/onboarding/99/review")
-                        .with(user("doctor@example.com").roles("PHYSICIAN"))
+                        .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name()))
                         .with(csrf())
                         .param("reviewStatus", "PENDING_REVIEW")
                         .param("reviewNotes", "needs a valid actionable status"))
