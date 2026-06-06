@@ -1,5 +1,7 @@
 package com.metabion.domain;
 
+import java.util.Arrays;
+
 public enum RoleName {
     PATIENT("Patient"),
     NUTRITION_SPECIALIST("Nutrition specialist"),
@@ -12,6 +14,10 @@ public enum RoleName {
     RoleName(String name)
     {
         this.name = name;
+    }
+
+    public static RoleName fromName(String name) {
+        return Arrays.stream(RoleName.values()).filter(roleName -> roleName.getName().equals(name)).toList().getFirst();
     }
 
 

@@ -133,7 +133,7 @@ public class StaffInvitationService {
         for (var requestedRole : requestedRoles) {
             RoleName role;
             try {
-                role = RoleName.from(requestedRole == null ? null : requestedRole.trim());
+                role = RoleName.fromName(requestedRole == null ? null : requestedRole.trim());
             } catch (IllegalArgumentException ex) {
                 throw new StaffInvitationException(UNSUPPORTED_ROLES_MESSAGE);
             }
