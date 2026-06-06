@@ -80,6 +80,65 @@ class UserPreferenceWebControllerTest {
     }
 
     @Test
+    void updateThemePreferenceFallsBackToAppWhenRefererIsMissing() throws Exception {
+        mvc.perform(post("/app/preferences/theme")
+                        .principal(auth)
+                        .param("themePreference", "LIGHT"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app"));
+
+        verify(preferences).updateThemePreference(auth, ThemePreference.LIGHT);
+    }
+
+    @Test
+    void updateThemePreferenceFallsBackToAppWhenRefererIsBlank() throws Exception {
+        mvc.perform(post("/app/preferences/theme")
+                        .principal(auth)
+                        .header("Referer", " ")
+                        .param("themePreference", "LIGHT"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app"));
+
+        verify(preferences).updateThemePreference(auth, ThemePreference.LIGHT);
+    }
+
+    @Test
+    void updateThemePreferenceFallsBackToAppWhenRefererIsMalformed() throws Exception {
+        mvc.perform(post("/app/preferences/theme")
+                        .principal(auth)
+                        .header("Referer", "http://[::1")
+                        .param("themePreference", "LIGHT"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app"));
+
+        verify(preferences).updateThemePreference(auth, ThemePreference.LIGHT);
+    }
+
+    @Test
+    void updateThemePreferenceFallsBackToAppWhenRefererNormalizesOutsideApp() throws Exception {
+        mvc.perform(post("/app/preferences/theme")
+                        .principal(auth)
+                        .header("Referer", "/app/../login")
+                        .param("themePreference", "SYSTEM"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app"));
+
+        verify(preferences).updateThemePreference(auth, ThemePreference.SYSTEM);
+    }
+
+    @Test
+    void updateThemePreferenceFallsBackToAppWhenEncodedRefererNormalizesOutsideApp() throws Exception {
+        mvc.perform(post("/app/preferences/theme")
+                        .principal(auth)
+                        .header("Referer", "/app/%2e%2e/login")
+                        .param("themePreference", "SYSTEM"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app"));
+
+        verify(preferences).updateThemePreference(auth, ThemePreference.SYSTEM);
+    }
+
+    @Test
     void updateThemePreferenceRedirectsToSafeRelativeReferer() throws Exception {
         mvc.perform(post("/app/preferences/theme")
                         .principal(auth)

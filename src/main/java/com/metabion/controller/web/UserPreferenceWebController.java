@@ -9,8 +9,11 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.util.UriUtils;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 
 @Controller
 public class UserPreferenceWebController {
@@ -46,8 +49,8 @@ public class UserPreferenceWebController {
             if ((uri.isAbsolute() || uri.getRawAuthority() != null) && !isSameOrigin(uri, request)) {
                 return "/app";
             }
-            var path = uri.getPath();
-            if (path != null && (path.equals("/app") || path.startsWith("/app/"))) {
+            var path = canonicalPath(uri);
+            if (isAppPath(path)) {
                 var query = uri.getRawQuery();
                 return query == null ? path : path + "?" + query;
             }
@@ -55,6 +58,33 @@ public class UserPreferenceWebController {
             return "/app";
         }
         return "/app";
+    }
+
+    private String canonicalPath(URI uri) {
+        var rawPath = uri.getRawPath();
+        if (rawPath == null || !rawPath.startsWith("/")) {
+            return null;
+        }
+        var decodedPath = UriUtils.decode(rawPath, StandardCharsets.UTF_8);
+        var segments = new ArrayDeque<String>();
+        for (var segment : decodedPath.split("/", -1)) {
+            if (segment.isEmpty() || segment.equals(".")) {
+                continue;
+            }
+            if (segment.equals("..")) {
+                if (segments.isEmpty()) {
+                    return null;
+                }
+                segments.removeLast();
+                continue;
+            }
+            segments.addLast(segment);
+        }
+        return "/" + String.join("/", segments);
+    }
+
+    private boolean isAppPath(String path) {
+        return path != null && (path.equals("/app") || path.startsWith("/app/"));
     }
 
     private boolean isSameOrigin(URI uri, HttpServletRequest request) {
