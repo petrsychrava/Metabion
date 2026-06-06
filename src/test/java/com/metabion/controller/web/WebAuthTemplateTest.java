@@ -135,6 +135,20 @@ class WebAuthTemplateTest {
     }
 
     @Test
+    void account_template_renders_authenticated_profile() throws Exception {
+        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        auth.setAuthenticated(true);
+
+        mvc.perform(get("/app/account").principal(auth).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Account")))
+                .andExpect(content().string(containsString("user@example.com")))
+                .andExpect(content().string(containsString("PATIENT")))
+                .andExpect(content().string(containsString("class=\"active\"")))
+                .andExpect(content().string(containsString("name=\"_csrf\"")));
+    }
+
+    @Test
     void admin_staff_invitation_template_renders_form() throws Exception {
         var auth = new TestingAuthenticationToken("admin@example.com", "password", "ROLE_ADMIN");
         auth.setAuthenticated(true);

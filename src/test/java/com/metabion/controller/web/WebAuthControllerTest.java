@@ -186,6 +186,25 @@ class WebAuthControllerTest {
     }
 
     @Test
+    void account_renders_authenticated_account_page() throws Exception {
+        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        auth.setAuthenticated(true);
+        var sidebarItems = List.of(
+                new AppMenuItem("Home", "/app", false, false, "Application home"),
+                new AppMenuItem("Account", "/app/account", false, false, "Account settings"));
+        when(appMenuCatalog.sidebarItems(auth)).thenReturn(sidebarItems);
+
+        mvc.perform(get("/app/account").principal(auth))
+                .andExpect(status().isOk())
+                .andExpect(view().name("account"))
+                .andExpect(model().attribute("email", "user@example.com"))
+                .andExpect(model().attribute("roles", List.of("PATIENT")))
+                .andExpect(model().attribute("appMenuItems", sidebarItems))
+                .andExpect(model().attribute("activePath", "/app/account"));
+        verify(appMenuCatalog).sidebarItems(auth);
+    }
+
+    @Test
     void post_login_delegates_to_security_service_and_redirects_to_app() throws Exception {
         when(securityService.login(any(), any(), any()))
                 .thenReturn(LoginResponse.authenticated("user@example.com", List.of("PATIENT")));

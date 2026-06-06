@@ -187,6 +187,15 @@ public class WebAuthController {
         return "app";
     }
 
+    @GetMapping("/app/account")
+    public String account(Authentication authentication, Model model) {
+        model.addAttribute("email", authentication.getName());
+        model.addAttribute("roles", roles(authentication));
+        model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
+        model.addAttribute("activePath", "/app/account");
+        return "account";
+    }
+
     private boolean isAuthenticated(Authentication authentication) {
         return authentication != null
                 && authentication.isAuthenticated()
