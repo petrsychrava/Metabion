@@ -13,12 +13,31 @@ CREATE TABLE staff_invitations (
 
 CREATE TABLE staff_invitation_roles (
     staff_invitation_id BIGINT NOT NULL REFERENCES staff_invitations(id) ON DELETE CASCADE,
-    role VARCHAR(50) NOT NULL,
-    PRIMARY KEY (staff_invitation_id, role),
-    CONSTRAINT chk_staff_invitation_roles_role CHECK (
-        role IN ('NUTRITION_SPECIALIST', 'PHYSICIAN', 'COORDINATOR')
-    )
+    role VARCHAR(50) NOT NULL REFERENCES roles(code),
+    PRIMARY KEY (staff_invitation_id, role)
 );
+
+CREATE OR REPLACE FUNCTION require_staff_invitation_clinical_staff_role()
+    RETURNS TRIGGER AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM roles
+        WHERE code = NEW.role
+          AND clinical_staff
+    ) THEN
+        RAISE EXCEPTION 'Staff invitation role must be a clinical_staff role'
+            USING ERRCODE = '23514';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_staff_invitation_roles_require_clinical_staff_role
+    BEFORE INSERT OR UPDATE OF role ON staff_invitation_roles
+    FOR EACH ROW
+EXECUTE FUNCTION require_staff_invitation_clinical_staff_role();
 
 CREATE UNIQUE INDEX ux_staff_invitations_pending_email
     ON staff_invitations(email)
