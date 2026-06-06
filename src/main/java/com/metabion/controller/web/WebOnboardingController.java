@@ -8,6 +8,7 @@ import com.metabion.domain.Sex;
 import com.metabion.domain.SteroidUse;
 import com.metabion.dto.OnboardingReviewRequest;
 import com.metabion.dto.OnboardingSubmissionRequest;
+import com.metabion.dto.OnboardingSubmissionResponse;
 import com.metabion.service.OnboardingService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -38,11 +39,13 @@ public class WebOnboardingController {
     public String onboarding(@RequestParam(defaultValue = OnboardingService.DEFAULT_CONTEXT) String context,
                              Authentication authentication,
                              Model model) {
-        model.addAttribute("onboardingForm", emptyForm(context));
+        var latest = latestOrNull(authentication, context);
+        model.addAttribute("onboardingForm", latest == null ? emptyForm(context) : formFromLatest(context, latest));
         model.addAttribute("context", context);
+        model.addAttribute("profileLocked", latest != null);
+        model.addAttribute("latest", latest);
         addOptions(model);
         addAppShell(model, authentication, "/app/onboarding");
-        addLatest(model, authentication, context);
         return "onboarding";
     }
 
@@ -56,7 +59,9 @@ public class WebOnboardingController {
         if (bindingResult.hasErrors()) {
             model.addAttribute("context", form.onboardingContext());
             addAppShell(model, authentication, "/app/onboarding");
-            addLatest(model, authentication, form.onboardingContext());
+            var latest = latestOrNull(authentication, form.onboardingContext());
+            model.addAttribute("profileLocked", latest != null);
+            model.addAttribute("latest", latest);
             return "onboarding";
         }
         onboardingService.submitForCurrentPatient(authentication, form);
@@ -139,6 +144,30 @@ public class WebOnboardingController {
                 "");
     }
 
+    private OnboardingSubmissionRequest formFromLatest(String context, OnboardingSubmissionResponse latest) {
+        return new OnboardingSubmissionRequest(
+                context,
+                latest.dateOfBirth(),
+                latest.sex(),
+                latest.countryRegion(),
+                latest.timezone(),
+                null,
+                null,
+                "",
+                "",
+                null,
+                "",
+                null,
+                null,
+                "",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "");
+    }
+
     private void addOptions(Model model) {
         model.addAttribute("sexOptions", Sex.values());
         model.addAttribute("diagnosisTypes", IbdDiagnosisType.values());
@@ -159,14 +188,14 @@ public class WebOnboardingController {
         model.addAttribute("activePath", activePath);
     }
 
-    private void addLatest(Model model, Authentication authentication, String context) {
+    private OnboardingSubmissionResponse latestOrNull(Authentication authentication, String context) {
         try {
-            model.addAttribute("latest", onboardingService.getLatestForCurrentPatient(authentication, context));
+            return onboardingService.getLatestForCurrentPatient(authentication, context);
         } catch (ResponseStatusException ex) {
             if (ex.getStatusCode() != HttpStatus.NOT_FOUND) {
                 throw ex;
             }
-            model.addAttribute("latest", null);
+            return null;
         }
     }
 }

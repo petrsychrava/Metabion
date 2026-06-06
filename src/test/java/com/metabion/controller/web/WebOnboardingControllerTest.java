@@ -98,6 +98,23 @@ class WebOnboardingControllerTest {
     }
 
     @Test
+    void patientOnboardingPageRendersExistingPatientProfileFieldsReadOnly() throws Exception {
+        when(onboardingService.getLatestForCurrentPatient(any(), eq("default"))).thenReturn(fullSubmissionResponse());
+
+        mvc.perform(get("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("onboarding"))
+                .andExpect(content().string(containsString("id=\"dateOfBirth\" name=\"dateOfBirth\"")))
+                .andExpect(content().string(containsString("value=\"1990-01-01\"")))
+                .andExpect(content().string(containsString("readonly=\"readonly\"")))
+                .andExpect(content().string(containsString("name=\"sex\" value=\"FEMALE\"")))
+                .andExpect(content().string(containsString("disabled=\"disabled\" id=\"sex\" name=\"sex\"")))
+                .andExpect(content().string(containsString("id=\"countryRegion\" name=\"countryRegion\" value=\"CZ\"")))
+                .andExpect(content().string(containsString("id=\"timezone\" name=\"timezone\" value=\"Europe/Prague\"")));
+    }
+
+    @Test
     void patientOnboardingPageDoesNotSwallowForbiddenLatestLookup() throws Exception {
         doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN))
                 .when(onboardingService).getLatestForCurrentPatient(any(), eq("default"));
