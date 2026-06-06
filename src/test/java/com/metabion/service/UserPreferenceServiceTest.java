@@ -8,13 +8,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.ThrowableAssert.ThrowingCallable;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,9 +61,7 @@ class UserPreferenceServiceTest {
 
     @Test
     void updateThemePreferenceRejectsNullPreference() {
-        assertThatThrownBy(() -> service.updateThemePreference(auth, null))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("400 BAD_REQUEST");
+        assertStatus(() -> service.updateThemePreference(auth, null), HttpStatus.BAD_REQUEST);
     }
 
     @Test
@@ -68,8 +70,33 @@ class UserPreferenceServiceTest {
         var missingAuth = new TestingAuthenticationToken("missing@example.com", "password", "ROLE_PATIENT");
         missingAuth.setAuthenticated(true);
 
-        assertThatThrownBy(() -> service.currentThemePreference(missingAuth))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("404 NOT_FOUND");
+        assertStatus(() -> service.currentThemePreference(missingAuth), HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void currentThemePreferenceRejectsNullAuthentication() {
+        assertStatus(() -> service.currentThemePreference(null), HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void currentThemePreferenceRejectsNullAuthenticationName() {
+        var nullNameAuth = mock(Authentication.class);
+        when(nullNameAuth.isAuthenticated()).thenReturn(true);
+        when(nullNameAuth.getName()).thenReturn(null);
+
+        assertStatus(() -> service.currentThemePreference(nullNameAuth), HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void currentThemePreferenceRejectsUnauthenticatedAuthentication() {
+        auth.setAuthenticated(false);
+
+        assertStatus(() -> service.currentThemePreference(auth), HttpStatus.UNAUTHORIZED);
+    }
+
+    private static void assertStatus(ThrowingCallable callable, HttpStatus status) {
+        assertThatThrownBy(callable)
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        exception -> assertThat(exception.getStatusCode()).isEqualTo(status));
     }
 }

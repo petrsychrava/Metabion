@@ -33,7 +33,7 @@ public class UserPreferenceService {
     }
 
     private User currentUser(Authentication authentication) {
-        if (authentication == null || authentication.getName() == null) {
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getName() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "authentication required");
         }
         return users.findByEmail(authentication.getName())
