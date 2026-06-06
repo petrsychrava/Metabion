@@ -1,7 +1,9 @@
 package com.metabion.repository;
 
 import com.metabion.domain.RoleName;
+import com.metabion.domain.ThemePreference;
 import com.metabion.domain.User;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -20,6 +22,9 @@ class UserRepositoryTest {
 
     @Autowired
     UserRepository users;
+
+    @Autowired
+    EntityManager entityManager;
 
     @Test
     void uniqueEmailConstraintRejectsDuplicateEmail() {
@@ -60,6 +65,27 @@ class UserRepositoryTest {
         users.saveAndFlush(buildUser("  C@X.COM  "));
 
         assertThat(users.findByEmail("c@x.com")).isPresent();
+    }
+
+    @Test
+    void newUserDefaultsToSystemThemePreference() {
+        var user = users.saveAndFlush(buildUser("theme-default@x.com"));
+        entityManager.clear();
+
+        assertThat(user.getThemePreference()).isEqualTo(ThemePreference.SYSTEM);
+        assertThat(users.findByEmail("theme-default@x.com").orElseThrow().getThemePreference())
+                .isEqualTo(ThemePreference.SYSTEM);
+    }
+
+    @Test
+    void userThemePreferenceCanBePersisted() {
+        var user = buildUser("theme-dark@x.com");
+        user.setThemePreference(ThemePreference.DARK);
+        users.saveAndFlush(user);
+        entityManager.clear();
+
+        assertThat(users.findByEmail("theme-dark@x.com").orElseThrow().getThemePreference())
+                .isEqualTo(ThemePreference.DARK);
     }
 
     private static User buildUser(String email) {
