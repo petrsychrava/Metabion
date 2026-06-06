@@ -26,7 +26,7 @@ public class UserPreferenceWebController {
                                         Authentication authentication,
                                         HttpServletRequest request) {
         preferences.updateThemePreference(authentication, parseThemePreference(themePreference));
-        return "redirect:" + safeRedirectPath(request.getHeader("Referer"));
+        return "redirect:" + safeRedirectPath(request.getHeader("Referer"), request);
     }
 
     private ThemePreference parseThemePreference(String value) {
@@ -37,12 +37,15 @@ public class UserPreferenceWebController {
         }
     }
 
-    private String safeRedirectPath(String referer) {
+    private String safeRedirectPath(String referer, HttpServletRequest request) {
         if (referer == null || referer.isBlank()) {
             return "/app";
         }
         try {
             var uri = URI.create(referer);
+            if ((uri.isAbsolute() || uri.getRawAuthority() != null) && !isSameOrigin(uri, request)) {
+                return "/app";
+            }
             var path = uri.getPath();
             if (path != null && (path.equals("/app") || path.startsWith("/app/"))) {
                 var query = uri.getRawQuery();
@@ -52,5 +55,28 @@ public class UserPreferenceWebController {
             return "/app";
         }
         return "/app";
+    }
+
+    private boolean isSameOrigin(URI uri, HttpServletRequest request) {
+        var scheme = uri.getScheme();
+        var host = uri.getHost();
+        return scheme != null
+                && host != null
+                && scheme.equalsIgnoreCase(request.getScheme())
+                && host.equalsIgnoreCase(request.getServerName())
+                && normalizedPort(uri) == request.getServerPort();
+    }
+
+    private int normalizedPort(URI uri) {
+        if (uri.getPort() != -1) {
+            return uri.getPort();
+        }
+        if ("http".equalsIgnoreCase(uri.getScheme())) {
+            return 80;
+        }
+        if ("https".equalsIgnoreCase(uri.getScheme())) {
+            return 443;
+        }
+        return -1;
     }
 }

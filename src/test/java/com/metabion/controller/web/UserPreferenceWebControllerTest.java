@@ -68,6 +68,30 @@ class UserPreferenceWebControllerTest {
     }
 
     @Test
+    void updateThemePreferenceFallsBackToAppWhenExternalRefererUsesAppPath() throws Exception {
+        mvc.perform(post("/app/preferences/theme")
+                        .principal(auth)
+                        .header("Referer", "https://evil.example/app/account?x=1")
+                        .param("themePreference", "SYSTEM"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app"));
+
+        verify(preferences).updateThemePreference(auth, ThemePreference.SYSTEM);
+    }
+
+    @Test
+    void updateThemePreferenceRedirectsToSafeRelativeReferer() throws Exception {
+        mvc.perform(post("/app/preferences/theme")
+                        .principal(auth)
+                        .header("Referer", "/app/account?tab=settings")
+                        .param("themePreference", "SYSTEM"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app/account?tab=settings"));
+
+        verify(preferences).updateThemePreference(auth, ThemePreference.SYSTEM);
+    }
+
+    @Test
     void updateThemePreferenceRejectsInvalidPreference() throws Exception {
         mvc.perform(post("/app/preferences/theme")
                         .principal(auth)
