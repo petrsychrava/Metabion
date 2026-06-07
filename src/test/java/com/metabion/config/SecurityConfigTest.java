@@ -3,6 +3,7 @@ package com.metabion.config;
 import com.metabion.dto.LoginResponse;
 import com.metabion.service.SecurityService;
 import com.metabion.service.StaffInvitationService;
+import com.metabion.service.UserPreferenceService;
 import com.metabion.service.UserService;
 
 import java.util.List;
@@ -67,6 +68,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     StaffInvitationService staffInvitationService;
+
+    @MockitoBean
+    UserPreferenceService userPreferenceService;
 
     private MockMvc mvc;
 
@@ -152,6 +156,22 @@ class SecurityConfigTest {
     void app_requires_authentication() throws Exception {
         mvc.perform(get("/app"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void theme_preference_post_requires_authentication() throws Exception {
+        mvc.perform(post("/app/preferences/theme")
+                        .with(csrf())
+                        .param("themePreference", "DARK"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void theme_preference_post_without_csrf_is_forbidden_for_authenticated_user() throws Exception {
+        mvc.perform(post("/app/preferences/theme")
+                        .with(user("user@example.com").roles("PATIENT"))
+                        .param("themePreference", "DARK"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
