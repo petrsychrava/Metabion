@@ -127,7 +127,9 @@ class WebAuthTemplateTest {
                 .andExpect(content().string(containsString("Education library - planned")))
                 .andExpect(content().string(containsString("user@example.com")))
                 .andExpect(content().string(containsString("Theme")))
+                .andExpect(content().string(containsString("class=\"theme-form\"")))
                 .andExpect(content().string(containsString("name=\"themePreference\"")))
+                .andExpect(content().string(containsString("id=\"themePreference\"")))
                 .andExpect(content().string(containsString("selected=\"selected\">Dark")))
                 .andExpect(content().string(containsString("/app/preferences/theme")))
                 .andExpect(content().string(containsString("name=\"_csrf\"")));
