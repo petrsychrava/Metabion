@@ -1,6 +1,8 @@
 package com.metabion.controller.web;
 
 import com.metabion.domain.RoleName;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
@@ -10,6 +12,12 @@ import java.util.List;
 
 @Component
 public class AppMenuCatalog {
+
+    private final MessageSource messages;
+
+    public AppMenuCatalog(MessageSource messages) {
+        this.messages = messages;
+    }
 
     public List<AppMenuItem> sidebarItems(Authentication authentication) {
         var roles = roles(authentication);
@@ -48,145 +56,149 @@ public class AppMenuCatalog {
 
     private List<AppMenuItem> patientItems() {
         return List.of(
-                new AppMenuItem(
-                        "Onboarding",
+                item(
+                        "menu.onboarding",
                         "/app/onboarding",
                         false,
                         true,
-                        "Continue the onboarding flow"),
-                new AppMenuItem(
-                        "Onboarding history",
+                        "menu.onboarding.description"),
+                item(
+                        "menu.onboardingHistory",
                         "/app/onboarding/history",
                         false,
                         false,
-                        "Review completed onboarding steps"),
-                new AppMenuItem(
-                        "Education library",
+                        "menu.onboardingHistory.description"),
+                item(
+                        "menu.educationLibrary",
                         null,
                         true,
                         true,
-                        "Planned patient education resources"),
-                new AppMenuItem(
-                        "Daily diet and symptom check-ins",
+                        "menu.educationLibrary.description"),
+                item(
+                        "menu.dailyCheckIns",
                         null,
                         true,
                         true,
-                        "Planned daily tracking for diet and symptoms"),
-                new AppMenuItem(
-                        "Lab trends",
+                        "menu.dailyCheckIns.description"),
+                item(
+                        "menu.labTrends",
                         null,
                         true,
                         true,
-                        "Planned laboratory trend views"),
-                new AppMenuItem(
-                        "Protocol phase",
-                        null,
-                        true,
-                        false,
-                        "Planned protocol progression details"),
-                new AppMenuItem(
-                        "Red-flag guidance",
-                        null,
-                        true,
-                        true,
-                        "Planned escalation guidance"),
-                new AppMenuItem(
-                        "Patient timeline",
+                        "menu.labTrends.description"),
+                item(
+                        "menu.protocolPhase",
                         null,
                         true,
                         false,
-                        "Planned longitudinal patient timeline"));
+                        "menu.protocolPhase.description"),
+                item(
+                        "menu.redFlagGuidance",
+                        null,
+                        true,
+                        true,
+                        "menu.redFlagGuidance.description"),
+                item(
+                        "menu.patientTimeline",
+                        null,
+                        true,
+                        false,
+                        "menu.patientTimeline.description"));
     }
 
     private List<AppMenuItem> clinicalItems() {
         return List.of(
-                new AppMenuItem(
-                        "Onboarding review",
+                item(
+                        "menu.onboardingReview",
                         "/app/clinical/onboarding",
                         false,
                         true,
-                        "Review patient onboarding submissions"),
-                new AppMenuItem(
-                        "Assigned patient overview",
+                        "menu.onboardingReview.description"),
+                item(
+                        "menu.assignedPatientOverview",
                         null,
                         true,
                         true,
-                        "Planned assigned patient overview"),
-                new AppMenuItem(
-                        "Red-flag monitoring",
+                        "menu.assignedPatientOverview.description"),
+                item(
+                        "menu.redFlagMonitoring",
                         null,
                         true,
                         true,
-                        "Planned red-flag monitoring"),
-                new AppMenuItem(
-                        "Data completeness",
-                        null,
-                        true,
-                        false,
-                        "Planned data completeness checks"),
-                new AppMenuItem(
-                        "Protocol checkpoints",
+                        "menu.redFlagMonitoring.description"),
+                item(
+                        "menu.dataCompleteness",
                         null,
                         true,
                         false,
-                        "Planned protocol checkpoint review"),
-                new AppMenuItem(
-                        "Cohort and participant management",
+                        "menu.dataCompleteness.description"),
+                item(
+                        "menu.protocolCheckpoints",
                         null,
                         true,
                         false,
-                        "Planned cohort and participant tools"),
-                new AppMenuItem(
-                        "Research export and reports",
+                        "menu.protocolCheckpoints.description"),
+                item(
+                        "menu.cohortManagement",
                         null,
                         true,
                         false,
-                        "Planned export and reporting tools"));
+                        "menu.cohortManagement.description"),
+                item(
+                        "menu.researchExport",
+                        null,
+                        true,
+                        false,
+                        "menu.researchExport.description"));
     }
 
     private List<AppMenuItem> adminItems() {
         return List.of(
-                new AppMenuItem(
-                        "Staff invitations",
+                item(
+                        "menu.staffInvitations",
                         "/app/staff-invitations/new",
                         false,
                         true,
-                        "Invite staff members"),
-                new AppMenuItem(
-                        "Content management",
+                        "menu.staffInvitations.description"),
+                item(
+                        "menu.contentManagement",
                         null,
                         true,
                         false,
-                        "Planned content administration"),
-                new AppMenuItem(
-                        "Rule configuration",
+                        "menu.contentManagement.description"),
+                item(
+                        "menu.ruleConfiguration",
                         null,
                         true,
                         false,
-                        "Planned rule configuration"),
-                new AppMenuItem(
-                        "Audit review",
+                        "menu.ruleConfiguration.description"),
+                item(
+                        "menu.auditReview",
                         null,
                         true,
                         false,
-                        "Planned audit review tools"));
+                        "menu.auditReview.description"));
     }
 
     private AppMenuItem home() {
-        return new AppMenuItem(
-                "Home",
-                "/app",
-                false,
-                false,
-                "Application home");
+        return item("menu.home", "/app", false, false, "menu.home.description");
     }
 
     private AppMenuItem account() {
+        return item("menu.account", "/app/account", false, false, "menu.account.description");
+    }
+
+    private AppMenuItem item(String labelKey, String route, boolean planned, boolean dashboard, String descriptionKey) {
         return new AppMenuItem(
-                "Account",
-                "/app/account",
-                false,
-                false,
-                "Account settings");
+                message(labelKey),
+                route,
+                planned,
+                dashboard,
+                message(descriptionKey),
+                message("menu.plannedSuffix"));
+    }
+
+    private String message(String key) {
+        return messages.getMessage(key, null, LocaleContextHolder.getLocale());
     }
 }

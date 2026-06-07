@@ -1,6 +1,7 @@
 package com.metabion.controller.web;
 
 import com.metabion.config.RateLimitingFilter;
+import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.ThemePreference;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.SecurityService;
@@ -184,6 +185,52 @@ class WebAuthTemplateTest {
                 .andExpect(content().string(containsString("selected=\"selected\">Dark")))
                 .andExpect(content().string(containsString("/app/preferences/theme")))
                 .andExpect(content().string(containsString("name=\"_csrf\"")));
+    }
+
+    @Test
+    void authenticated_language_preference_wins_over_locale_cookie() throws Exception {
+        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        auth.setAuthenticated(true);
+        when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.DARK);
+        when(userPreferenceService.currentLanguagePreference(auth)).thenReturn(LanguagePreference.CS);
+
+        mvc.perform(get("/app")
+                        .principal(auth)
+                        .cookie(new Cookie("METABION_LOCALE", "en"))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("lang=\"cs\"")))
+                .andExpect(content().string(containsString("Pracovní plocha")))
+                .andExpect(content().string(containsString("Vzdělávací knihovna - plánováno")))
+                .andExpect(content().string(containsString("Vzhled")))
+                .andExpect(content().string(containsString("Odhlásit se")));
+    }
+
+    @Test
+    void authenticated_account_and_staff_invitation_pages_render_in_czech() throws Exception {
+        var patient = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        patient.setAuthenticated(true);
+        when(userPreferenceService.currentThemePreference(patient)).thenReturn(ThemePreference.SYSTEM);
+        when(userPreferenceService.currentLanguagePreference(patient)).thenReturn(LanguagePreference.CS);
+
+        mvc.perform(get("/app/account").principal(patient).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Účet")))
+                .andExpect(content().string(containsString("Zkontrolujte identitu")))
+                .andExpect(content().string(containsString("Profil")))
+                .andExpect(content().string(containsString("E-mail")));
+
+        var admin = new TestingAuthenticationToken("admin@example.com", "password", "ROLE_ADMIN");
+        admin.setAuthenticated(true);
+        when(userPreferenceService.currentThemePreference(admin)).thenReturn(ThemePreference.SYSTEM);
+        when(userPreferenceService.currentLanguagePreference(admin)).thenReturn(LanguagePreference.CS);
+
+        mvc.perform(get("/app/staff-invitations/new").principal(admin).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Pozvat pracovníka")))
+                .andExpect(content().string(containsString("Odešlete pozvánku členovi klinického týmu.")))
+                .andExpect(content().string(containsString("Odeslat pozvánku")))
+                .andExpect(content().string(containsString("Pozvánky pracovníků")));
     }
 
     @Test

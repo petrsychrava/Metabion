@@ -1,16 +1,17 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{layout :: appShell('Metabion Dashboard', '/app', ~{::content})}">
+      th:replace="~{layout :: appShell(#{app.dashboard.pageTitle}, '/app', ~{::content})}">
 <th:block th:fragment="content">
     <header class="app-header">
         <div>
             <p class="eyebrow">Metabion</p>
-            <h1>Dashboard</h1>
+            <h1 th:text="#{app.dashboard.title}">Dashboard</h1>
             <p class="muted">
-                Signed in as <strong th:text="${email}">user@example.com</strong>.
+                <span th:text="#{app.dashboard.signedInAs}">Signed in as</span>
+                <strong th:text="${email}">user@example.com</strong>.
             </p>
             <p class="muted">
-                Roles:
+                <span th:text="#{app.dashboard.roles}">Roles:</span>
                 <span th:each="role, roleStat : ${roles}">
                     <span th:text="${role}">PATIENT</span><span th:if="${!roleStat.last}">, </span>
                 </span>
@@ -19,7 +20,7 @@
     </header>
 
     <section class="panel app-panel">
-        <h2>Workspace</h2>
+        <h2 th:text="#{app.dashboard.workspace}">Workspace</h2>
         <div class="dashboard-grid">
             <th:block th:each="item : ${dashboardItems}">
                 <a th:if="${item.linked()}"

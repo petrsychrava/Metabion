@@ -5,10 +5,15 @@ public record AppMenuItem(
         String route,
         boolean planned,
         boolean dashboard,
-        String description) {
+        String description,
+        String plannedSuffix) {
+
+    public AppMenuItem(String label, String route, boolean planned, boolean dashboard, String description) {
+        this(label, route, planned, dashboard, description, " - planned");
+    }
 
     public String displayLabel() {
-        return planned ? label + " - planned" : label;
+        return planned ? label + plannedSuffix : label;
     }
 
     public boolean linked() {

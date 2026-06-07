@@ -1,27 +1,29 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{layout :: appShell('Invite staff - Metabion', ${activePath}, ~{::content})}">
+      th:replace="~{layout :: appShell(#{app.staffInvitation.pageTitle}, ${activePath}, ~{::content})}">
 <th:block th:fragment="content">
     <header class="app-header">
         <div>
             <p class="eyebrow">Metabion</p>
-            <h1>Invite staff</h1>
+            <h1 th:text="#{app.staffInvitation.title}">Invite staff</h1>
         </div>
     </header>
     <section class="panel app-panel">
-        <p class="muted">Send an invitation to a clinical staff member.</p>
+        <p class="muted" th:text="#{app.staffInvitation.description}">
+            Send an invitation to a clinical staff member.
+        </p>
         <p class="error" th:if="${error}" th:text="${error}">Invitation error.</p>
 
         <form th:action="@{/app/staff-invitations}" th:object="${form}" method="post" class="form">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
             <div class="field">
-                <label for="email">Email</label>
+                <label for="email" th:text="#{app.staffInvitation.email}">Email</label>
                 <input id="email" type="email" th:field="*{email}" autocomplete="email" required>
                 <p class="error" th:if="${#fields.hasErrors('email')}" th:errors="*{email}">Email error</p>
             </div>
 
             <fieldset class="field">
-                <legend>Roles</legend>
+                <legend th:text="#{app.staffInvitation.roles}">Roles</legend>
                 <label th:each="role : ${staffRoles}" th:for="${'role-' + role}">
                     <input type="checkbox" th:id="${'role-' + role}" th:field="*{roles}" th:value="${role}">
                     <span th:text="${role}">PHYSICIAN</span>
@@ -29,7 +31,7 @@
                 <p class="error" th:if="${#fields.hasErrors('roles')}" th:errors="*{roles}">Roles error</p>
             </fieldset>
 
-            <button type="submit">Send invitation</button>
+            <button type="submit" th:text="#{app.staffInvitation.submit}">Send invitation</button>
         </form>
     </section>
 </th:block>

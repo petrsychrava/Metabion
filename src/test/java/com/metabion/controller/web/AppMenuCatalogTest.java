@@ -1,13 +1,17 @@
 package com.metabion.controller.web;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.security.authentication.TestingAuthenticationToken;
+
+import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class AppMenuCatalogTest {
 
-    private final AppMenuCatalog catalog = new AppMenuCatalog();
+    private final AppMenuCatalog catalog = new AppMenuCatalog(messages());
 
     @Test
     void patientReceivesPatientImplementedAndPlannedItems() {
@@ -120,9 +124,38 @@ class AppMenuCatalogTest {
                         "Red-flag guidance - planned");
     }
 
+    @Test
+    void menuLabelsUseCurrentLocale() {
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("cs"));
+        try {
+            var admin = auth("admin@example.com", "ROLE_ADMIN");
+
+            assertThat(catalog.sidebarItems(admin))
+                    .extracting(AppMenuItem::displayLabel)
+                    .containsExactly(
+                            "Domů",
+                            "Pozvánky pracovníků",
+                            "Správa obsahu - plánováno",
+                            "Nastavení pravidel - plánováno",
+                            "Kontrola auditu - plánováno",
+                            "Účet");
+        } finally {
+            LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
     private TestingAuthenticationToken auth(String name, String... authorities) {
         var auth = new TestingAuthenticationToken(name, "password", authorities);
         auth.setAuthenticated(true);
         return auth;
+    }
+
+    private static ResourceBundleMessageSource messages() {
+        var source = new ResourceBundleMessageSource();
+        source.setBasename("messages");
+        source.setDefaultEncoding("UTF-8");
+        source.setFallbackToSystemLocale(false);
+        source.setDefaultLocale(Locale.ENGLISH);
+        return source;
     }
 }
