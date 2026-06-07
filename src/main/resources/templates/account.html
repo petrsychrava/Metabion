@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell('Account', ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Metabion</p>
+            <h1>Account</h1>
+            <p class="muted">Review the identity and access details for your signed-in session.</p>
+        </div>
+    </header>
+
+    <section class="panel app-panel">
+        <h2>Profile</h2>
+        <dl class="details">
+            <dt>Email</dt>
+            <dd th:text="${email}">user@example.com</dd>
+            <dt>Roles</dt>
+            <dd>
+                <span th:each="role, roleStat : ${roles}">
+                    <span th:text="${role}">PATIENT</span><span th:if="${!roleStat.last}">, </span>
+                </span>
+            </dd>
+        </dl>
+    </section>
+</th:block>
+</html>
