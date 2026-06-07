@@ -17,7 +17,11 @@ public enum RoleName {
     }
 
     public static RoleName fromName(String name) {
-        return Arrays.stream(RoleName.values()).filter(roleName -> roleName.getName().equals(name)).toList().getFirst();
+        var roleNames = Arrays.stream(RoleName.values()).filter(roleName -> roleName.getName().equals(name)).toList();
+        if (roleNames.isEmpty()) {
+            throw new IllegalArgumentException("Unsupported role: " + name);
+        }
+        return roleNames.getFirst();
     }
 
 

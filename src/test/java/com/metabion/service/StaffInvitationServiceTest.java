@@ -69,7 +69,7 @@ class StaffInvitationServiceTest {
 
         var response = service.createInvitation(" Admin@Example.COM ", new CreateStaffInvitationRequest(
                 " Expert@Example.COM ",
-                new LinkedHashSet<>(Arrays.asList("PHYSICIAN", "COORDINATOR", "PHYSICIAN"))));
+                new LinkedHashSet<>(Arrays.asList(RoleName.PHYSICIAN.getName(), RoleName.COORDINATOR.getName(), RoleName.PHYSICIAN.getName()))));
 
         assertThat(response.status()).isEqualTo("invitation_created");
         verify(invitations).revokeActiveForEmail(eq("expert@example.com"), any(Instant.class));
@@ -99,7 +99,7 @@ class StaffInvitationServiceTest {
             when(users.findByEmail("expert@example.com")).thenReturn(Optional.empty());
 
             service.createInvitation("admin@example.com",
-                    new CreateStaffInvitationRequest("expert@example.com", Set.of("PHYSICIAN")));
+                    new CreateStaffInvitationRequest("expert@example.com", Set.of(RoleName.PHYSICIAN.getName())));
 
             verify(emailService, never()).sendStaffInvitation(any(), any());
 
@@ -128,12 +128,12 @@ class StaffInvitationServiceTest {
     @Test
     void createInvitationRejectsPatientAndAdminRoles() {
         assertThatThrownBy(() -> service.createInvitation("admin@example.com",
-                new CreateStaffInvitationRequest("patient@example.com", Set.of("PATIENT"))))
+                new CreateStaffInvitationRequest("patient@example.com", Set.of(RoleName.PATIENT.getName()))))
                 .isInstanceOf(StaffInvitationException.class)
                 .hasMessage("Only nutrition specialist, physician, and coordinator roles can be invited.");
 
         assertThatThrownBy(() -> service.createInvitation("admin@example.com",
-                new CreateStaffInvitationRequest("admin2@example.com", Set.of("ADMIN"))))
+                new CreateStaffInvitationRequest("admin2@example.com", Set.of(RoleName.ADMIN.getName()))))
                 .isInstanceOf(StaffInvitationException.class)
                 .hasMessage("Only nutrition specialist, physician, and coordinator roles can be invited.");
     }
@@ -141,7 +141,7 @@ class StaffInvitationServiceTest {
     @Test
     void createInvitationRejectsNullRoleEntry() {
         assertThatThrownBy(() -> service.createInvitation("admin@example.com",
-                new CreateStaffInvitationRequest("expert@example.com", new LinkedHashSet<>(Arrays.asList("PHYSICIAN", null)))))
+                new CreateStaffInvitationRequest("expert@example.com", new LinkedHashSet<>(Arrays.asList(RoleName.PHYSICIAN.getName(), null)))))
                 .isInstanceOf(StaffInvitationException.class)
                 .hasMessage("Only nutrition specialist, physician, and coordinator roles can be invited.");
     }
@@ -168,7 +168,7 @@ class StaffInvitationServiceTest {
         when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(user("patient@example.com", true, RoleName.PATIENT)));
 
         assertThatThrownBy(() -> service.createInvitation("admin@example.com",
-                new CreateStaffInvitationRequest("patient@example.com", Set.of("PHYSICIAN"))))
+                new CreateStaffInvitationRequest("patient@example.com", Set.of(RoleName.PHYSICIAN.getName()))))
                 .isInstanceOf(StaffInvitationException.class)
                 .hasMessage("This email is already registered as a patient. Staff access requires a separate account.");
 
@@ -181,14 +181,14 @@ class StaffInvitationServiceTest {
         when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(user("staff@example.com", true, RoleName.NUTRITION_SPECIALIST)));
 
         assertThatThrownBy(() -> service.createInvitation("admin@example.com",
-                new CreateStaffInvitationRequest("staff@example.com", Set.of("PHYSICIAN"))))
+                new CreateStaffInvitationRequest("staff@example.com", Set.of(RoleName.PHYSICIAN.getName()))))
                 .isInstanceOf(StaffInvitationException.class)
                 .hasMessage("This email already has staff access.");
 
         when(users.findByEmail("admin2@example.com")).thenReturn(Optional.of(user("admin2@example.com", true, RoleName.ADMIN)));
 
         assertThatThrownBy(() -> service.createInvitation("admin@example.com",
-                new CreateStaffInvitationRequest("admin2@example.com", Set.of("PHYSICIAN"))))
+                new CreateStaffInvitationRequest("admin2@example.com", Set.of(RoleName.PHYSICIAN.getName()))))
                 .isInstanceOf(StaffInvitationException.class)
                 .hasMessage("This email already has staff access.");
     }
@@ -199,7 +199,7 @@ class StaffInvitationServiceTest {
         when(users.findByEmail("disabled@example.com")).thenReturn(Optional.of(user("disabled@example.com", false, RoleName.PATIENT)));
 
         assertThatThrownBy(() -> service.createInvitation("admin@example.com",
-                new CreateStaffInvitationRequest("disabled@example.com", Set.of("PHYSICIAN"))))
+                new CreateStaffInvitationRequest("disabled@example.com", Set.of(RoleName.PHYSICIAN.getName()))))
                 .isInstanceOf(StaffInvitationException.class)
                 .hasMessage("This email belongs to an inactive account and requires manual resolution.");
     }
@@ -210,9 +210,9 @@ class StaffInvitationServiceTest {
         when(users.findByEmail("expert@example.com")).thenReturn(Optional.empty());
 
         service.createInvitation("admin@example.com",
-                new CreateStaffInvitationRequest("expert@example.com", Set.of("PHYSICIAN")));
+                new CreateStaffInvitationRequest("expert@example.com", Set.of(RoleName.PHYSICIAN.getName())));
         service.createInvitation("admin@example.com",
-                new CreateStaffInvitationRequest("expert@example.com", Set.of("COORDINATOR")));
+                new CreateStaffInvitationRequest("expert@example.com", Set.of(RoleName.COORDINATOR.getName())));
 
         verify(invitations, org.mockito.Mockito.times(2)).revokeActiveForEmail(eq("expert@example.com"), any(Instant.class));
         verify(invitations, org.mockito.Mockito.times(2)).save(any(StaffInvitation.class));
@@ -237,7 +237,7 @@ class StaffInvitationServiceTest {
         assertThat(savedUser.getEmail()).isEqualTo("expert@example.com");
         assertThat(savedUser.isEnabled()).isTrue();
         assertThat(savedUser.getPasswordHash()).isEqualTo("encoded-password");
-        assertThat(savedUser.roleNames()).containsExactlyInAnyOrder("PHYSICIAN", "COORDINATOR");
+        assertThat(savedUser.roleNames()).containsExactlyInAnyOrder(RoleName.PHYSICIAN.name(), RoleName.COORDINATOR.name());
 
         verify(staffProfiles).saveAndFlush(any(StaffProfile.class));
         assertThat(invitation.getAcceptedAt()).isNotNull();
