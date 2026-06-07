@@ -121,6 +121,7 @@ body {
 
 .app-panel {
     width: 100%;
+    margin-bottom: 16px;
 }
 
 .brand,
@@ -386,6 +387,12 @@ a {
 
 .theme-form select {
     background: var(--panel);
+}
+
+.preference-forms {
+    display: grid;
+    gap: 16px;
+    max-width: 360px;
 }
 
 .sidebar-logout button {

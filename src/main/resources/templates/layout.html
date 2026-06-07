@@ -13,17 +13,6 @@
     <a th:href="@{/}" th:attr="aria-label=#{app.brandHome}">Metabion</a>
 </header>
 
-<form th:fragment="languageSelector(formClass)" th:class="${formClass}" th:action="@{/preferences/language}" method="post">
-    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-    <label for="languagePreference" th:text="#{app.language}">Language</label>
-    <select id="languagePreference" name="languagePreference" onchange="this.form.submit()">
-        <option th:each="language : ${supportedLanguages}"
-                th:value="${language.name()}"
-                th:selected="${currentLanguage?.name() == language.name()}"
-                th:text="#{|language.${language.languageTag()}|}">Language</option>
-    </select>
-</form>
-
 <div class="workbench">
     <aside class="sidebar" aria-label="Application navigation">
         <a class="sidebar-brand" th:href="@{/app}">Metabion</a>
@@ -42,16 +31,6 @@
                 </li>
             </ul>
         </nav>
-        <form class="theme-form" th:action="@{/app/preferences/theme}" method="post">
-            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-            <label for="themePreference" th:text="#{app.theme}">Theme</label>
-            <select id="themePreference" name="themePreference" onchange="this.form.submit()">
-                <option value="SYSTEM" th:selected="${themePreference?.name() == 'SYSTEM'}" th:text="#{theme.system}">System</option>
-                <option value="LIGHT" th:selected="${themePreference?.name() == 'LIGHT'}" th:text="#{theme.light}">Light</option>
-                <option value="DARK" th:selected="${themePreference?.name() == 'DARK'}" th:text="#{theme.dark}">Dark</option>
-            </select>
-        </form>
-        <div th:replace="~{layout :: languageSelector('theme-form')}"></div>
         <form class="sidebar-logout" th:action="@{/logout}" method="post">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
             <button type="submit" class="secondary" th:text="#{app.signOut}">Sign out</button>

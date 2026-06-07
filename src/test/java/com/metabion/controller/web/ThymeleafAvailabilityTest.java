@@ -45,10 +45,10 @@ class ThymeleafAvailabilityTest {
     }
 
     @Test
-    void layout_renders_localized_authenticated_controls() {
+    void account_renders_localized_authenticated_preference_controls() {
         Context model = new Context(Locale.forLanguageTag("cs"));
         model.setVariable("pageTitle", "Metabion");
-        model.setVariable("activePath", "/app");
+        model.setVariable("activePath", "/app/account");
         model.setVariable("themePreference", ThemePreference.SYSTEM);
         model.setVariable("currentLanguage", LanguagePreference.CS);
         model.setVariable("supportedLanguages", List.of(LanguagePreference.EN, LanguagePreference.CS));
@@ -77,9 +77,10 @@ class ThymeleafAvailabilityTest {
         var context = new WebContext(exchange, Locale.forLanguageTag("cs"), Map.copyOf(model.getVariableNames().stream()
                 .collect(java.util.stream.Collectors.toMap(name -> name, model::getVariable))));
 
-        var output = templateEngine.process("app", context);
+        var output = templateEngine.process("account", context);
 
         assertThat(output)
+                .contains("Vzhled")
                 .contains("Jazyk")
                 .contains("Čeština")
                 .contains("Odhlásit se");

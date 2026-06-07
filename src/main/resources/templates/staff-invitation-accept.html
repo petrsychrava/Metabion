@@ -5,7 +5,7 @@
 <main class="page">
     <section class="panel auth-panel">
         <div th:replace="~{layout :: brand}"></div>
-        <div th:replace="~{layout :: languageSelector('language-form')}"></div>
+        <div th:replace="~{preferences :: languageSelector('language-form')}"></div>
         <h1 th:text="#{auth.invitation.title}">Set up staff account</h1>
         <p class="muted" th:text="#{auth.invitation.description}">Create your staff account password.</p>
         <p class="error" th:if="${error}" th:text="${error}">Invitation error.</p>

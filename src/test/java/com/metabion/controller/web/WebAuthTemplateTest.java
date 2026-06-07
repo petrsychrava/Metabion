@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.Mockito.when;
@@ -178,12 +179,12 @@ class WebAuthTemplateTest {
                 .andExpect(content().string(containsString("Onboarding")))
                 .andExpect(content().string(containsString("Education library - planned")))
                 .andExpect(content().string(containsString("user@example.com")))
-                .andExpect(content().string(containsString("Theme")))
-                .andExpect(content().string(containsString("class=\"theme-form\"")))
-                .andExpect(content().string(containsString("name=\"themePreference\"")))
-                .andExpect(content().string(containsString("id=\"themePreference\"")))
-                .andExpect(content().string(containsString("selected=\"selected\">Dark")))
-                .andExpect(content().string(containsString("/app/preferences/theme")))
+                .andExpect(content().string(not(containsString("name=\"themePreference\""))))
+                .andExpect(content().string(not(containsString("id=\"themePreference\""))))
+                .andExpect(content().string(not(containsString("/app/preferences/theme"))))
+                .andExpect(content().string(not(containsString("name=\"languagePreference\""))))
+                .andExpect(content().string(not(containsString("id=\"languagePreference\""))))
+                .andExpect(content().string(not(containsString("/preferences/language"))))
                 .andExpect(content().string(containsString("name=\"_csrf\"")));
     }
 
@@ -202,7 +203,7 @@ class WebAuthTemplateTest {
                 .andExpect(content().string(containsString("lang=\"cs\"")))
                 .andExpect(content().string(containsString("Pracovní plocha")))
                 .andExpect(content().string(containsString("Vzdělávací knihovna - plánováno")))
-                .andExpect(content().string(containsString("Vzhled")))
+                .andExpect(content().string(not(containsString("Vzhled"))))
                 .andExpect(content().string(containsString("Odhlásit se")));
     }
 
@@ -250,14 +251,28 @@ class WebAuthTemplateTest {
     void account_template_renders_authenticated_profile() throws Exception {
         var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
         auth.setAuthenticated(true);
+        when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.DARK);
+        when(userPreferenceService.currentLanguagePreference(auth)).thenReturn(LanguagePreference.EN);
 
-        mvc.perform(get("/app/account").principal(auth).with(csrf()))
+        var response = mvc.perform(get("/app/account").principal(auth).with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Account")))
                 .andExpect(content().string(containsString("user@example.com")))
                 .andExpect(content().string(containsString("PATIENT")))
                 .andExpect(content().string(containsString("class=\"active\"")))
-                .andExpect(content().string(containsString("name=\"_csrf\"")));
+                .andExpect(content().string(containsString("name=\"themePreference\"")))
+                .andExpect(content().string(containsString("id=\"themePreference\"")))
+                .andExpect(content().string(containsString("selected=\"selected\">Dark")))
+                .andExpect(content().string(containsString("/app/preferences/theme")))
+                .andExpect(content().string(containsString("name=\"languagePreference\"")))
+                .andExpect(content().string(containsString("id=\"languagePreference\"")))
+                .andExpect(content().string(containsString("/preferences/language")))
+                .andExpect(content().string(containsString("name=\"_csrf\"")))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(response.indexOf("Profile")).isLessThan(response.indexOf("Theme"));
     }
 
     @Test
