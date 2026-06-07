@@ -6,11 +6,12 @@ QWEN.md is a project-level instruction file that Qwen Code reads at the start of
 
 ## Project Overview
 
-**Metabion** is a **Spring Boot 4** authentication and user management backend service.
+**Metabion** is a **Spring Boot 4.0.6** authentication, user management, onboarding, and staff workflow backend service built with **Gradle** and **Java 25**.
 
 ### Tech Stack
 - **Java 25** with Spring Boot 4.0.6
 - **Gradle** (wrapper preferred) with Jacoco for test coverage
+- **Spring Web, Thymeleaf, Validation, Security, Data JPA, Flyway, Session JDBC, Mail**
 - **PostgreSQL** for production, **H2** and **Testcontainers** for testing
 - **Flyway** for database migrations
 - **Spring Security** with JDBC session management
@@ -22,8 +23,8 @@ The application follows a layered architecture:
 
 ```
 src/main/java/com/metabion/
-├── config/          # Security configuration
-├── controller/      # REST endpoints (Auth, Whoami)
+├── config/          # Security, localization, rate limiting, and app configuration
+├── controller/      # API and web MVC endpoints
 ├── domain/          # JPA entities (User, UserRole, tokens)
 ├── dto/             # Data transfer objects
 ├── exception/       # Custom exceptions
@@ -33,8 +34,13 @@ src/main/java/com/metabion/
 
 ### Key Domains
 - **User Registration** with email verification via tokens
-- **Password Reset** flow with hashed tokens
+- **Password Reset** flow with hashed reset tokens
 - **Role-based Access** (UserRole entity with composite key)
+- **Staff Invitations** and invitation acceptance
+- **Patient Onboarding** submission and staff review
+- **Cohort Membership**, cohort staff assignment, and patient expert assignment
+- **User Preferences** for theme and language
+- **Localization** via message bundles and authenticated locale handling
 - **Rate Limiting** on auth endpoints
 - **Email Service** abstraction with SMTP and logging implementations
 
