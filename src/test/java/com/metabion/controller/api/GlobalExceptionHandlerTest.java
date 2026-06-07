@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Locale;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -43,6 +45,14 @@ class GlobalExceptionHandlerTest {
         mvc.perform(post("/throw/bad-credentials"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().json("{\"error\":\"invalid_credentials\"}"));
+    }
+
+    @Test
+    void badCredentialsReturnStableErrorCodeUnderCzechLocale() throws Exception {
+        mvc.perform(post("/throw/bad-credentials")
+                        .locale(Locale.forLanguageTag("cs")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("invalid_credentials"));
     }
 
     @Test
@@ -95,6 +105,16 @@ class GlobalExceptionHandlerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("validation_failed"))
                 .andExpect(jsonPath("$.fields.email").exists());
+    }
+
+    @Test
+    void validationFailureReturnsStableErrorCodeUnderCzechLocale() throws Exception {
+        mvc.perform(post("/throw/validation")
+                        .locale(Locale.forLanguageTag("cs"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"not-an-email\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("validation_failed"));
     }
 
     @RestController
