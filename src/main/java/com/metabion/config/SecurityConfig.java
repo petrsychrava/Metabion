@@ -54,7 +54,8 @@ public class SecurityConfig {
             "/register",
             "/forgot-password",
             "/reset-password",
-            "/staff-invitations/accept"
+            "/staff-invitations/accept",
+            "/preferences/language"
     };
 
     private static final String[] PUBLIC_STATIC = {

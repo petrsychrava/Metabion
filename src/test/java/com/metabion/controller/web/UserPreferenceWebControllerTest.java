@@ -1,5 +1,7 @@
 package com.metabion.controller.web;
 
+import com.metabion.config.LocalizationConfig;
+import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.ThemePreference;
 import com.metabion.service.UserPreferenceService;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,11 +12,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.servlet.LocaleResolver;
+import org.springframework.web.servlet.i18n.CookieLocaleResolver;
 import org.springframework.web.servlet.view.RedirectView;
 
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -26,11 +31,13 @@ class UserPreferenceWebControllerTest {
 
     MockMvc mvc;
     TestingAuthenticationToken auth;
+    LocaleResolver localeResolver;
 
     @BeforeEach
     void setUp() {
+        localeResolver = new CookieLocaleResolver(LocalizationConfig.LOCALE_COOKIE_NAME);
         mvc = MockMvcBuilders
-                .standaloneSetup(new UserPreferenceWebController(preferences))
+                .standaloneSetup(new UserPreferenceWebController(preferences, localeResolver))
                 .setViewResolvers((viewName, locale) -> {
                     if (viewName.startsWith("redirect:")) {
                         return new RedirectView(viewName.substring("redirect:".length()), true);
@@ -53,6 +60,70 @@ class UserPreferenceWebControllerTest {
                 .andExpect(redirectedUrl("/app/account"));
 
         verify(preferences).updateThemePreference(auth, ThemePreference.DARK);
+    }
+
+    @Test
+    void updateLanguagePreferenceForAuthenticatedUserSetsLocaleCookiePersistsAndRedirectsToSafeReferer() throws Exception {
+        mvc.perform(post("/preferences/language")
+                        .principal(auth)
+                        .header("Referer", "http://localhost/app/account")
+                        .param("languagePreference", "CS"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app/account"))
+                .andExpect(cookie().value(LocalizationConfig.LOCALE_COOKIE_NAME,
+                        LanguagePreference.CS.languageTag()));
+
+        verify(preferences).updateLanguagePreference(auth, LanguagePreference.CS);
+    }
+
+    @Test
+    void updateLanguagePreferenceForAnonymousUserSetsLocaleCookieAndRedirectsToLogin() throws Exception {
+        mvc.perform(post("/preferences/language")
+                        .header("Referer", "http://localhost/login")
+                        .param("languagePreference", "CS"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"))
+                .andExpect(cookie().value(LocalizationConfig.LOCALE_COOKIE_NAME,
+                        LanguagePreference.CS.languageTag()));
+
+        verifyNoInteractions(preferences);
+    }
+
+    @Test
+    void updateLanguagePreferenceForAuthenticatedUserAllowsPublicRefererAndPersists() throws Exception {
+        mvc.perform(post("/preferences/language")
+                        .principal(auth)
+                        .header("Referer", "http://localhost/login")
+                        .param("languagePreference", "CS"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"))
+                .andExpect(cookie().value(LocalizationConfig.LOCALE_COOKIE_NAME,
+                        LanguagePreference.CS.languageTag()));
+
+        verify(preferences).updateLanguagePreference(auth, LanguagePreference.CS);
+    }
+
+    @Test
+    void updateLanguagePreferenceRejectsInvalidPreference() throws Exception {
+        mvc.perform(post("/preferences/language")
+                        .principal(auth)
+                        .param("languagePreference", "DE"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(preferences);
+    }
+
+    @Test
+    void updateLanguagePreferenceForAnonymousUserFallsBackToLoginWhenRefererIsExternal() throws Exception {
+        mvc.perform(post("/preferences/language")
+                        .header("Referer", "https://evil.example/login")
+                        .param("languagePreference", "CS"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"))
+                .andExpect(cookie().value(LocalizationConfig.LOCALE_COOKIE_NAME,
+                        LanguagePreference.CS.languageTag()));
+
+        verifyNoInteractions(preferences);
     }
 
     @Test

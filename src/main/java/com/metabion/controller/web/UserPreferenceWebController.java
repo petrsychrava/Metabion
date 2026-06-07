@@ -1,14 +1,18 @@
 package com.metabion.controller.web;
 
+import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.ThemePreference;
 import com.metabion.service.UserPreferenceService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.LocaleResolver;
 import org.springframework.web.util.UriUtils;
 
 import java.net.URI;
@@ -19,9 +23,11 @@ import java.util.ArrayDeque;
 public class UserPreferenceWebController {
 
     private final UserPreferenceService preferences;
+    private final LocaleResolver localeResolver;
 
-    public UserPreferenceWebController(UserPreferenceService preferences) {
+    public UserPreferenceWebController(UserPreferenceService preferences, LocaleResolver localeResolver) {
         this.preferences = preferences;
+        this.localeResolver = localeResolver;
     }
 
     @PostMapping("/app/preferences/theme")
@@ -29,7 +35,25 @@ public class UserPreferenceWebController {
                                         Authentication authentication,
                                         HttpServletRequest request) {
         preferences.updateThemePreference(authentication, parseThemePreference(themePreference));
-        return "redirect:" + safeRedirectPath(request.getHeader("Referer"), request);
+        return "redirect:" + safeRedirectPath(request.getHeader("Referer"), request, "/app", false);
+    }
+
+    @PostMapping("/preferences/language")
+    public String updateLanguagePreference(@RequestParam String languagePreference,
+                                           Authentication authentication,
+                                           HttpServletRequest request,
+                                           HttpServletResponse response) {
+        var preference = parseLanguagePreference(languagePreference);
+        localeResolver.setLocale(request, response, preference.toLocale());
+        var authenticated = isAuthenticated(authentication);
+        if (authenticated) {
+            preferences.updateLanguagePreference(authentication, preference);
+        }
+        return "redirect:" + safeRedirectPath(
+                request.getHeader("Referer"),
+                request,
+                authenticated ? "/app" : "/login",
+                true);
     }
 
     private ThemePreference parseThemePreference(String value) {
@@ -40,24 +64,32 @@ public class UserPreferenceWebController {
         }
     }
 
-    private String safeRedirectPath(String referer, HttpServletRequest request) {
+    private LanguagePreference parseLanguagePreference(String value) {
+        try {
+            return LanguagePreference.valueOf(value);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid language preference");
+        }
+    }
+
+    private String safeRedirectPath(String referer, HttpServletRequest request, String fallback, boolean allowPublicPaths) {
         if (referer == null || referer.isBlank()) {
-            return "/app";
+            return fallback;
         }
         try {
             var uri = URI.create(referer);
             if ((uri.isAbsolute() || uri.getRawAuthority() != null) && !isSameOrigin(uri, request)) {
-                return "/app";
+                return fallback;
             }
             var path = canonicalPath(uri);
-            if (isAppPath(path)) {
+            if (isAppPath(path) || (allowPublicPaths && isPublicLanguageReturnPath(path))) {
                 var query = uri.getRawQuery();
                 return query == null ? path : path + "?" + query;
             }
         } catch (IllegalArgumentException ex) {
-            return "/app";
+            return fallback;
         }
-        return "/app";
+        return fallback;
     }
 
     private String canonicalPath(URI uri) {
@@ -85,6 +117,22 @@ public class UserPreferenceWebController {
 
     private boolean isAppPath(String path) {
         return path != null && (path.equals("/app") || path.startsWith("/app/"));
+    }
+
+    private boolean isPublicLanguageReturnPath(String path) {
+        return path != null && (path.equals("/")
+                || path.equals("/login")
+                || path.equals("/register")
+                || path.equals("/verify")
+                || path.equals("/forgot-password")
+                || path.equals("/reset-password")
+                || path.equals("/staff-invitations/accept"));
+    }
+
+    private boolean isAuthenticated(Authentication authentication) {
+        return authentication != null
+                && authentication.isAuthenticated()
+                && !(authentication instanceof AnonymousAuthenticationToken);
     }
 
     private boolean isSameOrigin(URI uri, HttpServletRequest request) {
