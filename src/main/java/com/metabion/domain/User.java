@@ -43,6 +43,10 @@ public class User {
     @Column(name = "theme_preference", nullable = false)
     private ThemePreference themePreference = ThemePreference.SYSTEM;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "language_preference", nullable = false)
+    private LanguagePreference languagePreference = LanguagePreference.EN;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -123,6 +127,11 @@ public class User {
     public ThemePreference getThemePreference() { return themePreference; }
     public void setThemePreference(ThemePreference themePreference) {
         this.themePreference = themePreference == null ? ThemePreference.SYSTEM : themePreference;
+    }
+
+    public LanguagePreference getLanguagePreference() { return languagePreference; }
+    public void setLanguagePreference(LanguagePreference languagePreference) {
+        this.languagePreference = languagePreference == null ? LanguagePreference.EN : languagePreference;
     }
 
     public Instant getCreatedAt() { return createdAt; }

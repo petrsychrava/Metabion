@@ -1,5 +1,6 @@
 package com.metabion.service;
 
+import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.ThemePreference;
 import com.metabion.domain.User;
 import com.metabion.repository.UserRepository;
@@ -29,6 +30,19 @@ public class UserPreferenceService {
         }
         var user = currentUser(authentication);
         user.setThemePreference(preference);
+        users.save(user);
+    }
+
+    public LanguagePreference currentLanguagePreference(Authentication authentication) {
+        return currentUser(authentication).getLanguagePreference();
+    }
+
+    public void updateLanguagePreference(Authentication authentication, LanguagePreference preference) {
+        if (preference == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "language preference is required");
+        }
+        var user = currentUser(authentication);
+        user.setLanguagePreference(preference);
         users.save(user);
     }
 

@@ -1,5 +1,6 @@
 package com.metabion.service;
 
+import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.ThemePreference;
 import com.metabion.domain.User;
 import com.metabion.repository.UserRepository;
@@ -62,6 +63,29 @@ class UserPreferenceServiceTest {
     @Test
     void updateThemePreferenceRejectsNullPreference() {
         assertStatus(() -> service.updateThemePreference(auth, null), HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void currentLanguagePreferenceReturnsPersistedPreference() {
+        user.setLanguagePreference(LanguagePreference.CS);
+        when(users.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+
+        assertThat(service.currentLanguagePreference(auth)).isEqualTo(LanguagePreference.CS);
+    }
+
+    @Test
+    void updateLanguagePreferencePersistsRequestedPreference() {
+        when(users.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+
+        service.updateLanguagePreference(auth, LanguagePreference.CS);
+
+        assertThat(user.getLanguagePreference()).isEqualTo(LanguagePreference.CS);
+        verify(users).save(user);
+    }
+
+    @Test
+    void updateLanguagePreferenceRejectsNullPreference() {
+        assertStatus(() -> service.updateLanguagePreference(auth, null), HttpStatus.BAD_REQUEST);
     }
 
     @Test
