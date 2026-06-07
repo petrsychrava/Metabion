@@ -7,6 +7,7 @@ import com.metabion.service.SecurityService;
 import com.metabion.service.StaffInvitationService;
 import com.metabion.service.UserPreferenceService;
 import com.metabion.service.UserService;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,7 +91,7 @@ class WebAuthTemplateTest {
     void forgot_password_template_renders_form() throws Exception {
         mvc.perform(get("/forgot-password").with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Reset password")))
+                .andExpect(content().string(containsString("Forgot password")))
                 .andExpect(content().string(containsString("name=\"_csrf\"")));
     }
 
@@ -110,6 +111,19 @@ class WebAuthTemplateTest {
                         .param("password", "SecurePass123"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Check your email")));
+    }
+
+    @Test
+    void result_template_renders_in_czech_after_verify() throws Exception {
+        mvc.perform(get("/verify")
+                        .locale(java.util.Locale.forLanguageTag("cs"))
+                        .cookie(new Cookie("METABION_LOCALE", "cs"))
+                        .with(csrf())
+                        .param("token", "verify-token"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("lang=\"cs\"")))
+                .andExpect(content().string(containsString("E-mail ověřen")))
+                .andExpect(content().string(containsString("Jazyk")));
     }
 
     @Test
@@ -179,7 +193,7 @@ class WebAuthTemplateTest {
     void staff_invitation_accept_template_renders_form() throws Exception {
         mvc.perform(get("/staff-invitations/accept").param("token", "abc").with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Accept invitation")))
+                .andExpect(content().string(containsString("Set up staff account")))
                 .andExpect(content().string(containsString("name=\"token\"")))
                 .andExpect(content().string(containsString("value=\"abc\"")))
                 .andExpect(content().string(containsString("name=\"_csrf\"")));

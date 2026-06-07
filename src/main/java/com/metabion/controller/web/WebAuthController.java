@@ -13,6 +13,8 @@ import com.metabion.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.Authentication;
@@ -34,15 +36,18 @@ public class WebAuthController {
     private final SecurityService securityService;
     private final AppMenuCatalog appMenuCatalog;
     private final UserPreferenceService userPreferenceService;
+    private final MessageSource messages;
 
     public WebAuthController(UserService userService,
                              SecurityService securityService,
                              AppMenuCatalog appMenuCatalog,
-                             UserPreferenceService userPreferenceService) {
+                             UserPreferenceService userPreferenceService,
+                             MessageSource messages) {
         this.userService = userService;
         this.securityService = securityService;
         this.appMenuCatalog = appMenuCatalog;
         this.userPreferenceService = userPreferenceService;
+        this.messages = messages;
     }
 
     @GetMapping("/")
@@ -67,7 +72,7 @@ public class WebAuthController {
                               Model model) {
         if (isRateLimited(request, "login")) {
             model.addAttribute("loginForm", new LoginForm(email, ""));
-            model.addAttribute("error", "Invalid email or password.");
+            model.addAttribute("error", message("auth.login.invalid"));
             return "login";
         }
         try {
@@ -76,11 +81,11 @@ public class WebAuthController {
                 return "redirect:/app";
             }
             model.addAttribute("loginForm", new LoginForm(email, ""));
-            model.addAttribute("error", "Additional verification is not available in this web interface yet.");
+            model.addAttribute("error", message("auth.login.mfaUnavailable"));
             return "login";
         } catch (AuthenticationException ex) {
             model.addAttribute("loginForm", new LoginForm(email, ""));
-            model.addAttribute("error", "Invalid email or password.");
+            model.addAttribute("error", message("auth.login.invalid"));
             return "login";
         }
     }
@@ -100,16 +105,14 @@ public class WebAuthController {
                                  HttpServletRequest request,
                                  Model model) {
         if (isRateLimited(request, "register")) {
-            result(model, "Check your email", "If the address can be registered, a verification link has been sent.",
-                    "/login", "Sign in");
+            result(model, "result.checkEmail.title", "result.registration.message", "/login", "result.signIn");
             return "result";
         }
         if (bindingResult.hasErrors()) {
             return "register";
         }
         userService.register(registerForm);
-        result(model, "Check your email", "If the address can be registered, a verification link has been sent.",
-                "/login", "Sign in");
+        result(model, "result.checkEmail.title", "result.registration.message", "/login", "result.signIn");
         return "result";
     }
 
@@ -117,11 +120,10 @@ public class WebAuthController {
     public String verify(@RequestParam String token, Model model) {
         try {
             userService.verify(token);
-            result(model, "Email verified", "Your account is ready. You can now sign in.",
-                    "/login", "Sign in");
+            result(model, "result.emailVerified.title", "result.emailVerified.message", "/login", "result.signIn");
         } catch (InvalidTokenException ex) {
-            result(model, "Verification link invalid", "This verification link is invalid or expired.",
-                    "/register", "Register");
+            result(model, "result.verificationInvalid.title", "result.verificationInvalid.message",
+                    "/register", "result.register");
         }
         return "result";
     }
@@ -140,8 +142,7 @@ public class WebAuthController {
         if (!isRateLimited(request, "forgot-password")) {
             userService.requestPasswordReset(new ForgotPasswordRequest(email));
         }
-        result(model, "Check your email", "If an account exists, reset instructions have been sent.",
-                "/login", "Back to sign in");
+        result(model, "result.checkEmail.title", "result.resetRequested.message", "/login", "result.backToSignIn");
         return "result";
     }
 
@@ -158,8 +159,8 @@ public class WebAuthController {
                                       HttpServletRequest request,
                                       Model model) {
         if (isRateLimited(request, "reset-password")) {
-            result(model, "Request received", "If the reset link can be processed, your request has been accepted.",
-                    "/login", "Back to sign in");
+            result(model, "result.requestReceived.title", "result.resetAccepted.message",
+                    "/login", "result.backToSignIn");
             return "result";
         }
         if (bindingResult.hasErrors()) {
@@ -168,11 +169,10 @@ public class WebAuthController {
         }
         try {
             userService.resetPassword(resetPasswordForm);
-            result(model, "Password reset", "Your password has been changed. You can now sign in.",
-                    "/login", "Sign in");
+            result(model, "result.passwordReset.title", "result.passwordReset.message", "/login", "result.signIn");
         } catch (InvalidTokenException ex) {
-            result(model, "Reset link invalid", "This reset link is invalid or expired.",
-                    "/forgot-password", "Request a new link");
+            result(model, "result.resetInvalid.title", "result.resetInvalid.message",
+                    "/forgot-password", "result.requestNewLink");
         }
         return "result";
     }
@@ -226,9 +226,13 @@ public class WebAuthController {
     }
 
     private void result(Model model, String title, String message, String href, String action) {
-        model.addAttribute("title", title);
-        model.addAttribute("message", message);
+        model.addAttribute("title", message(title));
+        model.addAttribute("message", message(message));
         model.addAttribute("href", href);
-        model.addAttribute("action", action);
+        model.addAttribute("action", message(action));
+    }
+
+    private String message(String key) {
+        return messages.getMessage(key, null, LocaleContextHolder.getLocale());
     }
 }

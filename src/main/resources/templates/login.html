@@ -1,28 +1,38 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{layout :: head('Sign in - Metabion')}"></head>
+<html lang="en" th:lang="${htmlLang == null ? 'en' : htmlLang}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head(#{auth.login.title} + ' - Metabion')}"></head>
 <body>
 <main class="page">
     <section class="panel auth-panel">
         <div th:replace="~{layout :: brand}"></div>
-        <h1>Sign in</h1>
+        <form class="language-form" th:action="@{/preferences/language}" method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <label for="languagePreference" th:text="#{app.language}">Language</label>
+            <select id="languagePreference" name="languagePreference" onchange="this.form.submit()">
+                <option th:each="language : ${supportedLanguages}"
+                        th:value="${language.name()}"
+                        th:selected="${currentLanguage?.name() == language.name()}"
+                        th:text="#{|language.${language.languageTag()}|}">Language</option>
+            </select>
+        </form>
+        <h1 th:text="#{auth.login.title}">Sign in</h1>
         <p class="muted">Access your Metabion account.</p>
         <p class="error" th:if="${error}" th:text="${error}">Invalid email or password.</p>
 
         <form th:action="@{/login}" th:object="${loginForm}" method="post" class="form">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-            <label for="email">Email</label>
+            <label for="email" th:text="#{auth.login.email}">Email</label>
             <input id="email" type="email" th:field="*{email}" autocomplete="email" required>
 
-            <label for="password">Password</label>
+            <label for="password" th:text="#{auth.login.password}">Password</label>
             <input id="password" type="password" th:field="*{password}" autocomplete="current-password" required>
 
-            <button type="submit">Sign in</button>
+            <button type="submit" th:text="#{auth.login.submit}">Sign in</button>
         </form>
 
         <nav class="links" aria-label="Account links">
-            <a th:href="@{/register}">Create account</a>
-            <a th:href="@{/forgot-password}">Forgot password?</a>
+            <a th:href="@{/register}" th:text="#{auth.register.title}">Create account</a>
+            <a th:href="@{/forgot-password}" th:text="#{auth.forgot.title}">Forgot password?</a>
         </nav>
     </section>
 </main>

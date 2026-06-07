@@ -13,14 +13,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.web.csrf.DefaultCsrfToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.servlet.view.RedirectView;
+import org.thymeleaf.spring6.SpringTemplateEngine;
+import org.thymeleaf.spring6.view.ThymeleafViewResolver;
+import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doThrow;
@@ -29,6 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -53,16 +59,39 @@ class WebAuthControllerTest {
 
     @BeforeEach
     void setUp() {
+        var messages = messageSource();
         mvc = MockMvcBuilders
-                .standaloneSetup(new WebAuthController(userService, securityService, appMenuCatalog, userPreferenceService))
-                .setViewResolvers((viewName, locale) -> {
-                    if (viewName.startsWith("redirect:")) {
-                        return new RedirectView(viewName.substring("redirect:".length()), true);
-                    }
-                    return (model, request, response) -> {
-                    };
-                })
+                .standaloneSetup(new WebAuthController(userService, securityService, appMenuCatalog,
+                        userPreferenceService, messages))
+                .setControllerAdvice(new WebModelAttributes())
+                .defaultRequest(get("/")
+                        .requestAttr("_csrf", new DefaultCsrfToken("X-CSRF-TOKEN", "_csrf", "test-csrf")))
+                .setViewResolvers(viewResolver(messages))
                 .build();
+    }
+
+    private ResourceBundleMessageSource messageSource() {
+        var messages = new ResourceBundleMessageSource();
+        messages.setBasename("messages");
+        messages.setDefaultEncoding("UTF-8");
+        return messages;
+    }
+
+    private ThymeleafViewResolver viewResolver(ResourceBundleMessageSource messages) {
+        var templateResolver = new ClassLoaderTemplateResolver();
+        templateResolver.setPrefix("templates/");
+        templateResolver.setSuffix(".html");
+        templateResolver.setTemplateMode("HTML");
+        templateResolver.setCharacterEncoding("UTF-8");
+
+        var templateEngine = new SpringTemplateEngine();
+        templateEngine.setTemplateResolver(templateResolver);
+        templateEngine.setMessageSource(messages);
+
+        var viewResolver = new ThymeleafViewResolver();
+        viewResolver.setTemplateEngine(templateEngine);
+        viewResolver.setCharacterEncoding("UTF-8");
+        return viewResolver;
     }
 
     @Test
@@ -88,6 +117,14 @@ class WebAuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("login"))
                 .andExpect(model().attributeExists("loginForm"));
+    }
+
+    @Test
+    void loginPageRendersInCzechWhenRequested() throws Exception {
+        mvc.perform(get("/login").locale(java.util.Locale.forLanguageTag("cs")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Přihlášení")))
+                .andExpect(content().string(containsString("Jazyk")));
     }
 
     @Test
