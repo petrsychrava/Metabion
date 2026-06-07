@@ -86,16 +86,24 @@ class WebAuthTemplateTest {
         mvc.perform(get("/login").cookie(czechLocaleCookie).with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Přihlášení")))
-                .andExpect(content().string(containsString("Přístup k účtu Metabion")));
+                .andExpect(content().string(containsString("Přístup k účtu Metabion")))
+                .andExpect(content().string(containsString("aria-label=\"Domů Metabion\"")))
+                .andExpect(content().string(containsString("aria-label=\"Odkazy k účtu\"")))
+                .andExpect(content().string(not(containsString("Metabion home"))))
+                .andExpect(content().string(not(containsString("Account links"))));
 
         mvc.perform(get("/register").cookie(czechLocaleCookie).with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("e-mailovou adresu pro oznámení")))
-                .andExpect(content().string(containsString("Použijte alespoň 12 znaků.")));
+                .andExpect(content().string(containsString("Použijte alespoň 12 znaků.")))
+                .andExpect(content().string(not(containsString("Metabion home"))))
+                .andExpect(content().string(not(containsString("Account links"))));
 
         mvc.perform(get("/forgot-password").cookie(czechLocaleCookie).with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("pokyny pro obnovení hesla")));
+                .andExpect(content().string(containsString("pokyny pro obnovení hesla")))
+                .andExpect(content().string(not(containsString("Metabion home"))))
+                .andExpect(content().string(not(containsString("Account links"))));
 
         mvc.perform(get("/reset-password").param("token", "abc").cookie(czechLocaleCookie).with(csrf()))
                 .andExpect(status().isOk())

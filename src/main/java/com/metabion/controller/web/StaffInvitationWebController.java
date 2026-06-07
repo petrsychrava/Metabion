@@ -90,7 +90,7 @@ public class StaffInvitationWebController {
                                          Model model) {
         model.addAttribute("token", form.token());
         if (bindingResult.hasErrors()) {
-            model.addAttribute("error", "Review the invitation details.");
+            model.addAttribute("error", message("auth.invitation.review"));
             return "staff-invitation-accept";
         }
 
@@ -99,7 +99,7 @@ public class StaffInvitationWebController {
             result(model, "result.invitationAccepted.title", "result.invitationAccepted.message",
                     "/login", "result.signIn");
         } catch (ValidationException ex) {
-            model.addAttribute("error", ex.getMessage());
+            model.addAttribute("error", message("auth.invitation.review"));
             return "staff-invitation-accept";
         } catch (StaffInvitationException ex) {
             result(model, "result.invitationInvalid.title", "result.invitationInvalid.message",

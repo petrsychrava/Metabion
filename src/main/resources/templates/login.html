@@ -21,7 +21,7 @@
             <button type="submit" th:text="#{auth.login.submit}">Sign in</button>
         </form>
 
-        <nav class="links" aria-label="Account links">
+        <nav class="links" th:attr="aria-label=#{auth.nav.accountLinks}">
             <a th:href="@{/register}" th:text="#{auth.register.title}">Create account</a>
             <a th:href="@{/forgot-password}" th:text="#{auth.forgot.title}">Forgot password?</a>
         </nav>

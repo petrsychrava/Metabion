@@ -10,7 +10,7 @@
 </head>
 <body>
 <header class="brand" th:fragment="brand">
-    <a th:href="@{/}" aria-label="Metabion home">Metabion</a>
+    <a th:href="@{/}" th:attr="aria-label=#{app.brandHome}">Metabion</a>
 </header>
 
 <form th:fragment="languageSelector(formClass)" th:class="${formClass}" th:action="@{/preferences/language}" method="post">

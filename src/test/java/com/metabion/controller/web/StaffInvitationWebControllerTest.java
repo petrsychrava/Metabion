@@ -25,6 +25,7 @@ import org.springframework.web.context.WebApplicationContext;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -236,6 +237,23 @@ class StaffInvitationWebControllerTest {
     }
 
     @Test
+    void public_accept_post_with_short_password_renders_czech_error_when_requested() throws Exception {
+        mvc.perform(post("/staff-invitations/accept")
+                        .cookie(new Cookie("METABION_LOCALE", "cs"))
+                        .with(csrf())
+                        .param("token", "invite-token")
+                        .param("password", "too-short"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("staff-invitation-accept"))
+                .andExpect(model().attribute("token", "invite-token"))
+                .andExpect(model().attribute("error", "Zkontrolujte údaje pozvánky."))
+                .andExpect(content().string(containsString("Zkontrolujte údaje pozvánky.")))
+                .andExpect(content().string(not(containsString("Review the invitation details."))));
+
+        verify(staffInvitationService, never()).acceptInvitation(any());
+    }
+
+    @Test
     void public_accept_post_with_service_validation_error_rerenders_form_with_message() throws Exception {
         doThrow(new ValidationException("password exceeds 72 bytes"))
                 .when(staffInvitationService).acceptInvitation(any());
@@ -247,7 +265,25 @@ class StaffInvitationWebControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("staff-invitation-accept"))
                 .andExpect(model().attribute("token", "invite-token"))
-                .andExpect(model().attribute("error", "password exceeds 72 bytes"));
+                .andExpect(model().attribute("error", "Review the invitation details."));
+    }
+
+    @Test
+    void public_accept_post_with_service_validation_error_renders_czech_error_when_requested() throws Exception {
+        doThrow(new ValidationException("password exceeds 72 bytes"))
+                .when(staffInvitationService).acceptInvitation(any());
+
+        mvc.perform(post("/staff-invitations/accept")
+                        .cookie(new Cookie("METABION_LOCALE", "cs"))
+                        .with(csrf())
+                        .param("token", "invite-token")
+                        .param("password", "SecurePass123"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("staff-invitation-accept"))
+                .andExpect(model().attribute("token", "invite-token"))
+                .andExpect(model().attribute("error", "Zkontrolujte údaje pozvánky."))
+                .andExpect(content().string(containsString("Zkontrolujte údaje pozvánky.")))
+                .andExpect(content().string(not(containsString("password exceeds 72 bytes"))));
     }
 
     @Test
