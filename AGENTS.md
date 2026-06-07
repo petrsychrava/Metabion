@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-Metabion is a **Spring Boot 4.0.6** authentication and user management backend service built with **Gradle** and **Java 25**.
+Metabion is a **Spring Boot 4.0.6** authentication, user management, onboarding, and staff workflow backend service built with **Gradle** and **Java 25**.
 
-The application is currently focused on patient account registration, verification, login/logout, password reset, role-based access, session authentication, and an MFA extension point.
+The application is currently focused on patient account registration, verification, login/logout, password reset, role-based access, session authentication, staff invitations, patient onboarding review, user preferences, localization, and an MFA extension point.
 
 ## Project Structure
 
@@ -20,8 +20,8 @@ Metabion/
 │   ├── main/
 │   │   ├── java/com/metabion/
 │   │   │   ├── Main.java
-│   │   │   ├── config/       # Security and app configuration
-│   │   │   ├── controller/   # REST endpoints
+│   │   │   ├── config/       # Security, localization, rate limiting, and app configuration
+│   │   │   ├── controller/   # API and web MVC endpoints
 │   │   │   ├── domain/       # JPA entities
 │   │   │   ├── dto/          # Request/response records
 │   │   │   ├── exception/    # Application exceptions
@@ -29,6 +29,7 @@ Metabion/
 │   │   │   └── service/      # Business logic
 │   │   └── resources/
 │   │       ├── application.properties
+│   │       ├── messages*.properties # Localization bundles
 │   │       └── db/migration/ # Flyway migrations
 │   └── test/
 │       ├── java/com/metabion/
@@ -55,7 +56,7 @@ Jacoco HTML reports are generated under `build/reports/jacoco/test/html/` after 
 
 - Java 25 toolchain
 - Spring Boot 4.0.6
-- Spring Web, Validation, Security, Data JPA, Flyway, Session JDBC, Mail
+- Spring Web, Thymeleaf, Validation, Security, Data JPA, Flyway, Session JDBC, Mail
 - PostgreSQL for production persistence
 - H2 and Testcontainers PostgreSQL for tests
 - Flyway-owned database migrations
@@ -69,6 +70,8 @@ Jacoco HTML reports are generated under `build/reports/jacoco/test/html/` after 
 The codebase follows a layered structure:
 
 - `controller`: HTTP API boundaries and validation entry points.
+- `controller/api`: REST API endpoints.
+- `controller/web`: server-rendered web MVC endpoints.
 - `service`: business rules, security flows, token handling, email orchestration.
 - `repository`: Spring Data persistence access.
 - `domain`: JPA entities and value objects.
@@ -80,7 +83,12 @@ Important domain flows include:
 - Registration with email verification tokens.
 - Login/logout using server-side sessions, not JWT.
 - Password reset with hashed reset tokens.
-- Role-based access through `UserRole`.
+- Role-based access through `RoleName`, `UserRole`, and assignment entities.
+- Staff invitations and invitation acceptance.
+- Patient onboarding submissions and staff review.
+- Cohort membership, cohort staff assignment, and patient expert assignment.
+- User theme and language preferences.
+- Localization through message bundles and authenticated locale handling.
 - MFA extensibility through `MfaChallengeService`; the current default is no-op.
 - Email delivery through `EmailService` with SMTP and logging implementations.
 
@@ -99,6 +107,7 @@ Important domain flows include:
 - Flyway migrations live in `src/main/resources/db/migration/` and use `V{n}__{slug}.sql` names.
 - Treat Flyway as the owner of database schema. Production-like configurations should validate schema rather than relying on Hibernate to create it.
 - Application settings belong in `src/main/resources/application.properties` or profile-specific files.
+- User-facing message bundles belong in `src/main/resources/messages*.properties`.
 - Use environment variables or Spring profiles for environment-specific values.
 - Never commit secrets, credentials, plaintext tokens, passwords, or session identifiers.
 
