@@ -16,11 +16,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
 
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -90,7 +92,12 @@ class UserServiceRecoveryTest {
     void forgot_password_known_email_marks_prior_tokens_consumed_and_issues_new() {
         when(users.findByEmail("test@example.com")).thenReturn(Optional.of(user));
 
-        userService.requestPasswordReset(new ForgotPasswordRequest(" Test@Example.com "));
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("cs"));
+        try {
+            userService.requestPasswordReset(new ForgotPasswordRequest(" Test@Example.com "));
+        } finally {
+            LocaleContextHolder.resetLocaleContext();
+        }
 
         verify(passwordEncoder).matches(anyString(), eq(SecurityService.DUMMY_HASH));
         verify(resetTokens).markAllConsumedForUser(eq(42L), any(Instant.class));
@@ -103,8 +110,11 @@ class UserServiceRecoveryTest {
         assertThat(saved.getExpiresAt()).isAfter(Instant.now().plusSeconds(23 * 60 * 60));
 
         var plainCaptor = ArgumentCaptor.forClass(String.class);
-        verify(emailService, timeout(1000)).sendPasswordReset(eq("test@example.com"), plainCaptor.capture());
+        var localeCaptor = ArgumentCaptor.forClass(Locale.class);
+        verify(emailService, timeout(1000))
+                .sendPasswordReset(eq("test@example.com"), plainCaptor.capture(), localeCaptor.capture());
         assertThat(plainCaptor.getValue()).hasSize(43);
+        assertThat(localeCaptor.getValue()).isEqualTo(Locale.forLanguageTag("cs"));
         assertThat(saved.getTokenHash()).isEqualTo(UserService.sha256Hex(plainCaptor.getValue()));
     }
 

@@ -24,6 +24,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
@@ -84,7 +85,7 @@ class StaffInvitationServiceTest {
         assertThat(invitation.getExpiresAt()).isAfter(Instant.now().plusSeconds(6 * 24 * 60 * 60));
 
         var tokenCaptor = ArgumentCaptor.forClass(String.class);
-        verify(emailService).sendStaffInvitation(eq("expert@example.com"), tokenCaptor.capture());
+        verify(emailService).sendStaffInvitation(eq("expert@example.com"), tokenCaptor.capture(), any(Locale.class));
         assertThat(tokenCaptor.getValue()).hasSize(43);
         assertThat(invitation.getTokenHash()).isEqualTo(UserService.sha256Hex(tokenCaptor.getValue()));
         assertThat(invitation.getTokenHash()).isNotEqualTo(tokenCaptor.getValue());
@@ -101,14 +102,14 @@ class StaffInvitationServiceTest {
             service.createInvitation("admin@example.com",
                     new CreateStaffInvitationRequest("expert@example.com", Set.of(RoleName.PHYSICIAN.getName())));
 
-            verify(emailService, never()).sendStaffInvitation(any(), any());
+            verify(emailService, never()).sendStaffInvitation(any(), any(), any(Locale.class));
 
             var synchronizations = TransactionSynchronizationManager.getSynchronizations();
             assertThat(synchronizations).hasSize(1);
             synchronizations.getFirst().afterCommit();
 
             var tokenCaptor = ArgumentCaptor.forClass(String.class);
-            verify(emailService).sendStaffInvitation(eq("expert@example.com"), tokenCaptor.capture());
+            verify(emailService).sendStaffInvitation(eq("expert@example.com"), tokenCaptor.capture(), any(Locale.class));
             assertThat(tokenCaptor.getValue()).hasSize(43);
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
