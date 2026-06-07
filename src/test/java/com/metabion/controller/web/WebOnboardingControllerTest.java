@@ -102,6 +102,11 @@ class WebOnboardingControllerTest {
                 .andExpect(content().string(containsString("Historie")))
                 .andExpect(content().string(containsString("Odeslat výchozí údaje")))
                 .andExpect(content().string(containsString("Datum narození")))
+                .andExpect(content().string(containsString(">Žena<")))
+                .andExpect(content().string(containsString(">Crohnova choroba<")))
+                .andExpect(content().string(containsString(">Mírná<")))
+                .andExpect(content().string(containsString(">Žádné<")))
+                .andExpect(content().string(containsString(">Nikdy nepoužita<")))
                 .andExpect(content().string(containsString("Aktuální léky")));
     }
 
@@ -130,7 +135,8 @@ class WebOnboardingControllerTest {
                 .andExpect(content().string(containsString("Historie vstupních dotazníků")))
                 .andExpect(content().string(containsString("Zpět")))
                 .andExpect(content().string(containsString("Verze")))
-                .andExpect(content().string(containsString("Odesláno")));
+                .andExpect(content().string(containsString("Odesláno")))
+                .andExpect(content().string(containsString("Čeká na kontrolu")));
     }
 
     @Test
@@ -243,6 +249,7 @@ class WebOnboardingControllerTest {
                 .andExpect(content().string(containsString("Kontrola vstupních dotazníků")))
                 .andExpect(content().string(containsString("Pacient")))
                 .andExpect(content().string(containsString("Verze")))
+                .andExpect(content().string(containsString("Čeká na kontrolu")))
                 .andExpect(content().string(containsString("Otevřít")));
     }
 
@@ -270,7 +277,7 @@ class WebOnboardingControllerTest {
                 .andExpect(content().string(containsString("1990-01-01")))
                 .andExpect(content().string(containsString("Europe/Prague")))
                 .andExpect(content().string(containsString("Ileocolonic")))
-                .andExpect(content().string(containsString("NEVER_USED")))
+                .andExpect(content().string(containsString("Never used")))
                 .andExpect(content().string(containsString("4.2")))
                 .andExpect(content().string(containsString("Recent outpatient labs")));
     }
@@ -288,6 +295,14 @@ class WebOnboardingControllerTest {
                 .andExpect(content().string(containsString("Detail vstupního dotazníku")))
                 .andExpect(content().string(containsString("Zpět")))
                 .andExpect(content().string(containsString("Datum narození")))
+                .andExpect(content().string(containsString("Žena")))
+                .andExpect(content().string(containsString("Crohnova choroba")))
+                .andExpect(content().string(containsString("Mírná")))
+                .andExpect(content().string(containsString("Žádné")))
+                .andExpect(content().string(containsString("Nikdy nepoužita")))
+                .andExpect(content().string(containsString("Čeká na kontrolu")))
+                .andExpect(content().string(containsString(">Zkontrolováno<")))
+                .andExpect(content().string(containsString(">Vyžaduje následnou kontrolu<")))
                 .andExpect(content().string(containsString("Poznámky ke kontrole")))
                 .andExpect(content().string(containsString("Uložit kontrolu")));
     }

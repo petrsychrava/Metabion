@@ -22,7 +22,7 @@
                 <td th:text="${submission.patientEmail()}">patient@example.com</td>
                 <td th:text="${submission.onboardingContext()}">default</td>
                 <td th:text="${submission.version()}">1</td>
-                <td th:text="${submission.reviewStatus()}">PENDING_REVIEW</td>
+                <td th:text="${#messages.msg('enum.onboardingReviewStatus.' + submission.reviewStatus().name())}">PENDING_REVIEW</td>
                 <td><a th:href="@{/app/clinical/onboarding/{id}(id=${submission.id()})}" th:text="#{onboarding.open}">Open</a></td>
             </tr>
             </tbody>

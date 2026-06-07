@@ -23,7 +23,7 @@
                 <td th:text="${submission.version()}">1</td>
                 <td th:text="${submission.onboardingContext()}">default</td>
                 <td th:text="${submission.submittedAt()}">date</td>
-                <td th:text="${submission.reviewStatus()}">PENDING_REVIEW</td>
+                <td th:text="${#messages.msg('enum.onboardingReviewStatus.' + submission.reviewStatus().name())}">PENDING_REVIEW</td>
             </tr>
             </tbody>
         </table>
