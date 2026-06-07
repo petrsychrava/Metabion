@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<form th:fragment="languageSelector(formClass)" th:class="${formClass}" th:action="@{/preferences/language}" method="post">
+    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+    <label for="languagePreference" th:text="#{app.language}">Language</label>
+    <select id="languagePreference" name="languagePreference" onchange="this.form.submit()">
+        <option th:each="language : ${supportedLanguages}"
+                th:value="${language.name()}"
+                th:selected="${currentLanguage?.name() == language.name()}"
+                th:text="#{|language.${language.languageTag()}|}">Language</option>
+    </select>
+</form>
+</body>
+</html>
