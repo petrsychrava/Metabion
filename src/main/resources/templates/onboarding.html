@@ -26,23 +26,23 @@
             <label class="field">Date of birth
                 <input type="date" id="dateOfBirth" name="dateOfBirth"
                        th:value="${onboardingForm.dateOfBirth == null ? '' : #temporals.format(onboardingForm.dateOfBirth, 'yyyy-MM-dd')}"
-                       th:readonly="${profileLocked}" required>
+                       th:readonly="${profileLocked}" th:classappend="${profileLocked} ? 'locked-profile-field'" required>
             </label>
             <p class="error" th:if="${#fields.hasErrors('dateOfBirth')}" th:errors="*{dateOfBirth}">Date of birth error</p>
             <label class="field">Sex
                 <input th:if="${profileLocked}" type="hidden" name="sex" th:value="*{sex}">
-                <select th:field="*{sex}" th:disabled="${profileLocked}" required>
+                <select th:field="*{sex}" th:disabled="${profileLocked}" th:classappend="${profileLocked} ? 'locked-profile-field'" required>
                     <option value="">Select</option>
                     <option th:each="option : ${sexOptions}" th:value="${option}" th:text="${option}"></option>
                 </select>
             </label>
             <p class="error" th:if="${#fields.hasErrors('sex')}" th:errors="*{sex}">Sex error</p>
             <label class="field">Country/region
-                <input th:field="*{countryRegion}" th:readonly="${profileLocked}" required>
+                <input th:field="*{countryRegion}" th:readonly="${profileLocked}" th:classappend="${profileLocked} ? 'locked-profile-field'" required>
             </label>
             <p class="error" th:if="${#fields.hasErrors('countryRegion')}" th:errors="*{countryRegion}">Country error</p>
             <label class="field">Timezone
-                <input th:field="*{timezone}" th:readonly="${profileLocked}" required>
+                <input th:field="*{timezone}" th:readonly="${profileLocked}" th:classappend="${profileLocked} ? 'locked-profile-field'" required>
             </label>
             <p class="error" th:if="${#fields.hasErrors('timezone')}" th:errors="*{timezone}">Timezone error</p>
             <label class="field">Diagnosis

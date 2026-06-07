@@ -110,10 +110,11 @@ class WebOnboardingControllerTest {
                 .andExpect(content().string(containsString("id=\"dateOfBirth\" name=\"dateOfBirth\"")))
                 .andExpect(content().string(containsString("value=\"1990-01-01\"")))
                 .andExpect(content().string(containsString("readonly=\"readonly\"")))
+                .andExpect(content().string(containsString("class=\"locked-profile-field\"")))
                 .andExpect(content().string(containsString("name=\"sex\" value=\"FEMALE\"")))
-                .andExpect(content().string(containsString("disabled=\"disabled\" id=\"sex\" name=\"sex\"")))
-                .andExpect(content().string(containsString("id=\"countryRegion\" name=\"countryRegion\" value=\"CZ\"")))
-                .andExpect(content().string(containsString("id=\"timezone\" name=\"timezone\" value=\"Europe/Prague\"")));
+                .andExpect(content().string(containsString("disabled=\"disabled\" class=\"locked-profile-field\" id=\"sex\" name=\"sex\"")))
+                .andExpect(content().string(containsString("class=\"locked-profile-field\" id=\"countryRegion\" name=\"countryRegion\" value=\"CZ\"")))
+                .andExpect(content().string(containsString("class=\"locked-profile-field\" id=\"timezone\" name=\"timezone\" value=\"Europe/Prague\"")));
     }
 
     @Test

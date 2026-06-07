@@ -223,6 +223,13 @@ textarea:focus {
     outline: 3px solid rgba(45, 143, 204, 0.16);
 }
 
+input.locked-profile-field,
+select.locked-profile-field {
+    background: var(--secondary-bg);
+    border-color: var(--secondary-hover);
+    color: var(--muted);
+}
+
 button,
 .button-link {
     border: 0;
