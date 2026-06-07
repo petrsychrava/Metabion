@@ -1,9 +1,15 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="appShell(pageTitle, activePath, content)">
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:fragment="appShell(pageTitle, activePath, content)"
+      th:attr="data-theme-preference=${themePreference == null ? 'SYSTEM' : themePreference.name()}">
 <head th:fragment="head(pageTitle)">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title th:text="${pageTitle}">Metabion</title>
+    <script th:inline="javascript">
+        document.documentElement.dataset.themePreference =
+            /*[[${themePreference == null ? 'SYSTEM' : themePreference.name()}]]*/ 'SYSTEM';
+    </script>
     <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
@@ -29,6 +35,15 @@
                 </li>
             </ul>
         </nav>
+        <form class="theme-form" th:action="@{/app/preferences/theme}" method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <label for="themePreference">Theme</label>
+            <select id="themePreference" name="themePreference" onchange="this.form.submit()">
+                <option value="SYSTEM" th:selected="${themePreference?.name() == 'SYSTEM'}">System</option>
+                <option value="LIGHT" th:selected="${themePreference?.name() == 'LIGHT'}">Light</option>
+                <option value="DARK" th:selected="${themePreference?.name() == 'DARK'}">Dark</option>
+            </select>
+        </form>
         <form class="sidebar-logout" th:action="@{/logout}" method="post">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
             <button type="submit" class="secondary">Sign out</button>

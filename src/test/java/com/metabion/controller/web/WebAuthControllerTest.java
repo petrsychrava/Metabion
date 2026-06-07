@@ -1,10 +1,12 @@
 package com.metabion.controller.web;
 
+import com.metabion.domain.ThemePreference;
 import com.metabion.dto.LoginForm;
 import com.metabion.dto.LoginResponse;
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.config.RateLimitingFilter;
 import com.metabion.service.SecurityService;
+import com.metabion.service.UserPreferenceService;
 import com.metabion.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,12 +46,15 @@ class WebAuthControllerTest {
     @Mock
     AppMenuCatalog appMenuCatalog;
 
+    @Mock
+    UserPreferenceService userPreferenceService;
+
     MockMvc mvc;
 
     @BeforeEach
     void setUp() {
         mvc = MockMvcBuilders
-                .standaloneSetup(new WebAuthController(userService, securityService, appMenuCatalog))
+                .standaloneSetup(new WebAuthController(userService, securityService, appMenuCatalog, userPreferenceService))
                 .setViewResolvers((viewName, locale) -> {
                     if (viewName.startsWith("redirect:")) {
                         return new RedirectView(viewName.substring("redirect:".length()), true);
@@ -130,6 +135,7 @@ class WebAuthControllerTest {
                 new AppMenuItem("Dashboard A", "/app/dashboard-a", false, true, "dashboard a"));
         when(appMenuCatalog.sidebarItems(auth)).thenReturn(sidebarItems);
         when(appMenuCatalog.dashboardItems(auth)).thenReturn(dashboardItems);
+        when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.DARK);
 
         mvc.perform(get("/app").principal(auth))
                 .andExpect(status().isOk())
@@ -138,7 +144,8 @@ class WebAuthControllerTest {
                 .andExpect(model().attribute("roles", List.of("COORDINATOR", "PHYSICIAN")))
                 .andExpect(model().attribute("appMenuItems", sidebarItems))
                 .andExpect(model().attribute("dashboardItems", dashboardItems))
-                .andExpect(model().attribute("activePath", "/app"));
+                .andExpect(model().attribute("activePath", "/app"))
+                .andExpect(model().attribute("themePreference", ThemePreference.DARK));
         verify(appMenuCatalog).sidebarItems(auth);
         verify(appMenuCatalog).dashboardItems(auth);
     }
@@ -193,6 +200,7 @@ class WebAuthControllerTest {
                 new AppMenuItem("Home", "/app", false, false, "Application home"),
                 new AppMenuItem("Account", "/app/account", false, false, "Account settings"));
         when(appMenuCatalog.sidebarItems(auth)).thenReturn(sidebarItems);
+        when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.SYSTEM);
 
         mvc.perform(get("/app/account").principal(auth))
                 .andExpect(status().isOk())
@@ -200,7 +208,8 @@ class WebAuthControllerTest {
                 .andExpect(model().attribute("email", "user@example.com"))
                 .andExpect(model().attribute("roles", List.of("PATIENT")))
                 .andExpect(model().attribute("appMenuItems", sidebarItems))
-                .andExpect(model().attribute("activePath", "/app/account"));
+                .andExpect(model().attribute("activePath", "/app/account"))
+                .andExpect(model().attribute("themePreference", ThemePreference.SYSTEM));
         verify(appMenuCatalog).sidebarItems(auth);
     }
 

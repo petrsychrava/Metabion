@@ -1,9 +1,11 @@
 package com.metabion.controller.web;
 
 import com.metabion.config.RateLimitingFilter;
+import com.metabion.domain.ThemePreference;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.SecurityService;
 import com.metabion.service.StaffInvitationService;
+import com.metabion.service.UserPreferenceService;
 import com.metabion.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +21,7 @@ import org.springframework.web.context.WebApplicationContext;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -51,6 +54,9 @@ class WebAuthTemplateTest {
 
     @MockitoBean
     UserRepository userRepository;
+
+    @MockitoBean
+    UserPreferenceService userPreferenceService;
 
     @MockitoBean
     RateLimitingFilter rateLimitingFilter;
@@ -110,14 +116,20 @@ class WebAuthTemplateTest {
     void app_template_renders_authenticated_shell() throws Exception {
         var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
         auth.setAuthenticated(true);
+        when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.DARK);
 
         mvc.perform(get("/app").principal(auth).with(csrf()))
                 .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-theme-preference=\"DARK\"")))
                 .andExpect(content().string(containsString("class=\"workbench\"")))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
                 .andExpect(content().string(containsString("Onboarding")))
                 .andExpect(content().string(containsString("Education library - planned")))
                 .andExpect(content().string(containsString("user@example.com")))
+                .andExpect(content().string(containsString("Theme")))
+                .andExpect(content().string(containsString("name=\"themePreference\"")))
+                .andExpect(content().string(containsString("selected=\"selected\">Dark")))
+                .andExpect(content().string(containsString("/app/preferences/theme")))
                 .andExpect(content().string(containsString("name=\"_csrf\"")));
     }
 

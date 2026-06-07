@@ -6,6 +6,7 @@ import com.metabion.dto.CreateStaffInvitationRequest;
 import com.metabion.exception.StaffInvitationException;
 import com.metabion.exception.ValidationException;
 import com.metabion.service.StaffInvitationService;
+import com.metabion.service.UserPreferenceService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
@@ -30,10 +31,14 @@ public class StaffInvitationWebController {
 
     private final StaffInvitationService staffInvitationService;
     private final AppMenuCatalog appMenuCatalog;
+    private final UserPreferenceService userPreferenceService;
 
-    public StaffInvitationWebController(StaffInvitationService staffInvitationService, AppMenuCatalog appMenuCatalog) {
+    public StaffInvitationWebController(StaffInvitationService staffInvitationService,
+                                        AppMenuCatalog appMenuCatalog,
+                                        UserPreferenceService userPreferenceService) {
         this.staffInvitationService = staffInvitationService;
         this.appMenuCatalog = appMenuCatalog;
+        this.userPreferenceService = userPreferenceService;
     }
 
     @GetMapping("/app/staff-invitations/new")
@@ -112,5 +117,6 @@ public class StaffInvitationWebController {
     private void addAppShell(Model model, Authentication authentication) {
         model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
         model.addAttribute("activePath", "/app/staff-invitations/new");
+        model.addAttribute("themePreference", userPreferenceService.currentThemePreference(authentication));
     }
 }

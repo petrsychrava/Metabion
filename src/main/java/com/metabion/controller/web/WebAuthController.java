@@ -8,6 +8,7 @@ import com.metabion.dto.ResetPasswordRequest;
 import com.metabion.config.RateLimitingFilter;
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.service.SecurityService;
+import com.metabion.service.UserPreferenceService;
 import com.metabion.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,11 +33,16 @@ public class WebAuthController {
     private final UserService userService;
     private final SecurityService securityService;
     private final AppMenuCatalog appMenuCatalog;
+    private final UserPreferenceService userPreferenceService;
 
-    public WebAuthController(UserService userService, SecurityService securityService, AppMenuCatalog appMenuCatalog) {
+    public WebAuthController(UserService userService,
+                             SecurityService securityService,
+                             AppMenuCatalog appMenuCatalog,
+                             UserPreferenceService userPreferenceService) {
         this.userService = userService;
         this.securityService = securityService;
         this.appMenuCatalog = appMenuCatalog;
+        this.userPreferenceService = userPreferenceService;
     }
 
     @GetMapping("/")
@@ -181,9 +187,8 @@ public class WebAuthController {
     public String app(Authentication authentication, Model model) {
         model.addAttribute("email", authentication.getName());
         model.addAttribute("roles", roles(authentication));
-        model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
         model.addAttribute("dashboardItems", appMenuCatalog.dashboardItems(authentication));
-        model.addAttribute("activePath", "/app");
+        addAppShell(model, authentication, "/app");
         return "app";
     }
 
@@ -191,8 +196,7 @@ public class WebAuthController {
     public String account(Authentication authentication, Model model) {
         model.addAttribute("email", authentication.getName());
         model.addAttribute("roles", roles(authentication));
-        model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
-        model.addAttribute("activePath", "/app/account");
+        addAppShell(model, authentication, "/app/account");
         return "account";
     }
 
@@ -213,6 +217,12 @@ public class WebAuthController {
                 .map(authority -> authority.substring("ROLE_".length()))
                 .sorted()
                 .toList();
+    }
+
+    private void addAppShell(Model model, Authentication authentication, String activePath) {
+        model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
+        model.addAttribute("activePath", activePath);
+        model.addAttribute("themePreference", userPreferenceService.currentThemePreference(authentication));
     }
 
     private void result(Model model, String title, String message, String href, String action) {

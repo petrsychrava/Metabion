@@ -5,6 +5,7 @@ import com.metabion.dto.OnboardingReviewRequest;
 import com.metabion.dto.OnboardingSubmissionResponse;
 import com.metabion.service.OnboardingService;
 import com.metabion.service.SecurityService;
+import com.metabion.service.UserPreferenceService;
 import com.metabion.service.UserService;
 import jakarta.servlet.Filter;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +57,7 @@ class WebOnboardingControllerTest {
     @MockitoBean UserService userService;
     @MockitoBean SecurityService securityService;
     @MockitoBean OnboardingService onboardingService;
+    @MockitoBean UserPreferenceService userPreferenceService;
 
     private MockMvc mvc;
 

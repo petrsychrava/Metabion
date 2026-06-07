@@ -10,6 +10,7 @@ import com.metabion.dto.OnboardingReviewRequest;
 import com.metabion.dto.OnboardingSubmissionRequest;
 import com.metabion.dto.OnboardingSubmissionResponse;
 import com.metabion.service.OnboardingService;
+import com.metabion.service.UserPreferenceService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -29,10 +30,14 @@ public class WebOnboardingController {
 
     private final OnboardingService onboardingService;
     private final AppMenuCatalog appMenuCatalog;
+    private final UserPreferenceService userPreferenceService;
 
-    public WebOnboardingController(OnboardingService onboardingService, AppMenuCatalog appMenuCatalog) {
+    public WebOnboardingController(OnboardingService onboardingService,
+                                   AppMenuCatalog appMenuCatalog,
+                                   UserPreferenceService userPreferenceService) {
         this.onboardingService = onboardingService;
         this.appMenuCatalog = appMenuCatalog;
+        this.userPreferenceService = userPreferenceService;
     }
 
     @GetMapping("/app/onboarding")
@@ -186,6 +191,7 @@ public class WebOnboardingController {
     private void addAppShell(Model model, Authentication authentication, String activePath) {
         model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
         model.addAttribute("activePath", activePath);
+        model.addAttribute("themePreference", userPreferenceService.currentThemePreference(authentication));
     }
 
     private OnboardingSubmissionResponse latestOrNull(Authentication authentication, String context) {

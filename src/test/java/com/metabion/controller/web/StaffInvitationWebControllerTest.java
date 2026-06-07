@@ -6,6 +6,7 @@ import com.metabion.exception.StaffInvitationException;
 import com.metabion.exception.ValidationException;
 import com.metabion.service.SecurityService;
 import com.metabion.service.StaffInvitationService;
+import com.metabion.service.UserPreferenceService;
 import com.metabion.service.UserService;
 import jakarta.servlet.Filter;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,6 +62,9 @@ class StaffInvitationWebControllerTest {
 
     @MockitoBean
     StaffInvitationService staffInvitationService;
+
+    @MockitoBean
+    UserPreferenceService userPreferenceService;
 
     private MockMvc mvc;
 
