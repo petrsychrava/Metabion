@@ -3,6 +3,7 @@ package com.metabion.controller.web;
 import com.metabion.domain.*;
 import com.metabion.dto.OnboardingReviewRequest;
 import com.metabion.dto.OnboardingSubmissionResponse;
+import com.metabion.dto.OnboardingSubmissionSummaryResponse;
 import com.metabion.service.OnboardingService;
 import com.metabion.service.SecurityService;
 import com.metabion.service.UserPreferenceService;
@@ -89,6 +90,22 @@ class WebOnboardingControllerTest {
     }
 
     @Test
+    void patientOnboardingPageRendersInCzech() throws Exception {
+        when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
+
+        mvc.perform(get("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("onboarding"))
+                .andExpect(content().string(containsString("lang=\"cs\"")))
+                .andExpect(content().string(containsString("Pacientský vstupní dotazník")))
+                .andExpect(content().string(containsString("Historie")))
+                .andExpect(content().string(containsString("Odeslat výchozí údaje")))
+                .andExpect(content().string(containsString("Datum narození")))
+                .andExpect(content().string(containsString("Aktuální léky")));
+    }
+
+    @Test
     void patientOnboardingPageRendersWhenNoSubmissionExists() throws Exception {
         doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND))
                 .when(onboardingService).getLatestForCurrentPatient(any(), eq("default"));
@@ -97,6 +114,23 @@ class WebOnboardingControllerTest {
                         .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
                 .andExpect(status().isOk())
                 .andExpect(view().name("onboarding"));
+    }
+
+    @Test
+    void patientOnboardingHistoryRendersInCzech() throws Exception {
+        when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
+        when(onboardingService.listHistoryForCurrentPatient(any(), eq("default")))
+                .thenReturn(java.util.List.of(summaryResponse()));
+
+        mvc.perform(get("/app/onboarding/history")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("onboarding-history"))
+                .andExpect(content().string(containsString("lang=\"cs\"")))
+                .andExpect(content().string(containsString("Historie vstupních dotazníků")))
+                .andExpect(content().string(containsString("Zpět")))
+                .andExpect(content().string(containsString("Verze")))
+                .andExpect(content().string(containsString("Odesláno")));
     }
 
     @Test
@@ -196,6 +230,23 @@ class WebOnboardingControllerTest {
     }
 
     @Test
+    void clinicalReviewListRendersInCzech() throws Exception {
+        when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
+        when(onboardingService.listReviewable(any(), eq(null), eq(null)))
+                .thenReturn(java.util.List.of(summaryResponse()));
+
+        mvc.perform(get("/app/clinical/onboarding")
+                        .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("clinical-onboarding"))
+                .andExpect(content().string(containsString("lang=\"cs\"")))
+                .andExpect(content().string(containsString("Kontrola vstupních dotazníků")))
+                .andExpect(content().string(containsString("Pacient")))
+                .andExpect(content().string(containsString("Verze")))
+                .andExpect(content().string(containsString("Otevřít")));
+    }
+
+    @Test
     void clinicalReviewListForbiddenForPatientRendersWebError() throws Exception {
         doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user cannot review onboarding submissions"))
                 .when(onboardingService).listReviewable(any(), eq(null), eq(null));
@@ -223,6 +274,24 @@ class WebOnboardingControllerTest {
                 .andExpect(content().string(containsString("4.2")))
                 .andExpect(content().string(containsString("Recent outpatient labs")));
     }
+
+    @Test
+    void clinicalReviewDetailRendersInCzech() throws Exception {
+        when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
+        when(onboardingService.getReviewable(any(), eq(99L))).thenReturn(fullSubmissionResponse());
+
+        mvc.perform(get("/app/clinical/onboarding/99")
+                        .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("clinical-onboarding-detail"))
+                .andExpect(content().string(containsString("lang=\"cs\"")))
+                .andExpect(content().string(containsString("Detail vstupního dotazníku")))
+                .andExpect(content().string(containsString("Zpět")))
+                .andExpect(content().string(containsString("Datum narození")))
+                .andExpect(content().string(containsString("Poznámky ke kontrole")))
+                .andExpect(content().string(containsString("Uložit kontrolu")));
+    }
+
 
     @Test
     void clinicalReviewPostDelegatesToService() throws Exception {
@@ -286,5 +355,17 @@ class WebOnboardingControllerTest {
                 null,
                 null,
                 null);
+    }
+
+    private OnboardingSubmissionSummaryResponse summaryResponse() {
+        return new OnboardingSubmissionSummaryResponse(
+                99L,
+                10L,
+                "patient@example.com",
+                "study-a",
+                2,
+                Instant.parse("2026-05-31T12:00:00Z"),
+                IbdDiagnosisType.CROHNS_DISEASE,
+                OnboardingReviewStatus.PENDING_REVIEW);
     }
 }

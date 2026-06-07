@@ -1,23 +1,29 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{layout :: appShell('Clinical onboarding review', ${activePath}, ~{::content})}">
+      th:replace="~{layout :: appShell(#{onboarding.clinical.pageTitle}, ${activePath}, ~{::content})}">
 <th:block th:fragment="content">
     <header class="app-header">
         <div>
             <p class="eyebrow">Metabion</p>
-            <h1>Onboarding review</h1>
+            <h1 th:text="#{onboarding.clinical.title}">Onboarding review</h1>
         </div>
     </header>
     <section class="panel app-panel">
         <table class="table">
-            <thead><tr><th>Patient</th><th>Context</th><th>Version</th><th>Status</th><th></th></tr></thead>
+            <thead><tr>
+                <th th:text="#{onboarding.patient}">Patient</th>
+                <th th:text="#{onboarding.context}">Context</th>
+                <th th:text="#{onboarding.version}">Version</th>
+                <th th:text="#{onboarding.statusTitle}">Status</th>
+                <th></th>
+            </tr></thead>
             <tbody>
             <tr th:each="submission : ${submissions}">
                 <td th:text="${submission.patientEmail()}">patient@example.com</td>
                 <td th:text="${submission.onboardingContext()}">default</td>
                 <td th:text="${submission.version()}">1</td>
                 <td th:text="${submission.reviewStatus()}">PENDING_REVIEW</td>
-                <td><a th:href="@{/app/clinical/onboarding/{id}(id=${submission.id()})}">Open</a></td>
+                <td><a th:href="@{/app/clinical/onboarding/{id}(id=${submission.id()})}" th:text="#{onboarding.open}">Open</a></td>
             </tr>
             </tbody>
         </table>
