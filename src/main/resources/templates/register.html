@@ -5,18 +5,11 @@
 <main class="page">
     <section class="panel auth-panel">
         <div th:replace="~{layout :: brand}"></div>
-        <form class="language-form" th:action="@{/preferences/language}" method="post">
-            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-            <label for="languagePreference" th:text="#{app.language}">Language</label>
-            <select id="languagePreference" name="languagePreference" onchange="this.form.submit()">
-                <option th:each="language : ${supportedLanguages}"
-                        th:value="${language.name()}"
-                        th:selected="${currentLanguage?.name() == language.name()}"
-                        th:text="#{|language.${language.languageTag()}|}">Language</option>
-            </select>
-        </form>
+        <div th:replace="~{layout :: languageSelector('language-form')}"></div>
         <h1 th:text="#{auth.register.title}">Create account</h1>
-        <p class="muted">Use the email address where you want to receive account notices.</p>
+        <p class="muted" th:text="#{auth.register.description}">
+            Use the email address where you want to receive account notices.
+        </p>
 
         <form th:action="@{/register}" th:object="${registerForm}" method="post" class="form">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
@@ -30,7 +23,7 @@
                 <label for="password" th:text="#{auth.login.password}">Password</label>
                 <input id="password" type="password" th:field="*{password}" autocomplete="new-password"
                        minlength="12" maxlength="72" required>
-                <p class="hint">Use at least 12 characters.</p>
+                <p class="hint" th:text="#{auth.password.hint}">Use at least 12 characters.</p>
                 <p class="error" th:if="${#fields.hasErrors('password')}" th:errors="*{password}">Password error</p>
             </div>
 

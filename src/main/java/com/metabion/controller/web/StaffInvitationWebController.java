@@ -8,6 +8,8 @@ import com.metabion.exception.ValidationException;
 import com.metabion.service.StaffInvitationService;
 import com.metabion.service.UserPreferenceService;
 import jakarta.validation.Valid;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -32,13 +34,16 @@ public class StaffInvitationWebController {
     private final StaffInvitationService staffInvitationService;
     private final AppMenuCatalog appMenuCatalog;
     private final UserPreferenceService userPreferenceService;
+    private final MessageSource messages;
 
     public StaffInvitationWebController(StaffInvitationService staffInvitationService,
                                         AppMenuCatalog appMenuCatalog,
-                                        UserPreferenceService userPreferenceService) {
+                                        UserPreferenceService userPreferenceService,
+                                        MessageSource messages) {
         this.staffInvitationService = staffInvitationService;
         this.appMenuCatalog = appMenuCatalog;
         this.userPreferenceService = userPreferenceService;
+        this.messages = messages;
     }
 
     @GetMapping("/app/staff-invitations/new")
@@ -63,7 +68,7 @@ public class StaffInvitationWebController {
 
         try {
             staffInvitationService.createInvitation(authentication.getName(), form);
-            result(model, "Invitation sent", "The staff invitation has been sent.", "/app", "Continue");
+            result(model, "result.invitationSent.title", "result.invitationSent.message", "/app", "result.continue");
             return "result";
         } catch (StaffInvitationException ex) {
             model.addAttribute("error", ex.getMessage());
@@ -91,14 +96,14 @@ public class StaffInvitationWebController {
 
         try {
             staffInvitationService.acceptInvitation(form);
-            result(model, "Invitation accepted", "Your staff account is ready. You can now sign in.",
-                    "/login", "Sign in");
+            result(model, "result.invitationAccepted.title", "result.invitationAccepted.message",
+                    "/login", "result.signIn");
         } catch (ValidationException ex) {
             model.addAttribute("error", ex.getMessage());
             return "staff-invitation-accept";
         } catch (StaffInvitationException ex) {
-            result(model, "Invitation link invalid", "This invitation link is invalid or expired.",
-                    "/login", "Back to sign in");
+            result(model, "result.invitationInvalid.title", "result.invitationInvalid.message",
+                    "/login", "result.backToSignIn");
         }
         return "result";
     }
@@ -108,15 +113,19 @@ public class StaffInvitationWebController {
     }
 
     private void result(Model model, String title, String message, String href, String action) {
-        model.addAttribute("title", title);
-        model.addAttribute("message", message);
+        model.addAttribute("title", message(title));
+        model.addAttribute("message", message(message));
         model.addAttribute("href", href);
-        model.addAttribute("action", action);
+        model.addAttribute("action", message(action));
     }
 
     private void addAppShell(Model model, Authentication authentication) {
         model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
         model.addAttribute("activePath", "/app/staff-invitations/new");
         model.addAttribute("themePreference", userPreferenceService.currentThemePreference(authentication));
+    }
+
+    private String message(String key) {
+        return messages.getMessage(key, null, LocaleContextHolder.getLocale());
     }
 }

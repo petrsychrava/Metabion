@@ -9,6 +9,7 @@ import com.metabion.service.StaffInvitationService;
 import com.metabion.service.UserPreferenceService;
 import com.metabion.service.UserService;
 import jakarta.servlet.Filter;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -33,10 +34,10 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 @SpringBootTest(properties = {
         "spring.profiles.active=dev",
@@ -207,6 +208,20 @@ class StaffInvitationWebControllerTest {
     }
 
     @Test
+    void public_accept_post_renders_czech_result_when_requested() throws Exception {
+        mvc.perform(post("/staff-invitations/accept")
+                        .cookie(new Cookie("METABION_LOCALE", "cs"))
+                        .with(csrf())
+                        .param("token", "invite-token")
+                        .param("password", "SecurePass123"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("result"))
+                .andExpect(content().string(containsString("Pozvánka přijata")))
+                .andExpect(content().string(containsString("účet pracovníka je připraven")))
+                .andExpect(content().string(containsString("Přihlásit se")));
+    }
+
+    @Test
     void public_accept_post_with_short_password_rerenders_form_without_calling_service() throws Exception {
         mvc.perform(post("/staff-invitations/accept")
                         .with(csrf())
@@ -256,5 +271,22 @@ class StaffInvitationWebControllerTest {
                 .andExpect(view().name("result"))
                 .andExpect(model().attribute("title", "Invitation link invalid"))
                 .andExpect(model().attribute("message", "This invitation link is invalid or expired."));
+    }
+
+    @Test
+    void invalid_public_acceptance_renders_czech_invalid_link_result_when_requested() throws Exception {
+        doThrow(StaffInvitationException.invalidOrExpired())
+                .when(staffInvitationService).acceptInvitation(any());
+
+        mvc.perform(post("/staff-invitations/accept")
+                        .cookie(new Cookie("METABION_LOCALE", "cs"))
+                        .with(csrf())
+                        .param("token", "bad-token")
+                        .param("password", "SecurePass123"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("result"))
+                .andExpect(content().string(containsString("Odkaz pozvánky je neplatný")))
+                .andExpect(content().string(containsString("odkaz pozvánky je neplatný nebo vypršel")))
+                .andExpect(content().string(containsString("Zpět na přihlášení")));
     }
 }

@@ -80,6 +80,35 @@ class WebAuthTemplateTest {
     }
 
     @Test
+    void anonymous_auth_templates_render_body_copy_in_czech() throws Exception {
+        var czechLocaleCookie = new Cookie("METABION_LOCALE", "cs");
+
+        mvc.perform(get("/login").cookie(czechLocaleCookie).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Přihlášení")))
+                .andExpect(content().string(containsString("Přístup k účtu Metabion")));
+
+        mvc.perform(get("/register").cookie(czechLocaleCookie).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("e-mailovou adresu pro oznámení")))
+                .andExpect(content().string(containsString("Použijte alespoň 12 znaků.")));
+
+        mvc.perform(get("/forgot-password").cookie(czechLocaleCookie).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("pokyny pro obnovení hesla")));
+
+        mvc.perform(get("/reset-password").param("token", "abc").cookie(czechLocaleCookie).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Vytvořte nové heslo")))
+                .andExpect(content().string(containsString("Použijte alespoň 12 znaků.")));
+
+        mvc.perform(get("/staff-invitations/accept").param("token", "abc").cookie(czechLocaleCookie).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Vytvořte heslo k účtu pracovníka")))
+                .andExpect(content().string(containsString("Použijte alespoň 12 znaků.")));
+    }
+
+    @Test
     void register_template_renders_form() throws Exception {
         mvc.perform(get("/register").with(csrf()))
                 .andExpect(status().isOk())

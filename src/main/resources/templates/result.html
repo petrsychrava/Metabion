@@ -5,16 +5,7 @@
 <main class="page">
     <section class="panel auth-panel">
         <div th:replace="~{layout :: brand}"></div>
-        <form class="language-form" th:action="@{/preferences/language}" method="post">
-            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-            <label for="languagePreference" th:text="#{app.language}">Language</label>
-            <select id="languagePreference" name="languagePreference" onchange="this.form.submit()">
-                <option th:each="language : ${supportedLanguages}"
-                        th:value="${language.name()}"
-                        th:selected="${currentLanguage?.name() == language.name()}"
-                        th:text="#{|language.${language.languageTag()}|}">Language</option>
-            </select>
-        </form>
+        <div th:replace="~{layout :: languageSelector('language-form')}"></div>
         <h1 th:text="${title}">Result</h1>
         <p class="muted" th:text="${message}">Status message.</p>
         <a class="button-link" th:href="@{${href}}" th:text="${action}">Continue</a>
