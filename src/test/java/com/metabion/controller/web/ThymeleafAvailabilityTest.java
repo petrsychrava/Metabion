@@ -53,6 +53,9 @@ class ThymeleafAvailabilityTest {
         model.setVariable("currentLanguage", LanguagePreference.CS);
         model.setVariable("supportedLanguages", List.of(LanguagePreference.EN, LanguagePreference.CS));
         model.setVariable("appMenuItems", List.of());
+        model.setVariable("email", "patient@example.com");
+        model.setVariable("roles", List.of("PATIENT"));
+        model.setVariable("dashboardItems", List.of());
         model.setVariable("_csrf", new CsrfToken() {
             @Override
             public String getHeaderName() {
@@ -74,7 +77,7 @@ class ThymeleafAvailabilityTest {
         var context = new WebContext(exchange, Locale.forLanguageTag("cs"), Map.copyOf(model.getVariableNames().stream()
                 .collect(java.util.stream.Collectors.toMap(name -> name, model::getVariable))));
 
-        var output = templateEngine.process("layout", context);
+        var output = templateEngine.process("app", context);
 
         assertThat(output)
                 .contains("Jazyk")

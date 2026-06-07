@@ -12,7 +12,11 @@ public class WebModelAttributes {
     @ModelAttribute("currentLanguage")
     public LanguagePreference currentLanguage() {
         var language = LocaleContextHolder.getLocale().getLanguage();
-        return LanguagePreference.fromLanguageTag(language);
+        try {
+            return LanguagePreference.fromLanguageTag(language);
+        } catch (IllegalArgumentException ex) {
+            return LanguagePreference.EN;
+        }
     }
 
     @ModelAttribute("supportedLanguages")
