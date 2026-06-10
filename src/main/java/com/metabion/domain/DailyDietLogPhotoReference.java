@@ -26,16 +26,16 @@ public class DailyDietLogPhotoReference {
     @JoinColumn(name = "meal_id")
     private DailyDietLogMeal meal;
 
-    @Column(name = "original_filename", nullable = false, length = 255)
+    @Column(name = "original_filename", length = 255)
     private String originalFilename;
 
-    @Column(name = "content_type", nullable = false, length = 120)
+    @Column(name = "content_type", length = 120)
     private String contentType;
 
     @Column(name = "size_bytes")
     private Long sizeBytes;
 
-    @Column(name = "storage_key", nullable = false, length = 500)
+    @Column(name = "storage_key", length = 500)
     private String storageKey;
 
     @Column(length = 500)

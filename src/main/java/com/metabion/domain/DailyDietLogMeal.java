@@ -32,7 +32,7 @@ public class DailyDietLogMeal {
     @Column(name = "food_category", nullable = false, length = 60)
     private FoodCategory foodCategory;
 
-    @Column(name = "food_description", nullable = false, length = 1000)
+    @Column(name = "food_description", length = 500)
     private String foodDescription;
 
     @Column(length = 1000)

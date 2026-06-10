@@ -20,7 +20,7 @@ CREATE TABLE daily_diet_logs (
     CONSTRAINT chk_daily_diet_logs_appetite_level
         CHECK (appetite_level IN ('LOW', 'NORMAL', 'HIGH', 'VARIABLE')),
     CONSTRAINT chk_daily_diet_logs_notes
-        CHECK (notes IS NULL OR length(notes) <= 1000)
+        CHECK (notes IS NULL OR length(trim(notes)) > 0)
 );
 
 CREATE TABLE daily_diet_log_meals (
@@ -28,7 +28,7 @@ CREATE TABLE daily_diet_log_meals (
     daily_diet_log_id   BIGINT NOT NULL REFERENCES daily_diet_logs(id) ON DELETE CASCADE,
     meal_type           VARCHAR(40) NOT NULL,
     food_category       VARCHAR(60) NOT NULL,
-    food_description    VARCHAR(1000) NOT NULL,
+    food_description    VARCHAR(500),
     notes               VARCHAR(1000),
     sort_order          INT NOT NULL DEFAULT 0,
 
@@ -78,10 +78,10 @@ CREATE TABLE daily_diet_log_photo_references (
     id                  BIGSERIAL PRIMARY KEY,
     daily_diet_log_id   BIGINT NOT NULL REFERENCES daily_diet_logs(id) ON DELETE CASCADE,
     meal_id             BIGINT REFERENCES daily_diet_log_meals(id) ON DELETE SET NULL,
-    original_filename   VARCHAR(255) NOT NULL,
-    content_type        VARCHAR(120) NOT NULL,
+    original_filename   VARCHAR(255),
+    content_type        VARCHAR(120),
     size_bytes          BIGINT,
-    storage_key         VARCHAR(500) NOT NULL,
+    storage_key         VARCHAR(500),
     caption             VARCHAR(500),
     sort_order          INT NOT NULL DEFAULT 0,
 
