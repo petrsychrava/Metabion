@@ -28,6 +28,7 @@ The current app menu contains a planned item for daily diet and symptom check-in
 
 In scope:
 
+- Patient glucose unit preference used as the default for glucose entry forms.
 - Patient daily diet log create/update.
 - Patient daily log read and date-range history.
 - Structured meal and food category recording.
@@ -180,7 +181,30 @@ Validation should restrict plausible type/unit combinations:
 - ketone: `MMOL_L`
 - glucose: `MMOL_L` or `MG_DL`
 
-Values must be positive and bounded to clinically plausible ranges for data quality, while avoiding medical interpretation.
+Glucose measurements should always store both the entered value and the selected unit. The selected unit defaults from the patient's glucose unit preference, but each measurement remains explicit for export and audit clarity.
+
+Values must be bounded to clinically plausible ranges for data quality, while avoiding medical interpretation. Glucose values must be positive, and ketone values may be zero or positive. Glucose validation should use unit-specific ranges so accidental unit mistakes are rejected instead of silently accepted. Use these initial bounds:
+
+- glucose `MMOL_L`: `1.0` to `40.0`
+- glucose `MG_DL`: `18` to `720`
+- ketone `MMOL_L`: `0.0` to `15.0`
+
+Do not silently infer or auto-convert glucose units from the numeric value.
+
+### `patient_profiles`
+
+Add `glucose_unit_preference` to patient profiles.
+
+Fields:
+
+- `glucose_unit_preference`
+
+Constraints:
+
+- enum check for supported glucose units
+- default `MMOL_L`
+
+The preference controls form defaults only. It does not change historical measurements and should not be updated implicitly when a patient enters one measurement in another unit. A later account/preferences screen can expose the default-unit setting.
 
 ## API Design
 
@@ -222,6 +246,8 @@ The page should use the shared app shell and include:
 - repeated deviation rows
 - optional photo metadata rows
 - optional ketone/glucose measurement rows
+
+Glucose measurement rows should default the unit from the patient's glucose unit preference. Patients may select another allowed glucose unit for an individual entry. Ketone unit should be fixed to `mmol/L`.
 
 `POST /app/diet-logs` saves the form and redirects back to `/app/diet-logs?date=YYYY-MM-DD`.
 
@@ -292,8 +318,10 @@ Validation:
 - meals may be empty at the API level, but the web form should encourage at least one row.
 - text fields are trimmed and bounded.
 - enum values are restricted by Java enums and Flyway checks.
-- measurement values must be positive and plausible.
+- glucose measurement values must be positive and plausible.
+- ketone measurement values must be zero or positive and plausible.
 - measurement type/unit combinations are restricted.
+- glucose values are validated against the selected unit's plausible range.
 - date ranges must have `from <= to` and may span at most 370 days.
 
 Error behavior:
