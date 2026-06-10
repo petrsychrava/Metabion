@@ -320,7 +320,6 @@ public class DietLogForm {
         boolean isBlank() {
             return measurementType == null
                     && value == null
-                    && unit == null
                     && measuredAt == null
                     && context == null
                     && blank(notes);
