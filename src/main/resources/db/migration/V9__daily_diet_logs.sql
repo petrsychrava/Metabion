@@ -15,6 +15,8 @@ CREATE TABLE daily_diet_logs (
 
     CONSTRAINT ux_daily_diet_logs_patient_date
         UNIQUE (patient_profile_id, log_date),
+    CONSTRAINT ux_daily_diet_logs_id_patient
+        UNIQUE (id, patient_profile_id),
     CONSTRAINT chk_daily_diet_logs_adherence_level
         CHECK (adherence_level IN ('FULL', 'MOSTLY', 'PARTIAL', 'LOW', 'NOT_FOLLOWED')),
     CONSTRAINT chk_daily_diet_logs_appetite_level
@@ -46,6 +48,8 @@ CREATE TABLE daily_diet_log_meals (
             'SUPPLEMENTS',
             'OTHER'
         )),
+    CONSTRAINT ux_daily_diet_log_meals_id_log
+        UNIQUE (id, daily_diet_log_id),
     CONSTRAINT chk_daily_diet_log_meals_sort_order
         CHECK (sort_order >= 0)
 );
@@ -77,7 +81,7 @@ CREATE TABLE daily_diet_log_deviations (
 CREATE TABLE daily_diet_log_photo_references (
     id                  BIGSERIAL PRIMARY KEY,
     daily_diet_log_id   BIGINT NOT NULL REFERENCES daily_diet_logs(id) ON DELETE CASCADE,
-    meal_id             BIGINT REFERENCES daily_diet_log_meals(id) ON DELETE SET NULL,
+    meal_id             BIGINT,
     original_filename   VARCHAR(255),
     content_type        VARCHAR(120),
     size_bytes          BIGINT,
@@ -87,6 +91,10 @@ CREATE TABLE daily_diet_log_photo_references (
 
     CONSTRAINT chk_daily_diet_log_photo_references_size
         CHECK (size_bytes IS NULL OR size_bytes >= 0),
+    CONSTRAINT fk_daily_diet_log_photo_references_meal_log
+        FOREIGN KEY (meal_id, daily_diet_log_id)
+        REFERENCES daily_diet_log_meals(id, daily_diet_log_id)
+        ON DELETE SET NULL (meal_id),
     CONSTRAINT chk_daily_diet_log_photo_references_sort_order
         CHECK (sort_order >= 0)
 );
@@ -94,7 +102,7 @@ CREATE TABLE daily_diet_log_photo_references (
 CREATE TABLE daily_measurement_entries (
     id                  BIGSERIAL PRIMARY KEY,
     patient_profile_id  BIGINT NOT NULL REFERENCES patient_profiles(id) ON DELETE CASCADE,
-    daily_diet_log_id   BIGINT REFERENCES daily_diet_logs(id) ON DELETE SET NULL,
+    daily_diet_log_id   BIGINT,
     measurement_type    VARCHAR(40) NOT NULL,
     value               NUMERIC(8,2) NOT NULL,
     unit                VARCHAR(20) NOT NULL,
@@ -114,6 +122,10 @@ CREATE TABLE daily_measurement_entries (
             (measurement_type = 'KETONE' AND unit = 'MMOL_L')
             OR (measurement_type = 'GLUCOSE' AND unit IN ('MMOL_L', 'MG_DL'))
         ),
+    CONSTRAINT fk_daily_measurement_entries_log_patient
+        FOREIGN KEY (daily_diet_log_id, patient_profile_id)
+        REFERENCES daily_diet_logs(id, patient_profile_id)
+        ON DELETE SET NULL (daily_diet_log_id),
     CONSTRAINT chk_daily_measurement_entries_value_range
         CHECK (
             (measurement_type = 'KETONE' AND unit = 'MMOL_L' AND value BETWEEN 0 AND 15)
@@ -124,6 +136,18 @@ CREATE TABLE daily_measurement_entries (
 
 CREATE INDEX ix_daily_diet_logs_patient_date
     ON daily_diet_logs(patient_profile_id, log_date DESC);
+
+CREATE INDEX ix_daily_diet_log_meals_daily_diet_log
+    ON daily_diet_log_meals(daily_diet_log_id);
+
+CREATE INDEX ix_daily_diet_log_deviations_daily_diet_log
+    ON daily_diet_log_deviations(daily_diet_log_id);
+
+CREATE INDEX ix_daily_diet_log_photo_references_daily_diet_log
+    ON daily_diet_log_photo_references(daily_diet_log_id);
+
+CREATE INDEX ix_daily_diet_log_photo_references_meal
+    ON daily_diet_log_photo_references(meal_id);
 
 CREATE INDEX ix_daily_measurement_entries_patient_measured_at
     ON daily_measurement_entries(patient_profile_id, measured_at DESC);

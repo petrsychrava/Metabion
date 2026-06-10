@@ -157,6 +157,43 @@ class DailyDietLogRepositoryTest {
         assertThat(entries.getFirst().getMeasurementType()).isEqualTo(MeasurementType.GLUCOSE);
     }
 
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void measurementDailyLogMustBelongToSamePatient() {
+        var logPatient = createPatient("measurement-log-patient@example.com");
+        var measurementPatient = createPatient("measurement-owner@example.com");
+        var log = dailyDietLogs.saveAndFlush(new DailyDietLog(logPatient, LocalDate.of(2026, 6, 10)));
+
+        assertThatThrownBy(() -> measurementEntries.saveAndFlush(new DailyMeasurementEntry(
+                measurementPatient,
+                log,
+                MeasurementType.GLUCOSE,
+                new BigDecimal("5.8"),
+                MeasurementUnit.MMOL_L,
+                Instant.parse("2026-06-10T07:00:00Z"),
+                MeasurementContext.FASTING,
+                null)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void photoReferenceMealMustBelongToSameDailyLog() {
+        var patient = createPatient("photo-meal-owner@example.com");
+        var logWithMeal = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var meal = new DailyDietLogMeal(MealType.BREAKFAST, FoodCategory.PROTEIN, "Eggs", null, 0);
+        logWithMeal.addMeal(meal);
+        dailyDietLogs.saveAndFlush(logWithMeal);
+
+        var otherLog = new DailyDietLog(patient, LocalDate.of(2026, 6, 11));
+        var photoReference = new DailyDietLogPhotoReference(null, null, 1024L, null, "Wrong meal link", 0);
+        photoReference.setMeal(meal);
+        otherLog.addPhotoReference(photoReference);
+
+        assertThatThrownBy(() -> dailyDietLogs.saveAndFlush(otherLog))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
     private PatientProfile createPatient(String email) {
         var profile = new PatientProfile(createUser(email, RoleName.PATIENT));
         profile.setDateOfBirth(LocalDate.of(1990, 1, 1));
