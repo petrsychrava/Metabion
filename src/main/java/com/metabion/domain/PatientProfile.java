@@ -47,6 +47,10 @@ public class PatientProfile {
     @Column(length = 100)
     private String timezone;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "glucose_unit_preference", nullable = false, length = 20)
+    private MeasurementUnit glucoseUnitPreference = MeasurementUnit.MMOL_L;
+
     public PatientProfile() {
     }
 
@@ -124,5 +128,13 @@ public class PatientProfile {
 
     public void setTimezone(String timezone) {
         this.timezone = timezone;
+    }
+
+    public MeasurementUnit getGlucoseUnitPreference() {
+        return glucoseUnitPreference;
+    }
+
+    public void setGlucoseUnitPreference(MeasurementUnit glucoseUnitPreference) {
+        this.glucoseUnitPreference = glucoseUnitPreference == null ? MeasurementUnit.MMOL_L : glucoseUnitPreference;
     }
 }
