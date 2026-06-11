@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell('Clinical diet log detail', ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Metabion</p>
+            <h1>Clinical diet log detail</h1>
+        </div>
+        <a class="button-link secondary" th:href="@{/app/clinical/diet-logs}">Back</a>
+    </header>
+
+    <section class="panel app-panel">
+        <dl class="details">
+            <dt>Patient email</dt><dd th:text="${log.patientEmail()}">patient@example.com</dd>
+            <dt>Date</dt><dd th:text="${log.logDate()}">2026-06-10</dd>
+            <dt>Adherence</dt><dd th:text="${log.adherenceLevel()}">MOSTLY</dd>
+            <dt>Appetite</dt><dd th:text="${log.appetiteLevel()}">NORMAL</dd>
+            <dt>Notes</dt><dd th:text="${log.notes()} ?: 'Not provided'">Notes</dd>
+        </dl>
+    </section>
+
+    <section class="panel app-panel">
+        <h2>Meals</h2>
+        <dl class="details" th:each="meal : ${log.meals()}">
+            <dt>Meal type</dt><dd th:text="${meal.mealType()}">LUNCH</dd>
+            <dt>Food category</dt><dd th:text="${meal.foodCategory()}">LOW_CARB_VEGETABLES</dd>
+            <dt>Food description</dt><dd th:text="${meal.foodDescription()} ?: 'Not provided'">Avocado salad</dd>
+            <dt>Notes</dt><dd th:text="${meal.notes()} ?: 'Not provided'">Meal notes</dd>
+        </dl>
+    </section>
+
+    <section class="panel app-panel">
+        <h2>Deviations</h2>
+        <dl class="details" th:each="deviation : ${log.deviations()}">
+            <dt>Category</dt><dd th:text="${deviation.deviationCategory()}">DINING_OUT</dd>
+            <dt>Severity</dt><dd th:text="${deviation.severity()}">MINOR</dd>
+            <dt>Notes</dt><dd th:text="${deviation.notes()} ?: 'Not provided'">Deviation notes</dd>
+        </dl>
+    </section>
+
+    <section class="panel app-panel">
+        <h2>Photo metadata</h2>
+        <dl class="details" th:each="photo : ${log.photoReferences()}">
+            <dt>Original filename</dt><dd th:text="${photo.originalFilename()} ?: 'Not provided'">photo-1.jpg</dd>
+            <dt>Content type</dt><dd th:text="${photo.contentType()} ?: 'Not provided'">image/jpeg</dd>
+            <dt>Size bytes</dt><dd th:text="${photo.sizeBytes()} ?: 'Not provided'">1024</dd>
+            <dt>Storage key</dt><dd th:text="${photo.storageKey()} ?: 'Not provided'">diet/photo-1</dd>
+            <dt>Caption</dt><dd th:text="${photo.caption()} ?: 'Not provided'">Lunch</dd>
+        </dl>
+    </section>
+
+    <section class="panel app-panel">
+        <h2>Measurements</h2>
+        <dl class="details" th:each="measurement : ${log.measurements()}">
+            <dt>Type</dt><dd th:text="${measurement.measurementType()}">GLUCOSE</dd>
+            <dt>Value</dt><dd th:text="${measurement.value()}">5.8</dd>
+            <dt>Unit</dt><dd th:text="${measurement.unit()}">MMOL_L</dd>
+            <dt>Measured at</dt><dd th:text="${measurement.measuredAt()}">2026-06-10T07:30:00Z</dd>
+            <dt>Context</dt><dd th:text="${measurement.context()}">FASTING</dd>
+            <dt>Notes</dt><dd th:text="${measurement.notes()} ?: 'Not provided'">Morning</dd>
+        </dl>
+    </section>
+</th:block>
+</html>

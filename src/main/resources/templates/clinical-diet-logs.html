@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell('Clinical diet logs', ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Metabion</p>
+            <h1>Clinical diet logs</h1>
+        </div>
+    </header>
+
+    <section class="panel app-panel">
+        <form class="form" th:action="@{/app/clinical/diet-logs}" method="get">
+            <label class="field"><span>Patient profile ID</span>
+                <input type="number" name="patientProfileId" th:value="${patientProfileId}">
+            </label>
+            <label class="field"><span>From</span>
+                <input type="date" name="from" th:value="${from}">
+            </label>
+            <label class="field"><span>To</span>
+                <input type="date" name="to" th:value="${to}">
+            </label>
+            <button type="submit">Filter</button>
+        </form>
+    </section>
+
+    <section class="panel app-panel">
+        <table class="table">
+            <thead>
+            <tr>
+                <th>Date</th>
+                <th>Patient</th>
+                <th>Adherence</th>
+                <th>Appetite</th>
+                <th>Meals</th>
+                <th>Deviations</th>
+                <th>Measurements</th>
+                <th>Notes</th>
+                <th>Open</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="log : ${logs}">
+                <td th:text="${log.logDate()}">2026-06-10</td>
+                <td th:text="${log.patientEmail()}">patient@example.com</td>
+                <td th:text="${log.adherenceLevel()}">MOSTLY</td>
+                <td th:text="${log.appetiteLevel()}">NORMAL</td>
+                <td th:text="${log.mealCount()}">1</td>
+                <td th:text="${log.deviationCount()}">0</td>
+                <td th:text="${log.measurementCount()}">1</td>
+                <td th:text="${log.notesPreview()}">Notes</td>
+                <td><a th:href="@{/app/clinical/diet-logs/{id}(id=${log.id()})}">Open</a></td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+</th:block>
+</html>
