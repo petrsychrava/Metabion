@@ -75,11 +75,11 @@ public class AppMenuCatalog {
                         true,
                         "menu.educationLibrary.description"),
                 item(
-                        "menu.dailyCheckIns",
-                        null,
+                        "menu.dietLogs",
+                        "/app/diet-logs",
+                        false,
                         true,
-                        true,
-                        "menu.dailyCheckIns.description"),
+                        "menu.dietLogs.description"),
                 item(
                         "menu.labTrends",
                         null,
@@ -114,6 +114,12 @@ public class AppMenuCatalog {
                         false,
                         true,
                         "menu.onboardingReview.description"),
+                item(
+                        "menu.dietLogReview",
+                        "/app/clinical/diet-logs",
+                        false,
+                        true,
+                        "menu.dietLogReview.description"),
                 item(
                         "menu.assignedPatientOverview",
                         null,

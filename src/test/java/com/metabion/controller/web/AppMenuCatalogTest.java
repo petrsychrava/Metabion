@@ -24,7 +24,7 @@ class AppMenuCatalogTest {
                         "Onboarding",
                         "Onboarding history",
                         "Education library - planned",
-                        "Daily diet and symptom check-ins - planned",
+                        "Diet logs",
                         "Lab trends - planned",
                         "Protocol phase - planned",
                         "Red-flag guidance - planned",
@@ -45,6 +45,7 @@ class AppMenuCatalogTest {
                 .containsExactly(
                         "Home",
                         "Onboarding review",
+                        "Diet log review",
                         "Assigned patient overview - planned",
                         "Red-flag monitoring - planned",
                         "Data completeness - planned",
@@ -63,6 +64,7 @@ class AppMenuCatalogTest {
                 .containsExactly(
                         "Home",
                         "Onboarding review",
+                        "Diet log review",
                         "Assigned patient overview - planned",
                         "Red-flag monitoring - planned",
                         "Data completeness - planned",
@@ -98,11 +100,21 @@ class AppMenuCatalogTest {
                 .singleElement()
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/onboarding");
+        assertThat(catalog.sidebarItems(patient))
+                .filteredOn(item -> "Diet logs".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/diet-logs");
         assertThat(catalog.sidebarItems(clinician))
                 .filteredOn(item -> "Onboarding review".equals(item.label()))
                 .singleElement()
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/clinical/onboarding");
+        assertThat(catalog.sidebarItems(clinician))
+                .filteredOn(item -> "Diet log review".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/clinical/diet-logs");
         assertThat(catalog.sidebarItems(admin))
                 .filteredOn(item -> "Staff invitations".equals(item.label()))
                 .singleElement()
@@ -119,7 +131,7 @@ class AppMenuCatalogTest {
                 .containsExactly(
                         "Onboarding",
                         "Education library - planned",
-                        "Daily diet and symptom check-ins - planned",
+                        "Diet logs",
                         "Lab trends - planned",
                         "Red-flag guidance - planned");
     }
