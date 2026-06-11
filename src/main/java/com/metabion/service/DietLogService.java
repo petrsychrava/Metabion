@@ -31,6 +31,7 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @Transactional
@@ -376,7 +377,20 @@ public class DietLogService {
         if (storageKey == null) {
             return;
         }
-        if (storageKey.contains("://") || storageKey.contains("..") || storageKey.startsWith("/")) {
+        var lowerStorageKey = storageKey.toLowerCase(Locale.ROOT);
+        if (storageKey.contains("://")
+                || storageKey.contains("..")
+                || storageKey.startsWith("/")
+                || storageKey.contains("\\")
+                || storageKey.startsWith("~")
+                || lowerStorageKey.startsWith("file:")
+                || storageKey.contains("?")
+                || storageKey.contains("#")
+                || lowerStorageKey.contains("token=")
+                || lowerStorageKey.contains("signature=")
+                || lowerStorageKey.contains("session=")
+                || lowerStorageKey.contains("password=")
+                || lowerStorageKey.contains("secret=")) {
             throw badRequest("photo storageKey is not allowed");
         }
     }

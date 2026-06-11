@@ -373,6 +373,30 @@ class DietLogServiceTest {
         assertUnsafeStorageKey("https://example.com/meal.jpg");
         assertUnsafeStorageKey("../meal.jpg");
         assertUnsafeStorageKey("/tmp/meal.jpg");
+        assertUnsafeStorageKey("C:\\Users\\x\\meal.jpg");
+        assertUnsafeStorageKey("\\\\server\\share\\meal.jpg");
+        assertUnsafeStorageKey("~/meal.jpg");
+        assertUnsafeStorageKey("file:/tmp/meal.jpg");
+        assertUnsafeStorageKey("meal.jpg?token=abc");
+        assertUnsafeStorageKey("meal.jpg#sig");
+        assertUnsafeStorageKey("pending/meal.jpg?signature=abc");
+    }
+
+    @Test
+    void storageKeyGuardAllowsOpaqueRelativeKeys() {
+        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patientProfile(10L, patientUser);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
+                .thenReturn(Optional.empty());
+        when(dailyDietLogs.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(measurements.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.saveForCurrentPatient(auth("patient@example.com"), validRequest(LocalDate.of(2026, 6, 10)));
+
+        assertThat(response.photoReferences()).hasSize(1);
+        assertThat(response.photoReferences().getFirst().storageKey()).isEqualTo("pending/meal.jpg");
     }
 
     private void assertUnsafeStorageKey(String storageKey) {
