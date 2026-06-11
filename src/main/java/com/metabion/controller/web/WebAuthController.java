@@ -6,6 +6,8 @@ import com.metabion.dto.LoginRequest;
 import com.metabion.dto.RegisterRequest;
 import com.metabion.dto.ResetPasswordRequest;
 import com.metabion.config.RateLimitingFilter;
+import com.metabion.domain.MeasurementUnit;
+import com.metabion.domain.RoleName;
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.service.SecurityService;
 import com.metabion.service.UserPreferenceService;
@@ -194,8 +196,14 @@ public class WebAuthController {
 
     @GetMapping("/app/account")
     public String account(Authentication authentication, Model model) {
+        var roleNames = roles(authentication);
         model.addAttribute("email", authentication.getName());
-        model.addAttribute("roles", roles(authentication));
+        model.addAttribute("roles", roleNames);
+        if (roleNames.contains(RoleName.PATIENT.name())) {
+            model.addAttribute("patientAccount", true);
+            model.addAttribute("glucoseUnitPreference", userPreferenceService.currentGlucoseUnitPreference(authentication));
+            model.addAttribute("measurementUnits", MeasurementUnit.values());
+        }
         addAppShell(model, authentication, "/app/account");
         return "account";
     }

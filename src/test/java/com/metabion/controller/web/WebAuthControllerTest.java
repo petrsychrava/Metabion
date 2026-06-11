@@ -1,5 +1,6 @@
 package com.metabion.controller.web;
 
+import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.ThemePreference;
 import com.metabion.dto.LoginForm;
 import com.metabion.dto.LoginResponse;
@@ -238,12 +239,15 @@ class WebAuthControllerTest {
                 new AppMenuItem("Account", "/app/account", false, false, "Account settings"));
         when(appMenuCatalog.sidebarItems(auth)).thenReturn(sidebarItems);
         when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.SYSTEM);
+        when(userPreferenceService.currentGlucoseUnitPreference(auth)).thenReturn(MeasurementUnit.MG_DL);
 
         mvc.perform(get("/app/account").principal(auth))
                 .andExpect(status().isOk())
                 .andExpect(view().name("account"))
                 .andExpect(model().attribute("email", "user@example.com"))
                 .andExpect(model().attribute("roles", List.of("PATIENT")))
+                .andExpect(model().attribute("patientAccount", true))
+                .andExpect(model().attribute("glucoseUnitPreference", MeasurementUnit.MG_DL))
                 .andExpect(model().attribute("appMenuItems", sidebarItems))
                 .andExpect(model().attribute("activePath", "/app/account"))
                 .andExpect(model().attribute("themePreference", ThemePreference.SYSTEM));

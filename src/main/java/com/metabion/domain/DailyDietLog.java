@@ -52,6 +52,9 @@ public class DailyDietLog {
     @Column(length = 1000)
     private String notes;
 
+    @Column(length = 2000)
+    private String metadata;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -164,6 +167,14 @@ public class DailyDietLog {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public String getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(String metadata) {
+        this.metadata = metadata;
     }
 
     public Instant getCreatedAt() {

@@ -52,6 +52,9 @@ public class DailyMeasurementEntry {
     @Column(length = 1000)
     private String notes;
 
+    @Column(length = 2000)
+    private String metadata;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -67,6 +70,19 @@ public class DailyMeasurementEntry {
             Instant measuredAt,
             MeasurementContext context,
             String notes) {
+        this(patientProfile, dailyDietLog, measurementType, value, unit, measuredAt, context, notes, null);
+    }
+
+    public DailyMeasurementEntry(
+            PatientProfile patientProfile,
+            DailyDietLog dailyDietLog,
+            MeasurementType measurementType,
+            BigDecimal value,
+            MeasurementUnit unit,
+            Instant measuredAt,
+            MeasurementContext context,
+            String notes,
+            String metadata) {
         this.patientProfile = patientProfile;
         this.dailyDietLog = dailyDietLog;
         this.measurementType = measurementType;
@@ -75,6 +91,7 @@ public class DailyMeasurementEntry {
         this.measuredAt = measuredAt;
         this.context = context;
         this.notes = notes;
+        this.metadata = metadata;
     }
 
     public Long getId() {
@@ -143,6 +160,14 @@ public class DailyMeasurementEntry {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public String getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(String metadata) {
+        this.metadata = metadata;
     }
 
     public Instant getCreatedAt() {

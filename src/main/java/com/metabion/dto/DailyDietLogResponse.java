@@ -26,6 +26,7 @@ public record DailyDietLogResponse(
         DietAdherenceLevel adherenceLevel,
         AppetiteLevel appetiteLevel,
         String notes,
+        String metadata,
         Instant createdAt,
         Instant updatedAt,
         List<MealResponse> meals,
@@ -33,6 +34,23 @@ public record DailyDietLogResponse(
         List<PhotoReferenceResponse> photoReferences,
         List<DailyMeasurementEntryResponse> measurements
 ) {
+
+    public DailyDietLogResponse(Long id,
+                                Long patientProfileId,
+                                String patientEmail,
+                                LocalDate logDate,
+                                DietAdherenceLevel adherenceLevel,
+                                AppetiteLevel appetiteLevel,
+                                String notes,
+                                Instant createdAt,
+                                Instant updatedAt,
+                                List<MealResponse> meals,
+                                List<DeviationResponse> deviations,
+                                List<PhotoReferenceResponse> photoReferences,
+                                List<DailyMeasurementEntryResponse> measurements) {
+        this(id, patientProfileId, patientEmail, logDate, adherenceLevel, appetiteLevel, notes, null,
+                createdAt, updatedAt, meals, deviations, photoReferences, measurements);
+    }
 
     public static DailyDietLogResponse from(DailyDietLog log, List<DailyMeasurementEntry> measurements) {
         var patientProfile = log.getPatientProfile();
@@ -44,6 +62,7 @@ public record DailyDietLogResponse(
                 log.getAdherenceLevel(),
                 log.getAppetiteLevel(),
                 log.getNotes(),
+                log.getMetadata(),
                 log.getCreatedAt(),
                 log.getUpdatedAt(),
                 log.getMeals().stream().map(MealResponse::from).toList(),

@@ -10,6 +10,7 @@ CREATE TABLE daily_diet_logs (
     adherence_level     VARCHAR(40) NOT NULL,
     appetite_level      VARCHAR(40) NOT NULL,
     notes               VARCHAR(1000),
+    metadata            VARCHAR(2000),
     created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
@@ -22,7 +23,9 @@ CREATE TABLE daily_diet_logs (
     CONSTRAINT chk_daily_diet_logs_appetite_level
         CHECK (appetite_level IN ('LOW', 'NORMAL', 'HIGH', 'VARIABLE')),
     CONSTRAINT chk_daily_diet_logs_notes
-        CHECK (notes IS NULL OR length(trim(notes)) > 0)
+        CHECK (notes IS NULL OR length(trim(notes)) > 0),
+    CONSTRAINT chk_daily_diet_logs_metadata
+        CHECK (metadata IS NULL OR length(trim(metadata)) > 0)
 );
 
 CREATE TABLE daily_diet_log_meals (
@@ -109,6 +112,7 @@ CREATE TABLE daily_measurement_entries (
     measured_at         TIMESTAMP WITH TIME ZONE NOT NULL,
     context             VARCHAR(40) NOT NULL,
     notes               VARCHAR(1000),
+    metadata            VARCHAR(2000),
     created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
     CONSTRAINT chk_daily_measurement_entries_type
@@ -131,7 +135,9 @@ CREATE TABLE daily_measurement_entries (
             (measurement_type = 'KETONE' AND unit = 'MMOL_L' AND value BETWEEN 0 AND 15)
             OR (measurement_type = 'GLUCOSE' AND unit = 'MMOL_L' AND value BETWEEN 1 AND 40)
             OR (measurement_type = 'GLUCOSE' AND unit = 'MG_DL' AND value BETWEEN 18 AND 720)
-        )
+        ),
+    CONSTRAINT chk_daily_measurement_entries_metadata
+        CHECK (metadata IS NULL OR length(trim(metadata)) > 0)
 );
 
 CREATE INDEX ix_daily_diet_logs_patient_date

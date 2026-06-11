@@ -16,6 +16,15 @@ public record DailyMeasurementEntryRequest(
         @NotNull MeasurementUnit unit,
         @NotNull Instant measuredAt,
         @NotNull MeasurementContext context,
-        @Size(max = 1000) String notes
+        @Size(max = 1000) String notes,
+        @Size(max = 2000) String metadata
 ) {
+    public DailyMeasurementEntryRequest(MeasurementType measurementType,
+                                        BigDecimal value,
+                                        MeasurementUnit unit,
+                                        Instant measuredAt,
+                                        MeasurementContext context,
+                                        String notes) {
+        this(measurementType, value, unit, measuredAt, context, notes, null);
+    }
 }

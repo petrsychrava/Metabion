@@ -20,8 +20,23 @@ public record DailyMeasurementEntryResponse(
         Instant measuredAt,
         MeasurementContext context,
         String notes,
+        String metadata,
         Instant createdAt
 ) {
+
+    public DailyMeasurementEntryResponse(Long id,
+                                         Long patientProfileId,
+                                         Long dailyDietLogId,
+                                         MeasurementType measurementType,
+                                         BigDecimal value,
+                                         MeasurementUnit unit,
+                                         Instant measuredAt,
+                                         MeasurementContext context,
+                                         String notes,
+                                         Instant createdAt) {
+        this(id, patientProfileId, dailyDietLogId, measurementType, value, unit, measuredAt, context, notes, null,
+                createdAt);
+    }
 
     public static DailyMeasurementEntryResponse from(DailyMeasurementEntry entry) {
         return new DailyMeasurementEntryResponse(
@@ -34,6 +49,7 @@ public record DailyMeasurementEntryResponse(
                 entry.getMeasuredAt(),
                 entry.getContext(),
                 entry.getNotes(),
+                entry.getMetadata(),
                 entry.getCreatedAt());
     }
 

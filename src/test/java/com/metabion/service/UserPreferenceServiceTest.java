@@ -1,8 +1,12 @@
 package com.metabion.service;
 
 import com.metabion.domain.LanguagePreference;
+import com.metabion.domain.MeasurementUnit;
+import com.metabion.domain.PatientProfile;
+import com.metabion.domain.RoleName;
 import com.metabion.domain.ThemePreference;
 import com.metabion.domain.User;
+import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,15 +33,21 @@ class UserPreferenceServiceTest {
     @Mock
     UserRepository users;
 
+    @Mock
+    PatientProfileRepository patientProfiles;
+
     UserPreferenceService service;
     User user;
+    PatientProfile patientProfile;
     TestingAuthenticationToken auth;
 
     @BeforeEach
     void setUp() {
-        service = new UserPreferenceService(users);
+        service = new UserPreferenceService(users, patientProfiles);
         user = new User("user@example.com", "hash");
         user.setId(1L);
+        user.addRole(RoleName.PATIENT);
+        patientProfile = new PatientProfile(user);
         auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
         auth.setAuthenticated(true);
     }
@@ -86,6 +96,51 @@ class UserPreferenceServiceTest {
     @Test
     void updateLanguagePreferenceRejectsNullPreference() {
         assertStatus(() -> service.updateLanguagePreference(auth, null), HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void currentGlucoseUnitPreferenceReturnsPatientProfilePreference() {
+        patientProfile.setGlucoseUnitPreference(MeasurementUnit.MG_DL);
+        when(users.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patientProfile));
+
+        assertThat(service.currentGlucoseUnitPreference(auth)).isEqualTo(MeasurementUnit.MG_DL);
+    }
+
+    @Test
+    void updateGlucoseUnitPreferencePersistsPatientProfilePreference() {
+        when(users.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patientProfile));
+
+        service.updateGlucoseUnitPreference(auth, MeasurementUnit.MG_DL);
+
+        assertThat(patientProfile.getGlucoseUnitPreference()).isEqualTo(MeasurementUnit.MG_DL);
+        verify(patientProfiles).save(patientProfile);
+    }
+
+    @Test
+    void updateGlucoseUnitPreferenceRejectsNullPreference() {
+        assertStatus(() -> service.updateGlucoseUnitPreference(auth, null), HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void currentGlucoseUnitPreferenceRejectsNonPatientUser() {
+        var staff = new User("staff@example.com", "hash");
+        staff.setId(2L);
+        staff.addRole(RoleName.PHYSICIAN);
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        var staffAuth = new TestingAuthenticationToken("staff@example.com", "password", "ROLE_PHYSICIAN");
+        staffAuth.setAuthenticated(true);
+
+        assertStatus(() -> service.currentGlucoseUnitPreference(staffAuth), HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void currentGlucoseUnitPreferenceRejectsMissingPatientProfile() {
+        when(users.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.empty());
+
+        assertStatus(() -> service.currentGlucoseUnitPreference(auth), HttpStatus.NOT_FOUND);
     }
 
     @Test

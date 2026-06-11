@@ -1,6 +1,7 @@
 package com.metabion.controller.web;
 
 import com.metabion.domain.LanguagePreference;
+import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.ThemePreference;
 import com.metabion.service.UserPreferenceService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,6 +39,14 @@ public class UserPreferenceWebController {
         return "redirect:" + safeRedirectPath(request.getHeader("Referer"), request, "/app", false);
     }
 
+    @PostMapping("/app/preferences/glucose-unit")
+    public String updateGlucoseUnitPreference(@RequestParam String glucoseUnitPreference,
+                                              Authentication authentication,
+                                              HttpServletRequest request) {
+        preferences.updateGlucoseUnitPreference(authentication, parseMeasurementUnit(glucoseUnitPreference));
+        return "redirect:" + safeRedirectPath(request.getHeader("Referer"), request, "/app", false);
+    }
+
     @PostMapping("/preferences/language")
     public String updateLanguagePreference(@RequestParam String languagePreference,
                                            Authentication authentication,
@@ -69,6 +78,14 @@ public class UserPreferenceWebController {
             return LanguagePreference.valueOf(value);
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid language preference");
+        }
+    }
+
+    private MeasurementUnit parseMeasurementUnit(String value) {
+        try {
+            return MeasurementUnit.valueOf(value);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid glucose unit preference");
         }
     }
 

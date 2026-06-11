@@ -110,6 +110,42 @@ class DietLogServiceTest {
     }
 
     @Test
+    void saveForCurrentPatientPersistsDietAndMeasurementMetadata() {
+        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patientProfile(10L, patientUser);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
+                .thenReturn(Optional.empty());
+        when(dailyDietLogs.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(measurements.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        var measurementRequest = new DailyMeasurementEntryRequest(
+                MeasurementType.GLUCOSE,
+                new BigDecimal("5.8"),
+                MeasurementUnit.MMOL_L,
+                Instant.parse("2026-06-10T07:30:00Z"),
+                MeasurementContext.FASTING,
+                " morning ",
+                " {\"source\":\"meter\"} ");
+        var request = new DailyDietLogRequest(
+                LocalDate.of(2026, 6, 10),
+                DietAdherenceLevel.MOSTLY,
+                AppetiteLevel.NORMAL,
+                " Stable day ",
+                " {\"source\":\"mobile\"} ",
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(measurementRequest));
+
+        var response = service.saveForCurrentPatient(auth("patient@example.com"), request);
+
+        assertThat(response.metadata()).isEqualTo("{\"source\":\"mobile\"}");
+        assertThat(response.measurements()).hasSize(1);
+        assertThat(response.measurements().getFirst().metadata()).isEqualTo("{\"source\":\"meter\"}");
+    }
+
+    @Test
     void existingSameDateLogIsReplacedNotDuplicated() {
         var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
         var patient = patientProfile(10L, patientUser);
@@ -187,6 +223,49 @@ class DietLogServiceTest {
         assertThat(response.id()).isEqualTo(99L);
         assertThat(response.measurements()).hasSize(1);
         verify(measurements).findByDailyDietLogIdOrderByMeasuredAtDesc(99L);
+    }
+
+    @Test
+    void getCurrentPatientLogIncludesStandaloneMeasurementsForSamePatientDay() {
+        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patientProfile(10L, patientUser);
+        var log = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
+        var linked = new DailyMeasurementEntry(
+                patient,
+                log,
+                MeasurementType.GLUCOSE,
+                new BigDecimal("5.8"),
+                MeasurementUnit.MMOL_L,
+                Instant.parse("2026-06-10T07:30:00Z"),
+                MeasurementContext.FASTING,
+                "linked");
+        var standalone = new DailyMeasurementEntry(
+                patient,
+                null,
+                MeasurementType.KETONE,
+                new BigDecimal("1.2"),
+                MeasurementUnit.MMOL_L,
+                Instant.parse("2026-06-10T20:00:00Z"),
+                MeasurementContext.BEDTIME,
+                "standalone");
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
+                .thenReturn(Optional.of(log));
+        when(measurements.findByDailyDietLogIdOrderByMeasuredAtDesc(99L)).thenReturn(List.of(linked));
+        when(measurements
+                .findByPatientProfileIdAndDailyDietLogIsNullAndMeasuredAtGreaterThanEqualAndMeasuredAtLessThanOrderByMeasuredAtDesc(
+                        eq(10L),
+                        any(),
+                        any()))
+                .thenReturn(List.of(standalone));
+
+        var response = service.getCurrentPatientLog(auth("patient@example.com"), LocalDate.of(2026, 6, 10));
+
+        assertThat(response.measurements()).hasSize(2);
+        assertThat(response.measurements()).extracting("dailyDietLogId").containsNull();
+        assertThat(response.measurements()).extracting("measurementType")
+                .containsExactly(MeasurementType.KETONE, MeasurementType.GLUCOSE);
     }
 
     @Test

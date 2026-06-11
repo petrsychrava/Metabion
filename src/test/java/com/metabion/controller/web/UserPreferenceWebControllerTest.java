@@ -2,6 +2,7 @@ package com.metabion.controller.web;
 
 import com.metabion.config.LocalizationConfig;
 import com.metabion.domain.LanguagePreference;
+import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.ThemePreference;
 import com.metabion.service.UserPreferenceService;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,6 +61,28 @@ class UserPreferenceWebControllerTest {
                 .andExpect(redirectedUrl("/app/account"));
 
         verify(preferences).updateThemePreference(auth, ThemePreference.DARK);
+    }
+
+    @Test
+    void updateGlucoseUnitPreferenceDelegatesAndRedirectsToSafeReferer() throws Exception {
+        mvc.perform(post("/app/preferences/glucose-unit")
+                        .principal(auth)
+                        .header("Referer", "http://localhost/app/account")
+                        .param("glucoseUnitPreference", "MG_DL"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app/account"));
+
+        verify(preferences).updateGlucoseUnitPreference(auth, MeasurementUnit.MG_DL);
+    }
+
+    @Test
+    void updateGlucoseUnitPreferenceRejectsInvalidPreference() throws Exception {
+        mvc.perform(post("/app/preferences/glucose-unit")
+                        .principal(auth)
+                        .param("glucoseUnitPreference", "PERCENT"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(preferences);
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.metabion.controller.web;
 
 import com.metabion.domain.LanguagePreference;
+import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.ThemePreference;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,6 +51,9 @@ class ThymeleafAvailabilityTest {
         model.setVariable("pageTitle", "Metabion");
         model.setVariable("activePath", "/app/account");
         model.setVariable("themePreference", ThemePreference.SYSTEM);
+        model.setVariable("patientAccount", true);
+        model.setVariable("glucoseUnitPreference", MeasurementUnit.MG_DL);
+        model.setVariable("measurementUnits", List.of(MeasurementUnit.MMOL_L, MeasurementUnit.MG_DL));
         model.setVariable("currentLanguage", LanguagePreference.CS);
         model.setVariable("supportedLanguages", List.of(LanguagePreference.EN, LanguagePreference.CS));
         model.setVariable("appMenuItems", List.of());
@@ -81,6 +85,8 @@ class ThymeleafAvailabilityTest {
 
         assertThat(output)
                 .contains("Vzhled")
+                .contains("Jednotka glukózy")
+                .contains("mg/dl")
                 .contains("Jazyk")
                 .contains("Čeština")
                 .contains("Odhlásit se");

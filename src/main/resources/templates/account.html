@@ -38,6 +38,16 @@
                     <option value="DARK" th:selected="${themePreference?.name() == 'DARK'}" th:text="#{theme.dark}">Dark</option>
                 </select>
             </form>
+            <form class="theme-form" th:if="${patientAccount}" th:action="@{/app/preferences/glucose-unit}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <label for="glucoseUnitPreference" th:text="#{app.account.glucoseUnit}">Glucose unit</label>
+                <select id="glucoseUnitPreference" name="glucoseUnitPreference" onchange="this.form.submit()">
+                    <option th:each="unit : ${measurementUnits}"
+                            th:value="${unit}"
+                            th:selected="${glucoseUnitPreference?.name() == unit.name()}"
+                            th:text="${#messages.msg('enum.measurementUnit.' + unit.name())}">mg/dL</option>
+                </select>
+            </form>
             <div th:replace="~{preferences :: languageSelector('theme-form')}"></div>
         </div>
     </section>

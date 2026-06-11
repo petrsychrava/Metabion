@@ -2,6 +2,7 @@ package com.metabion.controller.web;
 
 import com.metabion.config.RateLimitingFilter;
 import com.metabion.domain.LanguagePreference;
+import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.ThemePreference;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.SecurityService;
@@ -253,6 +254,7 @@ class WebAuthTemplateTest {
         auth.setAuthenticated(true);
         when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.DARK);
         when(userPreferenceService.currentLanguagePreference(auth)).thenReturn(LanguagePreference.EN);
+        when(userPreferenceService.currentGlucoseUnitPreference(auth)).thenReturn(MeasurementUnit.MG_DL);
 
         var response = mvc.perform(get("/app/account").principal(auth).with(csrf()))
                 .andExpect(status().isOk())
@@ -264,6 +266,10 @@ class WebAuthTemplateTest {
                 .andExpect(content().string(containsString("id=\"themePreference\"")))
                 .andExpect(content().string(containsString("selected=\"selected\">Dark")))
                 .andExpect(content().string(containsString("/app/preferences/theme")))
+                .andExpect(content().string(containsString("name=\"glucoseUnitPreference\"")))
+                .andExpect(content().string(containsString("id=\"glucoseUnitPreference\"")))
+                .andExpect(content().string(containsString("/app/preferences/glucose-unit")))
+                .andExpect(content().string(containsString("selected=\"selected\">mg/dL")))
                 .andExpect(content().string(containsString("name=\"languagePreference\"")))
                 .andExpect(content().string(containsString("id=\"languagePreference\"")))
                 .andExpect(content().string(containsString("/preferences/language")))

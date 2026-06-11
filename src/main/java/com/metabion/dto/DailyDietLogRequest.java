@@ -19,11 +19,23 @@ public record DailyDietLogRequest(
         @NotNull DietAdherenceLevel adherenceLevel,
         @NotNull AppetiteLevel appetiteLevel,
         @Size(max = 1000) String notes,
+        @Size(max = 2000) String metadata,
         @Valid List<MealRequest> meals,
         @Valid List<DeviationRequest> deviations,
         @Valid List<PhotoReferenceRequest> photoReferences,
         @Valid List<DailyMeasurementEntryRequest> measurements
 ) {
+
+    public DailyDietLogRequest(LocalDate logDate,
+                               DietAdherenceLevel adherenceLevel,
+                               AppetiteLevel appetiteLevel,
+                               String notes,
+                               List<MealRequest> meals,
+                               List<DeviationRequest> deviations,
+                               List<PhotoReferenceRequest> photoReferences,
+                               List<DailyMeasurementEntryRequest> measurements) {
+        this(logDate, adherenceLevel, appetiteLevel, notes, null, meals, deviations, photoReferences, measurements);
+    }
 
     public List<MealRequest> mealsOrEmpty() {
         return meals == null ? List.of() : meals;
@@ -47,6 +59,7 @@ public record DailyDietLogRequest(
                 adherenceLevel,
                 appetiteLevel,
                 notes,
+                metadata,
                 meals,
                 deviations,
                 photoReferences,

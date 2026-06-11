@@ -30,6 +30,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
@@ -78,6 +79,7 @@ public class DietLogService {
         log.setAdherenceLevel(request.adherenceLevel());
         log.setAppetiteLevel(request.appetiteLevel());
         log.setNotes(trimToNull(request.notes()));
+        log.setMetadata(trimToNull(request.metadata()));
         log.replaceChildren(mealsFrom(request), deviationsFrom(request), photoReferencesFrom(request));
 
         var replacingPersistedLog = log.getId() != null;
@@ -332,7 +334,8 @@ public class DietLogService {
                 request.unit(),
                 request.measuredAt(),
                 request.context(),
-                trimToNull(request.notes()));
+                trimToNull(request.notes()),
+                trimToNull(request.metadata()));
     }
 
     private DailyDietLogSummaryResponse summaryFrom(DailyDietLog log) {
@@ -352,7 +355,34 @@ public class DietLogService {
 
     private List<DailyMeasurementEntry> measurementsFor(DailyDietLog log) {
         var id = log.getId();
-        return id == null ? List.of() : measurements.findByDailyDietLogIdOrderByMeasuredAtDesc(id);
+        var linked = id == null ? List.<DailyMeasurementEntry>of()
+                : measurements.findByDailyDietLogIdOrderByMeasuredAtDesc(id);
+        if (linked == null) {
+            linked = List.of();
+        }
+        var patient = log.getPatientProfile();
+        var patientProfileId = patientProfileId(log);
+        if (patientProfileId == null || log.getLogDate() == null) {
+            return linked;
+        }
+        var zone = zoneFor(patient);
+        var fromInclusive = log.getLogDate().atStartOfDay(zone).toInstant();
+        var toExclusive = log.getLogDate().plusDays(1).atStartOfDay(zone).toInstant();
+        var standalone = measurements
+                .findByPatientProfileIdAndDailyDietLogIsNullAndMeasuredAtGreaterThanEqualAndMeasuredAtLessThanOrderByMeasuredAtDesc(
+                        patientProfileId,
+                        fromInclusive,
+                        toExclusive);
+        if (standalone == null) {
+            standalone = List.of();
+        }
+        if (standalone.isEmpty()) {
+            return linked;
+        }
+        return java.util.stream.Stream.concat(linked.stream(), standalone.stream())
+                .sorted(Comparator.comparing(DailyMeasurementEntry::getMeasuredAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .reversed())
+                .toList();
     }
 
     private static Long patientProfileId(DailyDietLog log) {
