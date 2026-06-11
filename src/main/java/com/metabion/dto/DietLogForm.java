@@ -9,6 +9,11 @@ import com.metabion.domain.MealType;
 import com.metabion.domain.MeasurementContext;
 import com.metabion.domain.MeasurementType;
 import com.metabion.domain.MeasurementUnit;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -18,14 +23,30 @@ import java.util.List;
 
 public class DietLogForm {
 
+    @NotNull
     private LocalDate logDate;
+
+    @NotNull
     private DietAdherenceLevel adherenceLevel;
+
+    @NotNull
     private AppetiteLevel appetiteLevel;
+
+    @Size(max = 1000)
     private String notes;
+
+    @Valid
     private List<MealRow> meals = new ArrayList<>();
+
+    @Valid
     private List<DeviationRow> deviations = new ArrayList<>();
+
+    @Valid
     private List<PhotoReferenceRow> photoReferences = new ArrayList<>();
+
+    @Valid
     private List<MeasurementRow> measurements = new ArrayList<>();
+
     private MeasurementUnit glucoseUnitPreference;
 
     public DailyDietLogRequest toRequest() {
@@ -147,7 +168,11 @@ public class DietLogForm {
     public static class MealRow {
         private MealType mealType;
         private FoodCategory foodCategory;
+
+        @Size(max = 500)
         private String foodDescription;
+
+        @Size(max = 1000)
         private String notes;
 
         public DailyDietLogRequest.MealRequest toRequest() {
@@ -197,6 +222,8 @@ public class DietLogForm {
     public static class DeviationRow {
         private DietDeviationCategory deviationCategory;
         private DietDeviationSeverity severity;
+
+        @Size(max = 1000)
         private String notes;
 
         public DailyDietLogRequest.DeviationRequest toRequest() {
@@ -235,10 +262,19 @@ public class DietLogForm {
     }
 
     public static class PhotoReferenceRow {
+        @Size(max = 255)
         private String originalFilename;
+
+        @Size(max = 120)
         private String contentType;
+
+        @PositiveOrZero
         private Long sizeBytes;
+
+        @Size(max = 500)
         private String storageKey;
+
+        @Size(max = 500)
         private String caption;
 
         public DailyDietLogRequest.PhotoReferenceRequest toRequest() {
@@ -301,10 +337,15 @@ public class DietLogForm {
 
     public static class MeasurementRow {
         private MeasurementType measurementType;
+
+        @Digits(integer = 6, fraction = 2)
         private BigDecimal value;
+
         private MeasurementUnit unit;
         private Instant measuredAt;
         private MeasurementContext context;
+
+        @Size(max = 1000)
         private String notes;
 
         public DailyMeasurementEntryRequest toRequest() {

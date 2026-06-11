@@ -99,6 +99,10 @@ class WebDietLogControllerTest {
                 .andExpect(content().string(containsString("Diet logs")))
                 .andExpect(content().string(containsString("Glucose unit default")))
                 .andExpect(content().string(containsString("mg/dL")))
+                .andExpect(content().string(containsString("name=\"meals[2].mealType\"")))
+                .andExpect(content().string(containsString("name=\"deviations[2].severity\"")))
+                .andExpect(content().string(containsString("name=\"photoReferences[2].storageKey\"")))
+                .andExpect(content().string(containsString("name=\"measurements[2].unit\"")))
                 .andExpect(content().string(not(containsString("name=\"glucoseUnitPreference\""))));
     }
 
@@ -129,8 +133,7 @@ class WebDietLogControllerTest {
                         .with(csrf())
                         .param("logDate", "2026-06-10")
                         .param("adherenceLevel", "MOSTLY")
-                        .param("appetiteLevel", "NORMAL")
-                        .param("glucoseUnitPreference", "MG_DL"))
+                        .param("appetiteLevel", "NORMAL"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/app/diet-logs?date=2026-06-10"));
 
@@ -148,6 +151,44 @@ class WebDietLogControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("diet-logs"))
                 .andExpect(model().attributeHasFieldErrors("dietLogForm", "logDate"))
+                .andExpect(content().string(containsString("class=\"sidebar\"")))
+                .andExpect(content().string(containsString("Diet logs")));
+
+        verify(dietLogService, never()).saveForCurrentPatient(any(), any());
+    }
+
+    @Test
+    void oversizedPatientNotesRedisplayWithBindingError() throws Exception {
+        mvc.perform(post("/app/diet-logs")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("logDate", "2026-06-10")
+                        .param("adherenceLevel", "MOSTLY")
+                        .param("appetiteLevel", "NORMAL")
+                        .param("notes", "x".repeat(1001)))
+                .andExpect(status().isOk())
+                .andExpect(view().name("diet-logs"))
+                .andExpect(model().attributeHasFieldErrors("dietLogForm", "notes"))
+                .andExpect(content().string(containsString("class=\"sidebar\"")))
+                .andExpect(content().string(containsString("Diet logs")));
+
+        verify(dietLogService, never()).saveForCurrentPatient(any(), any());
+    }
+
+    @Test
+    void oversizedNestedPatientMealRedisplaysWithBindingError() throws Exception {
+        mvc.perform(post("/app/diet-logs")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("logDate", "2026-06-10")
+                        .param("adherenceLevel", "MOSTLY")
+                        .param("appetiteLevel", "NORMAL")
+                        .param("meals[0].mealType", "LUNCH")
+                        .param("meals[0].foodCategory", "PROTEIN")
+                        .param("meals[0].foodDescription", "x".repeat(501)))
+                .andExpect(status().isOk())
+                .andExpect(view().name("diet-logs"))
+                .andExpect(model().attributeHasFieldErrors("dietLogForm", "meals[0].foodDescription"))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
                 .andExpect(content().string(containsString("Diet logs")));
 

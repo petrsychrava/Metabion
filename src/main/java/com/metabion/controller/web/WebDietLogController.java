@@ -35,6 +35,7 @@ public class WebDietLogController {
 
     private static final String PATIENT_ACTIVE_PATH = "/app/diet-logs";
     private static final String CLINICAL_ACTIVE_PATH = "/app/clinical/diet-logs";
+    private static final int MIN_FORM_ROWS = 3;
 
     private final DietLogService dietLogService;
     private final AppMenuCatalog appMenuCatalog;
@@ -195,19 +196,38 @@ public class WebDietLogController {
 
     private void ensureRows(DietLogForm form) {
         if (form.getMeals() == null || form.getMeals().isEmpty()) {
-            form.setMeals(new ArrayList<>(List.of(new DietLogForm.MealRow())));
+            form.setMeals(new ArrayList<>());
         }
+        while (form.getMeals().size() < MIN_FORM_ROWS) {
+            form.getMeals().add(new DietLogForm.MealRow());
+        }
+
         if (form.getDeviations() == null || form.getDeviations().isEmpty()) {
-            form.setDeviations(new ArrayList<>(List.of(new DietLogForm.DeviationRow())));
+            form.setDeviations(new ArrayList<>());
         }
+        while (form.getDeviations().size() < MIN_FORM_ROWS) {
+            form.getDeviations().add(new DietLogForm.DeviationRow());
+        }
+
         if (form.getPhotoReferences() == null || form.getPhotoReferences().isEmpty()) {
-            form.setPhotoReferences(new ArrayList<>(List.of(new DietLogForm.PhotoReferenceRow())));
+            form.setPhotoReferences(new ArrayList<>());
         }
+        while (form.getPhotoReferences().size() < MIN_FORM_ROWS) {
+            form.getPhotoReferences().add(new DietLogForm.PhotoReferenceRow());
+        }
+
         if (form.getMeasurements() == null || form.getMeasurements().isEmpty()) {
-            var measurement = new DietLogForm.MeasurementRow();
-            measurement.setUnit(form.getGlucoseUnitPreference());
-            form.setMeasurements(new ArrayList<>(List.of(measurement)));
+            form.setMeasurements(new ArrayList<>());
         }
+        while (form.getMeasurements().size() < MIN_FORM_ROWS) {
+            form.getMeasurements().add(defaultMeasurementRow(form.getGlucoseUnitPreference()));
+        }
+    }
+
+    private DietLogForm.MeasurementRow defaultMeasurementRow(MeasurementUnit glucoseUnitPreference) {
+        var measurement = new DietLogForm.MeasurementRow();
+        measurement.setUnit(glucoseUnitPreference);
+        return measurement;
     }
 
     private void applyGlucosePreferenceForDisplay(DietLogForm form, Authentication authentication) {
@@ -217,8 +237,7 @@ public class WebDietLogController {
         if (form.getMeasurements() != null) {
             form.getMeasurements().stream()
                     .filter(row -> row.getUnit() == null)
-                    .findFirst()
-                    .ifPresent(row -> row.setUnit(form.getGlucoseUnitPreference()));
+                    .forEach(row -> row.setUnit(form.getGlucoseUnitPreference()));
         }
     }
 
