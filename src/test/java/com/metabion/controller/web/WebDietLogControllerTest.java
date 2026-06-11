@@ -38,6 +38,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -95,7 +96,29 @@ class WebDietLogControllerTest {
                 .andExpect(model().attributeExists("dietLogForm"))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
                 .andExpect(content().string(containsString("Diet logs")))
-                .andExpect(content().string(containsString("MG_DL")));
+                .andExpect(content().string(containsString("Current glucose unit default")))
+                .andExpect(content().string(containsString("MG_DL")))
+                .andExpect(content().string(not(containsString("name=\"glucoseUnitPreference\""))));
+    }
+
+    @Test
+    void patientDietLogPageRendersExistingRowsWithDistinctIndexedNames() throws Exception {
+        when(dietLogService.currentPatientGlucoseUnitPreference(any())).thenReturn(MeasurementUnit.MG_DL);
+        when(dietLogService.getCurrentPatientLog(any(), eq(LocalDate.of(2026, 6, 10))))
+                .thenReturn(multiRowDetailResponse());
+
+        mvc.perform(get("/app/diet-logs")
+                        .param("date", "2026-06-10")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("diet-logs"))
+                .andExpect(content().string(containsString("Avocado salad")))
+                .andExpect(content().string(containsString("Protein shake")))
+                .andExpect(content().string(containsString("name=\"meals[0].mealType\"")))
+                .andExpect(content().string(containsString("name=\"meals[1].mealType\"")))
+                .andExpect(content().string(containsString("name=\"deviations[1].severity\"")))
+                .andExpect(content().string(containsString("name=\"photoReferences[1].storageKey\"")))
+                .andExpect(content().string(containsString("name=\"measurements[1].measuredAt\"")));
     }
 
     @Test
@@ -128,6 +151,26 @@ class WebDietLogControllerTest {
                 .andExpect(content().string(containsString("Diet logs")));
 
         verify(dietLogService, never()).saveForCurrentPatient(any(), any());
+    }
+
+    @Test
+    void patientServiceBadRequestRedisplaysSubmittedFormWithShell() throws Exception {
+        doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "mealType is required"))
+                .when(dietLogService).saveForCurrentPatient(any(), any());
+
+        mvc.perform(post("/app/diet-logs")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("logDate", "2026-06-10")
+                        .param("adherenceLevel", "MOSTLY")
+                        .param("appetiteLevel", "NORMAL")
+                        .param("meals[0].foodDescription", "Submitted meal"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("diet-logs"))
+                .andExpect(model().attribute("dietLogError", "mealType is required"))
+                .andExpect(content().string(containsString("class=\"sidebar\"")))
+                .andExpect(content().string(containsString("mealType is required")))
+                .andExpect(content().string(containsString("Submitted meal")));
     }
 
     @Test
@@ -254,5 +297,88 @@ class WebDietLogControllerTest {
                         MeasurementContext.FASTING,
                         "Morning",
                         Instant.parse("2026-06-10T07:31:00Z"))));
+    }
+
+    private DailyDietLogResponse multiRowDetailResponse() {
+        return new DailyDietLogResponse(
+                100L,
+                42L,
+                "patient@example.com",
+                LocalDate.of(2026, 6, 10),
+                DietAdherenceLevel.MOSTLY,
+                AppetiteLevel.NORMAL,
+                "Two row day",
+                Instant.parse("2026-06-10T08:00:00Z"),
+                Instant.parse("2026-06-10T18:00:00Z"),
+                List.of(
+                        new DailyDietLogResponse.MealResponse(
+                                1L,
+                                MealType.LUNCH,
+                                FoodCategory.LOW_CARB_VEGETABLES,
+                                "Avocado salad",
+                                "Felt fine",
+                                0),
+                        new DailyDietLogResponse.MealResponse(
+                                2L,
+                                MealType.SNACK,
+                                FoodCategory.PROTEIN,
+                                "Protein shake",
+                                "Afternoon",
+                                1)),
+                List.of(
+                        new DailyDietLogResponse.DeviationResponse(
+                                3L,
+                                DietDeviationCategory.DINING_OUT,
+                                DietDeviationSeverity.MINOR,
+                                "Restaurant lunch",
+                                0),
+                        new DailyDietLogResponse.DeviationResponse(
+                                4L,
+                                DietDeviationCategory.MISSED_MEAL,
+                                DietDeviationSeverity.MODERATE,
+                                "Skipped dinner",
+                                1)),
+                List.of(
+                        new DailyDietLogResponse.PhotoReferenceResponse(
+                                5L,
+                                1L,
+                                "photo-1.jpg",
+                                "image/jpeg",
+                                1024L,
+                                "diet/photo-1",
+                                "Lunch",
+                                0),
+                        new DailyDietLogResponse.PhotoReferenceResponse(
+                                6L,
+                                2L,
+                                "photo-2.jpg",
+                                "image/jpeg",
+                                2048L,
+                                "diet/photo-2",
+                                "Snack",
+                                1)),
+                List.of(
+                        new DailyMeasurementEntryResponse(
+                                7L,
+                                42L,
+                                100L,
+                                MeasurementType.GLUCOSE,
+                                new BigDecimal("5.8"),
+                                MeasurementUnit.MMOL_L,
+                                Instant.parse("2026-06-10T07:30:00Z"),
+                                MeasurementContext.FASTING,
+                                "Morning",
+                                Instant.parse("2026-06-10T07:31:00Z")),
+                        new DailyMeasurementEntryResponse(
+                                8L,
+                                42L,
+                                100L,
+                                MeasurementType.KETONE,
+                                new BigDecimal("1.2"),
+                                MeasurementUnit.MMOL_L,
+                                Instant.parse("2026-06-10T20:00:00Z"),
+                                MeasurementContext.BEDTIME,
+                                "Evening",
+                                Instant.parse("2026-06-10T20:01:00Z"))));
     }
 }

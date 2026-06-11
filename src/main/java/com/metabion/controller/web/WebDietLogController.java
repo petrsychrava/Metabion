@@ -69,10 +69,21 @@ public class WebDietLogController {
         ensureRows(form);
         addOptions(model);
         if (binding.hasErrors()) {
+            applyGlucosePreferenceForDisplay(form, authentication);
             addAppShell(model, authentication, PATIENT_ACTIVE_PATH);
             return "diet-logs";
         }
-        dietLogService.saveForCurrentPatient(authentication, form.toRequest());
+        try {
+            dietLogService.saveForCurrentPatient(authentication, form.toRequest());
+        } catch (ResponseStatusException ex) {
+            if (ex.getStatusCode() != HttpStatus.BAD_REQUEST) {
+                throw ex;
+            }
+            applyGlucosePreferenceForDisplay(form, authentication);
+            model.addAttribute("dietLogError", errorMessage(ex));
+            addAppShell(model, authentication, PATIENT_ACTIVE_PATH);
+            return "diet-logs";
+        }
         return "redirect:/app/diet-logs?date=" + form.getLogDate();
     }
 
@@ -197,6 +208,22 @@ public class WebDietLogController {
             measurement.setUnit(form.getGlucoseUnitPreference());
             form.setMeasurements(new ArrayList<>(List.of(measurement)));
         }
+    }
+
+    private void applyGlucosePreferenceForDisplay(DietLogForm form, Authentication authentication) {
+        if (form.getGlucoseUnitPreference() == null) {
+            form.setGlucoseUnitPreference(dietLogService.currentPatientGlucoseUnitPreference(authentication));
+        }
+        if (form.getMeasurements() != null) {
+            form.getMeasurements().stream()
+                    .filter(row -> row.getUnit() == null)
+                    .findFirst()
+                    .ifPresent(row -> row.setUnit(form.getGlucoseUnitPreference()));
+        }
+    }
+
+    private String errorMessage(ResponseStatusException ex) {
+        return ex.getReason() == null || ex.getReason().isBlank() ? "Diet log could not be saved." : ex.getReason();
     }
 
     private void addOptions(Model model) {

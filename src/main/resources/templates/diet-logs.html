@@ -12,6 +12,7 @@
     <section class="panel app-panel">
         <form class="form" th:action="@{/app/diet-logs}" th:object="${dietLogForm}" method="post">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <p class="error" th:if="${dietLogError != null}" th:text="${dietLogError}">Diet log error</p>
             <p class="error" th:each="error : ${#fields.errors('*')}" th:text="${error}">Form error</p>
 
             <label class="field"><span>Date</span>
@@ -39,101 +40,108 @@
                 <textarea th:field="*{notes}"></textarea>
             </label>
 
-            <label class="field"><span>Glucose unit default</span>
-                <select th:field="*{glucoseUnitPreference}">
-                    <option th:each="option : ${measurementUnits}" th:value="${option}" th:text="${option}">MG_DL</option>
-                </select>
-            </label>
+            <p class="muted">
+                <span>Current glucose unit default</span>
+                <strong th:text="*{glucoseUnitPreference}">MG_DL</strong>
+            </p>
 
             <fieldset>
                 <legend>Meal</legend>
-                <label class="field"><span>Meal type</span>
-                    <select th:field="*{meals[0].mealType}">
-                        <option value="">Select</option>
-                        <option th:each="option : ${mealTypes}" th:value="${option}" th:text="${option}">LUNCH</option>
-                    </select>
-                </label>
-                <label class="field"><span>Food category</span>
-                    <select th:field="*{meals[0].foodCategory}">
-                        <option value="">Select</option>
-                        <option th:each="option : ${foodCategories}" th:value="${option}" th:text="${option}">LOW_CARB_VEGETABLES</option>
-                    </select>
-                </label>
-                <label class="field"><span>Food description</span>
-                    <input th:field="*{meals[0].foodDescription}">
-                </label>
-                <label class="field"><span>Meal notes</span>
-                    <textarea th:field="*{meals[0].notes}"></textarea>
-                </label>
+                <div th:each="meal, row : *{meals}">
+                    <label class="field"><span>Meal type</span>
+                        <select th:field="*{meals[__${row.index}__].mealType}">
+                            <option value="">Select</option>
+                            <option th:each="option : ${mealTypes}" th:value="${option}" th:text="${option}">LUNCH</option>
+                        </select>
+                    </label>
+                    <label class="field"><span>Food category</span>
+                        <select th:field="*{meals[__${row.index}__].foodCategory}">
+                            <option value="">Select</option>
+                            <option th:each="option : ${foodCategories}" th:value="${option}" th:text="${option}">LOW_CARB_VEGETABLES</option>
+                        </select>
+                    </label>
+                    <label class="field"><span>Food description</span>
+                        <input th:field="*{meals[__${row.index}__].foodDescription}">
+                    </label>
+                    <label class="field"><span>Meal notes</span>
+                        <textarea th:field="*{meals[__${row.index}__].notes}"></textarea>
+                    </label>
+                </div>
             </fieldset>
 
             <fieldset>
                 <legend>Deviation</legend>
-                <label class="field"><span>Category</span>
-                    <select th:field="*{deviations[0].deviationCategory}">
-                        <option value="">Select</option>
-                        <option th:each="option : ${deviationCategories}" th:value="${option}" th:text="${option}">DINING_OUT</option>
-                    </select>
-                </label>
-                <label class="field"><span>Severity</span>
-                    <select th:field="*{deviations[0].severity}">
-                        <option value="">Select</option>
-                        <option th:each="option : ${deviationSeverities}" th:value="${option}" th:text="${option}">MINOR</option>
-                    </select>
-                </label>
-                <label class="field"><span>Deviation notes</span>
-                    <textarea th:field="*{deviations[0].notes}"></textarea>
-                </label>
+                <div th:each="deviation, row : *{deviations}">
+                    <label class="field"><span>Category</span>
+                        <select th:field="*{deviations[__${row.index}__].deviationCategory}">
+                            <option value="">Select</option>
+                            <option th:each="option : ${deviationCategories}" th:value="${option}" th:text="${option}">DINING_OUT</option>
+                        </select>
+                    </label>
+                    <label class="field"><span>Severity</span>
+                        <select th:field="*{deviations[__${row.index}__].severity}">
+                            <option value="">Select</option>
+                            <option th:each="option : ${deviationSeverities}" th:value="${option}" th:text="${option}">MINOR</option>
+                        </select>
+                    </label>
+                    <label class="field"><span>Deviation notes</span>
+                        <textarea th:field="*{deviations[__${row.index}__].notes}"></textarea>
+                    </label>
+                </div>
             </fieldset>
 
             <fieldset>
                 <legend>Photo metadata</legend>
-                <label class="field"><span>Original filename</span>
-                    <input th:field="*{photoReferences[0].originalFilename}">
-                </label>
-                <label class="field"><span>Content type</span>
-                    <input th:field="*{photoReferences[0].contentType}">
-                </label>
-                <label class="field"><span>Size bytes</span>
-                    <input type="number" th:field="*{photoReferences[0].sizeBytes}">
-                </label>
-                <label class="field"><span>Storage key</span>
-                    <input th:field="*{photoReferences[0].storageKey}">
-                </label>
-                <label class="field"><span>Caption</span>
-                    <input th:field="*{photoReferences[0].caption}">
-                </label>
+                <div th:each="photoReference, row : *{photoReferences}">
+                    <label class="field"><span>Original filename</span>
+                        <input th:field="*{photoReferences[__${row.index}__].originalFilename}">
+                    </label>
+                    <label class="field"><span>Content type</span>
+                        <input th:field="*{photoReferences[__${row.index}__].contentType}">
+                    </label>
+                    <label class="field"><span>Size bytes</span>
+                        <input type="number" th:field="*{photoReferences[__${row.index}__].sizeBytes}">
+                    </label>
+                    <label class="field"><span>Storage key</span>
+                        <input th:field="*{photoReferences[__${row.index}__].storageKey}">
+                    </label>
+                    <label class="field"><span>Caption</span>
+                        <input th:field="*{photoReferences[__${row.index}__].caption}">
+                    </label>
+                </div>
             </fieldset>
 
             <fieldset>
                 <legend>Measurement</legend>
-                <label class="field"><span>Type</span>
-                    <select th:field="*{measurements[0].measurementType}">
-                        <option value="">Select</option>
-                        <option th:each="option : ${measurementTypes}" th:value="${option}" th:text="${option}">GLUCOSE</option>
-                    </select>
-                </label>
-                <label class="field"><span>Value</span>
-                    <input type="number" step="0.01" th:field="*{measurements[0].value}">
-                </label>
-                <label class="field"><span>Unit</span>
-                    <select th:field="*{measurements[0].unit}">
-                        <option value="">Select</option>
-                        <option th:each="option : ${measurementUnits}" th:value="${option}" th:text="${option}">MG_DL</option>
-                    </select>
-                </label>
-                <label class="field"><span>Measured at</span>
-                    <input th:field="*{measurements[0].measuredAt}" placeholder="2026-06-10T07:30:00Z">
-                </label>
-                <label class="field"><span>Context</span>
-                    <select th:field="*{measurements[0].context}">
-                        <option value="">Select</option>
-                        <option th:each="option : ${measurementContexts}" th:value="${option}" th:text="${option}">FASTING</option>
-                    </select>
-                </label>
-                <label class="field"><span>Measurement notes</span>
-                    <textarea th:field="*{measurements[0].notes}"></textarea>
-                </label>
+                <div th:each="measurement, row : *{measurements}">
+                    <label class="field"><span>Type</span>
+                        <select th:field="*{measurements[__${row.index}__].measurementType}">
+                            <option value="">Select</option>
+                            <option th:each="option : ${measurementTypes}" th:value="${option}" th:text="${option}">GLUCOSE</option>
+                        </select>
+                    </label>
+                    <label class="field"><span>Value</span>
+                        <input type="number" step="0.01" th:field="*{measurements[__${row.index}__].value}">
+                    </label>
+                    <label class="field"><span>Unit</span>
+                        <select th:field="*{measurements[__${row.index}__].unit}">
+                            <option value="">Select</option>
+                            <option th:each="option : ${measurementUnits}" th:value="${option}" th:text="${option}">MG_DL</option>
+                        </select>
+                    </label>
+                    <label class="field"><span>Measured at</span>
+                        <input th:field="*{measurements[__${row.index}__].measuredAt}" placeholder="2026-06-10T07:30:00Z">
+                    </label>
+                    <label class="field"><span>Context</span>
+                        <select th:field="*{measurements[__${row.index}__].context}">
+                            <option value="">Select</option>
+                            <option th:each="option : ${measurementContexts}" th:value="${option}" th:text="${option}">FASTING</option>
+                        </select>
+                    </label>
+                    <label class="field"><span>Measurement notes</span>
+                        <textarea th:field="*{measurements[__${row.index}__].notes}"></textarea>
+                    </label>
+                </div>
             </fieldset>
 
             <button type="submit">Save diet log</button>
