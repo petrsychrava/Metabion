@@ -14,4 +14,6 @@ public interface DailyMeasurementEntryRepository extends JpaRepository<DailyMeas
             Instant to);
 
     List<DailyMeasurementEntry> findByDailyDietLogIdOrderByMeasuredAtDesc(Long dailyDietLogId);
+
+    void deleteByDailyDietLogId(Long dailyDietLogId);
 }

@@ -79,7 +79,11 @@ public class DietLogService {
         log.setNotes(trimToNull(request.notes()));
         log.replaceChildren(mealsFrom(request), deviationsFrom(request), photoReferencesFrom(request));
 
+        var replacingPersistedLog = log.getId() != null;
         var saved = dailyDietLogs.save(log);
+        if (replacingPersistedLog) {
+            measurements.deleteByDailyDietLogId(saved.getId());
+        }
         var savedMeasurements = saveMeasurements(patient, saved, request.measurementsOrEmpty());
         return DailyDietLogResponse.from(saved, savedMeasurements);
     }

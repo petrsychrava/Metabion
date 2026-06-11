@@ -44,7 +44,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -134,6 +136,38 @@ class DietLogServiceTest {
         assertThat(existing.getMeals().getFirst().getMealType()).isEqualTo(MealType.LUNCH);
         assertThat(existing.getDeviations()).hasSize(1);
         assertThat(existing.getPhotoReferences()).hasSize(1);
+    }
+
+    @Test
+    void secondFullSaveClearsOldLinkedMeasurementsBeforeSavingReplacements() {
+        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patientProfile(10L, patientUser);
+        var existing = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
+                .thenReturn(Optional.empty(), Optional.of(existing));
+        when(dailyDietLogs.save(any())).thenAnswer(invocation -> {
+            var saved = invocation.getArgument(0, DailyDietLog.class);
+            ReflectionTestUtils.setField(saved, "id", Long.valueOf(99L));
+            return saved;
+        });
+        when(measurements.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.saveForCurrentPatient(
+                auth("patient@example.com"),
+                validRequest(LocalDate.of(2026, 6, 10)).withMeasurements(List.of(glucoseRequest("5.8"))));
+        clearInvocations(measurements);
+        var response = service.saveForCurrentPatient(
+                auth("patient@example.com"),
+                validRequest(LocalDate.of(2026, 6, 10)).withMeasurements(List.of(glucoseRequest("6.2"))));
+
+        assertThat(response.measurements()).hasSize(1);
+        assertThat(response.measurements().getFirst().value()).isEqualByComparingTo("6.2");
+        verify(measurements).deleteByDailyDietLogId(99L);
+        var order = inOrder(measurements);
+        order.verify(measurements).deleteByDailyDietLogId(99L);
+        order.verify(measurements).save(any(DailyMeasurementEntry.class));
     }
 
     @Test
@@ -381,6 +415,16 @@ class DietLogServiceTest {
                 MeasurementType.KETONE,
                 value,
                 unit,
+                Instant.now(),
+                MeasurementContext.FASTING,
+                null);
+    }
+
+    private DailyMeasurementEntryRequest glucoseRequest(String value) {
+        return new DailyMeasurementEntryRequest(
+                MeasurementType.GLUCOSE,
+                new BigDecimal(value),
+                MeasurementUnit.MMOL_L,
                 Instant.now(),
                 MeasurementContext.FASTING,
                 null);
