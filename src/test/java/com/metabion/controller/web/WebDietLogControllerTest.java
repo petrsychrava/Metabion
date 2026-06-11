@@ -5,6 +5,7 @@ import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.DietDeviationCategory;
 import com.metabion.domain.DietDeviationSeverity;
 import com.metabion.domain.FoodCategory;
+import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.MealType;
 import com.metabion.domain.MeasurementContext;
 import com.metabion.domain.MeasurementType;
@@ -96,8 +97,8 @@ class WebDietLogControllerTest {
                 .andExpect(model().attributeExists("dietLogForm"))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
                 .andExpect(content().string(containsString("Diet logs")))
-                .andExpect(content().string(containsString("Current glucose unit default")))
-                .andExpect(content().string(containsString("MG_DL")))
+                .andExpect(content().string(containsString("Glucose unit default")))
+                .andExpect(content().string(containsString("mg/dL")))
                 .andExpect(content().string(not(containsString("name=\"glucoseUnitPreference\""))));
     }
 
@@ -221,6 +222,30 @@ class WebDietLogControllerTest {
                 .andExpect(content().string(containsString("Avocado salad")))
                 .andExpect(content().string(containsString("photo-1.jpg")))
                 .andExpect(content().string(containsString("5.8")));
+    }
+
+    @Test
+    void clinicalDetailRendersDietLogLabelsAndEnumsInCzech() throws Exception {
+        when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
+        when(dietLogService.getClinicalLog(any(), eq(99L))).thenReturn(detailResponse());
+
+        mvc.perform(get("/app/clinical/diet-logs/99")
+                        .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("clinical-diet-log-detail"))
+                .andExpect(content().string(containsString("lang=\"cs\"")))
+                .andExpect(content().string(containsString("Detail záznamu stravy")))
+                .andExpect(content().string(containsString("E-mail pacienta")))
+                .andExpect(content().string(containsString("Dodržování")))
+                .andExpect(content().string(containsString(">Většinou<")))
+                .andExpect(content().string(containsString(">Normální<")))
+                .andExpect(content().string(containsString(">Oběd<")))
+                .andExpect(content().string(containsString(">Nízkosacharidová zelenina<")))
+                .andExpect(content().string(containsString(">Jídlo mimo domov<")))
+                .andExpect(content().string(containsString(">Mírná<")))
+                .andExpect(content().string(containsString(">Glukóza<")))
+                .andExpect(content().string(containsString(">mmol/l<")))
+                .andExpect(content().string(containsString(">Nalačno<")));
     }
 
     @Test

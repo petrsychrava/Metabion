@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{layout :: appShell('Diet logs', ${activePath}, ~{::content})}">
+      th:replace="~{layout :: appShell(#{dietLogs.patient.pageTitle}, ${activePath}, ~{::content})}">
 <th:block th:fragment="content">
     <header class="app-header">
         <div>
             <p class="eyebrow">Metabion</p>
-            <h1>Diet logs</h1>
+            <h1 th:text="#{dietLogs.patient.title}">Diet logs</h1>
         </div>
     </header>
 
@@ -15,136 +15,136 @@
             <p class="error" th:if="${dietLogError != null}" th:text="${dietLogError}">Diet log error</p>
             <p class="error" th:each="error : ${#fields.errors('*')}" th:text="${error}">Form error</p>
 
-            <label class="field"><span>Date</span>
+            <label class="field"><span th:text="#{dietLogs.logDate}">Date</span>
                 <input type="date" th:field="*{logDate}" required>
             </label>
             <p class="error" th:if="${#fields.hasErrors('logDate')}" th:errors="*{logDate}">Date error</p>
 
-            <label class="field"><span>Adherence</span>
+            <label class="field"><span th:text="#{dietLogs.adherenceLevel}">Adherence</span>
                 <select th:field="*{adherenceLevel}" required>
-                    <option value="">Select</option>
-                    <option th:each="option : ${adherenceOptions}" th:value="${option}" th:text="${option}">MOSTLY</option>
+                    <option value="" th:text="#{onboarding.select}">Select</option>
+                    <option th:each="option : ${adherenceOptions}" th:value="${option}" th:text="${#messages.msg('enum.dietAdherenceLevel.' + option.name())}">Mostly</option>
                 </select>
             </label>
             <p class="error" th:if="${#fields.hasErrors('adherenceLevel')}" th:errors="*{adherenceLevel}">Adherence error</p>
 
-            <label class="field"><span>Appetite</span>
+            <label class="field"><span th:text="#{dietLogs.appetiteLevel}">Appetite</span>
                 <select th:field="*{appetiteLevel}" required>
-                    <option value="">Select</option>
-                    <option th:each="option : ${appetiteOptions}" th:value="${option}" th:text="${option}">NORMAL</option>
+                    <option value="" th:text="#{onboarding.select}">Select</option>
+                    <option th:each="option : ${appetiteOptions}" th:value="${option}" th:text="${#messages.msg('enum.appetiteLevel.' + option.name())}">Normal</option>
                 </select>
             </label>
             <p class="error" th:if="${#fields.hasErrors('appetiteLevel')}" th:errors="*{appetiteLevel}">Appetite error</p>
 
-            <label class="field"><span>Notes</span>
+            <label class="field"><span th:text="#{dietLogs.notes}">Notes</span>
                 <textarea th:field="*{notes}"></textarea>
             </label>
 
             <p class="muted">
-                <span>Current glucose unit default</span>
-                <strong th:text="*{glucoseUnitPreference}">MG_DL</strong>
+                <span th:text="#{dietLogs.glucoseUnitDefault}">Glucose unit default</span>
+                <strong th:text="${dietLogForm.glucoseUnitPreference == null ? '' : #messages.msg('enum.measurementUnit.' + dietLogForm.glucoseUnitPreference.name())}">mg/dL</strong>
             </p>
 
             <fieldset>
-                <legend>Meal</legend>
+                <legend th:text="#{dietLogs.meal}">Meal</legend>
                 <div th:each="meal, row : *{meals}">
-                    <label class="field"><span>Meal type</span>
+                    <label class="field"><span th:text="#{dietLogs.mealType}">Meal type</span>
                         <select th:field="*{meals[__${row.index}__].mealType}">
-                            <option value="">Select</option>
-                            <option th:each="option : ${mealTypes}" th:value="${option}" th:text="${option}">LUNCH</option>
+                            <option value="" th:text="#{onboarding.select}">Select</option>
+                            <option th:each="option : ${mealTypes}" th:value="${option}" th:text="${#messages.msg('enum.mealType.' + option.name())}">Lunch</option>
                         </select>
                     </label>
-                    <label class="field"><span>Food category</span>
+                    <label class="field"><span th:text="#{dietLogs.foodCategory}">Food category</span>
                         <select th:field="*{meals[__${row.index}__].foodCategory}">
-                            <option value="">Select</option>
-                            <option th:each="option : ${foodCategories}" th:value="${option}" th:text="${option}">LOW_CARB_VEGETABLES</option>
+                            <option value="" th:text="#{onboarding.select}">Select</option>
+                            <option th:each="option : ${foodCategories}" th:value="${option}" th:text="${#messages.msg('enum.foodCategory.' + option.name())}">Low-carb vegetables</option>
                         </select>
                     </label>
-                    <label class="field"><span>Food description</span>
+                    <label class="field"><span th:text="#{dietLogs.foodDescription}">Food description</span>
                         <input th:field="*{meals[__${row.index}__].foodDescription}">
                     </label>
-                    <label class="field"><span>Meal notes</span>
+                    <label class="field"><span th:text="#{dietLogs.mealNotes}">Meal notes</span>
                         <textarea th:field="*{meals[__${row.index}__].notes}"></textarea>
                     </label>
                 </div>
             </fieldset>
 
             <fieldset>
-                <legend>Deviation</legend>
+                <legend th:text="#{dietLogs.deviation}">Deviation</legend>
                 <div th:each="deviation, row : *{deviations}">
-                    <label class="field"><span>Category</span>
+                    <label class="field"><span th:text="#{dietLogs.deviationCategory}">Category</span>
                         <select th:field="*{deviations[__${row.index}__].deviationCategory}">
-                            <option value="">Select</option>
-                            <option th:each="option : ${deviationCategories}" th:value="${option}" th:text="${option}">DINING_OUT</option>
+                            <option value="" th:text="#{onboarding.select}">Select</option>
+                            <option th:each="option : ${deviationCategories}" th:value="${option}" th:text="${#messages.msg('enum.dietDeviationCategory.' + option.name())}">Dining out</option>
                         </select>
                     </label>
-                    <label class="field"><span>Severity</span>
+                    <label class="field"><span th:text="#{dietLogs.deviationSeverity}">Severity</span>
                         <select th:field="*{deviations[__${row.index}__].severity}">
-                            <option value="">Select</option>
-                            <option th:each="option : ${deviationSeverities}" th:value="${option}" th:text="${option}">MINOR</option>
+                            <option value="" th:text="#{onboarding.select}">Select</option>
+                            <option th:each="option : ${deviationSeverities}" th:value="${option}" th:text="${#messages.msg('enum.dietDeviationSeverity.' + option.name())}">Minor</option>
                         </select>
                     </label>
-                    <label class="field"><span>Deviation notes</span>
+                    <label class="field"><span th:text="#{dietLogs.deviationNotes}">Deviation notes</span>
                         <textarea th:field="*{deviations[__${row.index}__].notes}"></textarea>
                     </label>
                 </div>
             </fieldset>
 
             <fieldset>
-                <legend>Photo metadata</legend>
+                <legend th:text="#{dietLogs.photoReference}">Photo metadata</legend>
                 <div th:each="photoReference, row : *{photoReferences}">
-                    <label class="field"><span>Original filename</span>
+                    <label class="field"><span th:text="#{dietLogs.originalFilename}">Original filename</span>
                         <input th:field="*{photoReferences[__${row.index}__].originalFilename}">
                     </label>
-                    <label class="field"><span>Content type</span>
+                    <label class="field"><span th:text="#{dietLogs.contentType}">Content type</span>
                         <input th:field="*{photoReferences[__${row.index}__].contentType}">
                     </label>
-                    <label class="field"><span>Size bytes</span>
+                    <label class="field"><span th:text="#{dietLogs.sizeBytes}">Size bytes</span>
                         <input type="number" th:field="*{photoReferences[__${row.index}__].sizeBytes}">
                     </label>
-                    <label class="field"><span>Storage key</span>
+                    <label class="field"><span th:text="#{dietLogs.storageKey}">Storage key</span>
                         <input th:field="*{photoReferences[__${row.index}__].storageKey}">
                     </label>
-                    <label class="field"><span>Caption</span>
+                    <label class="field"><span th:text="#{dietLogs.caption}">Caption</span>
                         <input th:field="*{photoReferences[__${row.index}__].caption}">
                     </label>
                 </div>
             </fieldset>
 
             <fieldset>
-                <legend>Measurement</legend>
+                <legend th:text="#{dietLogs.measurement}">Measurement</legend>
                 <div th:each="measurement, row : *{measurements}">
-                    <label class="field"><span>Type</span>
+                    <label class="field"><span th:text="#{dietLogs.measurementType}">Type</span>
                         <select th:field="*{measurements[__${row.index}__].measurementType}">
-                            <option value="">Select</option>
-                            <option th:each="option : ${measurementTypes}" th:value="${option}" th:text="${option}">GLUCOSE</option>
+                            <option value="" th:text="#{onboarding.select}">Select</option>
+                            <option th:each="option : ${measurementTypes}" th:value="${option}" th:text="${#messages.msg('enum.measurementType.' + option.name())}">Glucose</option>
                         </select>
                     </label>
-                    <label class="field"><span>Value</span>
+                    <label class="field"><span th:text="#{dietLogs.measurementValue}">Value</span>
                         <input type="number" step="0.01" th:field="*{measurements[__${row.index}__].value}">
                     </label>
-                    <label class="field"><span>Unit</span>
+                    <label class="field"><span th:text="#{dietLogs.measurementUnit}">Unit</span>
                         <select th:field="*{measurements[__${row.index}__].unit}">
-                            <option value="">Select</option>
-                            <option th:each="option : ${measurementUnits}" th:value="${option}" th:text="${option}">MG_DL</option>
+                            <option value="" th:text="#{onboarding.select}">Select</option>
+                            <option th:each="option : ${measurementUnits}" th:value="${option}" th:text="${#messages.msg('enum.measurementUnit.' + option.name())}">mg/dL</option>
                         </select>
                     </label>
-                    <label class="field"><span>Measured at</span>
+                    <label class="field"><span th:text="#{dietLogs.measuredAt}">Measured at</span>
                         <input th:field="*{measurements[__${row.index}__].measuredAt}" placeholder="2026-06-10T07:30:00Z">
                     </label>
-                    <label class="field"><span>Context</span>
+                    <label class="field"><span th:text="#{dietLogs.measurementContext}">Context</span>
                         <select th:field="*{measurements[__${row.index}__].context}">
-                            <option value="">Select</option>
-                            <option th:each="option : ${measurementContexts}" th:value="${option}" th:text="${option}">FASTING</option>
+                            <option value="" th:text="#{onboarding.select}">Select</option>
+                            <option th:each="option : ${measurementContexts}" th:value="${option}" th:text="${#messages.msg('enum.measurementContext.' + option.name())}">Fasting</option>
                         </select>
                     </label>
-                    <label class="field"><span>Measurement notes</span>
+                    <label class="field"><span th:text="#{dietLogs.measurementNotes}">Measurement notes</span>
                         <textarea th:field="*{measurements[__${row.index}__].notes}"></textarea>
                     </label>
                 </div>
             </fieldset>
 
-            <button type="submit">Save diet log</button>
+            <button type="submit" th:text="#{dietLogs.save}">Save log</button>
         </form>
     </section>
 </th:block>
