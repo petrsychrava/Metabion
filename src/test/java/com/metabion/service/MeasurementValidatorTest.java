@@ -73,7 +73,7 @@ class MeasurementValidatorTest {
                     assertThatCode(() -> validator.validateForLogDate(patient, LocalDate.of(2026, 6, 10), request))
                             .doesNotThrowAnyException();
                 } else {
-                    assertBadRequest(request, "ketone unit must be MMOL_L");
+                    assertBadRequest(request, unsupportedReason(type));
                 }
             }
         }
@@ -112,6 +112,16 @@ class MeasurementValidatorTest {
     private boolean isSupported(MeasurementType type, MeasurementUnit unit) {
         return type == MeasurementType.GLUCOSE && (unit == MeasurementUnit.MMOL_L || unit == MeasurementUnit.MG_DL)
                 || type == MeasurementType.KETONE && unit == MeasurementUnit.MMOL_L;
+    }
+
+    private String unsupportedReason(MeasurementType type) {
+        if (type == MeasurementType.KETONE) {
+            return "ketone unit must be MMOL_L";
+        }
+        if (type == MeasurementType.GLUCOSE) {
+            return "glucose unit must be MMOL_L or MG_DL";
+        }
+        return "unsupported measurement type/unit combination";
     }
 
     private DailyMeasurementEntryRequest requestFor(MeasurementType type, MeasurementUnit unit) {
