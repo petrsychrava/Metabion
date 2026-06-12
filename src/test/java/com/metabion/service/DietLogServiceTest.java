@@ -68,6 +68,7 @@ class DietLogServiceTest {
         var measurementValidator = new MeasurementValidator(measurementWindows);
         var storageKeyValidator = new StorageKeyValidator();
         var requestMapper = new DietLogRequestMapper(storageKeyValidator);
+        var responseAssembler = new DietLogResponseAssembler();
         service = new DietLogService(
                 users,
                 patientProfiles,
@@ -75,7 +76,8 @@ class DietLogServiceTest {
                 measurements,
                 accessControl,
                 measurementValidator,
-                requestMapper);
+                requestMapper,
+                responseAssembler);
     }
 
     @Test

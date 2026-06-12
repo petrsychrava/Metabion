@@ -34,8 +34,6 @@ import java.util.stream.Collectors;
 @Transactional
 public class DietLogService {
 
-    private static final int NOTES_PREVIEW_LENGTH = 120;
-
     private final UserRepository users;
     private final PatientProfileRepository patientProfiles;
     private final DailyDietLogRepository dailyDietLogs;
@@ -43,6 +41,7 @@ public class DietLogService {
     private final AccessControlService accessControl;
     private final MeasurementValidator measurementValidator;
     private final DietLogRequestMapper requestMapper;
+    private final DietLogResponseAssembler responseAssembler;
 
     public DietLogService(UserRepository users,
                           PatientProfileRepository patientProfiles,
@@ -50,7 +49,8 @@ public class DietLogService {
                           DailyMeasurementEntryRepository measurements,
                           AccessControlService accessControl,
                           MeasurementValidator measurementValidator,
-                          DietLogRequestMapper requestMapper) {
+                          DietLogRequestMapper requestMapper,
+                          DietLogResponseAssembler responseAssembler) {
         this.users = users;
         this.patientProfiles = patientProfiles;
         this.dailyDietLogs = dailyDietLogs;
@@ -58,6 +58,7 @@ public class DietLogService {
         this.accessControl = accessControl;
         this.measurementValidator = measurementValidator;
         this.requestMapper = requestMapper;
+        this.responseAssembler = responseAssembler;
     }
 
     public DailyDietLogResponse saveForCurrentPatient(Authentication authentication, DailyDietLogRequest request) {
@@ -86,7 +87,7 @@ public class DietLogService {
             measurements.deleteByDailyDietLogId(saved.getId());
         }
         var savedMeasurements = saveMeasurements(patient, saved, request.measurementsOrEmpty());
-        return DailyDietLogResponse.from(saved, savedMeasurements);
+        return responseAssembler.full(saved, savedMeasurements);
     }
 
     public DailyDietLogResponse getCurrentPatientLog(Authentication authentication, LocalDate date) {
@@ -94,7 +95,7 @@ public class DietLogService {
         validateLogDate(patient, date);
         var log = dailyDietLogs.findByPatientProfileIdAndLogDate(patient.getId(), date)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Daily diet log not found"));
-        return DailyDietLogResponse.from(log, measurementsFor(log));
+        return responseAssembler.full(log, measurementsFor(log));
     }
 
     public List<DailyDietLogSummaryResponse> listCurrentPatientLogs(Authentication authentication,
@@ -105,7 +106,7 @@ public class DietLogService {
         var logs = dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(patient.getId(), from, to);
         var measurementCounts = measurementCountsFor(logs);
         return logs.stream()
-                .map(log -> summaryFrom(log, measurementCounts.getOrDefault(log.getId(), 0)))
+                .map(log -> responseAssembler.summary(log, measurementCounts.getOrDefault(log.getId(), 0)))
                 .toList();
     }
 
@@ -133,7 +134,7 @@ public class DietLogService {
         var logs = dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(patientProfileId, from, to);
         var measurementCounts = measurementCountsFor(logs);
         return logs.stream()
-                .map(log -> summaryFrom(log, measurementCounts.getOrDefault(log.getId(), 0)))
+                .map(log -> responseAssembler.summary(log, measurementCounts.getOrDefault(log.getId(), 0)))
                 .toList();
     }
 
@@ -146,7 +147,7 @@ public class DietLogService {
         var log = dailyDietLogs.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Daily diet log not found"));
         requireClinicalAccess(authentication, currentUser, patientProfileId(log));
-        return DailyDietLogResponse.from(log, measurementsFor(log));
+        return responseAssembler.full(log, measurementsFor(log));
     }
 
     public MeasurementUnit currentPatientGlucoseUnitPreference(Authentication authentication) {
@@ -218,21 +219,6 @@ public class DietLogService {
         return requests.stream()
                 .map(request -> measurements.save(requestMapper.measurementFrom(patient, log, request)))
                 .toList();
-    }
-
-    private DailyDietLogSummaryResponse summaryFrom(DailyDietLog log, int measurementCount) {
-        var patient = log.getPatientProfile();
-        return new DailyDietLogSummaryResponse(
-                log.getId(),
-                patientProfileId(log),
-                patient == null || patient.getUser() == null ? null : patient.getUser().getEmail(),
-                log.getLogDate(),
-                log.getAdherenceLevel(),
-                log.getAppetiteLevel(),
-                log.getMeals().size(),
-                log.getDeviations().size(),
-                measurementCount,
-                notesPreview(log.getNotes()));
     }
 
     private Map<Long, Integer> measurementCountsFor(List<DailyDietLog> logs) {
@@ -327,14 +313,6 @@ public class DietLogService {
         } catch (RuntimeException ignored) {
             return ZoneId.systemDefault();
         }
-    }
-
-    private static String notesPreview(String value) {
-        var trimmed = trimToNull(value);
-        if (trimmed == null || trimmed.length() <= NOTES_PREVIEW_LENGTH) {
-            return trimmed;
-        }
-        return trimmed.substring(0, NOTES_PREVIEW_LENGTH);
     }
 
     private static String trimToNull(String value) {
