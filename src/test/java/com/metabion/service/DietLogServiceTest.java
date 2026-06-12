@@ -64,7 +64,18 @@ class DietLogServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new DietLogService(users, patientProfiles, dailyDietLogs, measurements, accessControl);
+        var measurementWindows = new MeasurementWindowService();
+        var measurementValidator = new MeasurementValidator(measurementWindows);
+        var storageKeyValidator = new StorageKeyValidator();
+        var requestMapper = new DietLogRequestMapper(storageKeyValidator);
+        service = new DietLogService(
+                users,
+                patientProfiles,
+                dailyDietLogs,
+                measurements,
+                accessControl,
+                measurementValidator,
+                requestMapper);
     }
 
     @Test

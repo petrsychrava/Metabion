@@ -1,11 +1,7 @@
 package com.metabion.service;
 
 import com.metabion.domain.DailyDietLog;
-import com.metabion.domain.DailyDietLogDeviation;
-import com.metabion.domain.DailyDietLogMeal;
-import com.metabion.domain.DailyDietLogPhotoReference;
 import com.metabion.domain.DailyMeasurementEntry;
-import com.metabion.domain.MeasurementType;
 import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
@@ -25,15 +21,12 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -48,17 +41,23 @@ public class DietLogService {
     private final DailyDietLogRepository dailyDietLogs;
     private final DailyMeasurementEntryRepository measurements;
     private final AccessControlService accessControl;
+    private final MeasurementValidator measurementValidator;
+    private final DietLogRequestMapper requestMapper;
 
     public DietLogService(UserRepository users,
                           PatientProfileRepository patientProfiles,
                           DailyDietLogRepository dailyDietLogs,
                           DailyMeasurementEntryRepository measurements,
-                          AccessControlService accessControl) {
+                          AccessControlService accessControl,
+                          MeasurementValidator measurementValidator,
+                          DietLogRequestMapper requestMapper) {
         this.users = users;
         this.patientProfiles = patientProfiles;
         this.dailyDietLogs = dailyDietLogs;
         this.measurements = measurements;
         this.accessControl = accessControl;
+        this.measurementValidator = measurementValidator;
+        this.requestMapper = requestMapper;
     }
 
     public DailyDietLogResponse saveForCurrentPatient(Authentication authentication, DailyDietLogRequest request) {
@@ -73,18 +72,13 @@ public class DietLogService {
         if (request.appetiteLevel() == null) {
             throw badRequest("appetiteLevel is required");
         }
-        request.measurementsOrEmpty().forEach(this::validateMeasurement);
-        request.measurementsOrEmpty().forEach(measurement -> validateMeasurementDate(patient, request.logDate(), measurement));
+        request.measurementsOrEmpty()
+                .forEach(measurement -> measurementValidator.validateForLogDate(patient, request.logDate(), measurement));
 
         var log = dailyDietLogs.findByPatientProfileIdAndLogDate(patient.getId(), request.logDate())
                 .orElseGet(() -> new DailyDietLog(patient, request.logDate()));
         log.setPatientProfile(patient);
-        log.setLogDate(request.logDate());
-        log.setAdherenceLevel(request.adherenceLevel());
-        log.setAppetiteLevel(request.appetiteLevel());
-        log.setNotes(trimToNull(request.notes()));
-        log.setMetadata(trimToNull(request.metadata()));
-        log.replaceChildren(mealsFrom(request), deviationsFrom(request), photoReferencesFrom(request));
+        requestMapper.applyTo(log, request);
 
         var replacingPersistedLog = log.getId() != null;
         var saved = dailyDietLogs.save(log);
@@ -120,10 +114,9 @@ public class DietLogService {
                                                                         DailyMeasurementEntryRequest request) {
         var patient = currentPatientProfile(authentication);
         validateLogDate(patient, date);
-        validateMeasurement(request);
-        validateMeasurementDate(patient, date, request);
+        measurementValidator.validateForLogDate(patient, date, request);
         var log = dailyDietLogs.findByPatientProfileIdAndLogDate(patient.getId(), date).orElse(null);
-        return DailyMeasurementEntryResponse.from(measurements.save(measurementFrom(patient, log, request)));
+        return DailyMeasurementEntryResponse.from(measurements.save(requestMapper.measurementFrom(patient, log, request)));
     }
 
     public List<DailyDietLogSummaryResponse> listClinicalLogs(Authentication authentication,
@@ -219,137 +212,12 @@ public class DietLogService {
         }
     }
 
-    private void validateMeasurement(DailyMeasurementEntryRequest request) {
-        if (request == null) {
-            throw badRequest("measurement is required");
-        }
-        if (request.measurementType() == null) {
-            throw badRequest("measurementType is required");
-        }
-        if (request.value() == null) {
-            throw badRequest("value is required");
-        }
-        if (request.unit() == null) {
-            throw badRequest("unit is required");
-        }
-        if (request.measuredAt() == null) {
-            throw badRequest("measuredAt is required");
-        }
-        if (request.context() == null) {
-            throw badRequest("context is required");
-        }
-        if (request.measurementType() == MeasurementType.KETONE && request.unit() != MeasurementUnit.MMOL_L) {
-            throw badRequest("ketone unit must be MMOL_L");
-        }
-        if (request.measurementType() == MeasurementType.GLUCOSE && request.unit() == MeasurementUnit.MMOL_L
-                && outside(request.value(), "1.0", "40.0")) {
-            throw badRequest("glucose mmol/L value is outside the allowed range");
-        }
-        if (request.measurementType() == MeasurementType.GLUCOSE && request.unit() == MeasurementUnit.MG_DL
-                && outside(request.value(), "18", "720")) {
-            throw badRequest("glucose mg/dL value is outside the allowed range");
-        }
-        if (request.measurementType() == MeasurementType.KETONE && outside(request.value(), "0.0", "15.0")) {
-            throw badRequest("ketone mmol/L value is outside the allowed range");
-        }
-    }
-
-    private void validateMeasurementDate(PatientProfile patient, LocalDate logDate, DailyMeasurementEntryRequest request) {
-        var measuredDate = request.measuredAt().atZone(zoneFor(patient)).toLocalDate();
-        if (!measuredDate.equals(logDate)) {
-            throw badRequest("measuredAt must be within logDate");
-        }
-    }
-
-    private List<DailyDietLogMeal> mealsFrom(DailyDietLogRequest request) {
-        var requests = request.mealsOrEmpty();
-        var meals = new ArrayList<DailyDietLogMeal>(requests.size());
-        for (var i = 0; i < requests.size(); i++) {
-            var meal = requests.get(i);
-            if (meal == null) {
-                throw badRequest("meal is required");
-            }
-            if (meal.mealType() == null) {
-                throw badRequest("mealType is required");
-            }
-            if (meal.foodCategory() == null) {
-                throw badRequest("foodCategory is required");
-            }
-            meals.add(new DailyDietLogMeal(
-                    meal.mealType(),
-                    meal.foodCategory(),
-                    trimToNull(meal.foodDescription()),
-                    trimToNull(meal.notes()),
-                    i));
-        }
-        return meals;
-    }
-
-    private List<DailyDietLogDeviation> deviationsFrom(DailyDietLogRequest request) {
-        var requests = request.deviationsOrEmpty();
-        var deviations = new ArrayList<DailyDietLogDeviation>(requests.size());
-        for (var i = 0; i < requests.size(); i++) {
-            var deviation = requests.get(i);
-            if (deviation == null) {
-                throw badRequest("deviation is required");
-            }
-            if (deviation.deviationCategory() == null) {
-                throw badRequest("deviationCategory is required");
-            }
-            if (deviation.severity() == null) {
-                throw badRequest("severity is required");
-            }
-            deviations.add(new DailyDietLogDeviation(
-                    deviation.deviationCategory(),
-                    deviation.severity(),
-                    trimToNull(deviation.notes()),
-                    i));
-        }
-        return deviations;
-    }
-
-    private List<DailyDietLogPhotoReference> photoReferencesFrom(DailyDietLogRequest request) {
-        var requests = request.photoReferencesOrEmpty();
-        var photoReferences = new ArrayList<DailyDietLogPhotoReference>(requests.size());
-        for (var i = 0; i < requests.size(); i++) {
-            var photo = requests.get(i);
-            if (photo == null) {
-                throw badRequest("photoReference is required");
-            }
-            var storageKey = trimToNull(photo.storageKey());
-            validateStorageKey(storageKey);
-            photoReferences.add(new DailyDietLogPhotoReference(
-                    trimToNull(photo.originalFilename()),
-                    trimToNull(photo.contentType()),
-                    photo.sizeBytes(),
-                    storageKey,
-                    trimToNull(photo.caption()),
-                    i));
-        }
-        return photoReferences;
-    }
-
     private List<DailyMeasurementEntry> saveMeasurements(PatientProfile patient,
                                                          DailyDietLog log,
                                                          List<DailyMeasurementEntryRequest> requests) {
         return requests.stream()
-                .map(request -> measurements.save(measurementFrom(patient, log, request)))
+                .map(request -> measurements.save(requestMapper.measurementFrom(patient, log, request)))
                 .toList();
-    }
-
-    private DailyMeasurementEntry measurementFrom(PatientProfile patient,
-                                                  DailyDietLog log,
-                                                  DailyMeasurementEntryRequest request) {
-        return new DailyMeasurementEntry(
-                patient,
-                log,
-                request.measurementType(),
-                request.value(),
-                request.unit(),
-                request.measuredAt(),
-                request.context(),
-                trimToNull(request.notes()),
-                trimToNull(request.metadata()));
     }
 
     private DailyDietLogSummaryResponse summaryFrom(DailyDietLog log, int measurementCount) {
@@ -458,32 +326,6 @@ public class DietLogService {
             return timezone == null ? ZoneId.systemDefault() : ZoneId.of(timezone);
         } catch (RuntimeException ignored) {
             return ZoneId.systemDefault();
-        }
-    }
-
-    private static boolean outside(BigDecimal value, String min, String max) {
-        return value.compareTo(new BigDecimal(min)) < 0 || value.compareTo(new BigDecimal(max)) > 0;
-    }
-
-    private static void validateStorageKey(String storageKey) {
-        if (storageKey == null) {
-            return;
-        }
-        var lowerStorageKey = storageKey.toLowerCase(Locale.ROOT);
-        if (storageKey.contains("://")
-                || storageKey.contains("..")
-                || storageKey.startsWith("/")
-                || storageKey.contains("\\")
-                || storageKey.startsWith("~")
-                || lowerStorageKey.startsWith("file:")
-                || storageKey.contains("?")
-                || storageKey.contains("#")
-                || lowerStorageKey.contains("token=")
-                || lowerStorageKey.contains("signature=")
-                || lowerStorageKey.contains("session=")
-                || lowerStorageKey.contains("password=")
-                || lowerStorageKey.contains("secret=")) {
-            throw badRequest("photo storageKey is not allowed");
         }
     }
 
