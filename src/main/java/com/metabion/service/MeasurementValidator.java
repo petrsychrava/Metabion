@@ -75,6 +75,7 @@ public class MeasurementValidator {
         if (request.measurementType() == MeasurementType.GLUCOSE) {
             throw badRequest("glucose unit must be MMOL_L or MG_DL");
         }
+        throw badRequest("unsupported measurement type/unit combination");
     }
 
     private static ResponseStatusException badRequest(String reason) {

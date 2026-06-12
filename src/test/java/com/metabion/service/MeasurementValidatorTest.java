@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MeasurementValidatorTest {
@@ -63,6 +64,22 @@ class MeasurementValidatorTest {
     }
 
     @Test
+    void allowsOnlyCurrentSupportedTypeUnitCombinations() {
+        for (var type : MeasurementType.values()) {
+            for (var unit : MeasurementUnit.values()) {
+                var request = requestFor(type, unit);
+
+                if (isSupported(type, unit)) {
+                    assertThatCode(() -> validator.validateForLogDate(patient, LocalDate.of(2026, 6, 10), request))
+                            .doesNotThrowAnyException();
+                } else {
+                    assertBadRequest(request, "ketone unit must be MMOL_L");
+                }
+            }
+        }
+    }
+
+    @Test
     void rejectsMeasuredAtOutsideLocalLogDate() {
         var request = new DailyMeasurementEntryRequest(
                 MeasurementType.GLUCOSE,
@@ -90,6 +107,19 @@ class MeasurementValidatorTest {
                 measuredAt(),
                 MeasurementContext.FASTING,
                 null);
+    }
+
+    private boolean isSupported(MeasurementType type, MeasurementUnit unit) {
+        return type == MeasurementType.GLUCOSE && (unit == MeasurementUnit.MMOL_L || unit == MeasurementUnit.MG_DL)
+                || type == MeasurementType.KETONE && unit == MeasurementUnit.MMOL_L;
+    }
+
+    private DailyMeasurementEntryRequest requestFor(MeasurementType type, MeasurementUnit unit) {
+        var value = switch (type) {
+            case GLUCOSE -> unit == MeasurementUnit.MG_DL ? "104" : "5.8";
+            case KETONE -> "1.0";
+        };
+        return request(type, value, unit);
     }
 
     private Instant measuredAt() {
