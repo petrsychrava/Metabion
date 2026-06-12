@@ -105,10 +105,7 @@ class DietLogServiceTest {
 
     @Test
     void rejectsMeasurementMeasuredOutsideRequestedLogDate() {
-        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
-        var patient = patientProfile(10L, patientUser);
-        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
-        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        givenAuthenticatedPatient();
         var offDayMeasurement = new DailyMeasurementEntryRequest(
                 MeasurementType.GLUCOSE,
                 new BigDecimal("5.8"),
@@ -128,10 +125,7 @@ class DietLogServiceTest {
 
     @Test
     void rejectsStandaloneMeasurementMeasuredOutsideRequestedLogDate() {
-        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
-        var patient = patientProfile(10L, patientUser);
-        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
-        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        givenAuthenticatedPatient();
 
         assertThatThrownBy(() -> service.addMeasurementForCurrentPatient(
                 auth("patient@example.com"),
@@ -150,11 +144,8 @@ class DietLogServiceTest {
     }
 
     @Test
-    void createsOrReplacesCurrentPatientLog() {
-        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
-        var patient = patientProfile(10L, patientUser);
-        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
-        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+    void createsCurrentPatientLog() {
+        givenAuthenticatedPatient();
         when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
                 .thenReturn(Optional.empty());
         when(dailyDietLogs.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -172,10 +163,7 @@ class DietLogServiceTest {
 
     @Test
     void saveForCurrentPatientPersistsDietAndMeasurementMetadata() {
-        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
-        var patient = patientProfile(10L, patientUser);
-        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
-        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        givenAuthenticatedPatient();
         when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
                 .thenReturn(Optional.empty());
         when(dailyDietLogs.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -208,8 +196,7 @@ class DietLogServiceTest {
 
     @Test
     void existingSameDateLogIsReplacedNotDuplicated() {
-        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
-        var patient = patientProfile(10L, patientUser);
+        var patient = givenAuthenticatedPatient();
         var existing = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
         existing.addMeal(new DailyDietLogMeal(MealType.BREAKFAST, FoodCategory.DAIRY, "Yogurt", "old", 0));
         existing.addDeviation(new DailyDietLogDeviation(
@@ -217,8 +204,6 @@ class DietLogServiceTest {
                 DietDeviationSeverity.MAJOR,
                 "old",
                 0));
-        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
-        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
         when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
                 .thenReturn(Optional.of(existing));
         when(dailyDietLogs.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -237,11 +222,8 @@ class DietLogServiceTest {
 
     @Test
     void secondFullSaveClearsOldLinkedMeasurementsBeforeSavingReplacements() {
-        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
-        var patient = patientProfile(10L, patientUser);
+        var patient = givenAuthenticatedPatient();
         var existing = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
-        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
-        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
         when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
                 .thenReturn(Optional.empty(), Optional.of(existing));
         when(dailyDietLogs.save(any())).thenAnswer(invocation -> {
@@ -269,12 +251,9 @@ class DietLogServiceTest {
 
     @Test
     void getCurrentPatientLogReturnsOwnLogAndUsesMeasurementsByLogId() {
-        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
-        var patient = patientProfile(10L, patientUser);
+        var patient = givenAuthenticatedPatient();
         var log = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
         var measurement = glucoseMeasurement(patient, log, new BigDecimal("5.8"));
-        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
-        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
         when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
                 .thenReturn(Optional.of(log));
         when(measurements.findByDailyDietLogIdOrderByMeasuredAtDesc(99L)).thenReturn(List.of(measurement));
@@ -288,8 +267,7 @@ class DietLogServiceTest {
 
     @Test
     void getCurrentPatientLogIncludesStandaloneMeasurementsForSamePatientDay() {
-        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
-        var patient = patientProfile(10L, patientUser);
+        var patient = givenAuthenticatedPatient();
         var log = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
         var linked = new DailyMeasurementEntry(
                 patient,
@@ -309,8 +287,6 @@ class DietLogServiceTest {
                 Instant.parse("2026-06-10T20:00:00Z"),
                 MeasurementContext.BEDTIME,
                 "standalone");
-        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
-        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
         when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
                 .thenReturn(Optional.of(log));
         when(measurements.findByDailyDietLogIdOrderByMeasuredAtDesc(99L)).thenReturn(List.of(linked));
@@ -331,10 +307,7 @@ class DietLogServiceTest {
 
     @Test
     void getCurrentPatientLogMissingReturns404() {
-        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
-        var patient = patientProfile(10L, patientUser);
-        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
-        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        givenAuthenticatedPatient();
         when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
                 .thenReturn(Optional.empty());
 
@@ -345,14 +318,11 @@ class DietLogServiceTest {
 
     @Test
     void listCurrentPatientLogsReturnsDescendingSummariesAndValidatesRange() {
-        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
-        var patient = patientProfile(10L, patientUser);
+        var patient = givenAuthenticatedPatient();
         var older = savedLog(98L, patient, LocalDate.of(2026, 6, 9));
         older.setNotes("  older notes  ");
         var newer = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
         newer.setNotes("x".repeat(130));
-        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
-        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
         when(dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(
                 10L,
                 LocalDate.of(2026, 6, 1),
@@ -384,10 +354,7 @@ class DietLogServiceTest {
 
     @Test
     void addMeasurementForCurrentPatientAllowsMissingLogAndValidatesKetone() {
-        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
-        var patient = patientProfile(10L, patientUser);
-        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
-        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        givenAuthenticatedPatient();
         when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
                 .thenReturn(Optional.empty());
         when(measurements.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -488,11 +455,8 @@ class DietLogServiceTest {
 
     @Test
     void currentPatientGlucoseUnitPreferenceReturnsPreferenceAndDefaultsNullToMmol() {
-        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
-        var patient = patientProfile(10L, patientUser);
+        var patient = givenAuthenticatedPatient();
         patient.setGlucoseUnitPreference(MeasurementUnit.MG_DL);
-        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
-        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
 
         assertThat(service.currentPatientGlucoseUnitPreference(auth("patient@example.com")))
                 .isEqualTo(MeasurementUnit.MG_DL);
@@ -504,10 +468,7 @@ class DietLogServiceTest {
 
     @Test
     void storageKeyGuardRejectsUnsafeValues() {
-        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
-        var patient = patientProfile(10L, patientUser);
-        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
-        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        givenAuthenticatedPatient();
 
         assertUnsafeStorageKey("https://example.com/meal.jpg");
         assertUnsafeStorageKey("../meal.jpg");
@@ -523,10 +484,7 @@ class DietLogServiceTest {
 
     @Test
     void storageKeyGuardAllowsOpaqueRelativeKeys() {
-        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
-        var patient = patientProfile(10L, patientUser);
-        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
-        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        givenAuthenticatedPatient();
         when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
                 .thenReturn(Optional.empty());
         when(dailyDietLogs.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -603,6 +561,14 @@ class DietLogServiceTest {
                 Instant.now(),
                 MeasurementContext.FASTING,
                 "morning");
+    }
+
+    private PatientProfile givenAuthenticatedPatient() {
+        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patientProfile(10L, patientUser);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        return patient;
     }
 
     private Instant measuredAt(LocalDate date) {
