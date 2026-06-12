@@ -11,6 +11,7 @@ import java.time.ZoneId;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MeasurementWindowServiceTest {
 
@@ -42,6 +43,20 @@ class MeasurementWindowServiceTest {
 
         assertThat(service.dayWindow(patient(null), LocalDate.of(2026, 6, 10)).fromInclusive()).isEqualTo(expected);
         assertThat(service.dayWindow(patient("not-a-zone"), LocalDate.of(2026, 6, 10)).fromInclusive()).isEqualTo(expected);
+    }
+
+    @Test
+    void doesNotSwallowTimezoneAccessFailures() {
+        var patient = new PatientProfile() {
+            @Override
+            public String getTimezone() {
+                throw new IllegalStateException("timezone unavailable");
+            }
+        };
+
+        assertThatThrownBy(() -> service.dayWindow(patient, LocalDate.of(2026, 6, 10)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("timezone unavailable");
     }
 
     @Test

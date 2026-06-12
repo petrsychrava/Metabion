@@ -3,6 +3,7 @@ package com.metabion.service;
 import com.metabion.domain.PatientProfile;
 import org.springframework.stereotype.Service;
 
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -34,10 +35,13 @@ public class MeasurementWindowService {
     }
 
     ZoneId zoneFor(PatientProfile patient) {
+        var timezone = trimToNull(patient == null ? null : patient.getTimezone());
+        if (timezone == null) {
+            return ZoneId.systemDefault();
+        }
         try {
-            var timezone = trimToNull(patient == null ? null : patient.getTimezone());
-            return timezone == null ? ZoneId.systemDefault() : ZoneId.of(timezone);
-        } catch (RuntimeException ignored) {
+            return ZoneId.of(timezone);
+        } catch (DateTimeException ignored) {
             return ZoneId.systemDefault();
         }
     }
