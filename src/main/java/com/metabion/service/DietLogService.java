@@ -22,13 +22,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Transactional
@@ -39,6 +39,7 @@ public class DietLogService {
     private final DailyDietLogRepository dailyDietLogs;
     private final DailyMeasurementEntryRepository measurements;
     private final AccessControlService accessControl;
+    private final MeasurementWindowService measurementWindows;
     private final MeasurementValidator measurementValidator;
     private final DietLogRequestMapper requestMapper;
     private final DietLogResponseAssembler responseAssembler;
@@ -48,6 +49,7 @@ public class DietLogService {
                           DailyDietLogRepository dailyDietLogs,
                           DailyMeasurementEntryRepository measurements,
                           AccessControlService accessControl,
+                          MeasurementWindowService measurementWindows,
                           MeasurementValidator measurementValidator,
                           DietLogRequestMapper requestMapper,
                           DietLogResponseAssembler responseAssembler) {
@@ -56,6 +58,7 @@ public class DietLogService {
         this.dailyDietLogs = dailyDietLogs;
         this.measurements = measurements;
         this.accessControl = accessControl;
+        this.measurementWindows = measurementWindows;
         this.measurementValidator = measurementValidator;
         this.requestMapper = requestMapper;
         this.responseAssembler = responseAssembler;
@@ -196,7 +199,7 @@ public class DietLogService {
         if (logDate == null) {
             throw badRequest("logDate is required");
         }
-        if (logDate.isAfter(LocalDate.now(zoneFor(patient)))) {
+        if (logDate.isAfter(LocalDate.now(measurementWindows.zoneFor(patient)))) {
             throw badRequest("logDate cannot be in the future");
         }
     }
@@ -248,16 +251,13 @@ public class DietLogService {
         if (logsByDate.isEmpty()) {
             return counts;
         }
-        var zone = zoneFor(patient);
-        var minDate = logsByDate.keySet().stream().min(Comparator.naturalOrder()).orElseThrow();
-        var maxDate = logsByDate.keySet().stream().max(Comparator.naturalOrder()).orElseThrow();
-        var fromInclusive = minDate.atStartOfDay(zone).toInstant();
-        var toExclusive = maxDate.plusDays(1).atStartOfDay(zone).toInstant();
+        var zone = measurementWindows.zoneFor(patient);
+        var window = measurementWindows.dateRangeWindow(patient, logsByDate.keySet());
         measurements
                 .findByPatientProfileIdAndDailyDietLogIsNullAndMeasuredAtGreaterThanEqualAndMeasuredAtLessThanOrderByMeasuredAtDesc(
                         patientProfileId,
-                        fromInclusive,
-                        toExclusive)
+                        window.fromInclusive(),
+                        window.toExclusive())
                 .stream()
                 .map(DailyMeasurementEntry::getMeasuredAt)
                 .filter(measuredAt -> measuredAt != null)
@@ -281,21 +281,19 @@ public class DietLogService {
         if (patientProfileId == null || log.getLogDate() == null) {
             return linked;
         }
-        var zone = zoneFor(patient);
-        var fromInclusive = log.getLogDate().atStartOfDay(zone).toInstant();
-        var toExclusive = log.getLogDate().plusDays(1).atStartOfDay(zone).toInstant();
+        var window = measurementWindows.dayWindow(patient, log.getLogDate());
         var standalone = measurements
                 .findByPatientProfileIdAndDailyDietLogIsNullAndMeasuredAtGreaterThanEqualAndMeasuredAtLessThanOrderByMeasuredAtDesc(
                         patientProfileId,
-                        fromInclusive,
-                        toExclusive);
+                        window.fromInclusive(),
+                        window.toExclusive());
         if (standalone == null) {
             standalone = List.of();
         }
         if (standalone.isEmpty()) {
             return linked;
         }
-        return java.util.stream.Stream.concat(linked.stream(), standalone.stream())
+        return Stream.concat(linked.stream(), standalone.stream())
                 .sorted(Comparator.comparing(DailyMeasurementEntry::getMeasuredAt, Comparator.nullsLast(Comparator.naturalOrder()))
                         .reversed())
                 .toList();
@@ -304,23 +302,6 @@ public class DietLogService {
     private static Long patientProfileId(DailyDietLog log) {
         var patient = log.getPatientProfile();
         return patient == null ? null : patient.getId();
-    }
-
-    private static ZoneId zoneFor(PatientProfile patient) {
-        try {
-            var timezone = trimToNull(patient == null ? null : patient.getTimezone());
-            return timezone == null ? ZoneId.systemDefault() : ZoneId.of(timezone);
-        } catch (RuntimeException ignored) {
-            return ZoneId.systemDefault();
-        }
-    }
-
-    private static String trimToNull(String value) {
-        if (value == null) {
-            return null;
-        }
-        var trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private static ResponseStatusException badRequest(String reason) {

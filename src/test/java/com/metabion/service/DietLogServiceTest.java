@@ -75,6 +75,7 @@ class DietLogServiceTest {
                 dailyDietLogs,
                 measurements,
                 accessControl,
+                measurementWindows,
                 measurementValidator,
                 requestMapper,
                 responseAssembler);
