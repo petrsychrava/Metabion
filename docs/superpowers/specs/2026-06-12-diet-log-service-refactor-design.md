@@ -114,7 +114,7 @@ Date mismatch keeps reason `measuredAt must be within logDate`.
 
 Rule-table miss behavior is explicit:
 
-- missing `GLUCOSE` rules pass through after required-field validation, preserving today's behavior for unsupported glucose units that are not currently range-checked
+- missing `GLUCOSE` rules are rejected because glucose may only be recorded in `MMOL_L` or `MG_DL`
 - missing `KETONE` rules are rejected with `ketone unit must be MMOL_L`
 - missing rules for any future measurement type pass through after required-field validation unless the type is added to the table with stricter semantics
 
@@ -215,7 +215,7 @@ Preserve the existing important validation reason strings listed in this design.
 
 The only intentional behavior tightening is storage key validation: keys with characters outside the allowlist, empty path segments, `.` segments, or `..` segments are rejected even if they did not match the old blocklist.
 
-Measurement rule-table misses preserve current behavior: unrecognized glucose unit combinations are not newly rejected in this refactor, while ketone remains restricted to `MMOL_L`.
+Measurement rule-table misses are strict for current measurement types: glucose is restricted to `MMOL_L` and `MG_DL`, and ketone is restricted to `MMOL_L`.
 
 ## Testing
 
@@ -229,7 +229,7 @@ Add focused unit tests:
   - accepts current valid glucose and ketone examples
   - rejects current out-of-range glucose and ketone examples
   - rejects unsupported ketone unit
-- documents that unconfigured glucose and future measurement type/unit combinations pass through when such combinations become representable
+  - documents that glucose is restricted to `MMOL_L` and `MG_DL` when any additional unit becomes representable
   - rejects measured-at values outside the local log date
 - `MeasurementWindowServiceTest`
   - builds UTC day windows
@@ -261,4 +261,4 @@ Verification commands:
 - The `Stream` import/style nit is cleaned up if `Stream` remains in use.
 - Direct validator tests do not need authentication, patient profile repository, or diet log repository mocks.
 - Existing diet log behavior remains green under the focused service tests and full test suite.
-- No public API, DTO, repository, database, or controller behavior changes except the intentional stricter storage key allowlist.
+- No public API, DTO, repository, database, or controller behavior changes except the intentional stricter storage key allowlist and strict rejection of any future unsupported glucose unit.
