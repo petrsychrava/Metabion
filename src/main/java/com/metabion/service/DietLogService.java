@@ -31,8 +31,11 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -71,6 +74,7 @@ public class DietLogService {
             throw badRequest("appetiteLevel is required");
         }
         request.measurementsOrEmpty().forEach(this::validateMeasurement);
+        request.measurementsOrEmpty().forEach(measurement -> validateMeasurementDate(patient, request.logDate(), measurement));
 
         var log = dailyDietLogs.findByPatientProfileIdAndLogDate(patient.getId(), request.logDate())
                 .orElseGet(() -> new DailyDietLog(patient, request.logDate()));
@@ -104,9 +108,10 @@ public class DietLogService {
                                                                     LocalDate to) {
         var patient = currentPatientProfile(authentication);
         validateRange(from, to);
-        return dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(patient.getId(), from, to)
-                .stream()
-                .map(this::summaryFrom)
+        var logs = dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(patient.getId(), from, to);
+        var measurementCounts = measurementCountsFor(logs);
+        return logs.stream()
+                .map(log -> summaryFrom(log, measurementCounts.getOrDefault(log.getId(), 0)))
                 .toList();
     }
 
@@ -116,6 +121,7 @@ public class DietLogService {
         var patient = currentPatientProfile(authentication);
         validateLogDate(patient, date);
         validateMeasurement(request);
+        validateMeasurementDate(patient, date, request);
         var log = dailyDietLogs.findByPatientProfileIdAndLogDate(patient.getId(), date).orElse(null);
         return DailyMeasurementEntryResponse.from(measurements.save(measurementFrom(patient, log, request)));
     }
@@ -131,9 +137,10 @@ public class DietLogService {
         }
         validateRange(from, to);
         requireClinicalAccess(authentication, currentUser, patientProfileId);
-        return dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(patientProfileId, from, to)
-                .stream()
-                .map(this::summaryFrom)
+        var logs = dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(patientProfileId, from, to);
+        var measurementCounts = measurementCountsFor(logs);
+        return logs.stream()
+                .map(log -> summaryFrom(log, measurementCounts.getOrDefault(log.getId(), 0)))
                 .toList();
     }
 
@@ -247,6 +254,13 @@ public class DietLogService {
         }
     }
 
+    private void validateMeasurementDate(PatientProfile patient, LocalDate logDate, DailyMeasurementEntryRequest request) {
+        var measuredDate = request.measuredAt().atZone(zoneFor(patient)).toLocalDate();
+        if (!measuredDate.equals(logDate)) {
+            throw badRequest("measuredAt must be within logDate");
+        }
+    }
+
     private List<DailyDietLogMeal> mealsFrom(DailyDietLogRequest request) {
         var requests = request.mealsOrEmpty();
         var meals = new ArrayList<DailyDietLogMeal>(requests.size());
@@ -338,7 +352,7 @@ public class DietLogService {
                 trimToNull(request.metadata()));
     }
 
-    private DailyDietLogSummaryResponse summaryFrom(DailyDietLog log) {
+    private DailyDietLogSummaryResponse summaryFrom(DailyDietLog log, int measurementCount) {
         var patient = log.getPatientProfile();
         return new DailyDietLogSummaryResponse(
                 log.getId(),
@@ -349,8 +363,56 @@ public class DietLogService {
                 log.getAppetiteLevel(),
                 log.getMeals().size(),
                 log.getDeviations().size(),
-                measurementsFor(log).size(),
+                measurementCount,
                 notesPreview(log.getNotes()));
+    }
+
+    private Map<Long, Integer> measurementCountsFor(List<DailyDietLog> logs) {
+        if (logs == null || logs.isEmpty()) {
+            return Map.of();
+        }
+        var counts = new HashMap<Long, Integer>();
+        var logIds = logs.stream()
+                .map(DailyDietLog::getId)
+                .filter(id -> id != null)
+                .toList();
+        if (!logIds.isEmpty()) {
+            measurements.countByDailyDietLogIds(logIds)
+                    .forEach(count -> counts.put(
+                            count.getDailyDietLogId(),
+                            Math.toIntExact(count.getMeasurementCount())));
+        }
+
+        var patient = logs.getFirst().getPatientProfile();
+        var patientProfileId = patientProfileId(logs.getFirst());
+        if (patientProfileId == null) {
+            return counts;
+        }
+        var logsByDate = logs.stream()
+                .filter(log -> log.getId() != null && log.getLogDate() != null)
+                .collect(Collectors.groupingBy(DailyDietLog::getLogDate, Collectors.mapping(DailyDietLog::getId, Collectors.toList())));
+        if (logsByDate.isEmpty()) {
+            return counts;
+        }
+        var zone = zoneFor(patient);
+        var minDate = logsByDate.keySet().stream().min(Comparator.naturalOrder()).orElseThrow();
+        var maxDate = logsByDate.keySet().stream().max(Comparator.naturalOrder()).orElseThrow();
+        var fromInclusive = minDate.atStartOfDay(zone).toInstant();
+        var toExclusive = maxDate.plusDays(1).atStartOfDay(zone).toInstant();
+        measurements
+                .findByPatientProfileIdAndDailyDietLogIsNullAndMeasuredAtGreaterThanEqualAndMeasuredAtLessThanOrderByMeasuredAtDesc(
+                        patientProfileId,
+                        fromInclusive,
+                        toExclusive)
+                .stream()
+                .map(DailyMeasurementEntry::getMeasuredAt)
+                .filter(measuredAt -> measuredAt != null)
+                .map(measuredAt -> measuredAt.atZone(zone).toLocalDate())
+                .map(logsByDate::get)
+                .filter(ids -> ids != null)
+                .flatMap(List::stream)
+                .forEach(id -> counts.merge(id, 1, Integer::sum));
+        return counts;
     }
 
     private List<DailyMeasurementEntry> measurementsFor(DailyDietLog log) {

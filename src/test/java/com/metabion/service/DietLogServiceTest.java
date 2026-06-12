@@ -37,6 +37,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -86,6 +87,52 @@ class DietLogServiceTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("400 BAD_REQUEST");
         verify(dailyDietLogs, never()).save(any());
+    }
+
+    @Test
+    void rejectsMeasurementMeasuredOutsideRequestedLogDate() {
+        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patientProfile(10L, patientUser);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        var offDayMeasurement = new DailyMeasurementEntryRequest(
+                MeasurementType.GLUCOSE,
+                new BigDecimal("5.8"),
+                MeasurementUnit.MMOL_L,
+                Instant.parse("2026-06-11T00:00:00Z"),
+                MeasurementContext.FASTING,
+                "next day");
+
+        assertThatThrownBy(() -> service.saveForCurrentPatient(
+                auth("patient@example.com"),
+                validRequest(LocalDate.of(2026, 6, 10)).withMeasurements(List.of(offDayMeasurement))))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("measuredAt must be within logDate");
+        verify(dailyDietLogs, never()).save(any());
+    }
+
+    @Test
+    void rejectsStandaloneMeasurementMeasuredOutsideRequestedLogDate() {
+        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patientProfile(10L, patientUser);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+
+        assertThatThrownBy(() -> service.addMeasurementForCurrentPatient(
+                auth("patient@example.com"),
+                LocalDate.of(2026, 6, 10),
+                new DailyMeasurementEntryRequest(
+                        MeasurementType.GLUCOSE,
+                        new BigDecimal("5.8"),
+                        MeasurementUnit.MMOL_L,
+                        Instant.parse("2026-06-09T23:59:59Z"),
+                        MeasurementContext.FASTING,
+                        "previous day")))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("measuredAt must be within logDate");
+        verify(measurements, never()).save(any());
     }
 
     @Test
@@ -296,9 +343,7 @@ class DietLogServiceTest {
                 10L,
                 LocalDate.of(2026, 6, 1),
                 LocalDate.of(2026, 6, 30))).thenReturn(List.of(newer, older));
-        when(measurements.findByDailyDietLogIdOrderByMeasuredAtDesc(99L))
-                .thenReturn(List.of(glucoseMeasurement(patient, newer, new BigDecimal("5.8"))));
-        when(measurements.findByDailyDietLogIdOrderByMeasuredAtDesc(98L)).thenReturn(List.of());
+        when(measurements.countByDailyDietLogIds(List.of(99L, 98L))).thenReturn(List.of(measurementCount(99L, 1)));
 
         var summaries = service.listCurrentPatientLogs(
                 auth("patient@example.com"),
@@ -308,6 +353,7 @@ class DietLogServiceTest {
         assertThat(summaries).extracting(DailyDietLogSummaryResponse::id).containsExactly(99L, 98L);
         assertThat(summaries.getFirst().measurementCount()).isEqualTo(1);
         assertThat(summaries.getFirst().notesPreview()).hasSize(120);
+        verify(measurements, never()).findByDailyDietLogIdOrderByMeasuredAtDesc(any());
         assertThatThrownBy(() -> service.listCurrentPatientLogs(
                 auth("patient@example.com"),
                 LocalDate.of(2026, 6, 30),
@@ -380,7 +426,7 @@ class DietLogServiceTest {
                 20L,
                 LocalDate.of(2026, 6, 1),
                 LocalDate.of(2026, 6, 30))).thenReturn(List.of(log));
-        when(measurements.findByDailyDietLogIdOrderByMeasuredAtDesc(99L)).thenReturn(List.of());
+        when(measurements.countByDailyDietLogIds(List.of(99L))).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.listClinicalLogs(
                 auth("doctor@example.com"),
@@ -508,7 +554,7 @@ class DietLogServiceTest {
                         MeasurementType.GLUCOSE,
                         new BigDecimal("5.8"),
                         MeasurementUnit.MMOL_L,
-                        Instant.now(),
+                        measuredAt(date),
                         MeasurementContext.FASTING,
                         " morning ")));
     }
@@ -518,7 +564,7 @@ class DietLogServiceTest {
                 MeasurementType.KETONE,
                 value,
                 unit,
-                Instant.now(),
+                measuredAt(LocalDate.of(2026, 6, 10)),
                 MeasurementContext.FASTING,
                 null);
     }
@@ -528,7 +574,7 @@ class DietLogServiceTest {
                 MeasurementType.GLUCOSE,
                 new BigDecimal(value),
                 MeasurementUnit.MMOL_L,
-                Instant.now(),
+                measuredAt(LocalDate.of(2026, 6, 10)),
                 MeasurementContext.FASTING,
                 null);
     }
@@ -543,6 +589,24 @@ class DietLogServiceTest {
                 Instant.now(),
                 MeasurementContext.FASTING,
                 "morning");
+    }
+
+    private Instant measuredAt(LocalDate date) {
+        return date.atTime(7, 30).toInstant(ZoneOffset.UTC);
+    }
+
+    private DailyMeasurementEntryRepository.DailyDietLogMeasurementCount measurementCount(Long dailyDietLogId, long count) {
+        return new DailyMeasurementEntryRepository.DailyDietLogMeasurementCount() {
+            @Override
+            public Long getDailyDietLogId() {
+                return dailyDietLogId;
+            }
+
+            @Override
+            public long getMeasurementCount() {
+                return count;
+            }
+        };
     }
 
     private DailyDietLog savedLog(Long id, PatientProfile patient, LocalDate date) {
