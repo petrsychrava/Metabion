@@ -29,6 +29,7 @@ The authentication normalization mismatch found in the same review has already b
 - No public DTO record changes.
 - No dependency changes.
 - No global current-user abstraction in this pass.
+- No consolidation of `requireClinicalReader` role-set logic in this pass; the overlap with `AccessControlService` remains an open follow-up.
 - No clinical range configuration UI or externalized configuration.
 
 ## Recommended Approach
@@ -81,7 +82,7 @@ Invalid keys throw `400 BAD_REQUEST` with reason `photo storageKey is not allowe
 
 ### MeasurementValidator
 
-`MeasurementValidator` validates `DailyMeasurementEntryRequest`.
+`MeasurementValidator` validates `DailyMeasurementEntryRequest`. It depends on `MeasurementWindowService` for timezone resolution and date-window checks; it must not duplicate patient timezone parsing or invalid-timezone fallback logic.
 
 It checks:
 
@@ -91,9 +92,9 @@ It checks:
 - `unit` is present
 - `measuredAt` is present
 - `context` is present
-- type/unit combinations are supported
-- value falls within the supported clinical range
-- `measuredAt` belongs to the requested `logDate` in the patient's timezone
+- type/unit combinations follow the configured rule-table miss semantics
+- value falls within the configured clinical range when a range rule exists
+- `measuredAt` belongs to the requested `logDate` in the patient's timezone as resolved by `MeasurementWindowService`
 
 The validator uses an immutable rule table keyed by `MeasurementType` and `MeasurementUnit`.
 
@@ -111,6 +112,12 @@ Unsupported ketone units keep the existing error reason `ketone unit must be MMO
 
 Date mismatch keeps reason `measuredAt must be within logDate`.
 
+Rule-table miss behavior is explicit:
+
+- missing `GLUCOSE` rules pass through after required-field validation, preserving today's behavior for unsupported glucose units that are not currently range-checked
+- missing `KETONE` rules are rejected with `ketone unit must be MMOL_L`
+- missing rules for any future measurement type pass through after required-field validation unless the type is added to the table with stricter semantics
+
 ### MeasurementWindowService
 
 `MeasurementWindowService` owns patient-local time window construction.
@@ -126,6 +133,8 @@ Responsibilities:
 
 - one-log standalone measurement lookup
 - list summary standalone measurement counting
+
+`MeasurementValidator` also uses this service for measured-at date membership. This keeps all patient timezone parsing and fallback behavior in one place.
 
 ### DietLogRequestMapper
 
@@ -162,7 +171,7 @@ It does not query repositories and does not perform authorization.
 1. `DietLogService.saveForCurrentPatient` resolves the current patient.
 2. It rejects a null request.
 3. It validates the log date and required adherence/appetite.
-4. `MeasurementValidator` validates all measurement requests for the patient's local log date.
+4. `MeasurementValidator` validates all measurement requests for the patient's local log date using `MeasurementWindowService`.
 5. The service loads an existing log for patient/date or creates a new one.
 6. `DietLogRequestMapper.applyTo(log, request)` updates scalars and child collections.
 7. The service saves the log.
@@ -206,6 +215,8 @@ Preserve the existing important validation reason strings listed in this design.
 
 The only intentional behavior tightening is storage key validation: keys with characters outside the allowlist, empty path segments, `.` segments, or `..` segments are rejected even if they did not match the old blocklist.
 
+Measurement rule-table misses preserve current behavior: unrecognized glucose unit combinations are not newly rejected in this refactor, while ketone remains restricted to `MMOL_L`.
+
 ## Testing
 
 Add focused unit tests:
@@ -218,6 +229,7 @@ Add focused unit tests:
   - accepts current valid glucose and ketone examples
   - rejects current out-of-range glucose and ketone examples
   - rejects unsupported ketone unit
+- documents that unconfigured glucose and future measurement type/unit combinations pass through when such combinations become representable
   - rejects measured-at values outside the local log date
 - `MeasurementWindowServiceTest`
   - builds UTC day windows
@@ -228,6 +240,7 @@ Update existing tests:
 
 - Keep `DietLogServiceTest` for orchestration behavior.
 - Rename `createsOrReplacesCurrentPatientLog` to `createsCurrentPatientLog`.
+- Replace the fully-qualified `java.util.stream.Stream` usage with a normal import if the combine-and-sort logic still needs `Stream` after extraction.
 - Add or reuse helper methods for repeated authenticated-patient stubbing where practical.
 - Keep delete-before-save ordering coverage for replacing measurements.
 - Keep clinical access behavior coverage.
@@ -243,6 +256,9 @@ Verification commands:
 ## Success Criteria
 
 - `DietLogService` no longer contains storage key policy, clinical measurement range literals, request child mapping methods, notes preview logic, or duplicated standalone measurement window construction.
+- Patient timezone parsing and invalid-timezone fallback exist only in `MeasurementWindowService`; validators and services call it rather than recreating the logic.
+- The remaining duplicated clinical-reader role-set check is documented as out of scope and not made worse.
+- The `Stream` import/style nit is cleaned up if `Stream` remains in use.
 - Direct validator tests do not need authentication, patient profile repository, or diet log repository mocks.
 - Existing diet log behavior remains green under the focused service tests and full test suite.
 - No public API, DTO, repository, database, or controller behavior changes except the intentional stricter storage key allowlist.
