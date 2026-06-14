@@ -49,3 +49,4 @@ bin/
 ### Qwen Code ###
 .qwen/
 gradle.properties
+.worktrees/
