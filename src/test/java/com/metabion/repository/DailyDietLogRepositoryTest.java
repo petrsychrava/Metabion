@@ -9,6 +9,7 @@ import com.metabion.domain.DailyMeasurementEntry;
 import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.DietDeviationCategory;
 import com.metabion.domain.DietDeviationSeverity;
+import com.metabion.domain.DietLogPhotoStatus;
 import com.metabion.domain.FoodCategory;
 import com.metabion.domain.MealType;
 import com.metabion.domain.MeasurementContext;
@@ -131,6 +132,49 @@ class DailyDietLogRepositoryTest {
         assertThat(loaded.getMeals()).hasSize(1);
         assertThat(loaded.getDeviations()).hasSize(1);
         assertThat(loaded.getPhotoReferences()).hasSize(1);
+    }
+
+    @Test
+    void photoReferenceStoresUploadLifecycleMetadata() {
+        var patient = createPatient("photo-lifecycle@example.com");
+        var uploader = patient.getUser();
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        log.setAdherenceLevel(DietAdherenceLevel.MOSTLY);
+        log.setAppetiteLevel(AppetiteLevel.NORMAL);
+        var sha256 = "0f4e2a" + "0".repeat(58);
+
+        var photo = DailyDietLogPhotoReference.pending(
+                patient,
+                uploader,
+                "plate.jpg",
+                "image/jpeg",
+                1234L,
+                sha256,
+                "diet-log-photos/10/2026/06/14/file.jpg");
+        photo.attachTo(log, "Lunch plate", 0);
+        log.addPhotoReference(photo);
+
+        entityManager.persist(log);
+        entityManager.flush();
+        entityManager.clear();
+
+        var saved = dailyDietLogs.findByPatientProfileIdAndLogDate(patient.getId(), LocalDate.of(2026, 6, 10))
+                .orElseThrow();
+
+        assertThat(saved.getPhotoReferences()).singleElement()
+                .satisfies(savedPhoto -> {
+                    assertThat(savedPhoto.getPatientProfile().getId()).isEqualTo(patient.getId());
+                    assertThat(savedPhoto.getUploadedByUser().getId()).isEqualTo(uploader.getId());
+                    assertThat(savedPhoto.getStatus()).isEqualTo(DietLogPhotoStatus.ATTACHED);
+                    assertThat(savedPhoto.getOriginalFilename()).isEqualTo("plate.jpg");
+                    assertThat(savedPhoto.getContentType()).isEqualTo("image/jpeg");
+                    assertThat(savedPhoto.getSizeBytes()).isEqualTo(1234L);
+                    assertThat(savedPhoto.getSha256()).isEqualTo(sha256);
+                    assertThat(savedPhoto.getStorageKey()).isEqualTo("diet-log-photos/10/2026/06/14/file.jpg");
+                    assertThat(savedPhoto.getCaption()).isEqualTo("Lunch plate");
+                    assertThat(savedPhoto.getAttachedAt()).isNotNull();
+                    assertThat(savedPhoto.getRemovedAt()).isNull();
+                });
     }
 
     @Test

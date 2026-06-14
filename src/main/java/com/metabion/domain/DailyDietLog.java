@@ -111,18 +111,18 @@ public class DailyDietLog {
         deviations.forEach(this::addDeviation);
     }
 
-    public void replacePhotoReferences(List<DailyDietLogPhotoReference> photoReferences) {
-        this.photoReferences.clear();
-        photoReferences.forEach(this::addPhotoReference);
+    public void replaceChildren(
+            List<DailyDietLogMeal> meals,
+            List<DailyDietLogDeviation> deviations) {
+        replaceMeals(meals);
+        replaceDeviations(deviations);
     }
 
     public void replaceChildren(
             List<DailyDietLogMeal> meals,
             List<DailyDietLogDeviation> deviations,
             List<DailyDietLogPhotoReference> photoReferences) {
-        replaceMeals(meals);
-        replaceDeviations(deviations);
-        replacePhotoReferences(photoReferences);
+        replaceChildren(meals, deviations);
     }
 
     public Long getId() {
