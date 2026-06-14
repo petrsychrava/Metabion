@@ -2,6 +2,7 @@ package com.metabion.service;
 
 import com.metabion.dto.FileStorageResource;
 import com.metabion.dto.StoredFile;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +23,7 @@ public class LocalFileStorageService implements FileStorageService {
 
     private final Path root;
 
+    @Autowired
     public LocalFileStorageService(@Value("${metabion.storage.local.root:./var/metabion-storage}") String root) {
         this(Path.of(root));
     }

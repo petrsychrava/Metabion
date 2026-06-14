@@ -2,11 +2,13 @@ package com.metabion.service;
 
 import com.metabion.domain.DailyDietLog;
 import com.metabion.domain.DailyDietLogPhotoReference;
+import com.metabion.domain.DietLogPhotoStatus;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.dto.DietLogPhotoUploadResponse;
+import com.metabion.dto.FileStorageResource;
 import com.metabion.repository.DailyDietLogPhotoReferenceRepository;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
@@ -19,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.nio.file.NoSuchFileException;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
@@ -84,6 +87,24 @@ public class DietLogPhotoService {
         }
     }
 
+    public record PhotoContent(String contentType, FileStorageResource resource) {
+    }
+
+    @Transactional(readOnly = true)
+    public PhotoContent readContent(Authentication authentication, Long photoId) {
+        var user = currentUser(authentication);
+        var photo = photos.findById(photoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "photo not found"));
+        requireCanRead(user, authentication, photo);
+        try {
+            return new PhotoContent(photo.getContentType(), storage.read(photo.getStorageKey()));
+        } catch (NoSuchFileException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "photo content not found", ex);
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "photo content could not be read", ex);
+        }
+    }
+
     public void attachToLog(PatientProfile patient,
                             DailyDietLog log,
                             List<DailyDietLogRequest.PhotoUploadReferenceRequest> requests) {
@@ -131,6 +152,25 @@ public class DietLogPhotoService {
         }
     }
 
+    private void requireCanRead(User user, Authentication authentication, DailyDietLogPhotoReference photo) {
+        var patient = photo.getPatientProfile();
+        if (patient == null || patient.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "photo not found");
+        }
+        if (user.hasRole(RoleName.ADMIN)) {
+            return;
+        }
+        if (user.hasRole(RoleName.PATIENT) && sameUser(patient.getUser(), user)) {
+            return;
+        }
+        if (photo.getStatus() == DietLogPhotoStatus.ATTACHED
+                && user.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN, RoleName.COORDINATOR)
+                && accessControl.canAccessPatientProfile(authentication, patient.getId())) {
+            return;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user cannot read photo");
+    }
+
     private static boolean samePatient(PatientProfile first, PatientProfile second) {
         if (first.getId() != null && second.getId() != null) {
             return first.getId().equals(second.getId());
@@ -139,6 +179,16 @@ public class DietLogPhotoService {
     }
 
     private static boolean sameLog(DailyDietLog first, DailyDietLog second) {
+        if (first.getId() != null && second.getId() != null) {
+            return first.getId().equals(second.getId());
+        }
+        return first == second;
+    }
+
+    private static boolean sameUser(User first, User second) {
+        if (first == null || second == null) {
+            return false;
+        }
         if (first.getId() != null && second.getId() != null) {
             return first.getId().equals(second.getId());
         }

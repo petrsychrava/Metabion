@@ -6,6 +6,7 @@ import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.DailyDietLogRequest;
+import com.metabion.dto.FileStorageResource;
 import com.metabion.repository.DailyDietLogPhotoReferenceRepository;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
@@ -19,6 +20,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -29,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -142,6 +145,53 @@ class DietLogPhotoServiceTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("400 BAD_REQUEST")
                 .hasMessageContaining("photo upload is invalid");
+    }
+
+    @Test
+    void patientCanReadOwnPendingPhotoContent() throws Exception {
+        var user = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patient(10L, user);
+        var photo = DailyDietLogPhotoReference.pending(
+                patient,
+                user,
+                "plate.jpg",
+                "image/jpeg",
+                3L,
+                "a".repeat(64),
+                "diet-log-photos/10/plate.jpg");
+        org.springframework.test.util.ReflectionTestUtils.setField(photo, "id", 50L);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(user));
+        when(photos.findById(50L)).thenReturn(Optional.of(photo));
+        when(storage.read("diet-log-photos/10/plate.jpg"))
+                .thenReturn(new FileStorageResource(new ByteArrayInputStream(new byte[]{1, 2, 3}), 3));
+
+        var content = service.readContent(auth("patient@example.com"), 50L);
+
+        assertThat(content.contentType()).isEqualTo("image/jpeg");
+        assertThat(content.resource().sizeBytes()).isEqualTo(3);
+    }
+
+    @Test
+    void clinicalUserCannotReadPendingPhotoContent() throws Exception {
+        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
+        var clinician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var photo = DailyDietLogPhotoReference.pending(
+                patient(10L, patientUser),
+                patientUser,
+                "plate.jpg",
+                "image/jpeg",
+                3L,
+                "a".repeat(64),
+                "diet-log-photos/10/plate.jpg");
+        org.springframework.test.util.ReflectionTestUtils.setField(photo, "id", 50L);
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(clinician));
+        when(photos.findById(50L)).thenReturn(Optional.of(photo));
+
+        assertThatThrownBy(() -> service.readContent(auth("doctor@example.com"), 50L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403 FORBIDDEN")
+                .hasMessageContaining("Current user cannot read photo");
+        verify(storage, never()).read(anyString());
     }
 
     private void givenPatient() {
