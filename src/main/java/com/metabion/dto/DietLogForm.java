@@ -12,7 +12,6 @@ import com.metabion.domain.MeasurementUnit;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -264,18 +263,6 @@ public class DietLogForm {
     public static class PhotoReferenceRow {
         private Long uploadId;
 
-        @Size(max = 255)
-        private String originalFilename;
-
-        @Size(max = 120)
-        private String contentType;
-
-        @PositiveOrZero
-        private Long sizeBytes;
-
-        @Size(max = 500)
-        private String storageKey;
-
         @Size(max = 500)
         private String caption;
 
@@ -285,10 +272,6 @@ public class DietLogForm {
 
         boolean isBlank() {
             return uploadId == null
-                    && blank(originalFilename)
-                    && blank(contentType)
-                    && sizeBytes == null
-                    && blank(storageKey)
                     && blank(caption);
         }
 
@@ -298,38 +281,6 @@ public class DietLogForm {
 
         public void setUploadId(Long uploadId) {
             this.uploadId = uploadId;
-        }
-
-        public String getOriginalFilename() {
-            return originalFilename;
-        }
-
-        public void setOriginalFilename(String originalFilename) {
-            this.originalFilename = originalFilename;
-        }
-
-        public String getContentType() {
-            return contentType;
-        }
-
-        public void setContentType(String contentType) {
-            this.contentType = contentType;
-        }
-
-        public Long getSizeBytes() {
-            return sizeBytes;
-        }
-
-        public void setSizeBytes(Long sizeBytes) {
-            this.sizeBytes = sizeBytes;
-        }
-
-        public String getStorageKey() {
-            return storageKey;
-        }
-
-        public void setStorageKey(String storageKey) {
-            this.storageKey = storageKey;
         }
 
         public String getCaption() {

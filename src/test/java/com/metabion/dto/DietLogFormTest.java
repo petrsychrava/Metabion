@@ -114,10 +114,6 @@ class DietLogFormTest {
         var blankPhoto = new DietLogForm.PhotoReferenceRow();
         var photo = new DietLogForm.PhotoReferenceRow();
         photo.setUploadId(51L);
-        photo.setOriginalFilename("dinner.jpg");
-        photo.setContentType("image/jpeg");
-        photo.setSizeBytes(1024L);
-        photo.setStorageKey("diet/dinner.jpg");
         photo.setCaption("Dinner plate");
         form.setPhotoReferences(List.of(blankPhoto, photo));
 
