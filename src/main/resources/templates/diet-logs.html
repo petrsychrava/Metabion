@@ -138,7 +138,7 @@
                             formData.append('file', file);
                             const response = await fetch('/api/diet-log-photos/uploads', {
                                 method: 'POST',
-                                headers: {'X-CSRF-TOKEN': csrf.value},
+                                headers: {'X-XSRF-TOKEN': csrf.value},
                                 body: formData
                             });
                             if (response.ok) {

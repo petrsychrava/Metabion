@@ -102,6 +102,8 @@ class WebDietLogControllerTest {
                 .andExpect(content().string(containsString("name=\"meals[2].mealType\"")))
                 .andExpect(content().string(containsString("name=\"deviations[2].severity\"")))
                 .andExpect(content().string(containsString("type=\"file\"")))
+                .andExpect(content().string(containsString("headers: {'X-XSRF-TOKEN': csrf.value}")))
+                .andExpect(content().string(not(containsString("headers: {'X-CSRF-TOKEN': csrf.value}"))))
                 .andExpect(content().string(containsString("name=\"photoReferences[2].uploadId\"")))
                 .andExpect(content().string(not(containsString("name=\"photoReferences[2].storageKey\""))))
                 .andExpect(content().string(not(containsString("name=\"photoReferences[2].contentType\""))))
