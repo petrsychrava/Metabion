@@ -3,7 +3,6 @@ package com.metabion.service;
 import com.metabion.domain.DailyDietLog;
 import com.metabion.domain.DailyDietLogDeviation;
 import com.metabion.domain.DailyDietLogMeal;
-import com.metabion.domain.DailyDietLogPhotoReference;
 import com.metabion.domain.DailyMeasurementEntry;
 import com.metabion.domain.PatientProfile;
 import com.metabion.dto.DailyDietLogRequest;
@@ -18,19 +17,16 @@ import java.util.List;
 @Service
 public class DietLogRequestMapper {
 
-    private final StorageKeyValidator storageKeyValidator;
-
-    public DietLogRequestMapper(StorageKeyValidator storageKeyValidator) {
-        this.storageKeyValidator = storageKeyValidator;
-    }
-
     public void applyTo(DailyDietLog log, DailyDietLogRequest request) {
+        if (!request.photoReferencesOrEmpty().isEmpty()) {
+            throw badRequest("photo uploads must use staged upload");
+        }
         log.setLogDate(request.logDate());
         log.setAdherenceLevel(request.adherenceLevel());
         log.setAppetiteLevel(request.appetiteLevel());
         log.setNotes(trimToNull(request.notes()));
         log.setMetadata(trimToNull(request.metadata()));
-        log.replaceChildren(mealsFrom(request), deviationsFrom(request), photoReferencesFrom(request));
+        log.replaceChildren(mealsFrom(request), deviationsFrom(request));
     }
 
     public DailyMeasurementEntry measurementFrom(PatientProfile patient,
@@ -101,27 +97,6 @@ public class DietLogRequestMapper {
                     i));
         }
         return deviations;
-    }
-
-    private List<DailyDietLogPhotoReference> photoReferencesFrom(DailyDietLogRequest request) {
-        var requests = request.photoReferencesOrEmpty();
-        var photoReferences = new ArrayList<DailyDietLogPhotoReference>(requests.size());
-        for (var i = 0; i < requests.size(); i++) {
-            var photo = requests.get(i);
-            if (photo == null) {
-                throw badRequest("photoReference is required");
-            }
-            var storageKey = trimToNull(photo.storageKey());
-            storageKeyValidator.validate(storageKey);
-            photoReferences.add(new DailyDietLogPhotoReference(
-                    trimToNull(photo.originalFilename()),
-                    trimToNull(photo.contentType()),
-                    photo.sizeBytes(),
-                    storageKey,
-                    trimToNull(photo.caption()),
-                    i));
-        }
-        return photoReferences;
     }
 
     private static ResponseStatusException badRequest(String reason) {
