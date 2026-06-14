@@ -229,6 +229,74 @@ class DailyDietLogRepositoryTest {
     }
 
     @Test
+    void pendingPhotoReferenceWithRemovalAuditIsRejected() {
+        var patient = createPatient("pending-removed-audit@example.com");
+        var photo = DailyDietLogPhotoReference.pending(
+                patient,
+                patient.getUser(),
+                "pending.jpg",
+                "image/jpeg",
+                1234L,
+                "4".repeat(64),
+                "diet-log-photos/pending/invalid-pending.jpg");
+        photo.setRemovedAt(Instant.parse("2026-06-10T12:00:00Z"));
+        photo.setRemovedByUser(patient.getUser());
+
+        assertThatThrownBy(() -> {
+            entityManager.persist(photo);
+            entityManager.flush();
+        })
+                .isInstanceOf(Exception.class)
+                .hasMessageContaining("chk_daily_diet_log_photo_references_attached_state");
+    }
+
+    @Test
+    void attachedPhotoReferenceWithRemovalAuditIsRejected() {
+        var patient = createPatient("attached-removed-audit@example.com");
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var photo = DailyDietLogPhotoReference.pending(
+                patient,
+                patient.getUser(),
+                "attached.jpg",
+                "image/jpeg",
+                1234L,
+                "5".repeat(64),
+                "diet-log-photos/attached/invalid-attached.jpg");
+        photo.attachTo(log, "Attached", 0);
+        photo.setRemovedAt(Instant.parse("2026-06-10T12:00:00Z"));
+        photo.setRemovedByUser(patient.getUser());
+        log.addPhotoReference(photo);
+
+        assertThatThrownBy(() -> dailyDietLogs.saveAndFlush(log))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("chk_daily_diet_log_photo_references_attached_state");
+    }
+
+    @Test
+    void removedPhotoReferenceWithoutAttachedAtIsRejected() {
+        var patient = createPatient("removed-without-attached-at@example.com");
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var photo = DailyDietLogPhotoReference.pending(
+                patient,
+                patient.getUser(),
+                "removed.jpg",
+                "image/jpeg",
+                1234L,
+                "6".repeat(64),
+                "diet-log-photos/removed/invalid-removed.jpg");
+        photo.attachTo(log, "Removed", 0);
+        photo.setStatus(DietLogPhotoStatus.REMOVED);
+        photo.setRemovedAt(Instant.parse("2026-06-10T12:00:00Z"));
+        photo.setRemovedByUser(patient.getUser());
+        log.addPhotoReference(photo);
+        photo.setAttachedAt(null);
+
+        assertThatThrownBy(() -> dailyDietLogs.saveAndFlush(log))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("chk_daily_diet_log_photo_references_attached_state");
+    }
+
+    @Test
     void queriesMeasurementsByPatientAndRange() {
         var patient = createPatient("daily-measurement@example.com");
         var log = dailyDietLogs.saveAndFlush(new DailyDietLog(patient, LocalDate.of(2026, 6, 10)));

@@ -1,3 +1,7 @@
+-- Compatibility with metadata-only placeholder photo rows is not required.
+-- Real photo storage rows must be created through the new upload lifecycle.
+DELETE FROM daily_diet_log_photo_references;
+
 ALTER TABLE daily_diet_log_photo_references
     ALTER COLUMN daily_diet_log_id DROP NOT NULL,
     ADD COLUMN patient_profile_id BIGINT,
@@ -8,16 +12,6 @@ ALTER TABLE daily_diet_log_photo_references
     ADD COLUMN attached_at TIMESTAMP WITH TIME ZONE,
     ADD COLUMN removed_at TIMESTAMP WITH TIME ZONE,
     ADD COLUMN removed_by_user_id BIGINT;
-
-UPDATE daily_diet_log_photo_references photo
-SET patient_profile_id = log.patient_profile_id,
-    uploaded_by_user_id = profile.user_id,
-    status = CASE WHEN photo.daily_diet_log_id IS NULL THEN 'PENDING' ELSE 'ATTACHED' END,
-    sha256 = repeat('0', 64),
-    attached_at = CASE WHEN photo.daily_diet_log_id IS NULL THEN NULL ELSE NOW() END
-FROM daily_diet_logs log
-JOIN patient_profiles profile ON profile.id = log.patient_profile_id
-WHERE photo.daily_diet_log_id = log.id;
 
 ALTER TABLE daily_diet_log_photo_references
     ALTER COLUMN patient_profile_id SET NOT NULL,
@@ -38,11 +32,24 @@ ALTER TABLE daily_diet_log_photo_references
         CHECK (length(sha256) = 64),
     ADD CONSTRAINT chk_daily_diet_log_photo_references_attached_state
         CHECK (
-            (status = 'PENDING' AND daily_diet_log_id IS NULL AND attached_at IS NULL)
-            OR (status = 'ATTACHED' AND daily_diet_log_id IS NOT NULL AND attached_at IS NOT NULL)
+            (
+                status = 'PENDING'
+                AND daily_diet_log_id IS NULL
+                AND attached_at IS NULL
+                AND removed_at IS NULL
+                AND removed_by_user_id IS NULL
+            )
+            OR (
+                status = 'ATTACHED'
+                AND daily_diet_log_id IS NOT NULL
+                AND attached_at IS NOT NULL
+                AND removed_at IS NULL
+                AND removed_by_user_id IS NULL
+            )
             OR (
                 status = 'REMOVED'
                 AND daily_diet_log_id IS NOT NULL
+                AND attached_at IS NOT NULL
                 AND removed_at IS NOT NULL
                 AND removed_by_user_id IS NOT NULL
             )
