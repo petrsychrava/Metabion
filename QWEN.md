@@ -6,11 +6,12 @@ QWEN.md is a project-level instruction file that Qwen Code reads at the start of
 
 ## Project Overview
 
-**Metabion** is a **Spring Boot 4** authentication and user management backend service.
+**Metabion** is a **Spring Boot 4.0.6** authentication, user management, onboarding, and staff workflow backend service built with **Gradle** and **Java 25**.
 
 ### Tech Stack
 - **Java 25** with Spring Boot 4.0.6
 - **Gradle** (wrapper preferred) with Jacoco for test coverage
+- **Spring Web, Thymeleaf, Validation, Security, Data JPA, Flyway, Session JDBC, Mail**
 - **PostgreSQL** for production, **H2** and **Testcontainers** for testing
 - **Flyway** for database migrations
 - **Spring Security** with JDBC session management
@@ -22,8 +23,8 @@ The application follows a layered architecture:
 
 ```
 src/main/java/com/metabion/
-├── config/          # Security configuration
-├── controller/      # REST endpoints (Auth, Whoami)
+├── config/          # Security, localization, rate limiting, and app configuration
+├── controller/      # API and web MVC endpoints
 ├── domain/          # JPA entities (User, UserRole, tokens)
 ├── dto/             # Data transfer objects
 ├── exception/       # Custom exceptions
@@ -33,8 +34,13 @@ src/main/java/com/metabion/
 
 ### Key Domains
 - **User Registration** with email verification via tokens
-- **Password Reset** flow with hashed tokens
+- **Password Reset** flow with hashed reset tokens
 - **Role-based Access** (UserRole entity with composite key)
+- **Staff Invitations** and invitation acceptance
+- **Patient Onboarding** submission and staff review
+- **Cohort Membership**, cohort staff assignment, and patient expert assignment
+- **User Preferences** for theme and language
+- **Localization** via message bundles and authenticated locale handling
 - **Rate Limiting** on auth endpoints
 - **Email Service** abstraction with SMTP and logging implementations
 
@@ -72,3 +78,27 @@ src/main/java/com/metabion/
 - Commit messages use **imperative mood, present tense**
 - Keep commits focused and descriptive
 - Reference issue/ticket numbers when applicable
+
+## Model-MCP Interaction Protocol
+
+To ensure reliable use of the IntelliJ IDEA MCP tools, you must strictly follow these protocols:
+
+### 1. MCP Tools are NOT Shell Commands
+Never attempt to call an MCP tool via `run_shell_command`. MCP tools are specialized functions, not executable binaries in the system path.
+- **WRONG:** `run_shell_command(command="mcp__idea-mcp__list_directory_tree ...")`
+- **CORRECT:** `mcp_idea_mcp_list_directory_tree(directoryPath="...")`
+
+### 2. Always Explicitly Provide `projectPath`
+To avoid "Unable to determine the target project" errors, you must always include the absolute `projectPath` (e.g., `/home/petr/IdeaProjects/Metabion`) in every `mcp__idea-mcp__` tool call.
+
+### 3. Strict Schema & Naming Adherence (CRITICAL)
+Do not "guess" parameters. If a tool call fails with a "missing property" or "invalid parameter" error, follow this loop:
+1. **Re-verify Tool Name:** Check if you used `_` instead of `__` or `-`. The registered name is the only valid name.
+2. **Re-verify Parameter Names:** Use `tool_search` or `get_function_declarations` to find the exact key names (e.g., `oldText` vs `old_string`, `newText` vs `new_string`).
+3. **Verify Types:** Ensure the data type (string vs integer) matches the schema.
+
+### 4. Error Recovery Protocol
+If an MCP tool call fails:
+1. Do not retry with the same (likely incorrect) arguments.
+2. Use `tool_search` to re-examine the tool's definition.
+3. Correct the tool name or parameter names based on the search results.

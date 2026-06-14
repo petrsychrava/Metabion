@@ -19,6 +19,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
 import org.springframework.stereotype.Service;
+import org.springframework.context.i18n.LocaleContextHolder;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -116,7 +117,8 @@ public class UserService {
         resetTokens.save(reset);
 
         var recipient = user.getEmail();
-        CompletableFuture.runAsync(() -> emailService.sendPasswordReset(recipient, plain));
+        var locale = LocaleContextHolder.getLocale();
+        CompletableFuture.runAsync(() -> emailService.sendPasswordReset(recipient, plain, locale));
     }
 
     public void resetPassword(ResetPasswordRequest req) {
@@ -150,7 +152,7 @@ public class UserService {
         token.setExpiresAt(Instant.now().plus(VERIFICATION_TTL));
         verifTokens.save(token);
 
-        emailService.sendVerification(user.getEmail(), plain);
+        emailService.sendVerification(user.getEmail(), plain, LocaleContextHolder.getLocale());
     }
 
     private void invalidateAllSessionsForUser(User user) {

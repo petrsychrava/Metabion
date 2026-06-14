@@ -1,60 +1,67 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{layout :: head('Onboarding detail')}"></head>
-<body>
-<main class="app-page">
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell(#{onboarding.detail.pageTitle}, ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
     <header class="app-header">
         <div>
             <p class="eyebrow">Metabion</p>
-            <h1>Onboarding detail</h1>
+            <h1 th:text="#{onboarding.detail.title}">Onboarding detail</h1>
         </div>
-        <a class="button-link secondary" th:href="@{/app/clinical/onboarding}">Back</a>
+        <a class="button-link secondary" th:href="@{/app/clinical/onboarding}"
+           th:text="#{onboarding.back}">Back</a>
     </header>
     <section class="panel app-panel">
         <h2 th:text="${submission.patientEmail()}">patient@example.com</h2>
         <p class="muted">
-            Version <strong th:text="${submission.version()}">1</strong>,
-            context <strong th:text="${submission.onboardingContext()}">default</strong>,
-            submitted <strong th:text="${submission.submittedAt()}">date</strong>,
-            status <strong th:text="${submission.reviewStatus()}">PENDING_REVIEW</strong>
+            <span th:text="#{onboarding.version}">Version</span>
+            <strong th:text="${submission.version()}">1</strong>,
+            <span th:text="#{onboarding.contextLower}">context</span>
+            <strong th:text="${submission.onboardingContext()}">default</strong>,
+            <span th:text="#{onboarding.submittedLower}">submitted</span>
+            <strong th:text="${submission.submittedAt()}">date</strong>,
+            <span th:text="#{onboarding.status}">status</span>
+            <strong th:text="${#messages.msg('enum.onboardingReviewStatus.' + submission.reviewStatus().name())}">PENDING_REVIEW</strong>
         </p>
         <dl class="details">
-            <dt>Created</dt><dd th:text="${submission.createdAt()}">date</dd>
-            <dt>Date of birth</dt><dd th:text="${submission.dateOfBirth()}">1990-01-01</dd>
-            <dt>Sex</dt><dd th:text="${submission.sex()}">FEMALE</dd>
-            <dt>Country/region</dt><dd th:text="${submission.countryRegion()}">CZ</dd>
-            <dt>Timezone</dt><dd th:text="${submission.timezone()}">Europe/Prague</dd>
-            <dt>Diagnosis</dt><dd th:text="${submission.diagnosisType()}">CROHNS_DISEASE</dd>
-            <dt>Diagnosis year</dt><dd th:text="${submission.diagnosisYear()} ?: 'Not provided'">2018</dd>
-            <dt>Disease location</dt><dd th:text="${submission.diseaseLocation()} ?: 'Not provided'">Ileocolonic</dd>
-            <dt>Disease behavior</dt><dd th:text="${submission.diseaseBehavior()} ?: 'Not provided'">Inflammatory</dd>
-            <dt>Activity</dt><dd th:text="${submission.activityEstimate()}">MILD</dd>
-            <dt>Medications</dt><dd th:text="${submission.currentMedications()}">Mesalamine</dd>
-            <dt>Steroid use</dt><dd th:text="${submission.steroidUse()}">NONE</dd>
-            <dt>Advanced therapy exposure</dt><dd th:text="${submission.advancedTherapyExposure()}">NEVER_USED</dd>
-            <dt>Medication notes</dt><dd th:text="${submission.medicationNotes()} ?: 'Not provided'">Stable regimen</dd>
-            <dt>Labs collected</dt><dd th:text="${submission.labsCollectedAt()} ?: 'Not provided'">2026-05-20</dd>
-            <dt>CRP mg/L</dt><dd th:text="${submission.crpMgL()} ?: 'Not provided'">4.2</dd>
-            <dt>Fecal calprotectin ug/g</dt><dd th:text="${submission.fecalCalprotectinUgG()} ?: 'Not provided'">120</dd>
-            <dt>Hemoglobin g/dL</dt><dd th:text="${submission.hemoglobinGDl()} ?: 'Not provided'">13.8</dd>
-            <dt>Albumin g/dL</dt><dd th:text="${submission.albuminGDl()} ?: 'Not provided'">4.3</dd>
-            <dt>Lab notes</dt><dd th:text="${submission.labNotes()} ?: 'Not provided'">Recent outpatient labs</dd>
-            <dt>Reviewed by</dt><dd th:text="${submission.reviewedByEmail()} ?: 'Not reviewed'">reviewer@example.com</dd>
-            <dt>Reviewed at</dt><dd th:text="${submission.reviewedAt()} ?: 'Not reviewed'">date</dd>
-            <dt>Review notes</dt><dd th:text="${submission.reviewNotes()} ?: 'Not provided'">Reviewed</dd>
+            <dt th:text="#{onboarding.created}">Created</dt><dd th:text="${submission.createdAt()}">date</dd>
+            <dt th:text="#{onboarding.dateOfBirth}">Date of birth</dt><dd th:text="${submission.dateOfBirth()}">1990-01-01</dd>
+            <dt th:text="#{onboarding.sex}">Sex</dt><dd th:text="${#messages.msg('enum.sex.' + submission.sex().name())}">FEMALE</dd>
+            <dt th:text="#{onboarding.countryRegion}">Country/region</dt><dd th:text="${submission.countryRegion()}">CZ</dd>
+            <dt th:text="#{onboarding.timezone}">Timezone</dt><dd th:text="${submission.timezone()}">Europe/Prague</dd>
+            <dt th:text="#{onboarding.diagnosis}">Diagnosis</dt><dd th:text="${#messages.msg('enum.ibdDiagnosisType.' + submission.diagnosisType().name())}">CROHNS_DISEASE</dd>
+            <dt th:text="#{onboarding.diagnosisYear}">Diagnosis year</dt><dd th:text="${submission.diagnosisYear()} ?: #{onboarding.notProvided}">2018</dd>
+            <dt th:text="#{onboarding.diseaseLocation}">Disease location</dt><dd th:text="${submission.diseaseLocation()} ?: #{onboarding.notProvided}">Ileocolonic</dd>
+            <dt th:text="#{onboarding.diseaseBehavior}">Disease behavior</dt><dd th:text="${submission.diseaseBehavior()} ?: #{onboarding.notProvided}">Inflammatory</dd>
+            <dt th:text="#{onboarding.activity}">Activity</dt><dd th:text="${#messages.msg('enum.diseaseActivityEstimate.' + submission.activityEstimate().name())}">MILD</dd>
+            <dt th:text="#{onboarding.medications}">Medications</dt><dd th:text="${submission.currentMedications()}">Mesalamine</dd>
+            <dt th:text="#{onboarding.steroidUse}">Steroid use</dt><dd th:text="${#messages.msg('enum.steroidUse.' + submission.steroidUse().name())}">NONE</dd>
+            <dt th:text="#{onboarding.advancedTherapyExposure}">Advanced therapy exposure</dt><dd th:text="${#messages.msg('enum.advancedTherapyExposure.' + submission.advancedTherapyExposure().name())}">NEVER_USED</dd>
+            <dt th:text="#{onboarding.medicationNotes}">Medication notes</dt><dd th:text="${submission.medicationNotes()} ?: #{onboarding.notProvided}">Stable regimen</dd>
+            <dt th:text="#{onboarding.labsCollected}">Labs collected</dt><dd th:text="${submission.labsCollectedAt()} ?: #{onboarding.notProvided}">2026-05-20</dd>
+            <dt th:text="#{onboarding.crpMgL}">CRP mg/L</dt><dd th:text="${submission.crpMgL()} ?: #{onboarding.notProvided}">4.2</dd>
+            <dt th:text="#{onboarding.fecalCalprotectinUgG}">Fecal calprotectin ug/g</dt><dd th:text="${submission.fecalCalprotectinUgG()} ?: #{onboarding.notProvided}">120</dd>
+            <dt th:text="#{onboarding.hemoglobinGDl}">Hemoglobin g/dL</dt><dd th:text="${submission.hemoglobinGDl()} ?: #{onboarding.notProvided}">13.8</dd>
+            <dt th:text="#{onboarding.albuminGDl}">Albumin g/dL</dt><dd th:text="${submission.albuminGDl()} ?: #{onboarding.notProvided}">4.3</dd>
+            <dt th:text="#{onboarding.labNotes}">Lab notes</dt><dd th:text="${submission.labNotes()} ?: #{onboarding.notProvided}">Recent outpatient labs</dd>
+            <dt th:text="#{onboarding.reviewedBy}">Reviewed by</dt><dd th:text="${submission.reviewedByEmail()} ?: #{onboarding.notReviewed}">reviewer@example.com</dd>
+            <dt th:text="#{onboarding.reviewedAt}">Reviewed at</dt><dd th:text="${submission.reviewedAt()} ?: #{onboarding.notReviewed}">date</dd>
+            <dt th:text="#{onboarding.reviewNotes}">Review notes</dt><dd th:text="${submission.reviewNotes()} ?: #{onboarding.notProvided}">Reviewed</dd>
         </dl>
         <form class="form" th:action="@{/app/clinical/onboarding/{id}/review(id=${submission.id()})}"
               th:object="${reviewForm}" method="post">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-            <label class="field">Review status
+            <p class="error" th:each="error : ${#fields.globalErrors()}" th:text="${error}">Review form error</p>
+            <p class="error" th:each="error : ${#fields.errors('*')}" th:text="${error}">Review form error</p>
+            <label class="field"><span th:text="#{onboarding.reviewStatus}">Review status</span>
                 <select th:field="*{reviewStatus}">
-                    <option th:each="status : ${reviewStatuses}" th:value="${status}" th:text="${status}"></option>
+                    <option th:each="status : ${reviewStatuses}" th:value="${status}" th:text="${#messages.msg('enum.onboardingReviewStatus.' + status.name())}"></option>
                 </select>
             </label>
-            <label class="field">Review notes <textarea th:field="*{reviewNotes}"></textarea></label>
-            <button type="submit">Save review</button>
+            <p class="error" th:if="${#fields.hasErrors('reviewStatus')}" th:errors="*{reviewStatus}">Review status error</p>
+            <label class="field"><span th:text="#{onboarding.reviewNotes}">Review notes</span> <textarea th:field="*{reviewNotes}"></textarea></label>
+            <p class="error" th:if="${#fields.hasErrors('reviewNotes')}" th:errors="*{reviewNotes}">Review notes error</p>
+            <button type="submit" th:text="#{onboarding.saveReview}">Save review</button>
         </form>
     </section>
-</main>
-</body>
+</th:block>
 </html>

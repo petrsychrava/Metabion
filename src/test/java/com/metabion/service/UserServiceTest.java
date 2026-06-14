@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -72,7 +73,7 @@ class UserServiceTest {
         verify(users).save(any(User.class));
         verify(verifTokens).markAllConsumedForUser(eq(1L), any(Instant.class));
         verify(verifTokens).save(any(AccountVerification.class));
-        verify(emailService).sendVerification(eq("test@example.com"), anyString());
+        verify(emailService).sendVerification(eq("test@example.com"), anyString(), any(Locale.class));
     }
 
     @Test
@@ -84,7 +85,7 @@ class UserServiceTest {
 
         verify(users, never()).save(any());
         verify(patientProfiles, never()).save(any());
-        verify(emailService, never()).sendVerification(anyString(), anyString());
+        verify(emailService, never()).sendVerification(anyString(), anyString(), any(Locale.class));
     }
 
     @Test
@@ -120,7 +121,7 @@ class UserServiceTest {
 
         userService.register(request);
 
-        verify(emailService).sendVerification(eq("test@example.com"), anyString());
+        verify(emailService).sendVerification(eq("test@example.com"), anyString(), any(Locale.class));
     }
 
     @Test

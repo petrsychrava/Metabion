@@ -203,9 +203,19 @@ public class OnboardingService {
     }
 
     private static void copyPatientProfile(OnboardingSubmissionRequest request, PatientProfile patient) {
+        if (hasStablePatientProfileFields(patient)) {
+            return;
+        }
         patient.setDateOfBirth(request.dateOfBirth());
         patient.setSex(request.sex());
         patient.setCountryRegion(trimToNull(request.countryRegion()));
         patient.setTimezone(trimToNull(request.timezone()));
+    }
+
+    private static boolean hasStablePatientProfileFields(PatientProfile patient) {
+        return patient.getDateOfBirth() != null
+                && patient.getSex() != null
+                && trimToNull(patient.getCountryRegion()) != null
+                && trimToNull(patient.getTimezone()) != null;
     }
 }

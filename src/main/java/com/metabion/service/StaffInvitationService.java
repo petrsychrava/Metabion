@@ -14,6 +14,7 @@ import com.metabion.repository.StaffProfileRepository;
 import com.metabion.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -111,15 +112,16 @@ public class StaffInvitationService {
     }
 
     private void sendInvitationEmailAfterCommit(String email, String token) {
+        var locale = LocaleContextHolder.getLocale();
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            emailService.sendStaffInvitation(email, token);
+            emailService.sendStaffInvitation(email, token, locale);
             return;
         }
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                emailService.sendStaffInvitation(email, token);
+                emailService.sendStaffInvitation(email, token, locale);
             }
         });
     }
@@ -133,7 +135,7 @@ public class StaffInvitationService {
         for (var requestedRole : requestedRoles) {
             RoleName role;
             try {
-                role = RoleName.from(requestedRole == null ? null : requestedRole.trim());
+                role = RoleName.fromName(requestedRole == null ? null : requestedRole.trim());
             } catch (IllegalArgumentException ex) {
                 throw new StaffInvitationException(UNSUPPORTED_ROLES_MESSAGE);
             }

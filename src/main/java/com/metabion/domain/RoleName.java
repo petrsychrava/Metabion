@@ -1,11 +1,29 @@
 package com.metabion.domain;
 
+import java.util.Arrays;
+
 public enum RoleName {
-    PATIENT,
-    NUTRITION_SPECIALIST,
-    PHYSICIAN,
-    COORDINATOR,
-    ADMIN;
+    PATIENT("Patient"),
+    NUTRITION_SPECIALIST("Nutrition specialist"),
+    PHYSICIAN("Physician"),
+    COORDINATOR("Coordinator"),
+    ADMIN("Administrator");
+
+    private final String name;
+
+    RoleName(String name)
+    {
+        this.name = name;
+    }
+
+    public static RoleName fromName(String name) {
+        var roleNames = Arrays.stream(RoleName.values()).filter(roleName -> roleName.getName().equals(name)).toList();
+        if (roleNames.isEmpty()) {
+            throw new IllegalArgumentException("Unsupported role: " + name);
+        }
+        return roleNames.getFirst();
+    }
+
 
     public String authority() {
         return "ROLE_" + name();
@@ -28,5 +46,9 @@ public enum RoleName {
             case NUTRITION_SPECIALIST, PHYSICIAN, COORDINATOR -> true;
             case PATIENT, ADMIN -> false;
         };
+    }
+
+    public String getName() {
+        return name;
     }
 }

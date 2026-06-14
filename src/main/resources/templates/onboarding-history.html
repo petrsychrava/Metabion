@@ -1,28 +1,32 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{layout :: head('Onboarding history')}"></head>
-<body>
-<main class="app-page">
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell(#{onboarding.history.pageTitle}, ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
     <header class="app-header">
         <div>
             <p class="eyebrow">Metabion</p>
-            <h1>Onboarding history</h1>
+            <h1 th:text="#{onboarding.history.title}">Onboarding history</h1>
         </div>
-        <a class="button-link secondary" th:href="@{/app/onboarding(context=${context})}">Back</a>
+        <a class="button-link secondary" th:href="@{/app/onboarding(context=${context})}"
+           th:text="#{onboarding.back}">Back</a>
     </header>
     <section class="panel app-panel">
         <table class="table">
-            <thead><tr><th>Version</th><th>Context</th><th>Submitted</th><th>Status</th></tr></thead>
+            <thead><tr>
+                <th th:text="#{onboarding.version}">Version</th>
+                <th th:text="#{onboarding.context}">Context</th>
+                <th th:text="#{onboarding.submitted}">Submitted</th>
+                <th th:text="#{onboarding.statusTitle}">Status</th>
+            </tr></thead>
             <tbody>
             <tr th:each="submission : ${submissions}">
                 <td th:text="${submission.version()}">1</td>
                 <td th:text="${submission.onboardingContext()}">default</td>
                 <td th:text="${submission.submittedAt()}">date</td>
-                <td th:text="${submission.reviewStatus()}">PENDING_REVIEW</td>
+                <td th:text="${#messages.msg('enum.onboardingReviewStatus.' + submission.reviewStatus().name())}">PENDING_REVIEW</td>
             </tr>
             </tbody>
         </table>
     </section>
-</main>
-</body>
+</th:block>
 </html>

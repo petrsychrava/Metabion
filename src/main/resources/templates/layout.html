@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en" th:lang="${htmlLang == null ? 'en' : htmlLang}" xmlns:th="http://www.thymeleaf.org"
+      th:fragment="appShell(pageTitle, activePath, content)"
+      th:attr="data-theme-preference=${themePreference == null ? 'SYSTEM' : themePreference.name()}">
 <head th:fragment="head(pageTitle)">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,7 +10,35 @@
 </head>
 <body>
 <header class="brand" th:fragment="brand">
-    <a th:href="@{/}" aria-label="Metabion home">Metabion</a>
+    <a th:href="@{/}" th:attr="aria-label=#{app.brandHome}">Metabion</a>
 </header>
+
+<div class="workbench">
+    <aside class="sidebar" aria-label="Application navigation">
+        <a class="sidebar-brand" th:href="@{/app}">Metabion</a>
+        <nav aria-label="Application sections">
+            <ul class="sidebar-nav">
+                <li th:each="item : ${appMenuItems}">
+                    <a th:if="${item.linked() and item.route() == activePath}"
+                       th:href="${item.route()}"
+                       class="active"
+                       aria-current="page"
+                       th:text="${item.displayLabel()}">Menu item</a>
+                    <a th:if="${item.linked() and item.route() != activePath}"
+                       th:href="${item.route()}"
+                       th:text="${item.displayLabel()}">Menu item</a>
+                    <span th:unless="${item.linked()}" class="disabled" th:text="${item.displayLabel()}">Planned item</span>
+                </li>
+            </ul>
+        </nav>
+        <form class="sidebar-logout" th:action="@{/logout}" method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <button type="submit" class="secondary" th:text="#{app.signOut}">Sign out</button>
+        </form>
+    </aside>
+    <main class="workbench-main">
+        <th:block th:replace="${content}"></th:block>
+    </main>
+</div>
 </body>
 </html>

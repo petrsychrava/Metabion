@@ -64,7 +64,7 @@ public class AccessControlService {
         if (authentication == null || !authentication.isAuthenticated() || authentication.getName() == null) {
             return Optional.empty();
         }
-        return users.findByEmail(authentication.getName());
+        return users.findByEmail(UserService.normalize(authentication.getName()));
     }
 
     private boolean canAccessPatientProfile(User user, Long patientProfileId) {

@@ -251,6 +251,50 @@ class OnboardingServiceTest {
     }
 
     @Test
+    void submitForCurrentPatientDoesNotOverwriteExistingPatientProfileFields() {
+        var patientUser = user(16L, "stable-profile@example.com", RoleName.PATIENT);
+        var patientProfile = patientProfile(160L, patientUser);
+        when(users.findByEmail("stable-profile@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(16L)).thenReturn(Optional.of(patientProfile));
+        when(patientProfiles.lockById(160L)).thenReturn(Optional.of(patientProfile));
+        when(submissions.maxVersion(160L, "default")).thenReturn(1);
+        when(submissions.save(any(OnboardingSubmission.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        var request = new OnboardingSubmissionRequest(
+                "default",
+                LocalDate.of(1985, 6, 15),
+                Sex.MALE,
+                "US",
+                "America/New_York",
+                validRequest().diagnosisType(),
+                validRequest().diagnosisYear(),
+                validRequest().diseaseLocation(),
+                validRequest().diseaseBehavior(),
+                validRequest().activityEstimate(),
+                validRequest().currentMedications(),
+                validRequest().steroidUse(),
+                validRequest().advancedTherapyExposure(),
+                validRequest().medicationNotes(),
+                validRequest().labsCollectedAt(),
+                validRequest().crpMgL(),
+                validRequest().fecalCalprotectinUgG(),
+                validRequest().hemoglobinGDl(),
+                validRequest().albuminGDl(),
+                validRequest().labNotes());
+
+        var response = service.submitForCurrentPatient(auth("stable-profile@example.com"), request);
+
+        assertThat(response.version()).isEqualTo(2);
+        assertThat(response.dateOfBirth()).isEqualTo(LocalDate.of(1990, 1, 1));
+        assertThat(response.sex()).isEqualTo(Sex.FEMALE);
+        assertThat(response.countryRegion()).isEqualTo("CZ");
+        assertThat(response.timezone()).isEqualTo("Europe/Prague");
+        assertThat(patientProfile.getDateOfBirth()).isEqualTo(LocalDate.of(1990, 1, 1));
+        assertThat(patientProfile.getSex()).isEqualTo(Sex.FEMALE);
+        assertThat(patientProfile.getCountryRegion()).isEqualTo("CZ");
+        assertThat(patientProfile.getTimezone()).isEqualTo("Europe/Prague");
+    }
+
+    @Test
     void patientHistoryIsLimitedToCurrentPatientProfile() {
         var patientUser = user(2L, "history-patient@example.com", RoleName.PATIENT);
         var patientProfile = patientProfile(20L, patientUser);

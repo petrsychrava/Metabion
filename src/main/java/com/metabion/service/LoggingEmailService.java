@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
+import java.util.Locale;
+
 @Service
 @Profile("dev")
 public class LoggingEmailService implements EmailService {
@@ -19,20 +21,20 @@ public class LoggingEmailService implements EmailService {
     }
 
     @Override
-    public void sendVerification(String to, String token) {
+    public void sendVerification(String to, String token, Locale locale) {
         log.info("[DEV] Verification email would be sent to {} with link {}", to,
-                baseUrl + "/verify?token=<redacted>");
+                baseUrl + "/verify?token=" + token);
     }
 
     @Override
-    public void sendPasswordReset(String to, String token) {
+    public void sendPasswordReset(String to, String token, Locale locale) {
         log.info("[DEV] Password reset email would be sent to {} with link {}", to,
-                baseUrl + "/reset-password?token=<redacted>");
+                baseUrl + "/reset-password?token=" + token);
     }
 
     @Override
-    public void sendStaffInvitation(String to, String token) {
+    public void sendStaffInvitation(String to, String token, Locale locale) {
         log.info("[DEV] Staff invitation email would be sent to {} with link {}", to,
-                baseUrl + "/staff-invitations/accept?token=<redacted>");
+                baseUrl + "/staff-invitations/accept?token=" + token);
     }
 }

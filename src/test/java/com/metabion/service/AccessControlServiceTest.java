@@ -68,6 +68,16 @@ class AccessControlServiceTest {
     }
 
     @Test
+    void currentUserLookupNormalizesAuthenticationName() {
+        var patient = user(1L, "patient@example.com", RoleName.PATIENT);
+        var ownProfile = patientProfile(10L, patient);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+        when(patientProfiles.findById(10L)).thenReturn(Optional.of(ownProfile));
+
+        assertThat(accessControlService.canAccessPatientProfile(auth(" PATIENT@example.com "), 10L)).isTrue();
+    }
+
+    @Test
     void staffCanAccessDirectlyAssignedPatient() {
         var staffUser = user(2L, "specialist@example.com", RoleName.NUTRITION_SPECIALIST);
         var staffProfile = staffProfile(20L, staffUser);

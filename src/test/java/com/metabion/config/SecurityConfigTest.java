@@ -3,6 +3,7 @@ package com.metabion.config;
 import com.metabion.dto.LoginResponse;
 import com.metabion.service.SecurityService;
 import com.metabion.service.StaffInvitationService;
+import com.metabion.service.UserPreferenceService;
 import com.metabion.service.UserService;
 
 import java.util.List;
@@ -21,6 +22,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -67,6 +69,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     StaffInvitationService staffInvitationService;
+
+    @MockitoBean
+    UserPreferenceService userPreferenceService;
 
     private MockMvc mvc;
 
@@ -152,6 +157,40 @@ class SecurityConfigTest {
     void app_requires_authentication() throws Exception {
         mvc.perform(get("/app"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void theme_preference_post_requires_authentication() throws Exception {
+        mvc.perform(post("/app/preferences/theme")
+                        .with(csrf())
+                        .param("themePreference", "DARK"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void theme_preference_post_without_csrf_is_forbidden_for_authenticated_user() throws Exception {
+        mvc.perform(post("/app/preferences/theme")
+                        .with(user("user@example.com").roles("PATIENT"))
+                        .param("themePreference", "DARK"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void language_preference_post_with_csrf_is_public_and_reaches_controller() throws Exception {
+        mvc.perform(post("/preferences/language")
+                        .with(csrf())
+                        .header("Referer", "/login")
+                        .param("languagePreference", "CS"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+    }
+
+    @Test
+    void language_preference_post_without_csrf_is_forbidden() throws Exception {
+        mvc.perform(post("/preferences/language")
+                        .header("Referer", "/login")
+                        .param("languagePreference", "CS"))
+                .andExpect(status().isForbidden());
     }
 
     @Test

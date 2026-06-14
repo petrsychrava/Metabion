@@ -45,15 +45,6 @@ CREATE TABLE onboarding_submissions (
         CHECK (advanced_therapy_exposure IN ('NEVER_USED', 'CURRENT', 'PAST', 'UNKNOWN')),
     CONSTRAINT chk_onboarding_submissions_review_status
         CHECK (review_status IN ('PENDING_REVIEW', 'REVIEWED', 'NEEDS_FOLLOW_UP')),
-    CONSTRAINT chk_onboarding_submissions_diagnosis_year
-        CHECK (diagnosis_year IS NULL OR diagnosis_year BETWEEN 1900 AND 2100),
-    CONSTRAINT chk_onboarding_submissions_lab_values
-        CHECK (
-            (crp_mg_l IS NULL OR (crp_mg_l >= 0 AND crp_mg_l <= 500))
-            AND (fecal_calprotectin_ug_g IS NULL OR (fecal_calprotectin_ug_g >= 0 AND fecal_calprotectin_ug_g <= 10000))
-            AND (hemoglobin_g_dl IS NULL OR (hemoglobin_g_dl >= 0 AND hemoglobin_g_dl <= 25))
-            AND (albumin_g_dl IS NULL OR (albumin_g_dl >= 0 AND albumin_g_dl <= 10))
-        ),
     CONSTRAINT chk_onboarding_submissions_labs_date_required
         CHECK (
             labs_collected_at IS NOT NULL

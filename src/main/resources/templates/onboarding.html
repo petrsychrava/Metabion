@@ -1,76 +1,94 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{layout :: head('Patient onboarding')}"></head>
-<body>
-<main class="app-page">
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell(#{onboarding.patient.pageTitle}, ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
     <header class="app-header">
         <div>
             <p class="eyebrow">Metabion</p>
-            <h1>Patient onboarding</h1>
+            <h1 th:text="#{onboarding.patient.title}">Patient onboarding</h1>
         </div>
-        <a class="button-link secondary" th:href="@{/app/onboarding/history(context=${context})}">History</a>
+        <a class="button-link secondary" th:href="@{/app/onboarding/history(context=${context})}"
+           th:text="#{onboarding.patient.history}">History</a>
     </header>
 
     <section class="panel app-panel" th:if="${latest != null}">
-        <h2>Latest baseline</h2>
+        <h2 th:text="#{onboarding.patient.latestBaseline}">Latest baseline</h2>
         <p class="muted">
-            Version <strong th:text="${latest.version()}">1</strong>,
-            status <strong th:text="${latest.reviewStatus()}">PENDING_REVIEW</strong>
+            <span th:text="#{onboarding.version}">Version</span>
+            <strong th:text="${latest.version()}">1</strong>,
+            <span th:text="#{onboarding.status}">status</span>
+            <strong th:text="${#messages.msg('enum.onboardingReviewStatus.' + latest.reviewStatus().name())}">PENDING_REVIEW</strong>
         </p>
     </section>
 
     <section class="panel app-panel">
-        <h2>Submit baseline</h2>
+        <h2 th:text="#{onboarding.patient.submitBaseline}">Submit baseline</h2>
         <form class="form" th:action="@{/app/onboarding}" th:object="${onboardingForm}" method="post">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-            <label class="field">Context <input th:field="*{onboardingContext}"></label>
-            <label class="field">Date of birth <input type="date" th:field="*{dateOfBirth}" required></label>
-            <label class="field">Sex
-                <select th:field="*{sex}" required>
-                    <option value="">Select</option>
-                    <option th:each="option : ${sexOptions}" th:value="${option}" th:text="${option}"></option>
+            <label class="field"><span th:text="#{onboarding.context}">Context</span> <input th:field="*{onboardingContext}"></label>
+            <label class="field"><span th:text="#{onboarding.dateOfBirth}">Date of birth</span>
+                <input type="date" id="dateOfBirth" name="dateOfBirth"
+                       th:value="${onboardingForm.dateOfBirth == null ? '' : #temporals.format(onboardingForm.dateOfBirth, 'yyyy-MM-dd')}"
+                       th:readonly="${profileLocked}" th:classappend="${profileLocked} ? 'locked-profile-field'" required>
+            </label>
+            <p class="error" th:if="${#fields.hasErrors('dateOfBirth')}" th:errors="*{dateOfBirth}">Date of birth error</p>
+            <label class="field"><span th:text="#{onboarding.sex}">Sex</span>
+                <input th:if="${profileLocked}" type="hidden" name="sex" th:value="*{sex}">
+                <select th:field="*{sex}" th:disabled="${profileLocked}" th:classappend="${profileLocked} ? 'locked-profile-field'" required>
+                    <option value="" th:text="#{onboarding.select}">Select</option>
+                    <option th:each="option : ${sexOptions}" th:value="${option}" th:text="${#messages.msg('enum.sex.' + option.name())}"></option>
                 </select>
             </label>
-            <label class="field">Country/region <input th:field="*{countryRegion}" required></label>
-            <label class="field">Timezone <input th:field="*{timezone}" required></label>
-            <label class="field">Diagnosis
+            <p class="error" th:if="${#fields.hasErrors('sex')}" th:errors="*{sex}">Sex error</p>
+            <label class="field"><span th:text="#{onboarding.countryRegion}">Country/region</span>
+                <input th:field="*{countryRegion}" th:readonly="${profileLocked}" th:classappend="${profileLocked} ? 'locked-profile-field'" required>
+            </label>
+            <p class="error" th:if="${#fields.hasErrors('countryRegion')}" th:errors="*{countryRegion}">Country error</p>
+            <label class="field"><span th:text="#{onboarding.timezone}">Timezone</span>
+                <input th:field="*{timezone}" th:readonly="${profileLocked}" th:classappend="${profileLocked} ? 'locked-profile-field'" required>
+            </label>
+            <p class="error" th:if="${#fields.hasErrors('timezone')}" th:errors="*{timezone}">Timezone error</p>
+            <label class="field"><span th:text="#{onboarding.diagnosis}">Diagnosis</span>
                 <select th:field="*{diagnosisType}" required>
-                    <option value="">Select</option>
-                    <option th:each="option : ${diagnosisTypes}" th:value="${option}" th:text="${option}"></option>
+                    <option value="" th:text="#{onboarding.select}">Select</option>
+                    <option th:each="option : ${diagnosisTypes}" th:value="${option}" th:text="${#messages.msg('enum.ibdDiagnosisType.' + option.name())}"></option>
                 </select>
             </label>
-            <label class="field">Diagnosis year <input type="number" th:field="*{diagnosisYear}"></label>
-            <label class="field">Disease location <input th:field="*{diseaseLocation}"></label>
-            <label class="field">Disease behavior <input th:field="*{diseaseBehavior}"></label>
-            <label class="field">Activity estimate
+            <p class="error" th:if="${#fields.hasErrors('diagnosisType')}" th:errors="*{diagnosisType}">Diagnosis error</p>
+            <label class="field"><span th:text="#{onboarding.diagnosisYear}">Diagnosis year</span> <input type="number" th:field="*{diagnosisYear}"></label>
+            <label class="field"><span th:text="#{onboarding.diseaseLocation}">Disease location</span> <input th:field="*{diseaseLocation}"></label>
+            <label class="field"><span th:text="#{onboarding.diseaseBehavior}">Disease behavior</span> <input th:field="*{diseaseBehavior}"></label>
+            <label class="field"><span th:text="#{onboarding.activityEstimate}">Activity estimate</span>
                 <select th:field="*{activityEstimate}" required>
-                    <option value="">Select</option>
-                    <option th:each="option : ${activityOptions}" th:value="${option}" th:text="${option}"></option>
+                    <option value="" th:text="#{onboarding.select}">Select</option>
+                    <option th:each="option : ${activityOptions}" th:value="${option}" th:text="${#messages.msg('enum.diseaseActivityEstimate.' + option.name())}"></option>
                 </select>
             </label>
-            <label class="field">Current medications <textarea th:field="*{currentMedications}"></textarea></label>
-            <label class="field">Steroid use
+            <p class="error" th:if="${#fields.hasErrors('activityEstimate')}" th:errors="*{activityEstimate}">Activity error</p>
+            <label class="field"><span th:text="#{onboarding.currentMedications}">Current medications</span> <textarea th:field="*{currentMedications}"></textarea></label>
+            <label class="field"><span th:text="#{onboarding.steroidUse}">Steroid use</span>
                 <select th:field="*{steroidUse}" required>
-                    <option value="">Select</option>
-                    <option th:each="option : ${steroidOptions}" th:value="${option}" th:text="${option}"></option>
+                    <option value="" th:text="#{onboarding.select}">Select</option>
+                    <option th:each="option : ${steroidOptions}" th:value="${option}" th:text="${#messages.msg('enum.steroidUse.' + option.name())}"></option>
                 </select>
             </label>
-            <label class="field">Advanced therapy exposure
+            <p class="error" th:if="${#fields.hasErrors('steroidUse')}" th:errors="*{steroidUse}">Steroid use error</p>
+            <label class="field"><span th:text="#{onboarding.advancedTherapyExposure}">Advanced therapy exposure</span>
                 <select th:field="*{advancedTherapyExposure}" required>
-                    <option value="">Select</option>
-                    <option th:each="option : ${advancedTherapyOptions}" th:value="${option}" th:text="${option}"></option>
+                    <option value="" th:text="#{onboarding.select}">Select</option>
+                    <option th:each="option : ${advancedTherapyOptions}" th:value="${option}" th:text="${#messages.msg('enum.advancedTherapyExposure.' + option.name())}"></option>
                 </select>
             </label>
-            <label class="field">Medication notes <textarea th:field="*{medicationNotes}"></textarea></label>
-            <label class="field">Labs collected at <input type="date" th:field="*{labsCollectedAt}"></label>
-            <label class="field">CRP mg/L <input type="number" step="0.01" th:field="*{crpMgL}"></label>
-            <label class="field">Fecal calprotectin ug/g <input type="number" step="0.01" th:field="*{fecalCalprotectinUgG}"></label>
-            <label class="field">Hemoglobin g/dL <input type="number" step="0.1" th:field="*{hemoglobinGDl}"></label>
-            <label class="field">Albumin g/dL <input type="number" step="0.1" th:field="*{albuminGDl}"></label>
-            <label class="field">Lab notes <textarea th:field="*{labNotes}"></textarea></label>
-            <button type="submit">Submit baseline</button>
+            <p class="error" th:if="${#fields.hasErrors('advancedTherapyExposure')}" th:errors="*{advancedTherapyExposure}">Advanced therapy error</p>
+            <label class="field"><span th:text="#{onboarding.medicationNotes}">Medication notes</span> <textarea th:field="*{medicationNotes}"></textarea></label>
+            <label class="field"><span th:text="#{onboarding.labsCollectedAt}">Labs collected at</span> <input type="date" th:field="*{labsCollectedAt}"></label>
+            <label class="field"><span th:text="#{onboarding.crpMgL}">CRP mg/L</span> <input type="number" step="0.01" th:field="*{crpMgL}"></label>
+            <label class="field"><span th:text="#{onboarding.fecalCalprotectinUgG}">Fecal calprotectin ug/g</span> <input type="number" step="0.01" th:field="*{fecalCalprotectinUgG}"></label>
+            <label class="field"><span th:text="#{onboarding.hemoglobinGDl}">Hemoglobin g/dL</span> <input type="number" step="0.1" th:field="*{hemoglobinGDl}"></label>
+            <label class="field"><span th:text="#{onboarding.albuminGDl}">Albumin g/dL</span> <input type="number" step="0.1" th:field="*{albuminGDl}"></label>
+            <label class="field"><span th:text="#{onboarding.labNotes}">Lab notes</span> <textarea th:field="*{labNotes}"></textarea></label>
+            <button type="submit" th:text="#{onboarding.patient.submitBaseline}">Submit baseline</button>
         </form>
     </section>
-</main>
-</body>
+</th:block>
 </html>

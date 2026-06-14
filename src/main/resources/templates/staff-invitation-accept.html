@@ -1,12 +1,13 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{layout :: head('Accept invitation - Metabion')}"></head>
+<html lang="en" th:lang="${htmlLang == null ? 'en' : htmlLang}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head(#{auth.invitation.title} + ' - Metabion')}"></head>
 <body>
 <main class="page">
     <section class="panel auth-panel">
         <div th:replace="~{layout :: brand}"></div>
-        <h1>Accept invitation</h1>
-        <p class="muted">Create your staff account password.</p>
+        <div th:replace="~{preferences :: languageSelector('language-form')}"></div>
+        <h1 th:text="#{auth.invitation.title}">Set up staff account</h1>
+        <p class="muted" th:text="#{auth.invitation.description}">Create your staff account password.</p>
         <p class="error" th:if="${error}" th:text="${error}">Invitation error.</p>
 
         <form th:action="@{/staff-invitations/accept}" th:object="${form}" method="post" class="form">
@@ -14,14 +15,14 @@
             <input type="hidden" th:field="*{token}" th:value="${token}">
 
             <div class="field">
-                <label for="password">Password</label>
+                <label for="password" th:text="#{auth.login.password}">Password</label>
                 <input id="password" type="password" th:field="*{password}" autocomplete="new-password"
                        minlength="12" maxlength="72" required>
-                <p class="hint">Use at least 12 characters.</p>
+                <p class="hint" th:text="#{auth.password.hint}">Use at least 12 characters.</p>
                 <p class="error" th:if="${#fields.hasErrors('password')}" th:errors="*{password}">Password error</p>
             </div>
 
-            <button type="submit">Accept invitation</button>
+            <button type="submit" th:text="#{auth.invitation.submit}">Create staff account</button>
         </form>
     </section>
 </main>
