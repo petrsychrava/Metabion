@@ -22,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
@@ -102,6 +103,23 @@ public class DietLogPhotoService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "photo content not found", ex);
         } catch (IOException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "photo content could not be read", ex);
+        }
+    }
+
+    @org.springframework.scheduling.annotation.Scheduled(
+            fixedDelayString = "${metabion.diet-log-photos.cleanup-delay:PT1H}")
+    public void cleanupPendingUploads() {
+        var cutoff = Instant.now().minus(properties.pendingRetention());
+        var pending = photos.findByStatusAndCreatedAtBefore(DietLogPhotoStatus.PENDING, cutoff);
+        for (var photo : pending) {
+            try {
+                storage.delete(photo.getStorageKey());
+            } catch (NoSuchFileException ignored) {
+                // Cleanup is idempotent; delete the stale row below.
+            } catch (IOException ex) {
+                continue;
+            }
+            photos.delete(photo);
         }
     }
 

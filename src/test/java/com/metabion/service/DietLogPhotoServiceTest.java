@@ -2,6 +2,7 @@ package com.metabion.service;
 
 import com.metabion.domain.DailyDietLog;
 import com.metabion.domain.DailyDietLogPhotoReference;
+import com.metabion.domain.DietLogPhotoStatus;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
@@ -22,6 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.file.NoSuchFileException;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
@@ -34,6 +36,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -192,6 +195,27 @@ class DietLogPhotoServiceTest {
                 .hasMessageContaining("403 FORBIDDEN")
                 .hasMessageContaining("Current user cannot read photo");
         verify(storage, never()).read(anyString());
+    }
+
+    @Test
+    void cleanupDeletesOldPendingRowsAndToleratesMissingFiles() throws Exception {
+        var user = user(1L, "patient@example.com", RoleName.PATIENT);
+        var pending = DailyDietLogPhotoReference.pending(
+                patient(10L, user),
+                user,
+                "old.jpg",
+                "image/jpeg",
+                4L,
+                "a".repeat(64),
+                "diet-log-photos/10/old.jpg");
+        when(photos.findByStatusAndCreatedAtBefore(eq(DietLogPhotoStatus.PENDING), any()))
+                .thenReturn(List.of(pending));
+        doThrow(new NoSuchFileException("old.jpg"))
+                .when(storage).delete("diet-log-photos/10/old.jpg");
+
+        service.cleanupPendingUploads();
+
+        verify(photos).delete(pending);
     }
 
     private void givenPatient() {
