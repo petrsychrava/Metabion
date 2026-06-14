@@ -151,6 +151,42 @@ class DietLogPhotoServiceTest {
     }
 
     @Test
+    void attachToLogReplacesExistingAttachedPhotosWithRequestedSet() {
+        var user = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patient(10L, user);
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var kept = attachedPhoto(50L, patient, user, log, "old caption", 0);
+        var removed = attachedPhoto(51L, patient, user, log, "remove me", 1);
+        when(photos.findByIdIn(List.of(50L))).thenReturn(List.of(kept));
+
+        service.attachToLog(
+                patient,
+                log,
+                List.of(new DailyDietLogRequest.PhotoUploadReferenceRequest(50L, "updated caption")));
+
+        assertThat(kept.getStatus()).isEqualTo(DietLogPhotoStatus.ATTACHED);
+        assertThat(kept.getCaption()).isEqualTo("updated caption");
+        assertThat(kept.getSortOrder()).isZero();
+        assertThat(removed.getStatus()).isEqualTo(DietLogPhotoStatus.REMOVED);
+        assertThat(removed.getRemovedByUser()).isSameAs(user);
+        assertThat(removed.getRemovedAt()).isNotNull();
+    }
+
+    @Test
+    void attachToLogEmptyRequestRemovesExistingAttachedPhotos() {
+        var user = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patient(10L, user);
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var removed = attachedPhoto(51L, patient, user, log, "remove me", 0);
+
+        service.attachToLog(patient, log, List.of());
+
+        assertThat(removed.getStatus()).isEqualTo(DietLogPhotoStatus.REMOVED);
+        assertThat(removed.getRemovedByUser()).isSameAs(user);
+        assertThat(removed.getRemovedAt()).isNotNull();
+    }
+
+    @Test
     void patientCanReadOwnPendingPhotoContent() throws Exception {
         var user = user(1L, "patient@example.com", RoleName.PATIENT);
         var patient = patient(10L, user);
@@ -245,5 +281,25 @@ class DietLogPhotoServiceTest {
         var patient = new PatientProfile(user);
         org.springframework.test.util.ReflectionTestUtils.setField(patient, "id", id);
         return patient;
+    }
+
+    private static DailyDietLogPhotoReference attachedPhoto(Long id,
+                                                            PatientProfile patient,
+                                                            User user,
+                                                            DailyDietLog log,
+                                                            String caption,
+                                                            int sortOrder) {
+        var photo = DailyDietLogPhotoReference.pending(
+                patient,
+                user,
+                "plate-" + id + ".jpg",
+                "image/jpeg",
+                4L,
+                "a".repeat(64),
+                "diet-log-photos/10/plate-" + id + ".jpg");
+        org.springframework.test.util.ReflectionTestUtils.setField(photo, "id", id);
+        photo.attachTo(log, caption, sortOrder);
+        log.addPhotoReference(photo);
+        return photo;
     }
 }

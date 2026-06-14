@@ -125,9 +125,18 @@ public class DailyDietLogPhotoReference {
         this.status = DietLogPhotoStatus.ATTACHED;
         this.caption = caption;
         this.sortOrder = sortOrder;
+        this.removedAt = null;
+        this.removedByUser = null;
         if (this.attachedAt == null) {
             this.attachedAt = Instant.now();
         }
+    }
+
+    public void markRemoved(User removedByUser) {
+        this.status = DietLogPhotoStatus.REMOVED;
+        this.meal = null;
+        this.removedAt = Instant.now();
+        this.removedByUser = removedByUser;
     }
 
     public Long getId() {

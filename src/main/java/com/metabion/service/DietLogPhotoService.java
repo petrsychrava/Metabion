@@ -27,6 +27,8 @@ import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -130,9 +132,6 @@ public class DietLogPhotoService {
         if (safeRequests.size() > properties.maxPhotosPerLog()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "too many photos");
         }
-        if (safeRequests.isEmpty()) {
-            return;
-        }
 
         var seenIds = new HashSet<Long>();
         for (var request : safeRequests) {
@@ -144,17 +143,30 @@ public class DietLogPhotoService {
                 .map(DailyDietLogRequest.PhotoUploadReferenceRequest::uploadId)
                 .toList();
 
-        var found = photos.findByIdIn(ids).stream()
-                .collect(Collectors.toMap(DailyDietLogPhotoReference::getId, Function.identity()));
+        var found = ids.isEmpty()
+                ? Map.<Long, DailyDietLogPhotoReference>of()
+                : photos.findByIdIn(ids).stream()
+                        .collect(Collectors.toMap(DailyDietLogPhotoReference::getId, Function.identity()));
+        for (var request : safeRequests) {
+            validateAttachable(patient, log, found.get(request.uploadId()));
+        }
+        removeOmittedAttachedPhotos(log, seenIds, patient.getUser());
+
         for (var i = 0; i < safeRequests.size(); i++) {
             var request = safeRequests.get(i);
             var photo = found.get(request.uploadId());
-            validateAttachable(patient, log, photo);
             photo.attachTo(log, DietLogRequestMapper.trimToNull(request.caption()), i);
             if (!log.getPhotoReferences().contains(photo)) {
                 log.addPhotoReference(photo);
             }
         }
+    }
+
+    private static void removeOmittedAttachedPhotos(DailyDietLog log, Set<Long> requestedIds, User removedByUser) {
+        log.getPhotoReferences().stream()
+                .filter(photo -> photo.getStatus() == DietLogPhotoStatus.ATTACHED)
+                .filter(photo -> photo.getId() == null || !requestedIds.contains(photo.getId()))
+                .forEach(photo -> photo.markRemoved(removedByUser));
     }
 
     private static void validateAttachable(PatientProfile patient, DailyDietLog log, DailyDietLogPhotoReference photo) {
