@@ -181,7 +181,9 @@ class DietLogControllerTest {
                     }
                   ],
                   "deviations": [],
-                  "photoReferences": [],
+                  "photoReferences": [
+                    {"uploadId": 50, "caption": "Lunch plate"}
+                  ],
                   "measurements": []
                 }
                 """;

@@ -101,7 +101,14 @@ class WebDietLogControllerTest {
                 .andExpect(content().string(containsString("mg/dL")))
                 .andExpect(content().string(containsString("name=\"meals[2].mealType\"")))
                 .andExpect(content().string(containsString("name=\"deviations[2].severity\"")))
-                .andExpect(content().string(containsString("name=\"photoReferences[2].storageKey\"")))
+                .andExpect(content().string(containsString("type=\"file\"")))
+                .andExpect(content().string(containsString("headers: {'X-XSRF-TOKEN': csrf.value}")))
+                .andExpect(content().string(not(containsString("headers: {'X-CSRF-TOKEN': csrf.value}"))))
+                .andExpect(content().string(containsString("name=\"photoReferences[2].uploadId\"")))
+                .andExpect(content().string(not(containsString("name=\"photoReferences[2].storageKey\""))))
+                .andExpect(content().string(not(containsString("name=\"photoReferences[2].contentType\""))))
+                .andExpect(content().string(not(containsString("name=\"photoReferences[2].sizeBytes\""))))
+                .andExpect(content().string(not(containsString("name=\"photoReferences[2].originalFilename\""))))
                 .andExpect(content().string(containsString("name=\"measurements[2].unit\"")))
                 .andExpect(content().string(not(containsString("name=\"glucoseUnitPreference\""))));
     }
@@ -122,7 +129,8 @@ class WebDietLogControllerTest {
                 .andExpect(content().string(containsString("name=\"meals[0].mealType\"")))
                 .andExpect(content().string(containsString("name=\"meals[1].mealType\"")))
                 .andExpect(content().string(containsString("name=\"deviations[1].severity\"")))
-                .andExpect(content().string(containsString("name=\"photoReferences[1].storageKey\"")))
+                .andExpect(content().string(containsString("name=\"photoReferences[1].uploadId\"")))
+                .andExpect(content().string(not(containsString("name=\"photoReferences[1].storageKey\""))))
                 .andExpect(content().string(containsString("name=\"measurements[1].measuredAt\"")));
     }
 
@@ -262,6 +270,8 @@ class WebDietLogControllerTest {
                 .andExpect(content().string(containsString("Stable day")))
                 .andExpect(content().string(containsString("Avocado salad")))
                 .andExpect(content().string(containsString("photo-1.jpg")))
+                .andExpect(content().string(containsString("/api/diet-log-photos/3/content")))
+                .andExpect(content().string(not(containsString("Storage key"))))
                 .andExpect(content().string(containsString("5.8")));
     }
 
@@ -349,8 +359,8 @@ class WebDietLogControllerTest {
                         "photo-1.jpg",
                         "image/jpeg",
                         1024L,
-                        "diet/photo-1",
                         "Lunch",
+                        "/api/diet-log-photos/3/content",
                         0)),
                 List.of(new DailyMeasurementEntryResponse(
                         4L,
@@ -411,8 +421,8 @@ class WebDietLogControllerTest {
                                 "photo-1.jpg",
                                 "image/jpeg",
                                 1024L,
-                                "diet/photo-1",
                                 "Lunch",
+                                "/api/diet-log-photos/5/content",
                                 0),
                         new DailyDietLogResponse.PhotoReferenceResponse(
                                 6L,
@@ -420,8 +430,8 @@ class WebDietLogControllerTest {
                                 "photo-2.jpg",
                                 "image/jpeg",
                                 2048L,
-                                "diet/photo-2",
                                 "Snack",
+                                "/api/diet-log-photos/6/content",
                                 1)),
                 List.of(
                         new DailyMeasurementEntryResponse(

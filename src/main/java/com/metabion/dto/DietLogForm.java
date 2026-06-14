@@ -12,7 +12,6 @@ import com.metabion.domain.MeasurementUnit;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -262,68 +261,26 @@ public class DietLogForm {
     }
 
     public static class PhotoReferenceRow {
-        @Size(max = 255)
-        private String originalFilename;
-
-        @Size(max = 120)
-        private String contentType;
-
-        @PositiveOrZero
-        private Long sizeBytes;
-
-        @Size(max = 500)
-        private String storageKey;
+        private Long uploadId;
 
         @Size(max = 500)
         private String caption;
 
-        public DailyDietLogRequest.PhotoReferenceRequest toRequest() {
-            return new DailyDietLogRequest.PhotoReferenceRequest(
-                    originalFilename,
-                    contentType,
-                    sizeBytes,
-                    storageKey,
-                    caption);
+        public DailyDietLogRequest.PhotoUploadReferenceRequest toRequest() {
+            return new DailyDietLogRequest.PhotoUploadReferenceRequest(uploadId, caption);
         }
 
         boolean isBlank() {
-            return blank(originalFilename)
-                    && blank(contentType)
-                    && sizeBytes == null
-                    && blank(storageKey)
+            return uploadId == null
                     && blank(caption);
         }
 
-        public String getOriginalFilename() {
-            return originalFilename;
+        public Long getUploadId() {
+            return uploadId;
         }
 
-        public void setOriginalFilename(String originalFilename) {
-            this.originalFilename = originalFilename;
-        }
-
-        public String getContentType() {
-            return contentType;
-        }
-
-        public void setContentType(String contentType) {
-            this.contentType = contentType;
-        }
-
-        public Long getSizeBytes() {
-            return sizeBytes;
-        }
-
-        public void setSizeBytes(Long sizeBytes) {
-            this.sizeBytes = sizeBytes;
-        }
-
-        public String getStorageKey() {
-            return storageKey;
-        }
-
-        public void setStorageKey(String storageKey) {
-            this.storageKey = storageKey;
+        public void setUploadId(Long uploadId) {
+            this.uploadId = uploadId;
         }
 
         public String getCaption() {

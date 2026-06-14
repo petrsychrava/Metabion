@@ -168,10 +168,7 @@ public class WebDietLogController {
         var photoReferences = new ArrayList<DietLogForm.PhotoReferenceRow>();
         for (var photo : response.photoReferences()) {
             var row = new DietLogForm.PhotoReferenceRow();
-            row.setOriginalFilename(photo.originalFilename());
-            row.setContentType(photo.contentType());
-            row.setSizeBytes(photo.sizeBytes());
-            row.setStorageKey(photo.storageKey());
+            row.setUploadId(photo.id());
             row.setCaption(photo.caption());
             photoReferences.add(row);
         }

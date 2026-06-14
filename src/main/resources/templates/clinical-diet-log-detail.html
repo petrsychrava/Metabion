@@ -42,15 +42,15 @@
     </section>
 
     <section class="panel app-panel">
-        <h2 th:text="#{dietLogs.photoReference}">Photo metadata</h2>
-        <dl class="details" th:each="photo : ${log.photoReferences()}">
-            <dt th:text="#{dietLogs.originalFilename}">Original filename</dt><dd th:text="${photo.originalFilename()} ?: #{dietLogs.notProvided}">photo-1.jpg</dd>
-            <dt th:text="#{dietLogs.contentType}">Content type</dt><dd th:text="${photo.contentType()} ?: #{dietLogs.notProvided}">image/jpeg</dd>
-            <dt th:text="#{dietLogs.sizeBytes}">Size bytes</dt><dd th:text="${photo.sizeBytes()} ?: #{dietLogs.notProvided}">1024</dd>
-            <dt th:text="#{dietLogs.storageKey}">Storage key</dt><dd th:text="${photo.storageKey()} ?: #{dietLogs.notProvided}">diet/photo-1</dd>
-            <dt th:text="#{dietLogs.caption}">Caption</dt><dd th:text="${photo.caption()} ?: #{dietLogs.notProvided}">Lunch</dd>
-        </dl>
-        <p th:if="${#lists.isEmpty(log.photoReferences())}" th:text="#{dietLogs.noPhotoReferences}">No photo metadata recorded</p>
+        <h2 th:text="#{dietLogs.photoReference}">Photos</h2>
+        <div th:each="photo : ${log.photoReferences()}">
+            <p>
+                <a th:href="${photo.contentUrl()}" th:text="${photo.originalFilename()} ?: #{dietLogs.photo}">plate.jpg</a>
+                <span th:text="${photo.caption()} ?: #{dietLogs.notProvided}">Lunch</span>
+            </p>
+            <img th:src="${photo.contentUrl()}" th:alt="${photo.caption()} ?: ${photo.originalFilename()}" style="max-width: 240px; height: auto;">
+        </div>
+        <p th:if="${#lists.isEmpty(log.photoReferences())}" th:text="#{dietLogs.noPhotoReferences}">No photos recorded</p>
     </section>
 
     <section class="panel app-panel">

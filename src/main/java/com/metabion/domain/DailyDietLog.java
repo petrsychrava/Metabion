@@ -118,10 +118,16 @@ public class DailyDietLog {
 
     public void replaceChildren(
             List<DailyDietLogMeal> meals,
-            List<DailyDietLogDeviation> deviations,
-            List<DailyDietLogPhotoReference> photoReferences) {
+            List<DailyDietLogDeviation> deviations) {
         replaceMeals(meals);
         replaceDeviations(deviations);
+    }
+
+    public void replaceChildren(
+            List<DailyDietLogMeal> meals,
+            List<DailyDietLogDeviation> deviations,
+            List<DailyDietLogPhotoReference> photoReferences) {
+        replaceChildren(meals, deviations);
         replacePhotoReferences(photoReferences);
     }
 

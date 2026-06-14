@@ -43,6 +43,7 @@ public class DietLogService {
     private final MeasurementValidator measurementValidator;
     private final DietLogRequestMapper requestMapper;
     private final DietLogResponseAssembler responseAssembler;
+    private final DietLogPhotoService dietLogPhotoService;
 
     public DietLogService(UserRepository users,
                           PatientProfileRepository patientProfiles,
@@ -52,7 +53,8 @@ public class DietLogService {
                           MeasurementWindowService measurementWindows,
                           MeasurementValidator measurementValidator,
                           DietLogRequestMapper requestMapper,
-                          DietLogResponseAssembler responseAssembler) {
+                          DietLogResponseAssembler responseAssembler,
+                          DietLogPhotoService dietLogPhotoService) {
         this.users = users;
         this.patientProfiles = patientProfiles;
         this.dailyDietLogs = dailyDietLogs;
@@ -62,6 +64,7 @@ public class DietLogService {
         this.measurementValidator = measurementValidator;
         this.requestMapper = requestMapper;
         this.responseAssembler = responseAssembler;
+        this.dietLogPhotoService = dietLogPhotoService;
     }
 
     public DailyDietLogResponse saveForCurrentPatient(Authentication authentication, DailyDietLogRequest request) {
@@ -86,6 +89,7 @@ public class DietLogService {
 
         var replacingPersistedLog = log.getId() != null;
         var saved = dailyDietLogs.save(log);
+        dietLogPhotoService.attachToLog(patient, saved, request.photoReferencesOrEmpty());
         if (replacingPersistedLog) {
             measurements.deleteByDailyDietLogId(saved.getId());
         }

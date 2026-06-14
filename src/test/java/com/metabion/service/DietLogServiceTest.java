@@ -59,6 +59,7 @@ class DietLogServiceTest {
     @Mock DailyDietLogRepository dailyDietLogs;
     @Mock DailyMeasurementEntryRepository measurements;
     @Mock AccessControlService accessControl;
+    @Mock DietLogPhotoService dietLogPhotoService;
 
     DietLogService service;
 
@@ -66,8 +67,7 @@ class DietLogServiceTest {
     void setUp() {
         var measurementWindows = new MeasurementWindowService();
         var measurementValidator = new MeasurementValidator(measurementWindows);
-        var storageKeyValidator = new StorageKeyValidator();
-        var requestMapper = new DietLogRequestMapper(storageKeyValidator);
+        var requestMapper = new DietLogRequestMapper();
         var responseAssembler = new DietLogResponseAssembler();
         service = new DietLogService(
                 users,
@@ -78,7 +78,8 @@ class DietLogServiceTest {
                 measurementWindows,
                 measurementValidator,
                 requestMapper,
-                responseAssembler);
+                responseAssembler,
+                dietLogPhotoService);
     }
 
     @Test
@@ -217,7 +218,7 @@ class DietLogServiceTest {
         assertThat(existing.getMeals()).hasSize(1);
         assertThat(existing.getMeals().getFirst().getMealType()).isEqualTo(MealType.LUNCH);
         assertThat(existing.getDeviations()).hasSize(1);
-        assertThat(existing.getPhotoReferences()).hasSize(1);
+        assertThat(existing.getPhotoReferences()).isEmpty();
     }
 
     @Test
@@ -467,23 +468,31 @@ class DietLogServiceTest {
     }
 
     @Test
-    void storageKeyGuardRejectsUnsafeValues() {
-        givenAuthenticatedPatient();
+    void saveForCurrentPatientAttachesUploadedPhotosAfterSavingLog() {
+        var patient = givenAuthenticatedPatient();
+        var saved = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
+        when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
+                .thenReturn(Optional.empty());
+        when(dailyDietLogs.save(any())).thenReturn(saved);
+        var photoReference = new DailyDietLogRequest.PhotoUploadReferenceRequest(50L, "Lunch plate");
+        var request = new DailyDietLogRequest(
+                LocalDate.of(2026, 6, 10),
+                DietAdherenceLevel.MOSTLY,
+                AppetiteLevel.NORMAL,
+                "Stable",
+                null,
+                List.of(),
+                List.of(),
+                List.of(photoReference),
+                List.of());
 
-        assertUnsafeStorageKey("https://example.com/meal.jpg");
-        assertUnsafeStorageKey("../meal.jpg");
-        assertUnsafeStorageKey("/tmp/meal.jpg");
-        assertUnsafeStorageKey("C:\\Users\\x\\meal.jpg");
-        assertUnsafeStorageKey("\\\\server\\share\\meal.jpg");
-        assertUnsafeStorageKey("~/meal.jpg");
-        assertUnsafeStorageKey("file:/tmp/meal.jpg");
-        assertUnsafeStorageKey("meal.jpg?token=abc");
-        assertUnsafeStorageKey("meal.jpg#sig");
-        assertUnsafeStorageKey("pending/meal.jpg?signature=abc");
+        service.saveForCurrentPatient(auth("patient@example.com"), request);
+
+        verify(dietLogPhotoService).attachToLog(patient, saved, List.of(photoReference));
     }
 
     @Test
-    void storageKeyGuardAllowsOpaqueRelativeKeys() {
+    void emptyPhotoReferencesStillSave() {
         givenAuthenticatedPatient();
         when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
                 .thenReturn(Optional.empty());
@@ -492,25 +501,8 @@ class DietLogServiceTest {
 
         var response = service.saveForCurrentPatient(auth("patient@example.com"), validRequest(LocalDate.of(2026, 6, 10)));
 
-        assertThat(response.photoReferences()).hasSize(1);
-        assertThat(response.photoReferences().getFirst().storageKey()).isEqualTo("pending/meal.jpg");
-    }
-
-    private void assertUnsafeStorageKey(String storageKey) {
-        var baseRequest = validRequest(LocalDate.of(2026, 6, 10));
-        var request = new DailyDietLogRequest(
-                baseRequest.logDate(),
-                baseRequest.adherenceLevel(),
-                baseRequest.appetiteLevel(),
-                baseRequest.notes(),
-                baseRequest.meals(),
-                baseRequest.deviations(),
-                List.of(new DailyDietLogRequest.PhotoReferenceRequest("meal.jpg", "image/jpeg", 123L, storageKey, "Lunch")),
-                baseRequest.measurements());
-
-        assertThatThrownBy(() -> service.saveForCurrentPatient(auth("patient@example.com"), request))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("400 BAD_REQUEST");
+        assertThat(response.photoReferences()).isEmpty();
+        verify(dietLogPhotoService).attachToLog(any(), any(), eq(List.of()));
     }
 
     private DailyDietLogRequest validRequest(LocalDate date) {
@@ -521,7 +513,7 @@ class DietLogServiceTest {
                 " Stable day ",
                 List.of(new DailyDietLogRequest.MealRequest(MealType.LUNCH, FoodCategory.PROTEIN, " Salmon ", " ok ")),
                 List.of(new DailyDietLogRequest.DeviationRequest(DietDeviationCategory.DINING_OUT, DietDeviationSeverity.MINOR, " small ")),
-                List.of(new DailyDietLogRequest.PhotoReferenceRequest(" meal.jpg ", " image/jpeg ", 123L, "pending/meal.jpg", " Lunch ")),
+                List.of(),
                 List.of(new DailyMeasurementEntryRequest(
                         MeasurementType.GLUCOSE,
                         new BigDecimal("5.8"),

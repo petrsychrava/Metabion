@@ -58,12 +58,7 @@ class DietLogFormTest {
                 DietDeviationCategory.DINING_OUT,
                 DietDeviationSeverity.MINOR,
                 "Restaurant lunch");
-        var photo = new DailyDietLogRequest.PhotoReferenceRequest(
-                "meal.jpg",
-                "image/jpeg",
-                128L,
-                "diet/meal.jpg",
-                "Breakfast");
+        var photo = new DailyDietLogRequest.PhotoUploadReferenceRequest(50L, "Breakfast");
         var request = new DailyDietLogRequest(
                 LocalDate.of(2026, 6, 10),
                 DietAdherenceLevel.FULL,
@@ -118,10 +113,7 @@ class DietLogFormTest {
 
         var blankPhoto = new DietLogForm.PhotoReferenceRow();
         var photo = new DietLogForm.PhotoReferenceRow();
-        photo.setOriginalFilename("dinner.jpg");
-        photo.setContentType("image/jpeg");
-        photo.setSizeBytes(1024L);
-        photo.setStorageKey("diet/dinner.jpg");
+        photo.setUploadId(51L);
         photo.setCaption("Dinner plate");
         form.setPhotoReferences(List.of(blankPhoto, photo));
 
@@ -156,10 +148,7 @@ class DietLogFormTest {
                 });
         assertThat(request.photoReferencesOrEmpty()).singleElement()
                 .satisfies(row -> {
-                    assertThat(row.originalFilename()).isEqualTo("dinner.jpg");
-                    assertThat(row.contentType()).isEqualTo("image/jpeg");
-                    assertThat(row.sizeBytes()).isEqualTo(1024L);
-                    assertThat(row.storageKey()).isEqualTo("diet/dinner.jpg");
+                    assertThat(row.uploadId()).isEqualTo(51L);
                     assertThat(row.caption()).isEqualTo("Dinner plate");
                 });
         assertThat(request.measurementsOrEmpty()).singleElement()
@@ -262,8 +251,8 @@ class DietLogFormTest {
                     assertThat(row.originalFilename()).isEqualTo("plate.jpg");
                     assertThat(row.contentType()).isEqualTo("image/jpeg");
                     assertThat(row.sizeBytes()).isEqualTo(2048L);
-                    assertThat(row.storageKey()).isEqualTo("diet/plate.jpg");
                     assertThat(row.caption()).isEqualTo("Lunch plate");
+                    assertThat(row.contentUrl()).isEqualTo("/api/diet-log-photos/50/content");
                     assertThat(row.sortOrder()).isEqualTo(3);
                 });
         assertThat(response.measurements()).singleElement()

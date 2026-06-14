@@ -9,6 +9,7 @@ import com.metabion.domain.DailyMeasurementEntry;
 import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.DietDeviationCategory;
 import com.metabion.domain.DietDeviationSeverity;
+import com.metabion.domain.DietLogPhotoStatus;
 import com.metabion.domain.FoodCategory;
 import com.metabion.domain.MealType;
 import com.metabion.domain.MeasurementContext;
@@ -114,13 +115,16 @@ class DailyDietLogRepositoryTest {
                 DietDeviationSeverity.MINOR,
                 "Restaurant meal",
                 0));
-        log.addPhotoReference(new DailyDietLogPhotoReference(
+        var photoReference = DailyDietLogPhotoReference.pending(
+                patient,
+                patient.getUser(),
                 "breakfast.jpg",
                 "image/jpeg",
                 1024L,
-                "daily-logs/1/breakfast.jpg",
-                "Breakfast",
-                0));
+                "3".repeat(64),
+                "daily-logs/1/breakfast.jpg");
+        photoReference.attachTo(log, "Breakfast", 0);
+        log.addPhotoReference(photoReference);
 
         dailyDietLogs.saveAndFlush(log);
         entityManager.clear();
@@ -131,6 +135,165 @@ class DailyDietLogRepositoryTest {
         assertThat(loaded.getMeals()).hasSize(1);
         assertThat(loaded.getDeviations()).hasSize(1);
         assertThat(loaded.getPhotoReferences()).hasSize(1);
+    }
+
+    @Test
+    void photoReferenceStoresUploadLifecycleMetadata() {
+        var patient = createPatient("photo-lifecycle@example.com");
+        var uploader = patient.getUser();
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        log.setAdherenceLevel(DietAdherenceLevel.MOSTLY);
+        log.setAppetiteLevel(AppetiteLevel.NORMAL);
+        var sha256 = "0f4e2a" + "0".repeat(58);
+
+        var photo = DailyDietLogPhotoReference.pending(
+                patient,
+                uploader,
+                "plate.jpg",
+                "image/jpeg",
+                1234L,
+                sha256,
+                "diet-log-photos/10/2026/06/14/file.jpg");
+        photo.attachTo(log, "Lunch plate", 0);
+        log.addPhotoReference(photo);
+
+        entityManager.persist(log);
+        entityManager.flush();
+        entityManager.clear();
+
+        var saved = dailyDietLogs.findByPatientProfileIdAndLogDate(patient.getId(), LocalDate.of(2026, 6, 10))
+                .orElseThrow();
+
+        assertThat(saved.getPhotoReferences()).singleElement()
+                .satisfies(savedPhoto -> {
+                    assertThat(savedPhoto.getPatientProfile().getId()).isEqualTo(patient.getId());
+                    assertThat(savedPhoto.getUploadedByUser().getId()).isEqualTo(uploader.getId());
+                    assertThat(savedPhoto.getStatus()).isEqualTo(DietLogPhotoStatus.ATTACHED);
+                    assertThat(savedPhoto.getOriginalFilename()).isEqualTo("plate.jpg");
+                    assertThat(savedPhoto.getContentType()).isEqualTo("image/jpeg");
+                    assertThat(savedPhoto.getSizeBytes()).isEqualTo(1234L);
+                    assertThat(savedPhoto.getSha256()).isEqualTo(sha256);
+                    assertThat(savedPhoto.getStorageKey()).isEqualTo("diet-log-photos/10/2026/06/14/file.jpg");
+                    assertThat(savedPhoto.getCaption()).isEqualTo("Lunch plate");
+                    assertThat(savedPhoto.getAttachedAt()).isNotNull();
+                    assertThat(savedPhoto.getRemovedAt()).isNull();
+                });
+    }
+
+    @Test
+    void pendingPhotoReferenceCanExistWithoutDailyDietLog() {
+        var patient = createPatient("pending-photo@example.com");
+        var uploader = patient.getUser();
+        var sha256 = "1".repeat(64);
+        var photo = DailyDietLogPhotoReference.pending(
+                patient,
+                uploader,
+                "snack.png",
+                "image/png",
+                2048L,
+                sha256,
+                "diet-log-photos/pending/snack.png");
+
+        entityManager.persist(photo);
+        entityManager.flush();
+        var photoId = photo.getId();
+        entityManager.clear();
+
+        var saved = entityManager.find(DailyDietLogPhotoReference.class, photoId);
+
+        assertThat(saved.getStatus()).isEqualTo(DietLogPhotoStatus.PENDING);
+        assertThat(saved.getPatientProfile().getId()).isEqualTo(patient.getId());
+        assertThat(saved.getUploadedByUser().getId()).isEqualTo(uploader.getId());
+        assertThat(saved.getStorageKey()).isEqualTo("diet-log-photos/pending/snack.png");
+        assertThat(saved.getSha256()).isEqualTo(sha256);
+        assertThat(saved.getCreatedAt()).isNotNull();
+        assertThat(saved.getDailyDietLog()).isNull();
+    }
+
+    @Test
+    void attachToRejectsDailyLogForDifferentPatient() {
+        var patient = createPatient("photo-owner@example.com");
+        var otherPatient = createPatient("other-photo-owner@example.com");
+        var photo = DailyDietLogPhotoReference.pending(
+                patient,
+                patient.getUser(),
+                "plate.jpg",
+                "image/jpeg",
+                1234L,
+                "2".repeat(64),
+                "diet-log-photos/pending/plate.jpg");
+        var otherLog = new DailyDietLog(otherPatient, LocalDate.of(2026, 6, 10));
+
+        assertThatThrownBy(() -> photo.attachTo(otherLog, "Wrong patient", 0))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void pendingPhotoReferenceWithRemovalAuditIsRejected() {
+        var patient = createPatient("pending-removed-audit@example.com");
+        var photo = DailyDietLogPhotoReference.pending(
+                patient,
+                patient.getUser(),
+                "pending.jpg",
+                "image/jpeg",
+                1234L,
+                "4".repeat(64),
+                "diet-log-photos/pending/invalid-pending.jpg");
+        photo.setRemovedAt(Instant.parse("2026-06-10T12:00:00Z"));
+        photo.setRemovedByUser(patient.getUser());
+
+        assertThatThrownBy(() -> {
+            entityManager.persist(photo);
+            entityManager.flush();
+        })
+                .isInstanceOf(Exception.class)
+                .hasMessageContaining("chk_daily_diet_log_photo_references_attached_state");
+    }
+
+    @Test
+    void attachedPhotoReferenceWithRemovalAuditIsRejected() {
+        var patient = createPatient("attached-removed-audit@example.com");
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var photo = DailyDietLogPhotoReference.pending(
+                patient,
+                patient.getUser(),
+                "attached.jpg",
+                "image/jpeg",
+                1234L,
+                "5".repeat(64),
+                "diet-log-photos/attached/invalid-attached.jpg");
+        photo.attachTo(log, "Attached", 0);
+        photo.setRemovedAt(Instant.parse("2026-06-10T12:00:00Z"));
+        photo.setRemovedByUser(patient.getUser());
+        log.addPhotoReference(photo);
+
+        assertThatThrownBy(() -> dailyDietLogs.saveAndFlush(log))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("chk_daily_diet_log_photo_references_attached_state");
+    }
+
+    @Test
+    void removedPhotoReferenceWithoutAttachedAtIsRejected() {
+        var patient = createPatient("removed-without-attached-at@example.com");
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var photo = DailyDietLogPhotoReference.pending(
+                patient,
+                patient.getUser(),
+                "removed.jpg",
+                "image/jpeg",
+                1234L,
+                "6".repeat(64),
+                "diet-log-photos/removed/invalid-removed.jpg");
+        photo.attachTo(log, "Removed", 0);
+        photo.setStatus(DietLogPhotoStatus.REMOVED);
+        photo.setRemovedAt(Instant.parse("2026-06-10T12:00:00Z"));
+        photo.setRemovedByUser(patient.getUser());
+        log.addPhotoReference(photo);
+        photo.setAttachedAt(null);
+
+        assertThatThrownBy(() -> dailyDietLogs.saveAndFlush(log))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("chk_daily_diet_log_photo_references_attached_state");
     }
 
     @Test
