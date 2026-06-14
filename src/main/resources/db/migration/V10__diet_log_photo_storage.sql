@@ -1,7 +1,3 @@
--- Compatibility with metadata-only placeholder photo rows is not required.
--- Real photo storage rows must be created through the new upload lifecycle.
-DELETE FROM daily_diet_log_photo_references;
-
 ALTER TABLE daily_diet_log_photo_references
     ALTER COLUMN daily_diet_log_id DROP NOT NULL,
     ADD COLUMN patient_profile_id BIGINT,
