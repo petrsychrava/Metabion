@@ -61,6 +61,8 @@ Add a focused diet-log photo subsystem:
 
 The storage service boundary must not expose local paths to callers. Diet-log code works with database IDs and opaque storage keys only.
 
+Diet-log save and photo attachment must share one database transaction. If saving the diet log fails, photo rows remain `PENDING` because the attachment updates roll back with the log save. If attaching submitted photos fails, the diet-log save rolls back rather than leaving a partially attached log.
+
 ## Data Model
 
 Update `daily_diet_log_photo_references` through Flyway.
@@ -103,7 +105,7 @@ Use staged upload.
 2. Patient drops or selects image files.
 3. Browser uploads each file immediately.
 4. Server validates authentication, role, file size, content type, and file signature.
-5. Server stores the bytes through `FileStorageService`.
+5. Server stores the bytes through `FileStorageService` while calculating SHA-256 in a streaming path.
 6. Server creates a `PENDING` `DailyDietLogPhotoReference` for the current patient.
 7. Server returns upload metadata including `uploadId`, original filename, content type, size, and private content URL. `uploadId` is the database photo row ID while the row is pending.
 8. Browser keeps hidden uploaded-photo IDs and lets the patient edit captions.
@@ -166,6 +168,7 @@ Initial constraints:
 - Store original bytes unchanged.
 - Validate file signatures rather than trusting only the browser-supplied MIME type.
 - Derive metadata server-side.
+- Calculate SHA-256 during upload without loading the full file into memory.
 - Captions remain bounded by the existing 500-character limit.
 
 Unsupported images return a validation error. Oversized uploads return either `413 Payload Too Large` through Spring multipart handling or a controlled `400` response if caught at the application boundary.
@@ -218,7 +221,7 @@ Add a scheduled cleanup path for abandoned pending uploads:
 - Delete their physical files through `FileStorageService`.
 - Hard-delete their database rows.
 
-Cleanup must tolerate missing files and continue processing remaining rows.
+Implement cleanup as an idempotent Spring `@Scheduled` task. Cleanup must tolerate missing files, including `FileNotFoundException`, and continue processing remaining rows. Running cleanup more than once over the same candidate must not fail the job.
 
 ## Testing
 
@@ -233,8 +236,10 @@ Service tests:
 
 - Upload rejects unauthenticated users and non-patient users.
 - Upload rejects empty files, unsupported signatures, and oversized files.
+- Upload calculates SHA-256 for accepted files without buffering the whole upload in memory.
 - Upload creates `PENDING` rows for the current patient.
 - Diet-log save attaches current patient pending uploads.
+- Diet-log save and photo attachment roll back atomically when attachment fails.
 - Diet-log save rejects cross-patient upload IDs.
 - Diet-log save enforces max 10 photos.
 - Re-saving a diet log preserves already attached photos when no deletion action is submitted.
