@@ -1,9 +1,11 @@
 package com.metabion.service;
 
+import com.metabion.domain.DailyDietLog;
 import com.metabion.domain.DailyDietLogPhotoReference;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
+import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.dto.DietLogPhotoUploadResponse;
 import com.metabion.repository.DailyDietLogPhotoReferenceRepository;
 import com.metabion.repository.PatientProfileRepository;
@@ -18,8 +20,12 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -76,6 +82,71 @@ public class DietLogPhotoService {
         } catch (IOException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "photo could not be stored", ex);
         }
+    }
+
+    public void attachToLog(PatientProfile patient,
+                            DailyDietLog log,
+                            List<DailyDietLogRequest.PhotoUploadReferenceRequest> requests) {
+        var safeRequests = requests == null ? List.<DailyDietLogRequest.PhotoUploadReferenceRequest>of() : requests;
+        if (safeRequests.size() > properties.maxPhotosPerLog()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "too many photos");
+        }
+        if (safeRequests.isEmpty()) {
+            return;
+        }
+
+        var seenIds = new HashSet<Long>();
+        for (var request : safeRequests) {
+            if (request == null || request.uploadId() == null || !seenIds.add(request.uploadId())) {
+                throw invalidPhotoUpload();
+            }
+        }
+        var ids = safeRequests.stream()
+                .map(DailyDietLogRequest.PhotoUploadReferenceRequest::uploadId)
+                .toList();
+
+        var found = photos.findByIdIn(ids).stream()
+                .collect(Collectors.toMap(DailyDietLogPhotoReference::getId, Function.identity()));
+        for (var i = 0; i < safeRequests.size(); i++) {
+            var request = safeRequests.get(i);
+            var photo = found.get(request.uploadId());
+            validateAttachable(patient, log, photo);
+            photo.attachTo(log, DietLogRequestMapper.trimToNull(request.caption()), i);
+            if (!log.getPhotoReferences().contains(photo)) {
+                log.addPhotoReference(photo);
+            }
+        }
+    }
+
+    private static void validateAttachable(PatientProfile patient, DailyDietLog log, DailyDietLogPhotoReference photo) {
+        if (patient == null || log == null || photo == null || photo.getPatientProfile() == null) {
+            throw invalidPhotoUpload();
+        }
+        if (!samePatient(patient, photo.getPatientProfile())) {
+            throw invalidPhotoUpload();
+        }
+        var existingLog = photo.getDailyDietLog();
+        if (existingLog != null && existingLog != log && !sameLog(existingLog, log)) {
+            throw invalidPhotoUpload();
+        }
+    }
+
+    private static boolean samePatient(PatientProfile first, PatientProfile second) {
+        if (first.getId() != null && second.getId() != null) {
+            return first.getId().equals(second.getId());
+        }
+        return first == second;
+    }
+
+    private static boolean sameLog(DailyDietLog first, DailyDietLog second) {
+        if (first.getId() != null && second.getId() != null) {
+            return first.getId().equals(second.getId());
+        }
+        return first == second;
+    }
+
+    private static ResponseStatusException invalidPhotoUpload() {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "photo upload is invalid");
     }
 
     private void validateFile(MultipartFile file) {

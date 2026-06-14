@@ -18,9 +18,6 @@ import java.util.List;
 public class DietLogRequestMapper {
 
     public void applyTo(DailyDietLog log, DailyDietLogRequest request) {
-        if (!request.photoReferencesOrEmpty().isEmpty()) {
-            throw badRequest("photo uploads must use staged upload");
-        }
         log.setLogDate(request.logDate());
         log.setAdherenceLevel(request.adherenceLevel());
         log.setAppetiteLevel(request.appetiteLevel());

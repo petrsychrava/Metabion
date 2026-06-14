@@ -59,6 +59,7 @@ class DietLogServiceTest {
     @Mock DailyDietLogRepository dailyDietLogs;
     @Mock DailyMeasurementEntryRepository measurements;
     @Mock AccessControlService accessControl;
+    @Mock DietLogPhotoService dietLogPhotoService;
 
     DietLogService service;
 
@@ -77,7 +78,8 @@ class DietLogServiceTest {
                 measurementWindows,
                 measurementValidator,
                 requestMapper,
-                responseAssembler);
+                responseAssembler,
+                dietLogPhotoService);
     }
 
     @Test
@@ -466,29 +468,27 @@ class DietLogServiceTest {
     }
 
     @Test
-    void rejectsLegacyPhotoMetadataRequests() {
-        givenAuthenticatedPatient();
-        var baseRequest = validRequest(LocalDate.of(2026, 6, 10));
+    void saveForCurrentPatientAttachesUploadedPhotosAfterSavingLog() {
+        var patient = givenAuthenticatedPatient();
+        var saved = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
+        when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
+                .thenReturn(Optional.empty());
+        when(dailyDietLogs.save(any())).thenReturn(saved);
+        var photoReference = new DailyDietLogRequest.PhotoUploadReferenceRequest(50L, "Lunch plate");
         var request = new DailyDietLogRequest(
-                baseRequest.logDate(),
-                baseRequest.adherenceLevel(),
-                baseRequest.appetiteLevel(),
-                baseRequest.notes(),
-                baseRequest.meals(),
-                baseRequest.deviations(),
-                List.of(new DailyDietLogRequest.PhotoReferenceRequest(
-                        "meal.jpg",
-                        "image/jpeg",
-                        123L,
-                        "pending/meal.jpg",
-                        "Lunch")),
-                baseRequest.measurements());
+                LocalDate.of(2026, 6, 10),
+                DietAdherenceLevel.MOSTLY,
+                AppetiteLevel.NORMAL,
+                "Stable",
+                null,
+                List.of(),
+                List.of(),
+                List.of(photoReference),
+                List.of());
 
-        assertThatThrownBy(() -> service.saveForCurrentPatient(auth("patient@example.com"), request))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("400 BAD_REQUEST")
-                .hasMessageContaining("photo uploads must use staged upload");
-        verify(dailyDietLogs, never()).save(any());
+        service.saveForCurrentPatient(auth("patient@example.com"), request);
+
+        verify(dietLogPhotoService).attachToLog(patient, saved, List.of(photoReference));
     }
 
     @Test
@@ -502,6 +502,7 @@ class DietLogServiceTest {
         var response = service.saveForCurrentPatient(auth("patient@example.com"), validRequest(LocalDate.of(2026, 6, 10)));
 
         assertThat(response.photoReferences()).isEmpty();
+        verify(dietLogPhotoService).attachToLog(any(), any(), eq(List.of()));
     }
 
     private DailyDietLogRequest validRequest(LocalDate date) {

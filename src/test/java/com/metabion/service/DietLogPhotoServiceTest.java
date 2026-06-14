@@ -1,8 +1,11 @@
 package com.metabion.service;
 
+import com.metabion.domain.DailyDietLog;
+import com.metabion.domain.DailyDietLogPhotoReference;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
+import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.repository.DailyDietLogPhotoReferenceRepository;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
@@ -18,6 +21,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.InputStream;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -111,6 +116,32 @@ class DietLogPhotoServiceTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("400 BAD_REQUEST")
                 .hasMessageContaining("photo file is too large");
+    }
+
+    @Test
+    void attachUploadsRejectsCrossPatientPhoto() {
+        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patient(10L, patientUser);
+        var otherPatient = patient(20L, user(2L, "other@example.com", RoleName.PATIENT));
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var photo = DailyDietLogPhotoReference.pending(
+                otherPatient,
+                otherPatient.getUser(),
+                "x.jpg",
+                "image/jpeg",
+                4L,
+                "a".repeat(64),
+                "diet-log-photos/20/x.jpg");
+        org.springframework.test.util.ReflectionTestUtils.setField(photo, "id", 99L);
+        when(photos.findByIdIn(List.of(99L))).thenReturn(List.of(photo));
+
+        assertThatThrownBy(() -> service.attachToLog(
+                patient,
+                log,
+                List.of(new DailyDietLogRequest.PhotoUploadReferenceRequest(99L, "caption"))))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("photo upload is invalid");
     }
 
     private void givenPatient() {

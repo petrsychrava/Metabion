@@ -58,12 +58,7 @@ class DietLogFormTest {
                 DietDeviationCategory.DINING_OUT,
                 DietDeviationSeverity.MINOR,
                 "Restaurant lunch");
-        var photo = new DailyDietLogRequest.PhotoReferenceRequest(
-                "meal.jpg",
-                "image/jpeg",
-                128L,
-                "diet/meal.jpg",
-                "Breakfast");
+        var photo = new DailyDietLogRequest.PhotoUploadReferenceRequest(50L, "Breakfast");
         var request = new DailyDietLogRequest(
                 LocalDate.of(2026, 6, 10),
                 DietAdherenceLevel.FULL,
@@ -118,6 +113,7 @@ class DietLogFormTest {
 
         var blankPhoto = new DietLogForm.PhotoReferenceRow();
         var photo = new DietLogForm.PhotoReferenceRow();
+        photo.setUploadId(51L);
         photo.setOriginalFilename("dinner.jpg");
         photo.setContentType("image/jpeg");
         photo.setSizeBytes(1024L);
@@ -156,10 +152,7 @@ class DietLogFormTest {
                 });
         assertThat(request.photoReferencesOrEmpty()).singleElement()
                 .satisfies(row -> {
-                    assertThat(row.originalFilename()).isEqualTo("dinner.jpg");
-                    assertThat(row.contentType()).isEqualTo("image/jpeg");
-                    assertThat(row.sizeBytes()).isEqualTo(1024L);
-                    assertThat(row.storageKey()).isEqualTo("diet/dinner.jpg");
+                    assertThat(row.uploadId()).isEqualTo(51L);
                     assertThat(row.caption()).isEqualTo("Dinner plate");
                 });
         assertThat(request.measurementsOrEmpty()).singleElement()

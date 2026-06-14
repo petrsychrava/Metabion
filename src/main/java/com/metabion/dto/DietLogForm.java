@@ -262,6 +262,8 @@ public class DietLogForm {
     }
 
     public static class PhotoReferenceRow {
+        private Long uploadId;
+
         @Size(max = 255)
         private String originalFilename;
 
@@ -277,21 +279,25 @@ public class DietLogForm {
         @Size(max = 500)
         private String caption;
 
-        public DailyDietLogRequest.PhotoReferenceRequest toRequest() {
-            return new DailyDietLogRequest.PhotoReferenceRequest(
-                    originalFilename,
-                    contentType,
-                    sizeBytes,
-                    storageKey,
-                    caption);
+        public DailyDietLogRequest.PhotoUploadReferenceRequest toRequest() {
+            return new DailyDietLogRequest.PhotoUploadReferenceRequest(uploadId, caption);
         }
 
         boolean isBlank() {
-            return blank(originalFilename)
+            return uploadId == null
+                    && blank(originalFilename)
                     && blank(contentType)
                     && sizeBytes == null
                     && blank(storageKey)
                     && blank(caption);
+        }
+
+        public Long getUploadId() {
+            return uploadId;
+        }
+
+        public void setUploadId(Long uploadId) {
+            this.uploadId = uploadId;
         }
 
         public String getOriginalFilename() {
