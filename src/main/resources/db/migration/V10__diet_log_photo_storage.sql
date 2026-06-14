@@ -24,6 +24,8 @@ ALTER TABLE daily_diet_log_photo_references
     ALTER COLUMN uploaded_by_user_id SET NOT NULL,
     ALTER COLUMN sha256 SET NOT NULL,
     ALTER COLUMN storage_key SET NOT NULL,
+    ADD CONSTRAINT fk_daily_diet_log_photo_references_log_patient
+        FOREIGN KEY (daily_diet_log_id, patient_profile_id) REFERENCES daily_diet_logs(id, patient_profile_id) ON DELETE CASCADE,
     ADD CONSTRAINT fk_daily_diet_log_photo_references_patient
         FOREIGN KEY (patient_profile_id) REFERENCES patient_profiles(id) ON DELETE CASCADE,
     ADD CONSTRAINT fk_daily_diet_log_photo_references_uploaded_by
@@ -38,7 +40,12 @@ ALTER TABLE daily_diet_log_photo_references
         CHECK (
             (status = 'PENDING' AND daily_diet_log_id IS NULL AND attached_at IS NULL)
             OR (status = 'ATTACHED' AND daily_diet_log_id IS NOT NULL AND attached_at IS NOT NULL)
-            OR (status = 'REMOVED')
+            OR (
+                status = 'REMOVED'
+                AND daily_diet_log_id IS NOT NULL
+                AND removed_at IS NOT NULL
+                AND removed_by_user_id IS NOT NULL
+            )
         );
 
 CREATE INDEX ix_daily_diet_log_photo_references_patient_status

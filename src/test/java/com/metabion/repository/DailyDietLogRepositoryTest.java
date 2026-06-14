@@ -115,13 +115,16 @@ class DailyDietLogRepositoryTest {
                 DietDeviationSeverity.MINOR,
                 "Restaurant meal",
                 0));
-        log.addPhotoReference(new DailyDietLogPhotoReference(
+        var photoReference = DailyDietLogPhotoReference.pending(
+                patient,
+                patient.getUser(),
                 "breakfast.jpg",
                 "image/jpeg",
                 1024L,
-                "daily-logs/1/breakfast.jpg",
-                "Breakfast",
-                0));
+                "3".repeat(64),
+                "daily-logs/1/breakfast.jpg");
+        photoReference.attachTo(log, "Breakfast", 0);
+        log.addPhotoReference(photoReference);
 
         dailyDietLogs.saveAndFlush(log);
         entityManager.clear();
@@ -175,6 +178,54 @@ class DailyDietLogRepositoryTest {
                     assertThat(savedPhoto.getAttachedAt()).isNotNull();
                     assertThat(savedPhoto.getRemovedAt()).isNull();
                 });
+    }
+
+    @Test
+    void pendingPhotoReferenceCanExistWithoutDailyDietLog() {
+        var patient = createPatient("pending-photo@example.com");
+        var uploader = patient.getUser();
+        var sha256 = "1".repeat(64);
+        var photo = DailyDietLogPhotoReference.pending(
+                patient,
+                uploader,
+                "snack.png",
+                "image/png",
+                2048L,
+                sha256,
+                "diet-log-photos/pending/snack.png");
+
+        entityManager.persist(photo);
+        entityManager.flush();
+        var photoId = photo.getId();
+        entityManager.clear();
+
+        var saved = entityManager.find(DailyDietLogPhotoReference.class, photoId);
+
+        assertThat(saved.getStatus()).isEqualTo(DietLogPhotoStatus.PENDING);
+        assertThat(saved.getPatientProfile().getId()).isEqualTo(patient.getId());
+        assertThat(saved.getUploadedByUser().getId()).isEqualTo(uploader.getId());
+        assertThat(saved.getStorageKey()).isEqualTo("diet-log-photos/pending/snack.png");
+        assertThat(saved.getSha256()).isEqualTo(sha256);
+        assertThat(saved.getCreatedAt()).isNotNull();
+        assertThat(saved.getDailyDietLog()).isNull();
+    }
+
+    @Test
+    void attachToRejectsDailyLogForDifferentPatient() {
+        var patient = createPatient("photo-owner@example.com");
+        var otherPatient = createPatient("other-photo-owner@example.com");
+        var photo = DailyDietLogPhotoReference.pending(
+                patient,
+                patient.getUser(),
+                "plate.jpg",
+                "image/jpeg",
+                1234L,
+                "2".repeat(64),
+                "diet-log-photos/pending/plate.jpg");
+        var otherLog = new DailyDietLog(otherPatient, LocalDate.of(2026, 6, 10));
+
+        assertThatThrownBy(() -> photo.attachTo(otherLog, "Wrong patient", 0))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

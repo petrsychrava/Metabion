@@ -117,6 +117,10 @@ public class DailyDietLogPhotoReference {
     }
 
     public void attachTo(DailyDietLog log, String caption, int sortOrder) {
+        var logPatient = log == null ? null : log.getPatientProfile();
+        if (this.patientProfile != null && logPatient != null && !samePatient(this.patientProfile, logPatient)) {
+            throw new IllegalArgumentException("Photo reference patient must match daily diet log patient");
+        }
         setDailyDietLog(log);
         this.status = DietLogPhotoStatus.ATTACHED;
         this.caption = caption;
@@ -148,9 +152,13 @@ public class DailyDietLogPhotoReference {
         if (dailyDietLog != null && this.attachedAt == null) {
             this.attachedAt = Instant.now();
         }
-        if (dailyDietLog != null && this.sha256 == null) {
-            this.sha256 = "0".repeat(64);
+    }
+
+    private static boolean samePatient(PatientProfile first, PatientProfile second) {
+        if (first.getId() != null && second.getId() != null) {
+            return first.getId().equals(second.getId());
         }
+        return first == second;
     }
 
     public PatientProfile getPatientProfile() {
