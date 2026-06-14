@@ -1,0 +1,144 @@
+package com.metabion.service;
+
+import com.metabion.domain.PatientProfile;
+import com.metabion.domain.RoleName;
+import com.metabion.domain.User;
+import com.metabion.repository.DailyDietLogPhotoReferenceRepository;
+import com.metabion.repository.PatientProfileRepository;
+import com.metabion.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.io.InputStream;
+import java.time.Duration;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class DietLogPhotoServiceTest {
+
+    @Mock UserRepository users;
+    @Mock PatientProfileRepository patientProfiles;
+    @Mock DailyDietLogPhotoReferenceRepository photos;
+    @Mock FileStorageService storage;
+    @Mock AccessControlService accessControl;
+
+    DietLogPhotoService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new DietLogPhotoService(
+                users,
+                patientProfiles,
+                photos,
+                storage,
+                accessControl,
+                new DietLogPhotoProperties(10 * 1024 * 1024L, 10, Duration.ofHours(24)));
+    }
+
+    @Test
+    void uploadCreatesPendingPhotoForCurrentPatient() throws Exception {
+        var user = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patient(10L, user);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(user));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        when(storage.store(any(), any(InputStream.class), eq(4L)))
+                .thenReturn(new com.metabion.dto.StoredFile("diet-log-photos/10/test.jpg", 4L, "a".repeat(64)));
+        when(photos.save(any())).thenAnswer(invocation -> {
+            var photo = invocation.getArgument(0, com.metabion.domain.DailyDietLogPhotoReference.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(photo, "id", 50L);
+            return photo;
+        });
+
+        var response = service.uploadForCurrentPatient(
+                auth("patient@example.com"),
+                new MockMultipartFile("file", "plate.jpg", "image/jpeg", jpegBytes()));
+
+        assertThat(response.uploadId()).isEqualTo(50L);
+        assertThat(response.originalFilename()).isEqualTo("plate.jpg");
+        assertThat(response.contentType()).isEqualTo("image/jpeg");
+        assertThat(response.sizeBytes()).isEqualTo(4L);
+        assertThat(response.contentUrl()).isEqualTo("/api/diet-log-photos/50/content");
+
+        var captor = ArgumentCaptor.forClass(com.metabion.domain.DailyDietLogPhotoReference.class);
+        verify(photos).save(captor.capture());
+        assertThat(captor.getValue().getPatientProfile()).isSameAs(patient);
+        assertThat(captor.getValue().getStorageKey()).isEqualTo("diet-log-photos/10/test.jpg");
+    }
+
+    @Test
+    void uploadRejectsUnsupportedSignature() throws Exception {
+        givenPatient();
+
+        assertThatThrownBy(() -> service.uploadForCurrentPatient(
+                auth("patient@example.com"),
+                new MockMultipartFile("file", "note.txt", "text/plain", "nope".getBytes())))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("unsupported image type");
+        verify(storage, never()).store(any(), any(), anyLong());
+    }
+
+    @Test
+    void uploadRejectsOversizedFile() {
+        givenPatient();
+        service = new DietLogPhotoService(
+                users,
+                patientProfiles,
+                photos,
+                storage,
+                accessControl,
+                new DietLogPhotoProperties(3, 10, Duration.ofHours(24)));
+
+        assertThatThrownBy(() -> service.uploadForCurrentPatient(
+                auth("patient@example.com"),
+                new MockMultipartFile("file", "plate.jpg", "image/jpeg", jpegBytes())))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("photo file is too large");
+    }
+
+    private void givenPatient() {
+        var user = user(1L, "patient@example.com", RoleName.PATIENT);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(user));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient(10L, user)));
+    }
+
+    private static TestingAuthenticationToken auth(String email) {
+        var authentication = new TestingAuthenticationToken(email, "n/a");
+        authentication.setAuthenticated(true);
+        return authentication;
+    }
+
+    private static byte[] jpegBytes() {
+        return new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xD9};
+    }
+
+    private static User user(Long id, String email, RoleName role) {
+        var user = new User(email, "hash");
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", id);
+        user.addRole(role);
+        return user;
+    }
+
+    private static PatientProfile patient(Long id, User user) {
+        var patient = new PatientProfile(user);
+        org.springframework.test.util.ReflectionTestUtils.setField(patient, "id", id);
+        return patient;
+    }
+}
