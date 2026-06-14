@@ -262,6 +262,8 @@ class WebDietLogControllerTest {
                 .andExpect(content().string(containsString("Stable day")))
                 .andExpect(content().string(containsString("Avocado salad")))
                 .andExpect(content().string(containsString("photo-1.jpg")))
+                .andExpect(content().string(containsString("/api/diet-log-photos/3/content")))
+                .andExpect(content().string(not(containsString("Storage key"))))
                 .andExpect(content().string(containsString("5.8")));
     }
 
@@ -349,8 +351,8 @@ class WebDietLogControllerTest {
                         "photo-1.jpg",
                         "image/jpeg",
                         1024L,
-                        "diet/photo-1",
                         "Lunch",
+                        "/api/diet-log-photos/3/content",
                         0)),
                 List.of(new DailyMeasurementEntryResponse(
                         4L,
@@ -411,8 +413,8 @@ class WebDietLogControllerTest {
                                 "photo-1.jpg",
                                 "image/jpeg",
                                 1024L,
-                                "diet/photo-1",
                                 "Lunch",
+                                "/api/diet-log-photos/5/content",
                                 0),
                         new DailyDietLogResponse.PhotoReferenceResponse(
                                 6L,
@@ -420,8 +422,8 @@ class WebDietLogControllerTest {
                                 "photo-2.jpg",
                                 "image/jpeg",
                                 2048L,
-                                "diet/photo-2",
                                 "Snack",
+                                "/api/diet-log-photos/6/content",
                                 1)),
                 List.of(
                         new DailyMeasurementEntryResponse(

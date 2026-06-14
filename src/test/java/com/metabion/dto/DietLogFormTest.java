@@ -255,8 +255,8 @@ class DietLogFormTest {
                     assertThat(row.originalFilename()).isEqualTo("plate.jpg");
                     assertThat(row.contentType()).isEqualTo("image/jpeg");
                     assertThat(row.sizeBytes()).isEqualTo(2048L);
-                    assertThat(row.storageKey()).isEqualTo("diet/plate.jpg");
                     assertThat(row.caption()).isEqualTo("Lunch plate");
+                    assertThat(row.contentUrl()).isEqualTo("/api/diet-log-photos/50/content");
                     assertThat(row.sortOrder()).isEqualTo(3);
                 });
         assertThat(response.measurements()).singleElement()
