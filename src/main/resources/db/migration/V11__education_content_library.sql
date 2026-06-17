@@ -30,6 +30,7 @@ CREATE TABLE education_module_versions (
 
     CONSTRAINT ux_education_module_versions_module_version UNIQUE (module_id, version),
     CONSTRAINT ux_education_module_versions_module_id_id UNIQUE (module_id, id),
+    CONSTRAINT ux_education_module_versions_id_module_id UNIQUE (id, module_id),
     CONSTRAINT chk_education_module_versions_version_positive CHECK (version > 0),
     CONSTRAINT chk_education_module_versions_status CHECK (status IN ('DRAFT', 'IN_REVIEW', 'APPROVED', 'PUBLISHED', 'ARCHIVED', 'REJECTED'))
 );
@@ -60,6 +61,7 @@ CREATE TABLE education_lessons (
     created_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
     CONSTRAINT ux_education_lessons_module_slug UNIQUE (module_id, slug),
+    CONSTRAINT ux_education_lessons_id_module_id UNIQUE (id, module_id),
     CONSTRAINT chk_education_lessons_slug_not_blank CHECK (length(trim(slug)) > 0),
     CONSTRAINT chk_education_lessons_slug_format CHECK (slug = lower(slug) AND slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$')
 );
@@ -67,12 +69,21 @@ CREATE TABLE education_lessons (
 CREATE TABLE education_lesson_versions (
     id                  BIGSERIAL PRIMARY KEY,
     module_version_id   BIGINT NOT NULL REFERENCES education_module_versions(id) ON DELETE CASCADE,
+    module_id           BIGINT NOT NULL,
     lesson_id           BIGINT NOT NULL REFERENCES education_lessons(id) ON DELETE CASCADE,
     sort_order          INT NOT NULL,
 
     CONSTRAINT ux_education_lesson_versions_version_lesson UNIQUE (module_version_id, lesson_id),
     CONSTRAINT ux_education_lesson_versions_version_sort UNIQUE (module_version_id, sort_order),
     CONSTRAINT ux_education_lesson_versions_module_version_id UNIQUE (module_version_id, id),
+    CONSTRAINT fk_education_lesson_versions_module_version_module
+        FOREIGN KEY (module_version_id, module_id)
+        REFERENCES education_module_versions(id, module_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_education_lesson_versions_lesson_module
+        FOREIGN KEY (lesson_id, module_id)
+        REFERENCES education_lessons(id, module_id)
+        ON DELETE CASCADE,
     CONSTRAINT chk_education_lesson_versions_sort_positive CHECK (sort_order > 0)
 );
 

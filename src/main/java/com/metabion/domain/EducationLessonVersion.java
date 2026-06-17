@@ -11,6 +11,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.util.ArrayList;
@@ -27,6 +29,9 @@ public class EducationLessonVersion {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "module_version_id", nullable = false)
     private EducationModuleVersion moduleVersion;
+
+    @Column(name = "module_id", nullable = false)
+    private Long moduleId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "lesson_id", nullable = false)
@@ -45,8 +50,15 @@ public class EducationLessonVersion {
     public EducationLessonVersion(EducationModuleVersion moduleVersion, EducationLesson lesson, int sortOrder) {
         validateSameModule(moduleVersion, lesson);
         this.moduleVersion = moduleVersion;
+        this.moduleId = moduleId(moduleVersion, lesson);
         this.lesson = lesson;
         this.sortOrder = sortOrder;
+    }
+
+    @PrePersist
+    @PreUpdate
+    void syncModuleId() {
+        this.moduleId = moduleId(moduleVersion, lesson);
     }
 
     public void addLocalization(EducationLessonLocalization localization) {
@@ -69,6 +81,7 @@ public class EducationLessonVersion {
     void setModuleVersion(EducationModuleVersion moduleVersion) {
         validateSameModule(moduleVersion, lesson);
         this.moduleVersion = moduleVersion;
+        this.moduleId = moduleId(moduleVersion, lesson);
     }
 
     public EducationLesson getLesson() {
@@ -77,6 +90,10 @@ public class EducationLessonVersion {
 
     public int getSortOrder() {
         return sortOrder;
+    }
+
+    public Long getModuleId() {
+        return moduleId;
     }
 
     public List<EducationLessonLocalization> getLocalizations() {
@@ -93,5 +110,15 @@ public class EducationLessonVersion {
                 || !versionModule.getId().equals(lessonModule.getId()))) {
             throw new IllegalArgumentException("Lesson version requires lesson from the same module");
         }
+    }
+
+    private Long moduleId(EducationModuleVersion moduleVersion, EducationLesson lesson) {
+        if (moduleVersion != null && moduleVersion.getModule().getId() != null) {
+            return moduleVersion.getModule().getId();
+        }
+        if (lesson != null) {
+            return lesson.getModule().getId();
+        }
+        return null;
     }
 }

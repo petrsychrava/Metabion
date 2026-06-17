@@ -90,6 +90,27 @@ class EducationContentRepositoryTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void directSqlCannotAttachLessonVersionToLessonFromDifferentModule() {
+        var admin = createUser("lesson-owner-admin@example.com", RoleName.ADMIN);
+        var module = modules.saveAndFlush(new EducationModule("sql-module-a", "IBD", 10));
+        var otherModule = modules.saveAndFlush(new EducationModule("sql-module-b", "IBD", 20));
+        var moduleVersion = versions.saveAndFlush(new EducationModuleVersion(module, 1, admin));
+        var lesson = lessons.saveAndFlush(new EducationLesson(otherModule, "foreign-lesson"));
+
+        assertThatThrownBy(() -> {
+            entityManager.createNativeQuery("""
+                            INSERT INTO education_lesson_versions(module_version_id, module_id, lesson_id, sort_order)
+                            VALUES (:moduleVersionId, :moduleId, :lessonId, 1)
+                            """)
+                    .setParameter("moduleVersionId", moduleVersion.getId())
+                    .setParameter("moduleId", module.getId())
+                    .setParameter("lessonId", lesson.getId())
+                    .executeUpdate();
+            entityManager.flush();
+        }).isInstanceOf(Exception.class);
+    }
+
     private EducationModule publishModule(String slug, String topic, int sortOrder, User admin) {
         var module = modules.saveAndFlush(new EducationModule(slug, topic, sortOrder));
         var version = new EducationModuleVersion(module, 1, admin);
