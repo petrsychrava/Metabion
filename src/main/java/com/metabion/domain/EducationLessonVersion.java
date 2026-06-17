@@ -43,6 +43,7 @@ public class EducationLessonVersion {
     }
 
     public EducationLessonVersion(EducationModuleVersion moduleVersion, EducationLesson lesson, int sortOrder) {
+        validateSameModule(moduleVersion, lesson);
         this.moduleVersion = moduleVersion;
         this.lesson = lesson;
         this.sortOrder = sortOrder;
@@ -66,6 +67,7 @@ public class EducationLessonVersion {
     }
 
     void setModuleVersion(EducationModuleVersion moduleVersion) {
+        validateSameModule(moduleVersion, lesson);
         this.moduleVersion = moduleVersion;
     }
 
@@ -79,5 +81,17 @@ public class EducationLessonVersion {
 
     public List<EducationLessonLocalization> getLocalizations() {
         return localizations;
+    }
+
+    private void validateSameModule(EducationModuleVersion moduleVersion, EducationLesson lesson) {
+        if (moduleVersion == null || lesson == null) {
+            return;
+        }
+        var versionModule = moduleVersion.getModule();
+        var lessonModule = lesson.getModule();
+        if (versionModule != lessonModule && (versionModule.getId() == null || lessonModule.getId() == null
+                || !versionModule.getId().equals(lessonModule.getId()))) {
+            throw new IllegalArgumentException("Lesson version requires lesson from the same module");
+        }
     }
 }

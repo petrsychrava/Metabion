@@ -92,6 +92,9 @@ public class EducationModuleVersion {
         if (status != EducationContentStatus.DRAFT && status != EducationContentStatus.REJECTED) {
             throw new IllegalArgumentException("Only draft or rejected content can be submitted");
         }
+        reviewedBy = null;
+        reviewedAt = null;
+        reviewNotes = null;
         status = EducationContentStatus.IN_REVIEW;
         submittedAt = Instant.now();
     }

@@ -29,15 +29,16 @@ CREATE TABLE education_module_versions (
     archived_at             TIMESTAMP WITH TIME ZONE,
 
     CONSTRAINT ux_education_module_versions_module_version UNIQUE (module_id, version),
+    CONSTRAINT ux_education_module_versions_module_id_id UNIQUE (module_id, id),
     CONSTRAINT chk_education_module_versions_version_positive CHECK (version > 0),
     CONSTRAINT chk_education_module_versions_status CHECK (status IN ('DRAFT', 'IN_REVIEW', 'APPROVED', 'PUBLISHED', 'ARCHIVED', 'REJECTED'))
 );
 
 ALTER TABLE education_modules
     ADD CONSTRAINT fk_education_modules_current_published
-    FOREIGN KEY (current_published_version_id)
-    REFERENCES education_module_versions(id)
-    ON DELETE SET NULL;
+    FOREIGN KEY (id, current_published_version_id)
+    REFERENCES education_module_versions(module_id, id)
+    ON DELETE SET NULL (current_published_version_id);
 
 CREATE TABLE education_module_localizations (
     id                  BIGSERIAL PRIMARY KEY,
@@ -71,6 +72,7 @@ CREATE TABLE education_lesson_versions (
 
     CONSTRAINT ux_education_lesson_versions_version_lesson UNIQUE (module_version_id, lesson_id),
     CONSTRAINT ux_education_lesson_versions_version_sort UNIQUE (module_version_id, sort_order),
+    CONSTRAINT ux_education_lesson_versions_module_version_id UNIQUE (module_version_id, id),
     CONSTRAINT chk_education_lesson_versions_sort_positive CHECK (sort_order > 0)
 );
 
@@ -97,7 +99,11 @@ CREATE TABLE education_lesson_completions (
     completed_at        TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT ux_education_lesson_completions_patient_lesson UNIQUE (patient_profile_id, lesson_version_id)
+    CONSTRAINT ux_education_lesson_completions_patient_lesson UNIQUE (patient_profile_id, lesson_version_id),
+    CONSTRAINT fk_education_lesson_completions_lesson_module_version
+        FOREIGN KEY (module_version_id, lesson_version_id)
+        REFERENCES education_lesson_versions(module_version_id, id)
+        ON DELETE CASCADE
 );
 
 CREATE INDEX ix_education_modules_sort ON education_modules(sort_order, id);

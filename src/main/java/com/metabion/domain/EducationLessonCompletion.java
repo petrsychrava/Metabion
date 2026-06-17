@@ -45,6 +45,12 @@ public class EducationLessonCompletion {
             PatientProfile patientProfile,
             EducationModuleVersion moduleVersion,
             EducationLessonVersion lessonVersion) {
+        if (moduleVersion != null && lessonVersion != null
+                && moduleVersion != lessonVersion.getModuleVersion()
+                && (moduleVersion.getId() == null || lessonVersion.getModuleVersion().getId() == null
+                || !moduleVersion.getId().equals(lessonVersion.getModuleVersion().getId()))) {
+            throw new IllegalArgumentException("Completion requires lesson version from the same module version");
+        }
         this.patientProfile = patientProfile;
         this.moduleVersion = moduleVersion;
         this.lessonVersion = lessonVersion;

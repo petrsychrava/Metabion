@@ -55,6 +55,13 @@ public class EducationModule {
     }
 
     public void publish(EducationModuleVersion version) {
+        if (version == null || version.getStatus() != EducationContentStatus.PUBLISHED) {
+            throw new IllegalArgumentException("Current published version must be published");
+        }
+        if (version.getModule() != this && (id == null || version.getModule().getId() == null
+                || !id.equals(version.getModule().getId()))) {
+            throw new IllegalArgumentException("Published version must belong to the same module");
+        }
         this.currentPublishedVersion = version;
         touch();
     }
