@@ -19,7 +19,7 @@ public class EducationContentForm {
     private String topic;
 
     @Min(1)
-    private int sortOrder;
+    private int sortOrder = 10;
 
     @NotBlank
     @Size(max = 200)

@@ -11,6 +11,6 @@ public record EducationLessonResponse(
         String summary,
         String bodyMarkdown,
         String bodyHtml,
-        boolean completed
+        Boolean completed
 ) {
 }
