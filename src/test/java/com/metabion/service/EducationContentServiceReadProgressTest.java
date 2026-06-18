@@ -3,7 +3,6 @@ package com.metabion.service;
 import com.metabion.domain.EducationContentStatus;
 import com.metabion.domain.EducationLanguage;
 import com.metabion.domain.EducationLesson;
-import com.metabion.domain.EducationLessonCompletion;
 import com.metabion.domain.EducationLessonLocalization;
 import com.metabion.domain.EducationLessonVersion;
 import com.metabion.domain.EducationModule;
@@ -82,7 +81,7 @@ class EducationContentServiceReadProgressTest {
         when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
         when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
         when(modules.findBySlug("ibd-basics")).thenReturn(Optional.of(module));
-        when(completions.findByPatientProfileIdAndLessonVersionIdIn(10L, List.of(100L))).thenReturn(List.of());
+        when(completions.findCompletedLessonVersionIds(10L, List.of(100L))).thenReturn(List.of());
         when(markdown.render("English body")).thenReturn("<p>English body</p>");
 
         var response = service.getPublishedModule(auth("patient@example.com"), "ibd-basics");
@@ -105,21 +104,31 @@ class EducationContentServiceReadProgressTest {
         var patientUser = user(3L, "patient@example.com", RoleName.PATIENT);
         var patient = patient(11L, patientUser);
         var module = publishedModule("nutrition", staff(4L), false);
-        var lessonVersion = module.getCurrentPublishedVersion().getLessons().getFirst();
         when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
         when(patientProfiles.findByUserId(3L)).thenReturn(Optional.of(patient));
         when(modules.findBySlug("nutrition")).thenReturn(Optional.of(module));
-        when(completions.findByPatientProfileIdAndLessonVersionId(11L, 100L)).thenReturn(Optional.empty());
-        when(completions.save(any(EducationLessonCompletion.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(completions.insertCompletionIfAbsent(11L, 60L, 100L)).thenReturn(1);
 
         service.completeLesson(auth("patient@example.com"), "nutrition", "intro");
         service.uncompleteLesson(auth("patient@example.com"), "nutrition", "intro");
 
-        var completionCaptor = ArgumentCaptor.forClass(EducationLessonCompletion.class);
-        verify(completions).save(completionCaptor.capture());
-        assertThat(completionCaptor.getValue().getPatientProfile()).isSameAs(patient);
-        assertThat(completionCaptor.getValue().getLessonVersion()).isSameAs(lessonVersion);
+        verify(completions).insertCompletionIfAbsent(11L, 60L, 100L);
         verify(completions).deleteByPatientProfileIdAndLessonVersionId(11L, 100L);
+    }
+
+    @Test
+    void duplicateCompletionInsertIsTreatedAsSuccess() {
+        var patientUser = user(12L, "patient@example.com", RoleName.PATIENT);
+        var patient = patient(13L, patientUser);
+        var module = publishedModule("nutrition", staff(14L), false);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(12L)).thenReturn(Optional.of(patient));
+        when(modules.findBySlug("nutrition")).thenReturn(Optional.of(module));
+        when(completions.insertCompletionIfAbsent(13L, 60L, 100L)).thenReturn(0);
+
+        service.completeLesson(auth("patient@example.com"), "nutrition", "intro");
+
+        verify(completions).insertCompletionIfAbsent(13L, 60L, 100L);
     }
 
     @Test
@@ -130,7 +139,7 @@ class EducationContentServiceReadProgressTest {
         assertThatThrownBy(() -> service.completeLesson(auth("physician@example.com"), "nutrition", "intro"))
                 .isInstanceOfSatisfying(ResponseStatusException.class, ex ->
                         assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
-        verify(completions, never()).save(any());
+        verify(completions, never()).insertCompletionIfAbsent(any(), any(), any());
     }
 
     @Test
@@ -223,7 +232,7 @@ class EducationContentServiceReadProgressTest {
             assertThat(response.completedLessonCount()).isNull();
             assertThat(response.completed()).isNull();
         });
-        verify(completions, never()).findByPatientProfileIdAndLessonVersionIdIn(any(), any());
+        verify(completions, never()).findCompletedLessonVersionIds(any(), any());
     }
 
     private EducationModule publishedModule(String slug, User author, boolean includeCzech) {

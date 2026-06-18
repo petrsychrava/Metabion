@@ -91,6 +91,22 @@ class EducationContentRepositoryTest {
     }
 
     @Test
+    void insertCompletionIfAbsentIsIdempotentAndCompletedIdsAreScalar() {
+        var admin = createUser("completion-upsert-admin@example.com", RoleName.ADMIN);
+        var patient = createPatient("completion-upsert-patient@example.com");
+        var module = publishModule("completion-upsert-module", "KETO", 10, admin);
+        var version = module.getCurrentPublishedVersion();
+        var lessonVersion = version.getLessons().getFirst();
+
+        assertThat(completions.insertCompletionIfAbsent(patient.getId(), version.getId(), lessonVersion.getId()))
+                .isEqualTo(1);
+        assertThat(completions.insertCompletionIfAbsent(patient.getId(), version.getId(), lessonVersion.getId()))
+                .isZero();
+        assertThat(completions.findCompletedLessonVersionIds(patient.getId(), java.util.List.of(lessonVersion.getId())))
+                .containsExactly(lessonVersion.getId());
+    }
+
+    @Test
     void directSqlCannotAttachLessonVersionToLessonFromDifferentModule() {
         var admin = createUser("lesson-owner-admin@example.com", RoleName.ADMIN);
         var module = modules.saveAndFlush(new EducationModule("sql-module-a", "IBD", 10));

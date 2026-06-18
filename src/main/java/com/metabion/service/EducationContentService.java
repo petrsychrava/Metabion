@@ -3,7 +3,6 @@ package com.metabion.service;
 import com.metabion.domain.EducationContentStatus;
 import com.metabion.domain.EducationLanguage;
 import com.metabion.domain.EducationLesson;
-import com.metabion.domain.EducationLessonCompletion;
 import com.metabion.domain.EducationLessonLocalization;
 import com.metabion.domain.EducationLessonVersion;
 import com.metabion.domain.EducationModule;
@@ -194,8 +193,12 @@ public class EducationContentService {
         var user = currentUser(authentication);
         var requestedLanguage = EducationLanguage.from(user.getLanguagePreference());
         var patient = patientProfileOrNull(user);
+        var publishedModules = modules.findByCurrentPublishedVersionIsNotNullOrderBySortOrderAscIdAsc();
+        fetchPublishedVersionGraph(publishedModules.stream()
+                .map(EducationModule::getCurrentPublishedVersion)
+                .toList());
 
-        return modules.findByCurrentPublishedVersionIsNotNullOrderBySortOrderAscIdAsc().stream()
+        return publishedModules.stream()
                 .map(module -> summary(module.getCurrentPublishedVersion(), requestedLanguage, patient))
                 .toList();
     }
@@ -209,6 +212,7 @@ public class EducationContentService {
         if (version == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Education module not found");
         }
+        fetchPublishedVersionGraph(List.of(version));
         return detail(version, requestedLanguage, patientProfileOrNull(user));
     }
 
@@ -216,8 +220,7 @@ public class EducationContentService {
         var patient = currentPatient(currentUser(authentication));
         var moduleVersion = currentPublishedVersion(moduleSlug);
         var lessonVersion = currentLessonVersion(moduleVersion, lessonSlug);
-        completions.findByPatientProfileIdAndLessonVersionId(patient.getId(), lessonVersion.getId())
-                .orElseGet(() -> completions.save(new EducationLessonCompletion(patient, moduleVersion, lessonVersion)));
+        completions.insertCompletionIfAbsent(patient.getId(), moduleVersion.getId(), lessonVersion.getId());
     }
 
     public void uncompleteLesson(Authentication authentication, String moduleSlug, String lessonSlug) {
@@ -286,7 +289,17 @@ public class EducationContentService {
         if (version == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Education module not found");
         }
+        fetchPublishedVersionGraph(List.of(version));
         return version;
+    }
+
+    void fetchPublishedVersionGraph(List<EducationModuleVersion> publishedVersions) {
+        if (publishedVersions.isEmpty()) {
+            return;
+        }
+        versions.fetchLocalizations(publishedVersions);
+        versions.fetchLessons(publishedVersions);
+        versions.fetchLessonLocalizations(publishedVersions);
     }
 
     String normalizeSlug(String slug) {
@@ -402,8 +415,7 @@ public class EducationContentService {
         if (lessonVersionIds.isEmpty()) {
             return Set.of();
         }
-        return completions.findByPatientProfileIdAndLessonVersionIdIn(patient.getId(), lessonVersionIds).stream()
-                .map(completion -> completion.getLessonVersion().getId())
+        return completions.findCompletedLessonVersionIds(patient.getId(), lessonVersionIds).stream()
                 .collect(Collectors.toSet());
     }
 
