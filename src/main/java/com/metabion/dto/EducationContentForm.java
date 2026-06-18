@@ -1,6 +1,7 @@
 package com.metabion.dto;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -139,22 +140,17 @@ public class EducationContentForm {
 
     public static class LessonRow {
 
-        @NotBlank
         @Size(max = 120)
         private String slug;
 
-        @Min(1)
         private int sortOrder;
 
-        @NotBlank
         @Size(max = 200)
         private String englishTitle;
 
-        @NotBlank
         @Size(max = 1000)
         private String englishSummary;
 
-        @NotBlank
         @Size(max = 20000)
         private String englishBodyMarkdown;
 
@@ -188,6 +184,16 @@ public class EducationContentForm {
                     czechTitle,
                     czechSummary,
                     czechBodyMarkdown);
+        }
+
+        @AssertTrue(message = "populated lesson rows must include slug, sortOrder, englishTitle, englishSummary, and englishBodyMarkdown")
+        public boolean isCompleteOrBlank() {
+            return isBlank()
+                    || (!blank(slug)
+                    && sortOrder >= 1
+                    && !blank(englishTitle)
+                    && !blank(englishSummary)
+                    && !blank(englishBodyMarkdown));
         }
 
         public String getSlug() {
