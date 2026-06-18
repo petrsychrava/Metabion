@@ -2,16 +2,22 @@ package com.metabion.service;
 
 import com.metabion.domain.EducationContentStatus;
 import com.metabion.domain.EducationLanguage;
+import com.metabion.domain.EducationLesson;
+import com.metabion.domain.EducationLessonCompletion;
 import com.metabion.domain.EducationLessonLocalization;
 import com.metabion.domain.EducationLessonVersion;
 import com.metabion.domain.EducationModule;
 import com.metabion.domain.EducationModuleLocalization;
 import com.metabion.domain.EducationModuleVersion;
+import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.EducationLessonResponse;
+import com.metabion.dto.EducationLessonUpsertRequest;
 import com.metabion.dto.EducationManagementDetailResponse;
+import com.metabion.dto.EducationModuleDetailResponse;
 import com.metabion.dto.EducationModuleRequest;
+import com.metabion.dto.EducationModuleSummaryResponse;
 import com.metabion.repository.EducationLessonCompletionRepository;
 import com.metabion.repository.EducationLessonRepository;
 import com.metabion.repository.EducationModuleRepository;
@@ -24,7 +30,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -151,6 +161,97 @@ public class EducationContentService {
         return managementDetail(version);
     }
 
+    public EducationManagementDetailResponse upsertLesson(
+            Authentication authentication,
+            String moduleSlug,
+            int versionNumber,
+            EducationLessonUpsertRequest request) {
+        var user = currentUser(authentication);
+        requireContentManager(user);
+        var version = versionOrNotFound(moduleSlug, versionNumber);
+        requireEditable(version);
+
+        var lessonSlug = normalizeSlug(request.slug());
+        var module = version.getModule();
+        var lesson = lessons.findByModuleSlugAndSlug(module.getSlug(), lessonSlug)
+                .orElseGet(() -> lessons.save(new EducationLesson(module, lessonSlug)));
+
+        version.getLessons().removeIf(existing -> sameLesson(existing.getLesson(), lesson));
+        var lessonVersion = new EducationLessonVersion(version, lesson, request.sortOrder());
+        lessonVersion.addLocalization(new EducationLessonLocalization(
+                lessonVersion,
+                EducationLanguage.EN,
+                trim(request.englishTitle()),
+                trim(request.englishSummary()),
+                trim(request.englishBodyMarkdown())));
+        addOptionalLessonLocalization(lessonVersion, request.czechTitle(), request.czechSummary(), request.czechBodyMarkdown());
+        version.addLesson(lessonVersion);
+
+        return managementDetail(versions.save(version));
+    }
+
+    public List<EducationModuleSummaryResponse> listPublishedModules(Authentication authentication) {
+        var user = currentUser(authentication);
+        var requestedLanguage = EducationLanguage.from(user.getLanguagePreference());
+        var patient = patientProfileOrNull(user);
+
+        return modules.findByCurrentPublishedVersionIsNotNullOrderBySortOrderAscIdAsc().stream()
+                .map(module -> summary(module.getCurrentPublishedVersion(), requestedLanguage, patient))
+                .toList();
+    }
+
+    public EducationModuleDetailResponse getPublishedModule(Authentication authentication, String moduleSlug) {
+        var user = currentUser(authentication);
+        var requestedLanguage = EducationLanguage.from(user.getLanguagePreference());
+        var module = modules.findBySlug(normalizeSlug(moduleSlug))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Education module not found"));
+        var version = module.getCurrentPublishedVersion();
+        if (version == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Education module not found");
+        }
+        return detail(version, requestedLanguage, patientProfileOrNull(user));
+    }
+
+    public void completeLesson(Authentication authentication, String moduleSlug, String lessonSlug) {
+        var patient = currentPatient(currentUser(authentication));
+        var moduleVersion = currentPublishedVersion(moduleSlug);
+        var lessonVersion = currentLessonVersion(moduleVersion, lessonSlug);
+        completions.findByPatientProfileIdAndLessonVersionId(patient.getId(), lessonVersion.getId())
+                .orElseGet(() -> completions.save(new EducationLessonCompletion(patient, moduleVersion, lessonVersion)));
+    }
+
+    public void uncompleteLesson(Authentication authentication, String moduleSlug, String lessonSlug) {
+        var patient = currentPatient(currentUser(authentication));
+        var lessonVersion = currentLessonVersion(currentPublishedVersion(moduleSlug), lessonSlug);
+        completions.deleteByPatientProfileIdAndLessonVersionId(patient.getId(), lessonVersion.getId());
+    }
+
+    public EducationManagementDetailResponse copyVersion(Authentication authentication, String moduleSlug, int versionNumber) {
+        var author = currentUser(authentication);
+        requireContentManager(author);
+        var source = versionOrNotFound(moduleSlug, versionNumber);
+        var nextVersion = versions.maxVersion(source.getModule().getId()) + 1;
+        var copy = new EducationModuleVersion(source.getModule(), nextVersion, author);
+
+        source.getLocalizations().forEach(localization -> copy.addLocalization(new EducationModuleLocalization(
+                copy,
+                localization.getLanguage(),
+                localization.getTitle(),
+                localization.getSummary())));
+        orderedLessons(source).forEach(lesson -> {
+            var lessonCopy = new EducationLessonVersion(copy, lesson.getLesson(), lesson.getSortOrder());
+            lesson.getLocalizations().forEach(localization -> lessonCopy.addLocalization(new EducationLessonLocalization(
+                    lessonCopy,
+                    localization.getLanguage(),
+                    localization.getTitle(),
+                    localization.getSummary(),
+                    localization.getBodyMarkdown())));
+            copy.addLesson(lessonCopy);
+        });
+
+        return managementDetail(versions.save(copy));
+    }
+
     User currentUser(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication is required");
@@ -176,6 +277,16 @@ public class EducationContentService {
     EducationModuleVersion versionOrNotFound(String moduleSlug, int versionNumber) {
         return versions.findByModuleSlugAndVersion(normalizeSlug(moduleSlug), versionNumber)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Education module version not found"));
+    }
+
+    EducationModuleVersion currentPublishedVersion(String moduleSlug) {
+        var module = modules.findBySlug(normalizeSlug(moduleSlug))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Education module not found"));
+        var version = module.getCurrentPublishedVersion();
+        if (version == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Education module not found");
+        }
+        return version;
     }
 
     String normalizeSlug(String slug) {
@@ -214,6 +325,45 @@ public class EducationContentService {
         }
     }
 
+    void addOptionalLessonLocalization(
+            EducationLessonVersion lessonVersion,
+            String title,
+            String summary,
+            String bodyMarkdown) {
+        var trimmedTitle = trimToNull(title);
+        var trimmedSummary = trimToNull(summary);
+        var trimmedBody = trimToNull(bodyMarkdown);
+        if (trimmedTitle != null && trimmedSummary != null && trimmedBody != null) {
+            lessonVersion.addLocalization(new EducationLessonLocalization(
+                    lessonVersion,
+                    EducationLanguage.CS,
+                    trimmedTitle,
+                    trimmedSummary,
+                    trimmedBody));
+        }
+    }
+
+    void requireEditable(EducationModuleVersion version) {
+        if (!version.isEditable()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Education module version is not editable");
+        }
+    }
+
+    PatientProfile patientProfileOrNull(User user) {
+        if (!user.hasRole(RoleName.PATIENT) || user.getId() == null) {
+            return null;
+        }
+        return patientProfiles.findByUserId(user.getId()).orElse(null);
+    }
+
+    PatientProfile currentPatient(User user) {
+        if (!user.hasRole(RoleName.PATIENT) || user.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Patient profile is required");
+        }
+        return patientProfiles.findByUserId(user.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Patient profile is required"));
+    }
+
     EducationLessonLocalization localizationOrEnglish(EducationLessonVersion lesson, EducationLanguage requestedLanguage) {
         return lesson.getLocalizations().stream()
                 .filter(localization -> localization.getLanguage() == requestedLanguage)
@@ -222,6 +372,98 @@ public class EducationContentService {
                         .filter(localization -> localization.getLanguage() == EducationLanguage.EN)
                         .findFirst())
                 .orElse(null);
+    }
+
+    EducationModuleLocalization localizationOrEnglish(EducationModuleVersion version, EducationLanguage requestedLanguage) {
+        return version.getLocalizations().stream()
+                .filter(localization -> localization.getLanguage() == requestedLanguage)
+                .findFirst()
+                .or(() -> version.getLocalizations().stream()
+                        .filter(localization -> localization.getLanguage() == EducationLanguage.EN)
+                        .findFirst())
+                .orElse(null);
+    }
+
+    EducationLessonVersion currentLessonVersion(EducationModuleVersion moduleVersion, String lessonSlug) {
+        var normalizedSlug = normalizeSlug(lessonSlug);
+        return moduleVersion.getLessons().stream()
+                .filter(lesson -> normalizedSlug.equals(lesson.getLesson().getSlug()))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Education lesson not found"));
+    }
+
+    Set<Long> completedLessonIds(PatientProfile patient, EducationModuleVersion version) {
+        if (patient == null) {
+            return Set.of();
+        }
+        var lessonVersionIds = version.getLessons().stream()
+                .map(EducationLessonVersion::getId)
+                .toList();
+        if (lessonVersionIds.isEmpty()) {
+            return Set.of();
+        }
+        return completions.findByPatientProfileIdAndLessonVersionIdIn(patient.getId(), lessonVersionIds).stream()
+                .map(completion -> completion.getLessonVersion().getId())
+                .collect(Collectors.toSet());
+    }
+
+    EducationModuleSummaryResponse summary(
+            EducationModuleVersion version,
+            EducationLanguage requestedLanguage,
+            PatientProfile patient) {
+        var module = version.getModule();
+        var localization = localizationOrEnglish(version, requestedLanguage);
+        var completedLessonIds = completedLessonIds(patient, version);
+        Integer completedLessonCount = patient == null ? null : completedLessonIds.size();
+        Boolean completed = patient == null ? null : completedLessonCount == version.getLessons().size();
+        return new EducationModuleSummaryResponse(
+                module.getSlug(),
+                module.getTopic(),
+                module.getSortOrder(),
+                version.getVersion(),
+                version.getStatus(),
+                requestedLanguage,
+                localization == null ? requestedLanguage : localization.getLanguage(),
+                localization == null ? null : localization.getTitle(),
+                localization == null ? null : localization.getSummary(),
+                version.getLessons().size(),
+                completedLessonCount,
+                completed,
+                version.getPublishedAt(),
+                email(version.getAuthor()),
+                email(version.getReviewedBy()),
+                email(version.getPublishedBy()));
+    }
+
+    EducationModuleDetailResponse detail(
+            EducationModuleVersion version,
+            EducationLanguage requestedLanguage,
+            PatientProfile patient) {
+        var module = version.getModule();
+        var localization = localizationOrEnglish(version, requestedLanguage);
+        var completedLessonIds = completedLessonIds(patient, version);
+        Integer completedLessonCount = patient == null ? null : completedLessonIds.size();
+        Boolean completed = patient == null ? null : completedLessonCount == version.getLessons().size();
+        return new EducationModuleDetailResponse(
+                module.getSlug(),
+                module.getTopic(),
+                module.getSortOrder(),
+                version.getVersion(),
+                version.getStatus(),
+                requestedLanguage,
+                localization == null ? requestedLanguage : localization.getLanguage(),
+                localization == null ? null : localization.getTitle(),
+                localization == null ? null : localization.getSummary(),
+                version.getLessons().size(),
+                completedLessonCount,
+                completed,
+                version.getPublishedAt(),
+                email(version.getAuthor()),
+                email(version.getReviewedBy()),
+                email(version.getPublishedBy()),
+                orderedLessons(version).stream()
+                        .map(lesson -> lessonResponse(lesson, requestedLanguage, completed(patient, completedLessonIds, lesson)))
+                        .toList());
     }
 
     EducationManagementDetailResponse managementDetail(EducationModuleVersion version) {
@@ -251,29 +493,36 @@ public class EducationContentService {
     }
 
     EducationLessonResponse lessonResponse(EducationLessonVersion lesson) {
-        var localization = localizationOrEnglish(lesson, EducationLanguage.EN);
+        return lessonResponse(lesson, EducationLanguage.EN, null);
+    }
+
+    EducationLessonResponse lessonResponse(
+            EducationLessonVersion lesson,
+            EducationLanguage requestedLanguage,
+            Boolean completed) {
+        var localization = localizationOrEnglish(lesson, requestedLanguage);
         if (localization == null) {
             return new EducationLessonResponse(
                     lesson.getLesson().getSlug(),
                     lesson.getSortOrder(),
-                    EducationLanguage.EN,
-                    EducationLanguage.EN,
+                    requestedLanguage,
+                    requestedLanguage,
                     null,
                     null,
                     null,
                     "",
-                    null);
+                    completed);
         }
         return new EducationLessonResponse(
                 lesson.getLesson().getSlug(),
                 lesson.getSortOrder(),
-                EducationLanguage.EN,
+                requestedLanguage,
                 localization.getLanguage(),
                 localization.getTitle(),
                 localization.getSummary(),
                 localization.getBodyMarkdown(),
                 markdown.render(localization.getBodyMarkdown()),
-                null);
+                completed);
     }
 
     private void validatePublishable(EducationModuleVersion version) {
@@ -309,5 +558,29 @@ public class EducationContentService {
             return left.getId().equals(right.getId());
         }
         return left == right;
+    }
+
+    private boolean sameLesson(EducationLesson left, EducationLesson right) {
+        if (left == null || right == null) {
+            return false;
+        }
+        if (left.getId() != null && right.getId() != null) {
+            return left.getId().equals(right.getId());
+        }
+        return left == right || left.getSlug().equals(right.getSlug());
+    }
+
+    private List<EducationLessonVersion> orderedLessons(EducationModuleVersion version) {
+        return version.getLessons().stream()
+                .sorted(Comparator.comparingInt(EducationLessonVersion::getSortOrder)
+                        .thenComparing(lesson -> lesson.getLesson().getSlug()))
+                .toList();
+    }
+
+    private Boolean completed(PatientProfile patient, Set<Long> completedLessonIds, EducationLessonVersion lesson) {
+        if (patient == null) {
+            return null;
+        }
+        return completedLessonIds.contains(lesson.getId());
     }
 }
