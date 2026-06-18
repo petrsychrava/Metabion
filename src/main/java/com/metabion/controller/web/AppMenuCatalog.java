@@ -24,6 +24,7 @@ public class AppMenuCatalog {
         var items = new ArrayList<AppMenuItem>();
 
         items.add(home());
+        items.add(educationLibrary());
 
         if (roles.contains(RoleName.PATIENT)) {
             items.addAll(patientItems());
@@ -68,12 +69,6 @@ public class AppMenuCatalog {
                         false,
                         false,
                         "menu.onboardingHistory.description"),
-                item(
-                        "menu.educationLibrary",
-                        "/app/education",
-                        false,
-                        true,
-                        "menu.educationLibrary.description"),
                 item(
                         "menu.dietLogs",
                         "/app/diet-logs",
@@ -120,6 +115,7 @@ public class AppMenuCatalog {
                         false,
                         true,
                         "menu.dietLogReview.description"),
+                contentManagement(),
                 item(
                         "menu.assignedPatientOverview",
                         null,
@@ -166,12 +162,7 @@ public class AppMenuCatalog {
                         false,
                         true,
                         "menu.staffInvitations.description"),
-                item(
-                        "menu.contentManagement",
-                        "/app/content/education",
-                        false,
-                        false,
-                        "menu.contentManagement.description"),
+                contentManagement(),
                 item(
                         "menu.ruleConfiguration",
                         null,
@@ -188,6 +179,14 @@ public class AppMenuCatalog {
 
     private AppMenuItem home() {
         return item("menu.home", "/app", false, false, "menu.home.description");
+    }
+
+    private AppMenuItem educationLibrary() {
+        return item("menu.educationLibrary", "/app/education", false, true, "menu.educationLibrary.description");
+    }
+
+    private AppMenuItem contentManagement() {
+        return item("menu.contentManagement", "/app/content/education", false, false, "menu.contentManagement.description");
     }
 
     private AppMenuItem account() {

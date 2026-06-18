@@ -86,6 +86,34 @@ class WebEducationControllerTest {
     }
 
     @Test
+    void educationLibraryRendersForNutritionSpecialist() throws Exception {
+        when(educationContentService.listPublishedModules(any())).thenReturn(List.of(summaryResponse()));
+
+        mvc.perform(get("/app/education")
+                        .with(user("nutrition@example.com").roles(RoleName.NUTRITION_SPECIALIST.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("education"))
+                .andExpect(model().attributeExists("modules"))
+                .andExpect(content().string(containsString("Education library")))
+                .andExpect(content().string(containsString("Content management")))
+                .andExpect(content().string(containsString("IBD basics")));
+    }
+
+    @Test
+    void educationLibraryRendersForPhysician() throws Exception {
+        when(educationContentService.listPublishedModules(any())).thenReturn(List.of(summaryResponse()));
+
+        mvc.perform(get("/app/education")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("education"))
+                .andExpect(model().attributeExists("modules"))
+                .andExpect(content().string(containsString("Education library")))
+                .andExpect(content().string(containsString("Content management")))
+                .andExpect(content().string(containsString("IBD basics")));
+    }
+
+    @Test
     void detailPageRendersForPatient() throws Exception {
         when(educationContentService.getPublishedModule(any(), eq("ibd-basics"))).thenReturn(detailResponse());
 

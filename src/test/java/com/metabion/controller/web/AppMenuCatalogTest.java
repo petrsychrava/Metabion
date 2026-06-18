@@ -21,9 +21,9 @@ class AppMenuCatalogTest {
                 .extracting(AppMenuItem::displayLabel)
                 .containsExactly(
                         "Home",
+                        "Education library",
                         "Onboarding",
                         "Onboarding history",
-                        "Education library",
                         "Diet logs",
                         "Lab trends - planned",
                         "Protocol phase - planned",
@@ -44,8 +44,10 @@ class AppMenuCatalogTest {
                 .extracting(AppMenuItem::displayLabel)
                 .containsExactly(
                         "Home",
+                        "Education library",
                         "Onboarding review",
                         "Diet log review",
+                        "Content management",
                         "Assigned patient overview - planned",
                         "Red-flag monitoring - planned",
                         "Data completeness - planned",
@@ -63,8 +65,10 @@ class AppMenuCatalogTest {
                 .extracting(AppMenuItem::displayLabel)
                 .containsExactly(
                         "Home",
+                        "Education library",
                         "Onboarding review",
                         "Diet log review",
+                        "Content management",
                         "Assigned patient overview - planned",
                         "Red-flag monitoring - planned",
                         "Data completeness - planned",
@@ -82,6 +86,7 @@ class AppMenuCatalogTest {
                 .extracting(AppMenuItem::displayLabel)
                 .containsExactly(
                         "Home",
+                        "Education library",
                         "Staff invitations",
                         "Content management",
                         "Rule configuration - planned",
@@ -111,6 +116,16 @@ class AppMenuCatalogTest {
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/education");
         assertThat(catalog.sidebarItems(clinician))
+                .filteredOn(item -> "Education library".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/education");
+        assertThat(catalog.sidebarItems(admin))
+                .filteredOn(item -> "Education library".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/education");
+        assertThat(catalog.sidebarItems(clinician))
                 .filteredOn(item -> "Onboarding review".equals(item.label()))
                 .singleElement()
                 .extracting(AppMenuItem::route)
@@ -120,6 +135,11 @@ class AppMenuCatalogTest {
                 .singleElement()
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/clinical/diet-logs");
+        assertThat(catalog.sidebarItems(clinician))
+                .filteredOn(item -> "Content management".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/content/education");
         assertThat(catalog.sidebarItems(admin))
                 .filteredOn(item -> "Staff invitations".equals(item.label()))
                 .singleElement()
@@ -139,8 +159,8 @@ class AppMenuCatalogTest {
         assertThat(catalog.dashboardItems(patient))
                 .extracting(AppMenuItem::displayLabel)
                 .containsExactly(
-                        "Onboarding",
                         "Education library",
+                        "Onboarding",
                         "Diet logs",
                         "Lab trends - planned",
                         "Red-flag guidance - planned");
@@ -156,6 +176,7 @@ class AppMenuCatalogTest {
                     .extracting(AppMenuItem::displayLabel)
                     .containsExactly(
                             "Domů",
+                            "Vzdělávací knihovna",
                             "Pozvánky pracovníků",
                             "Správa obsahu",
                             "Nastavení pravidel - plánováno",
