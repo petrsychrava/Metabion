@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell(#{contentEducation.detailPageTitle}, ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow" th:text="${version.topic()}">IBD</p>
+            <h1 th:text="${version.moduleSlug()}">module-slug</h1>
+            <p class="muted" th:text="#{contentEducation.detailDescription}">Review module metadata, lessons, and lifecycle state.</p>
+        </div>
+        <div class="links">
+            <a class="button-link secondary" th:href="@{/app/content/education}" th:text="#{education.back}">Back</a>
+            <a class="button-link"
+               th:if="${version.status().name() == 'DRAFT' || version.status().name() == 'REJECTED'}"
+               th:href="@{/app/content/education/{moduleSlug}/versions/{versionNumber}/edit(moduleSlug=${version.moduleSlug()},versionNumber=${version.version()})}"
+               th:text="#{contentEducation.edit}">Edit</a>
+        </div>
+    </header>
+
+    <section class="panel app-panel">
+        <dl class="details">
+            <dt th:text="#{contentEducation.module}">Module</dt>
+            <dd th:text="${version.moduleSlug()}">module-slug</dd>
+            <dt th:text="#{contentEducation.version}">Version</dt>
+            <dd th:text="${version.version()}">1</dd>
+            <dt th:text="#{contentEducation.status}">Status</dt>
+            <dd>
+                <span class="status-badge"
+                      th:classappend="' status-badge-' + ${#strings.toLowerCase(version.status().name())}"
+                      th:text="${version.status()}">DRAFT</span>
+            </dd>
+            <dt th:text="#{contentEducation.author}">Author</dt>
+            <dd th:text="${version.authorEmail() ?: '-'}">author@example.com</dd>
+            <dt th:text="#{contentEducation.reviewedBy}">Reviewed by</dt>
+            <dd th:text="${version.reviewedByEmail() ?: '-'}">reviewer@example.com</dd>
+            <dt th:text="#{contentEducation.publishedBy}">Published by</dt>
+            <dd th:text="${version.publishedByEmail() ?: '-'}">publisher@example.com</dd>
+            <dt th:text="#{contentEducation.reviewNotes}">Review notes</dt>
+            <dd th:text="${version.reviewNotes() ?: '-'}">Notes</dd>
+        </dl>
+    </section>
+
+    <section class="panel app-panel">
+        <h2 th:text="#{contentEducation.lifecycle}">Lifecycle</h2>
+        <form class="form" method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <div class="field">
+                <label for="reviewNotes" th:text="#{contentEducation.reviewNotes}">Review notes</label>
+                <textarea id="reviewNotes" name="reviewNotes" th:text="${reviewNotes}"></textarea>
+            </div>
+            <div class="links">
+                <button type="submit"
+                        th:if="${version.status().name() == 'DRAFT' || version.status().name() == 'REJECTED'}"
+                        th:formaction="@{/app/content/education/{moduleSlug}/versions/{versionNumber}/submit-review(moduleSlug=${version.moduleSlug()},versionNumber=${version.version()})}"
+                        th:text="#{contentEducation.submitReview}">Submit review</button>
+                <button type="submit"
+                        th:if="${version.status().name() == 'IN_REVIEW'}"
+                        th:formaction="@{/app/content/education/{moduleSlug}/versions/{versionNumber}/approve(moduleSlug=${version.moduleSlug()},versionNumber=${version.version()})}"
+                        th:text="#{contentEducation.approve}">Approve</button>
+                <button type="submit"
+                        class="secondary"
+                        th:if="${version.status().name() == 'IN_REVIEW'}"
+                        th:formaction="@{/app/content/education/{moduleSlug}/versions/{versionNumber}/reject(moduleSlug=${version.moduleSlug()},versionNumber=${version.version()})}"
+                        th:text="#{contentEducation.reject}">Reject</button>
+                <button type="submit"
+                        th:if="${version.status().name() == 'APPROVED' || version.status().name() == 'DRAFT'}"
+                        th:formaction="@{/app/content/education/{moduleSlug}/versions/{versionNumber}/publish(moduleSlug=${version.moduleSlug()},versionNumber=${version.version()})}"
+                        th:text="#{contentEducation.publish}">Publish</button>
+                <button type="submit"
+                        class="secondary"
+                        th:formaction="@{/app/content/education/{moduleSlug}/versions/{versionNumber}/copy(moduleSlug=${version.moduleSlug()},versionNumber=${version.version()})}"
+                        th:text="#{contentEducation.copy}">Copy</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="panel app-panel" th:if="${#lists.isEmpty(version.lessons())}">
+        <p class="muted" th:text="#{contentEducation.noLessons}">No lessons are attached to this version.</p>
+    </section>
+
+    <article class="panel app-panel" th:each="lesson : ${version.lessons()}">
+        <p class="eyebrow" th:text="#{contentEducation.lessonNumber(${lesson.sortOrder()})}">Lesson 1</p>
+        <h2 th:text="${lesson.title()}">Lesson title</h2>
+        <p class="muted" th:text="${lesson.summary()}">Lesson summary</p>
+        <div class="markdown-content" th:utext="${lesson.bodyHtml()}">
+            <p>Lesson body</p>
+        </div>
+    </article>
+</th:block>
+</html>

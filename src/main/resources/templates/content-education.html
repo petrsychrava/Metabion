@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell(#{contentEducation.pageTitle}, ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Metabion</p>
+            <h1 th:text="#{contentEducation.title}">Education content</h1>
+            <p class="muted" th:text="#{contentEducation.description}">Manage education modules and versions.</p>
+        </div>
+        <a class="button-link" th:href="@{/app/content/education/new}" th:text="#{contentEducation.new}">New module</a>
+    </header>
+
+    <section class="panel app-panel" th:if="${#lists.isEmpty(versions)}">
+        <p class="muted" th:text="#{contentEducation.empty}">No education content versions found.</p>
+    </section>
+
+    <section class="panel app-panel" th:if="${!#lists.isEmpty(versions)}">
+        <table class="table">
+            <thead>
+            <tr>
+                <th th:text="#{contentEducation.module}">Module</th>
+                <th th:text="#{contentEducation.version}">Version</th>
+                <th th:text="#{contentEducation.status}">Status</th>
+                <th th:text="#{contentEducation.author}">Author</th>
+                <th th:text="#{contentEducation.actions}">Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="version : ${versions}">
+                <td>
+                    <strong th:text="${version.title() ?: version.moduleSlug()}">Module title</strong>
+                    <p class="hint" th:text="${version.moduleSlug()}">module-slug</p>
+                </td>
+                <td th:text="${version.version()}">1</td>
+                <td>
+                    <span class="status-badge"
+                          th:classappend="' status-badge-' + ${#strings.toLowerCase(version.status().name())}"
+                          th:text="${version.status()}">DRAFT</span>
+                </td>
+                <td th:text="${version.authorEmail() ?: '-'}">author@example.com</td>
+                <td>
+                    <a th:href="@{/app/content/education/{moduleSlug}/versions/{versionNumber}(moduleSlug=${version.moduleSlug()},versionNumber=${version.version()})}"
+                       th:text="#{contentEducation.open}">Open</a>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+</th:block>
+</html>

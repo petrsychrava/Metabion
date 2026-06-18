@@ -220,6 +220,14 @@ public class EducationContentService {
                 .toList();
     }
 
+    public EducationManagementDetailResponse getManagedVersion(Authentication authentication, String moduleSlug, int versionNumber) {
+        var user = currentUser(authentication);
+        requireContentManager(user);
+        var version = versionOrNotFound(moduleSlug, versionNumber);
+        fetchPublishedVersionGraph(List.of(version));
+        return managementDetail(version);
+    }
+
     public EducationModuleDetailResponse getPublishedModule(Authentication authentication, String moduleSlug) {
         var user = currentUser(authentication);
         var requestedLanguage = EducationLanguage.from(user.getLanguagePreference());
