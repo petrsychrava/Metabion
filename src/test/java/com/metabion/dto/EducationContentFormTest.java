@@ -46,4 +46,36 @@ class EducationContentFormTest {
                     .contains("lessons[0].completeOrBlank");
         }
     }
+
+    @Test
+    void duplicateLessonRowsFailFormValidationBeforePersistence() {
+        var form = new EducationContentForm();
+        form.setSlug("hydration");
+        form.setTopic("IBD");
+        form.setEnglishTitle("Hydration");
+        form.setEnglishSummary("Hydration basics");
+
+        var first = completeLesson("water", 1);
+        var duplicateSlug = completeLesson("Water", 2);
+        var duplicateSortOrder = completeLesson("electrolytes", 1);
+        form.setLessons(List.of(first, duplicateSlug, duplicateSortOrder));
+
+        try (var validatorFactory = Validation.buildDefaultValidatorFactory()) {
+            var violations = validatorFactory.getValidator().validate(form);
+
+            assertThat(violations)
+                    .extracting(violation -> violation.getPropertyPath().toString())
+                    .contains("lessonSlugsUnique", "lessonSortOrdersUnique");
+        }
+    }
+
+    private EducationContentForm.LessonRow completeLesson(String slug, int sortOrder) {
+        var lesson = new EducationContentForm.LessonRow();
+        lesson.setSlug(slug);
+        lesson.setSortOrder(sortOrder);
+        lesson.setEnglishTitle("Lesson " + sortOrder);
+        lesson.setEnglishSummary("Summary " + sortOrder);
+        lesson.setEnglishBodyMarkdown("Body " + sortOrder);
+        return lesson;
+    }
 }

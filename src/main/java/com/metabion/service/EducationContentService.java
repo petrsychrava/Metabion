@@ -89,6 +89,16 @@ public class EducationContentService {
         return managementDetail(version);
     }
 
+    public EducationManagementDetailResponse createDraft(Authentication authentication, EducationContentForm form) {
+        var draft = createDraft(authentication, form.toModuleRequest());
+        form.toLessonRequests().forEach(lesson -> upsertLesson(
+                authentication,
+                draft.moduleSlug(),
+                draft.version(),
+                lesson));
+        return getManagedVersion(authentication, draft.moduleSlug(), draft.version());
+    }
+
     public EducationManagementDetailResponse submitReview(Authentication authentication, String moduleSlug, int versionNumber) {
         var user = currentUser(authentication);
         requireContentManager(user);

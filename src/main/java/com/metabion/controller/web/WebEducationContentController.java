@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.server.ResponseStatusException;
 
 @Controller
 public class WebEducationContentController {
@@ -63,13 +64,15 @@ public class WebEducationContentController {
             return "content-education-edit";
         }
 
-        var draft = educationContentService.createDraft(authentication, form.toModuleRequest());
-        form.toLessonRequests().forEach(lesson -> educationContentService.upsertLesson(
-                authentication,
-                draft.moduleSlug(),
-                draft.version(),
-                lesson));
-        return redirectToDetail(draft.moduleSlug(), draft.version());
+        try {
+            var draft = educationContentService.createDraft(authentication, form);
+            return redirectToDetail(draft.moduleSlug(), draft.version());
+        } catch (ResponseStatusException ex) {
+            binding.reject("contentEducation.createFailed", errorReason(ex));
+            model.addAttribute("mode", "new");
+            addAppShell(model, authentication);
+            return "content-education-edit";
+        }
     }
 
     @GetMapping(ACTIVE_PATH + "/{moduleSlug}/versions/{version}")
@@ -171,6 +174,10 @@ public class WebEducationContentController {
 
     private String redirectToDetail(String moduleSlug, int version) {
         return "redirect:" + ACTIVE_PATH + "/" + moduleSlug + "/versions/" + version;
+    }
+
+    private String errorReason(ResponseStatusException ex) {
+        return ex.getReason() == null ? "Unable to save education content" : ex.getReason();
     }
 
     private String detailWithReviewErrors(String moduleSlug, int version, Model model, Authentication authentication) {

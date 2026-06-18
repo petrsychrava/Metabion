@@ -17,6 +17,13 @@
           method="post">
         <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 
+        <section class="panel app-panel" th:if="${#fields.hasAnyErrors()}">
+            <h2 th:text="#{validation.summaryTitle}">Please fix the highlighted fields</h2>
+            <ul class="error-list">
+                <li th:each="error : ${#fields.allErrors()}" th:text="${error}">Validation error</li>
+            </ul>
+        </section>
+
         <section class="panel app-panel">
             <h2 th:text="#{contentEducation.module}">Module</h2>
             <div class="form-grid">
@@ -63,6 +70,10 @@
 
         <section class="panel app-panel">
             <h2 th:text="#{contentEducation.lessons}">Lessons</h2>
+            <p class="error" th:if="${#fields.hasErrors('lessonSlugsUnique')}"
+               th:errors="*{lessonSlugsUnique}">Lesson slugs must be unique</p>
+            <p class="error" th:if="${#fields.hasErrors('lessonSortOrdersUnique')}"
+               th:errors="*{lessonSortOrdersUnique}">Lesson sort orders must be unique</p>
             <article class="lesson-editor" th:each="lesson, stat : *{lessons}">
                 <h3 th:text="#{contentEducation.lessonNumber(${stat.index + 1})}">Lesson 1</h3>
                 <div class="form-grid">

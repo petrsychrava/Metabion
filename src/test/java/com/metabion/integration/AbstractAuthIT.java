@@ -27,6 +27,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.net.URI;
 import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -189,6 +190,10 @@ abstract class AbstractAuthIT {
             return exchange(path, "POST", body, extraHeaders);
         }
 
+        ResponseEntity<String> postFormWithHeaders(String path, Map<String, String> form, Map<String, String> extraHeaders) {
+            return exchangeForm(path, "POST", form, extraHeaders);
+        }
+
         void addCookie(String name, String value) {
             cookies.put(name, value);
         }
@@ -225,6 +230,42 @@ abstract class AbstractAuthIT {
             } catch (Exception e) {
                 throw new IllegalStateException(e);
             }
+        }
+
+        private ResponseEntity<String> exchangeForm(String path,
+                                                    String method,
+                                                    Map<String, String> form,
+                                                    Map<String, String> extraHeaders) {
+            try {
+                var builder = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                        .header(HttpHeaders.ACCEPT, MediaType.TEXT_HTML_VALUE)
+                        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+                        .header("X-Forwarded-For", nextIp());
+                if (!cookies.isEmpty()) {
+                    builder.header(HttpHeaders.COOKIE, cookieHeader());
+                }
+                extraHeaders.forEach(builder::header);
+
+                var response = http.send(builder
+                        .method(method, HttpRequest.BodyPublishers.ofString(formBody(form)))
+                        .build(), HttpResponse.BodyHandlers.ofString());
+                response.headers().allValues(HttpHeaders.SET_COOKIE).forEach(this::storeCookie);
+                var headers = new HttpHeaders();
+                response.headers().map().forEach(headers::put);
+                return new ResponseEntity<>(response.body(), headers, HttpStatusCode.valueOf(response.statusCode()));
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
+        private String formBody(Map<String, String> form) {
+            return form.entrySet().stream()
+                    .map(entry -> urlEncode(entry.getKey()) + "=" + urlEncode(entry.getValue()))
+                    .collect(java.util.stream.Collectors.joining("&"));
+        }
+
+        private String urlEncode(String value) {
+            return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
         }
 
         private String cookieHeader() {

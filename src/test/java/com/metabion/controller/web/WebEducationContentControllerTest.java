@@ -23,6 +23,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -37,6 +38,7 @@ import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -99,6 +101,89 @@ class WebEducationContentControllerTest {
                 .andExpect(model().attributeExists("contentForm"))
                 .andExpect(content().string(containsString("New education module")))
                 .andExpect(content().string(containsString("name=\"lessons[2].slug\"")));
+    }
+
+    @Test
+    void staffCanCreateModuleWithValidLessonRows() throws Exception {
+        when(educationContentService.createDraft(any(), any(EducationContentForm.class))).thenReturn(detailResponse());
+
+        mvc.perform(post("/app/content/education")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .param("slug", "ibd-basics")
+                        .param("topic", "IBD")
+                        .param("sortOrder", "10")
+                        .param("englishTitle", "IBD basics")
+                        .param("englishSummary", "Start here")
+                        .param("czechTitle", "")
+                        .param("czechSummary", "")
+                        .param("lessons[0].slug", "what-is-ibd")
+                        .param("lessons[0].sortOrder", "1")
+                        .param("lessons[0].englishTitle", "What is IBD?")
+                        .param("lessons[0].englishSummary", "A short introduction.")
+                        .param("lessons[0].englishBodyMarkdown", "**IBD**")
+                        .param("lessons[1].slug", "diet-basics")
+                        .param("lessons[1].sortOrder", "2")
+                        .param("lessons[1].englishTitle", "Diet basics")
+                        .param("lessons[1].englishSummary", "Nutrition basics.")
+                        .param("lessons[1].englishBodyMarkdown", "**Diet**"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app/content/education/ibd-basics/versions/1"));
+
+        verify(educationContentService).createDraft(any(), any(EducationContentForm.class));
+        verify(educationContentService, never()).upsertLesson(any(), eq("ibd-basics"), eq(1), any());
+    }
+
+    @Test
+    void duplicateLessonSortOrdersReturnCreateFormErrors() throws Exception {
+        mvc.perform(post("/app/content/education")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .param("slug", "ibd-basics")
+                        .param("topic", "IBD")
+                        .param("sortOrder", "10")
+                        .param("englishTitle", "IBD basics")
+                        .param("englishSummary", "Start here")
+                        .param("lessons[0].slug", "what-is-ibd")
+                        .param("lessons[0].sortOrder", "1")
+                        .param("lessons[0].englishTitle", "What is IBD?")
+                        .param("lessons[0].englishSummary", "A short introduction.")
+                        .param("lessons[0].englishBodyMarkdown", "**IBD**")
+                        .param("lessons[1].slug", "diet-basics")
+                        .param("lessons[1].sortOrder", "1")
+                        .param("lessons[1].englishTitle", "Diet basics")
+                        .param("lessons[1].englishSummary", "Nutrition basics.")
+                        .param("lessons[1].englishBodyMarkdown", "**Diet**"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("content-education-edit"))
+                .andExpect(model().attributeHasFieldErrors("contentForm", "lessonSortOrdersUnique"))
+                .andExpect(content().string(containsString("lesson sort orders must be unique")));
+
+        verify(educationContentService, never()).createDraft(any(), any(EducationContentForm.class));
+    }
+
+    @Test
+    void serviceCreateRejectionReturnsVisibleCreateFormError() throws Exception {
+        when(educationContentService.createDraft(any(), any(EducationContentForm.class)))
+                .thenThrow(new ResponseStatusException(BAD_REQUEST, "Education module slug already exists"));
+
+        mvc.perform(post("/app/content/education")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .param("slug", "ibd-basics")
+                        .param("topic", "IBD")
+                        .param("sortOrder", "10")
+                        .param("englishTitle", "IBD basics")
+                        .param("englishSummary", "Start here")
+                        .param("lessons[0].slug", "what-is-ibd")
+                        .param("lessons[0].sortOrder", "1")
+                        .param("lessons[0].englishTitle", "What is IBD?")
+                        .param("lessons[0].englishSummary", "A short introduction.")
+                        .param("lessons[0].englishBodyMarkdown", "**IBD**"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("content-education-edit"))
+                .andExpect(model().attributeHasErrors("contentForm"))
+                .andExpect(content().string(containsString("Education module slug already exists")));
     }
 
     @Test

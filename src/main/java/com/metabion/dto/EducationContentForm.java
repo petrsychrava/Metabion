@@ -7,7 +7,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 
 public class EducationContentForm {
 
@@ -64,6 +66,35 @@ public class EducationContentForm {
         while (lessons.size() < count) {
             lessons.add(new LessonRow());
         }
+    }
+
+    @AssertTrue(message = "lesson slugs must be unique")
+    public boolean isLessonSlugsUnique() {
+        var seen = new HashSet<String>();
+        for (var row : lessonsOrEmpty()) {
+            if (row.isBlank() || blank(row.getSlug())) {
+                continue;
+            }
+            var slug = normalizeSlugForUniqueness(row.getSlug());
+            if (!slug.isBlank() && !seen.add(slug)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @AssertTrue(message = "lesson sort orders must be unique")
+    public boolean isLessonSortOrdersUnique() {
+        var seen = new HashSet<Integer>();
+        for (var row : lessonsOrEmpty()) {
+            if (row.isBlank() || row.getSortOrder() < 1) {
+                continue;
+            }
+            if (!seen.add(row.getSortOrder())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public String getSlug() {
@@ -136,6 +167,13 @@ public class EducationContentForm {
 
     private static boolean blank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static String normalizeSlugForUniqueness(String slug) {
+        return slug == null ? "" : slug.trim()
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("(^-+|-+$)", "");
     }
 
     public static class LessonRow {

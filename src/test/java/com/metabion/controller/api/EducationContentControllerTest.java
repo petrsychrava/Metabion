@@ -78,7 +78,7 @@ class EducationContentControllerTest {
                         .content(objectMapper.writeValueAsString(validModuleRequest())))
                 .andExpect(status().isOk());
 
-        verify(educationContentService).createDraft(any(), any());
+        verify(educationContentService).createDraft(any(), any(EducationModuleRequest.class));
     }
 
     @Test
@@ -98,7 +98,7 @@ class EducationContentControllerTest {
     @Test
     void patientManagementCreateIsForbidden() throws Exception {
         doThrow(new ResponseStatusException(FORBIDDEN, "Content manager role is required"))
-                .when(educationContentService).createDraft(any(), any());
+                .when(educationContentService).createDraft(any(), any(EducationModuleRequest.class));
 
         mvc.perform(post("/api/content/education/modules")
                         .with(user("patient@example.com").roles("PATIENT"))
