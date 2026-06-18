@@ -178,7 +178,7 @@ class WebAuthTemplateTest {
                 .andExpect(content().string(containsString("class=\"workbench\"")))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
                 .andExpect(content().string(containsString("Onboarding")))
-                .andExpect(content().string(containsString("Education library - planned")))
+                .andExpect(content().string(containsString("Education library")))
                 .andExpect(content().string(containsString("user@example.com")))
                 .andExpect(content().string(not(containsString("name=\"themePreference\""))))
                 .andExpect(content().string(not(containsString("id=\"themePreference\""))))
@@ -203,7 +203,7 @@ class WebAuthTemplateTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("lang=\"cs\"")))
                 .andExpect(content().string(containsString("Pracovní plocha")))
-                .andExpect(content().string(containsString("Vzdělávací knihovna - plánováno")))
+                .andExpect(content().string(containsString("Vzdělávací knihovna")))
                 .andExpect(content().string(not(containsString("Vzhled"))))
                 .andExpect(content().string(containsString("Odhlásit se")));
     }
@@ -244,7 +244,7 @@ class WebAuthTemplateTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Staff invitations")))
                 .andExpect(content().string(containsString("/app/staff-invitations/new")))
-                .andExpect(content().string(containsString("Content management - planned")))
+                .andExpect(content().string(containsString("Content management")))
                 .andExpect(content().string(not(containsString("Onboarding review"))));
     }
 

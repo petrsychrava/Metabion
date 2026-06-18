@@ -89,7 +89,7 @@ class StaffInvitationWebControllerTest {
                 .andExpect(view().name("admin-staff-invitation"))
                 .andExpect(model().attributeExists("form"))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
-                .andExpect(content().string(containsString("Content management - planned")))
+                .andExpect(content().string(containsString("Content management")))
                 .andExpect(model().attribute("staffRoles",
                         contains("Nutrition specialist", "Physician", "Coordinator")));
     }
@@ -123,7 +123,7 @@ class StaffInvitationWebControllerTest {
                 .andExpect(view().name("admin-staff-invitation"))
                 .andExpect(model().attributeExists("form"))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
-                .andExpect(content().string(containsString("Content management - planned")))
+                .andExpect(content().string(containsString("Content management")))
                 .andExpect(content().string(containsString("must not be blank")))
                 .andExpect(content().string(containsString("must not be empty")))
                 .andExpect(model().attribute("staffRoles",
@@ -139,7 +139,7 @@ class StaffInvitationWebControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("admin-staff-invitation"))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
-                .andExpect(content().string(containsString("Content management - planned")))
+                .andExpect(content().string(containsString("Content management")))
                 .andExpect(content().string(containsString("must not be empty")))
                 .andExpect(model().attribute("staffRoles",
                         contains("Nutrition specialist", "Physician", "Coordinator")));

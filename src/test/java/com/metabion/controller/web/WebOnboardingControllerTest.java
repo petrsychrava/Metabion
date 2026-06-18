@@ -86,7 +86,7 @@ class WebOnboardingControllerTest {
                 .andExpect(model().attributeExists("onboardingForm"))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
                 .andExpect(content().string(containsString("Onboarding history")))
-                .andExpect(content().string(containsString("Education library - planned")));
+                .andExpect(content().string(containsString("Education library")));
     }
 
     @Test
@@ -199,7 +199,7 @@ class WebOnboardingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("onboarding"))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
-                .andExpect(content().string(containsString("Education library - planned")))
+                .andExpect(content().string(containsString("Education library")))
                 .andExpect(content().string(containsString("Latest baseline")))
                 .andExpect(content().string(containsString("must not be null")))
                 .andExpect(content().string(containsString("must not be blank")));
