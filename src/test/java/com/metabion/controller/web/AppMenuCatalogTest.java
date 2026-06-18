@@ -23,7 +23,7 @@ class AppMenuCatalogTest {
                         "Home",
                         "Onboarding",
                         "Onboarding history",
-                        "Education library - planned",
+                        "Education library",
                         "Diet logs",
                         "Lab trends - planned",
                         "Protocol phase - planned",
@@ -83,7 +83,7 @@ class AppMenuCatalogTest {
                 .containsExactly(
                         "Home",
                         "Staff invitations",
-                        "Content management - planned",
+                        "Content management",
                         "Rule configuration - planned",
                         "Audit review - planned",
                         "Account");
@@ -105,6 +105,11 @@ class AppMenuCatalogTest {
                 .singleElement()
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/diet-logs");
+        assertThat(catalog.sidebarItems(patient))
+                .filteredOn(item -> "Education library".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/education");
         assertThat(catalog.sidebarItems(clinician))
                 .filteredOn(item -> "Onboarding review".equals(item.label()))
                 .singleElement()
@@ -120,6 +125,11 @@ class AppMenuCatalogTest {
                 .singleElement()
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/staff-invitations/new");
+        assertThat(catalog.sidebarItems(admin))
+                .filteredOn(item -> "Content management".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/content/education");
     }
 
     @Test
@@ -130,7 +140,7 @@ class AppMenuCatalogTest {
                 .extracting(AppMenuItem::displayLabel)
                 .containsExactly(
                         "Onboarding",
-                        "Education library - planned",
+                        "Education library",
                         "Diet logs",
                         "Lab trends - planned",
                         "Red-flag guidance - planned");
@@ -147,7 +157,7 @@ class AppMenuCatalogTest {
                     .containsExactly(
                             "Domů",
                             "Pozvánky pracovníků",
-                            "Správa obsahu - plánováno",
+                            "Správa obsahu",
                             "Nastavení pravidel - plánováno",
                             "Kontrola auditu - plánováno",
                             "Účet");

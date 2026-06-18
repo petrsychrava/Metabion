@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell(${module.title()}, ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow" th:text="${module.topic()}">IBD</p>
+            <h1 th:text="${module.title()}">Module title</h1>
+            <p class="muted" th:text="${module.summary()}">Module summary</p>
+        </div>
+        <a class="button-link secondary" th:href="@{/app/education}" th:text="#{education.back}">Back</a>
+    </header>
+
+    <section class="panel app-panel">
+        <dl class="details">
+            <dt th:text="#{education.version}">Version</dt>
+            <dd th:text="${module.version()}">1</dd>
+            <dt th:text="#{education.lessons}">Lessons</dt>
+            <dd th:text="${module.lessonCount()}">3</dd>
+            <dt th:text="#{education.language}">Language</dt>
+            <dd th:text="${#messages.msg('language.' + #strings.toLowerCase(module.contentLanguage().name()))}">English</dd>
+        </dl>
+        <p class="hint"
+           th:if="${module.requestedLanguage() != module.contentLanguage()}"
+           th:text="#{education.fallbackLanguage(${#messages.msg('language.' + #strings.toLowerCase(module.contentLanguage().name()))})}">
+            This module is shown in English because your preferred language is not available.
+        </p>
+        <div class="progress-meter"
+             th:if="${module.completedLessonCount() != null}"
+             role="meter"
+             aria-valuemin="0"
+             th:attr="aria-label=#{education.progress},aria-valuenow=${module.completedLessonCount()},aria-valuemax=${module.lessonCount()}">
+            <div class="progress-meter-fill"
+                 th:style="'width: ' + ${module.lessonCount() == 0 ? 0 : (module.completedLessonCount() * 100 / module.lessonCount())} + '%'"></div>
+        </div>
+        <p class="hint" th:if="${module.completedLessonCount() != null}"
+           th:text="#{education.progressCount(${module.completedLessonCount()}, ${module.lessonCount()})}">
+            0 of 3 lessons complete
+        </p>
+    </section>
+
+    <section class="panel app-panel" th:if="${#lists.isEmpty(module.lessons())}">
+        <p class="muted" th:text="#{education.noLessons}">No lessons are available in this module yet.</p>
+    </section>
+
+    <article class="panel app-panel" th:each="lesson : ${module.lessons()}">
+        <p class="eyebrow" th:text="#{education.lessonNumber(${lesson.sortOrder()})}">Lesson 1</p>
+        <h2 th:text="${lesson.title()}">Lesson title</h2>
+        <p class="muted" th:text="${lesson.summary()}">Lesson summary</p>
+        <p class="hint"
+           th:if="${lesson.requestedLanguage() != lesson.contentLanguage()}"
+           th:text="#{education.fallbackLanguage(${#messages.msg('language.' + #strings.toLowerCase(lesson.contentLanguage().name()))})}">
+            This lesson is shown in English because your preferred language is not available.
+        </p>
+        <div class="markdown-content" th:utext="${lesson.bodyHtml()}">
+            <p>Lesson body</p>
+        </div>
+        <form class="links"
+              th:if="${lesson.completed() != null and !lesson.completed()}"
+              th:action="@{/app/education/{moduleSlug}/lessons/{lessonSlug}/complete(moduleSlug=${module.moduleSlug()},lessonSlug=${lesson.lessonSlug()})}"
+              method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <button type="submit" th:text="#{education.markComplete}">Mark complete</button>
+        </form>
+        <form class="links"
+              th:if="${lesson.completed() != null and lesson.completed()}"
+              th:action="@{/app/education/{moduleSlug}/lessons/{lessonSlug}/uncomplete(moduleSlug=${module.moduleSlug()},lessonSlug=${lesson.lessonSlug()})}"
+              method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <button type="submit" class="secondary" th:text="#{education.markIncomplete}">Mark incomplete</button>
+        </form>
+    </article>
+</th:block>
+</html>

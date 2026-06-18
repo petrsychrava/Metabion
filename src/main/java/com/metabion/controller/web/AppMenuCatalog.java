@@ -70,8 +70,8 @@ public class AppMenuCatalog {
                         "menu.onboardingHistory.description"),
                 item(
                         "menu.educationLibrary",
-                        null,
-                        true,
+                        "/app/education",
+                        false,
                         true,
                         "menu.educationLibrary.description"),
                 item(
@@ -168,8 +168,8 @@ public class AppMenuCatalog {
                         "menu.staffInvitations.description"),
                 item(
                         "menu.contentManagement",
-                        null,
-                        true,
+                        "/app/content/education",
+                        false,
                         false,
                         "menu.contentManagement.description"),
                 item(
