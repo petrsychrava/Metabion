@@ -126,8 +126,13 @@ public class WebEducationContentController {
     @PostMapping(ACTIVE_PATH + "/{moduleSlug}/versions/{version}/approve")
     public String approve(@PathVariable String moduleSlug,
                           @PathVariable int version,
-                          @ModelAttribute("reviewForm") EducationReviewRequest reviewForm,
+                          @Valid @ModelAttribute("reviewForm") EducationReviewRequest reviewForm,
+                          BindingResult binding,
+                          Model model,
                           Authentication authentication) {
+        if (binding.hasErrors()) {
+            return detailWithReviewErrors(moduleSlug, version, model, authentication);
+        }
         educationContentService.approve(authentication, moduleSlug, version, reviewForm.notes());
         return redirectToDetail(moduleSlug, version);
     }
@@ -135,8 +140,13 @@ public class WebEducationContentController {
     @PostMapping(ACTIVE_PATH + "/{moduleSlug}/versions/{version}/reject")
     public String reject(@PathVariable String moduleSlug,
                          @PathVariable int version,
-                         @ModelAttribute("reviewForm") EducationReviewRequest reviewForm,
+                         @Valid @ModelAttribute("reviewForm") EducationReviewRequest reviewForm,
+                         BindingResult binding,
+                         Model model,
                          Authentication authentication) {
+        if (binding.hasErrors()) {
+            return detailWithReviewErrors(moduleSlug, version, model, authentication);
+        }
         educationContentService.reject(authentication, moduleSlug, version, reviewForm.notes());
         return redirectToDetail(moduleSlug, version);
     }
@@ -159,6 +169,12 @@ public class WebEducationContentController {
 
     private String redirectToDetail(String moduleSlug, int version) {
         return "redirect:" + ACTIVE_PATH + "/" + moduleSlug + "/versions/" + version;
+    }
+
+    private String detailWithReviewErrors(String moduleSlug, int version, Model model, Authentication authentication) {
+        model.addAttribute("version", educationContentService.getManagedVersion(authentication, moduleSlug, version));
+        addAppShell(model, authentication);
+        return "content-education-detail";
     }
 
     private void addAppShell(Model model, Authentication authentication) {

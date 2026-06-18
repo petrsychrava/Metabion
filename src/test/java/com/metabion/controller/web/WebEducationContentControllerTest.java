@@ -33,6 +33,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentCaptor.forClass;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -173,6 +174,23 @@ class WebEducationContentControllerTest {
         verify(educationContentService).submitReview(any(), eq("ibd-basics"), eq(1));
     }
 
+    @Test
+    void overlongApproveReviewNotesReturnDetailErrors() throws Exception {
+        when(educationContentService.getManagedVersion(any(), eq("ibd-basics"), eq(1))).thenReturn(inReviewDetailResponse());
+
+        mvc.perform(post("/app/content/education/ibd-basics/versions/1/approve")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .param("notes", "x".repeat(2001)))
+                .andExpect(status().isOk())
+                .andExpect(view().name("content-education-detail"))
+                .andExpect(model().attributeExists("version"))
+                .andExpect(model().attributeHasFieldErrors("reviewForm", "notes"))
+                .andExpect(content().string(containsString("ibd-basics")));
+
+        verify(educationContentService, never()).approve(any(), eq("ibd-basics"), eq(1), any());
+    }
+
     private EducationManagementSummaryResponse summaryResponse() {
         return new EducationManagementSummaryResponse(
                 "ibd-basics",
@@ -203,6 +221,34 @@ class WebEducationContentControllerTest {
                 null,
                 Instant.parse("2026-06-10T10:00:00Z"),
                 null,
+                null,
+                null,
+                List.of(new EducationLessonResponse(
+                        "what-is-ibd",
+                        1,
+                        EducationLanguage.EN,
+                        EducationLanguage.EN,
+                        "What is IBD?",
+                        "A short introduction.",
+                        "**IBD**",
+                        "<p><strong>IBD</strong></p>",
+                        null)));
+    }
+
+    private EducationManagementDetailResponse inReviewDetailResponse() {
+        return new EducationManagementDetailResponse(
+                "ibd-basics",
+                "IBD",
+                10,
+                1,
+                EducationContentStatus.IN_REVIEW,
+                null,
+                false,
+                "author@example.com",
+                null,
+                null,
+                Instant.parse("2026-06-10T10:00:00Z"),
+                Instant.parse("2026-06-11T10:00:00Z"),
                 null,
                 null,
                 List.of(new EducationLessonResponse(

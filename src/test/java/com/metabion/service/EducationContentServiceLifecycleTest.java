@@ -201,7 +201,7 @@ class EducationContentServiceLifecycleTest {
     }
 
     @Test
-    void updateDraftUpdatesMetadataAndCzechLocalizations() {
+    void updateDraftDoesNotMutateStableModuleMetadataAndUpdatesCzechLocalizations() {
         var staff = user(9L, "staff@example.com", RoleName.COORDINATOR);
         var version = draft("editable-module", staff);
         addLocalizedLesson(version);
@@ -214,8 +214,8 @@ class EducationContentServiceLifecycleTest {
         var response = service.updateDraft(auth("staff@example.com"), "editable-module", 1, editForm());
 
         assertThat(response.moduleSlug()).isEqualTo("editable-module");
-        assertThat(version.getModule().getTopic()).isEqualTo("Nutrition");
-        assertThat(version.getModule().getSortOrder()).isEqualTo(30);
+        assertThat(version.getModule().getTopic()).isEqualTo("IBD");
+        assertThat(version.getModule().getSortOrder()).isEqualTo(10);
         assertThat(version.getLocalizations())
                 .extracting(EducationModuleLocalization::getLanguage)
                 .containsExactlyInAnyOrder(EducationLanguage.EN, EducationLanguage.CS);

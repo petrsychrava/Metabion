@@ -27,12 +27,12 @@
                 </div>
                 <div class="field">
                     <label for="topic" th:text="#{contentEducation.topic}">Topic</label>
-                    <input id="topic" th:field="*{topic}">
+                    <input id="topic" th:field="*{topic}" th:readonly="${mode != 'new'}">
                     <p class="error" th:if="${#fields.hasErrors('topic')}" th:errors="*{topic}">Error</p>
                 </div>
                 <div class="field">
                     <label for="sortOrder" th:text="#{contentEducation.sortOrder}">Sort order</label>
-                    <input id="sortOrder" type="number" min="1" th:field="*{sortOrder}">
+                    <input id="sortOrder" type="number" min="1" th:field="*{sortOrder}" th:readonly="${mode != 'new'}">
                     <p class="error" th:if="${#fields.hasErrors('sortOrder')}" th:errors="*{sortOrder}">Error</p>
                 </div>
             </div>

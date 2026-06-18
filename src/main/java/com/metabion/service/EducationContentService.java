@@ -249,9 +249,6 @@ public class EducationContentService {
         fetchPublishedVersionGraph(List.of(version));
         requireEditable(version);
 
-        var module = version.getModule();
-        module.setTopic(trim(form.getTopic()));
-        module.setSortOrder(form.getSortOrder());
         replaceModuleLocalizations(version, form);
         replaceLessons(version, form);
 

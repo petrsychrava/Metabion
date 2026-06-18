@@ -47,6 +47,7 @@
             <div class="field">
                 <label for="notes" th:text="#{contentEducation.reviewNotes}">Review notes</label>
                 <textarea id="notes" th:field="*{notes}"></textarea>
+                <p class="error" th:if="${#fields.hasErrors('notes')}" th:errors="*{notes}">Review notes error</p>
             </div>
             <div class="links">
                 <button type="submit"
