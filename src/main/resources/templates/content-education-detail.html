@@ -42,11 +42,11 @@
 
     <section class="panel app-panel">
         <h2 th:text="#{contentEducation.lifecycle}">Lifecycle</h2>
-        <form class="form" method="post">
+        <form class="form" th:object="${reviewForm}" method="post">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
             <div class="field">
-                <label for="reviewNotes" th:text="#{contentEducation.reviewNotes}">Review notes</label>
-                <textarea id="reviewNotes" name="reviewNotes" th:text="${reviewNotes}"></textarea>
+                <label for="notes" th:text="#{contentEducation.reviewNotes}">Review notes</label>
+                <textarea id="notes" th:field="*{notes}"></textarea>
             </div>
             <div class="links">
                 <button type="submit"

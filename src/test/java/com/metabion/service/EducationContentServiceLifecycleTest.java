@@ -10,6 +10,7 @@ import com.metabion.domain.EducationModuleLocalization;
 import com.metabion.domain.EducationModuleVersion;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
+import com.metabion.dto.EducationContentForm;
 import com.metabion.dto.EducationModuleRequest;
 import com.metabion.repository.EducationLessonCompletionRepository;
 import com.metabion.repository.EducationLessonRepository;
@@ -176,6 +177,64 @@ class EducationContentServiceLifecycleTest {
         verify(modules).save(version.getModule());
     }
 
+    @Test
+    void managedVersionFormIncludesCzechLocalizations() {
+        var staff = user(8L, "staff@example.com", RoleName.PHYSICIAN);
+        var version = draft("localized-module", staff);
+        version.addLocalization(new EducationModuleLocalization(
+                version,
+                EducationLanguage.CS,
+                "Cesky modul",
+                "Cesky souhrn"));
+        addLocalizedLesson(version);
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        when(versions.findByModuleSlugAndVersion("localized-module", 1)).thenReturn(Optional.of(version));
+
+        var form = service.getManagedVersionForm(auth("staff@example.com"), "localized-module", 1);
+
+        assertThat(form.getEnglishTitle()).isEqualTo("Title");
+        assertThat(form.getCzechTitle()).isEqualTo("Cesky modul");
+        assertThat(form.getLessons()).hasSize(1);
+        assertThat(form.getLessons().getFirst().getEnglishTitle()).isEqualTo("Lesson title");
+        assertThat(form.getLessons().getFirst().getCzechTitle()).isEqualTo("Cesky nazev lekce");
+        assertThat(form.getLessons().getFirst().getCzechBodyMarkdown()).isEqualTo("Cesky text lekce");
+    }
+
+    @Test
+    void updateDraftUpdatesMetadataAndCzechLocalizations() {
+        var staff = user(9L, "staff@example.com", RoleName.COORDINATOR);
+        var version = draft("editable-module", staff);
+        addLocalizedLesson(version);
+        var existingLesson = version.getLessons().getFirst().getLesson();
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        when(versions.findByModuleSlugAndVersion("editable-module", 1)).thenReturn(Optional.of(version));
+        when(lessons.findByModuleSlugAndSlug("editable-module", "editable-lesson")).thenReturn(Optional.of(existingLesson));
+        when(versions.save(any(EducationModuleVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.updateDraft(auth("staff@example.com"), "editable-module", 1, editForm());
+
+        assertThat(response.moduleSlug()).isEqualTo("editable-module");
+        assertThat(version.getModule().getTopic()).isEqualTo("Nutrition");
+        assertThat(version.getModule().getSortOrder()).isEqualTo(30);
+        assertThat(version.getLocalizations())
+                .extracting(EducationModuleLocalization::getLanguage)
+                .containsExactlyInAnyOrder(EducationLanguage.EN, EducationLanguage.CS);
+        assertThat(version.getLocalizations())
+                .filteredOn(localization -> localization.getLanguage() == EducationLanguage.CS)
+                .singleElement()
+                .extracting(EducationModuleLocalization::getTitle)
+                .isEqualTo("Upraveny modul");
+        assertThat(version.getLessons()).hasSize(1);
+        assertThat(version.getLessons().getFirst().getLocalizations())
+                .extracting(EducationLessonLocalization::getLanguage)
+                .containsExactlyInAnyOrder(EducationLanguage.EN, EducationLanguage.CS);
+        assertThat(version.getLessons().getFirst().getLocalizations())
+                .filteredOn(localization -> localization.getLanguage() == EducationLanguage.CS)
+                .singleElement()
+                .extracting(EducationLessonLocalization::getBodyMarkdown)
+                .isEqualTo("Upraveny cesky text");
+    }
+
     private EducationModuleRequest moduleRequest(String slug) {
         return new EducationModuleRequest(slug, "IBD", 10, "Title", "Summary", null, null);
     }
@@ -197,6 +256,46 @@ class EducationContentServiceLifecycleTest {
                 "Lesson summary",
                 "Lesson body"));
         version.addLesson(lessonVersion);
+    }
+
+    private void addLocalizedLesson(EducationModuleVersion version) {
+        var lesson = new EducationLesson(version.getModule(), "editable-lesson");
+        var lessonVersion = new EducationLessonVersion(version, lesson, 1);
+        lessonVersion.addLocalization(new EducationLessonLocalization(
+                lessonVersion,
+                EducationLanguage.EN,
+                "Lesson title",
+                "Lesson summary",
+                "Lesson body"));
+        lessonVersion.addLocalization(new EducationLessonLocalization(
+                lessonVersion,
+                EducationLanguage.CS,
+                "Cesky nazev lekce",
+                "Cesky souhrn lekce",
+                "Cesky text lekce"));
+        version.addLesson(lessonVersion);
+    }
+
+    private EducationContentForm editForm() {
+        var form = new EducationContentForm();
+        form.setSlug("editable-module");
+        form.setTopic("Nutrition");
+        form.setSortOrder(30);
+        form.setEnglishTitle("Updated module");
+        form.setEnglishSummary("Updated summary");
+        form.setCzechTitle("Upraveny modul");
+        form.setCzechSummary("Upraveny souhrn");
+        var lesson = new EducationContentForm.LessonRow();
+        lesson.setSlug("editable-lesson");
+        lesson.setSortOrder(1);
+        lesson.setEnglishTitle("Updated lesson");
+        lesson.setEnglishSummary("Updated lesson summary");
+        lesson.setEnglishBodyMarkdown("Updated lesson body");
+        lesson.setCzechTitle("Upravena lekce");
+        lesson.setCzechSummary("Upraveny souhrn lekce");
+        lesson.setCzechBodyMarkdown("Upraveny cesky text");
+        form.setLessons(List.of(lesson));
+        return form;
     }
 
     private Authentication auth(String email) {

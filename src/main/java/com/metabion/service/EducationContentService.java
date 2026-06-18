@@ -11,6 +11,7 @@ import com.metabion.domain.EducationModuleVersion;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
+import com.metabion.dto.EducationContentForm;
 import com.metabion.dto.EducationLessonResponse;
 import com.metabion.dto.EducationLessonUpsertRequest;
 import com.metabion.dto.EducationManagementDetailResponse;
@@ -30,6 +31,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -228,6 +230,34 @@ public class EducationContentService {
         return managementDetail(version);
     }
 
+    public EducationContentForm getManagedVersionForm(Authentication authentication, String moduleSlug, int versionNumber) {
+        var user = currentUser(authentication);
+        requireContentManager(user);
+        var version = versionOrNotFound(moduleSlug, versionNumber);
+        fetchPublishedVersionGraph(List.of(version));
+        return form(version);
+    }
+
+    public EducationManagementDetailResponse updateDraft(
+            Authentication authentication,
+            String moduleSlug,
+            int versionNumber,
+            EducationContentForm form) {
+        var user = currentUser(authentication);
+        requireContentManager(user);
+        var version = versionOrNotFound(moduleSlug, versionNumber);
+        fetchPublishedVersionGraph(List.of(version));
+        requireEditable(version);
+
+        var module = version.getModule();
+        module.setTopic(trim(form.getTopic()));
+        module.setSortOrder(form.getSortOrder());
+        replaceModuleLocalizations(version, form);
+        replaceLessons(version, form);
+
+        return managementDetail(versions.save(version));
+    }
+
     public EducationModuleDetailResponse getPublishedModule(Authentication authentication, String moduleSlug) {
         var user = currentUser(authentication);
         var requestedLanguage = EducationLanguage.from(user.getLanguagePreference());
@@ -400,6 +430,59 @@ public class EducationContentService {
         }
         return patientProfiles.findByUserId(user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Patient profile is required"));
+    }
+
+    EducationContentForm form(EducationModuleVersion version) {
+        var module = version.getModule();
+        var english = localization(version, EducationLanguage.EN);
+        var czech = localization(version, EducationLanguage.CS);
+        var form = new EducationContentForm();
+        form.setSlug(module.getSlug());
+        form.setTopic(module.getTopic());
+        form.setSortOrder(module.getSortOrder());
+        if (english != null) {
+            form.setEnglishTitle(english.getTitle());
+            form.setEnglishSummary(english.getSummary());
+        }
+        if (czech != null) {
+            form.setCzechTitle(czech.getTitle());
+            form.setCzechSummary(czech.getSummary());
+        }
+        form.setLessons(orderedLessons(version).stream()
+                .map(lesson -> {
+                    var row = new EducationContentForm.LessonRow();
+                    var lessonEnglish = localization(lesson, EducationLanguage.EN);
+                    var lessonCzech = localization(lesson, EducationLanguage.CS);
+                    row.setSlug(lesson.getLesson().getSlug());
+                    row.setSortOrder(lesson.getSortOrder());
+                    if (lessonEnglish != null) {
+                        row.setEnglishTitle(lessonEnglish.getTitle());
+                        row.setEnglishSummary(lessonEnglish.getSummary());
+                        row.setEnglishBodyMarkdown(lessonEnglish.getBodyMarkdown());
+                    }
+                    if (lessonCzech != null) {
+                        row.setCzechTitle(lessonCzech.getTitle());
+                        row.setCzechSummary(lessonCzech.getSummary());
+                        row.setCzechBodyMarkdown(lessonCzech.getBodyMarkdown());
+                    }
+                    return row;
+                })
+                .collect(Collectors.toCollection(ArrayList::new)));
+        return form;
+    }
+
+    EducationModuleLocalization localization(EducationModuleVersion version, EducationLanguage language) {
+        return version.getLocalizations().stream()
+                .filter(localization -> localization.getLanguage() == language)
+                .findFirst()
+                .orElse(null);
+    }
+
+    EducationLessonLocalization localization(EducationLessonVersion lesson, EducationLanguage language) {
+        return lesson.getLocalizations().stream()
+                .filter(localization -> localization.getLanguage() == language)
+                .findFirst()
+                .orElse(null);
     }
 
     EducationLessonLocalization localizationOrEnglish(EducationLessonVersion lesson, EducationLanguage requestedLanguage) {
@@ -595,6 +678,35 @@ public class EducationContentService {
                 localization.getBodyMarkdown(),
                 markdown.render(localization.getBodyMarkdown()),
                 completed);
+    }
+
+    private void replaceModuleLocalizations(EducationModuleVersion version, EducationContentForm form) {
+        version.getLocalizations().clear();
+        version.addLocalization(new EducationModuleLocalization(
+                version,
+                EducationLanguage.EN,
+                trim(form.getEnglishTitle()),
+                trim(form.getEnglishSummary())));
+        addOptionalModuleLocalization(version, EducationLanguage.CS, form.getCzechTitle(), form.getCzechSummary());
+    }
+
+    private void replaceLessons(EducationModuleVersion version, EducationContentForm form) {
+        var module = version.getModule();
+        version.getLessons().clear();
+        form.toLessonRequests().forEach(request -> {
+            var lessonSlug = normalizeSlug(request.slug());
+            var lesson = lessons.findByModuleSlugAndSlug(module.getSlug(), lessonSlug)
+                    .orElseGet(() -> lessons.save(new EducationLesson(module, lessonSlug)));
+            var lessonVersion = new EducationLessonVersion(version, lesson, request.sortOrder());
+            lessonVersion.addLocalization(new EducationLessonLocalization(
+                    lessonVersion,
+                    EducationLanguage.EN,
+                    trim(request.englishTitle()),
+                    trim(request.englishSummary()),
+                    trim(request.englishBodyMarkdown())));
+            addOptionalLessonLocalization(lessonVersion, request.czechTitle(), request.czechSummary(), request.czechBodyMarkdown());
+            version.addLesson(lessonVersion);
+        });
     }
 
     private void validatePublishable(EducationModuleVersion version) {

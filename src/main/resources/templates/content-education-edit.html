@@ -13,7 +13,7 @@
 
     <form class="form content-form"
           th:object="${contentForm}"
-          th:action="${mode == 'new'} ? @{/app/content/education} : @{/app/content/education/{moduleSlug}/versions/{versionNumber}/lessons(moduleSlug=${version.moduleSlug()},versionNumber=${version.version()})}"
+          th:action="${mode == 'new'} ? @{/app/content/education} : @{/app/content/education/{moduleSlug}/versions/{versionNumber}(moduleSlug=${version.moduleSlug()},versionNumber=${version.version()})}"
           method="post">
         <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 
@@ -27,12 +27,12 @@
                 </div>
                 <div class="field">
                     <label for="topic" th:text="#{contentEducation.topic}">Topic</label>
-                    <input id="topic" th:field="*{topic}" th:readonly="${mode != 'new'}">
+                    <input id="topic" th:field="*{topic}">
                     <p class="error" th:if="${#fields.hasErrors('topic')}" th:errors="*{topic}">Error</p>
                 </div>
                 <div class="field">
                     <label for="sortOrder" th:text="#{contentEducation.sortOrder}">Sort order</label>
-                    <input id="sortOrder" type="number" min="1" th:field="*{sortOrder}" th:readonly="${mode != 'new'}">
+                    <input id="sortOrder" type="number" min="1" th:field="*{sortOrder}">
                     <p class="error" th:if="${#fields.hasErrors('sortOrder')}" th:errors="*{sortOrder}">Error</p>
                 </div>
             </div>
@@ -40,22 +40,22 @@
             <div class="form-grid">
                 <div class="field">
                     <label for="englishTitle" th:text="#{contentEducation.englishTitle}">English title</label>
-                    <input id="englishTitle" th:field="*{englishTitle}" th:readonly="${mode != 'new'}">
+                    <input id="englishTitle" th:field="*{englishTitle}">
                     <p class="error" th:if="${#fields.hasErrors('englishTitle')}" th:errors="*{englishTitle}">Error</p>
                 </div>
                 <div class="field">
                     <label for="englishSummary" th:text="#{contentEducation.englishSummary}">English summary</label>
-                    <textarea id="englishSummary" th:field="*{englishSummary}" th:readonly="${mode != 'new'}"></textarea>
+                    <textarea id="englishSummary" th:field="*{englishSummary}"></textarea>
                     <p class="error" th:if="${#fields.hasErrors('englishSummary')}" th:errors="*{englishSummary}">Error</p>
                 </div>
                 <div class="field">
                     <label for="czechTitle" th:text="#{contentEducation.czechTitle}">Czech title</label>
-                    <input id="czechTitle" th:field="*{czechTitle}" th:readonly="${mode != 'new'}">
+                    <input id="czechTitle" th:field="*{czechTitle}">
                     <p class="error" th:if="${#fields.hasErrors('czechTitle')}" th:errors="*{czechTitle}">Error</p>
                 </div>
                 <div class="field">
                     <label for="czechSummary" th:text="#{contentEducation.czechSummary}">Czech summary</label>
-                    <textarea id="czechSummary" th:field="*{czechSummary}" th:readonly="${mode != 'new'}"></textarea>
+                    <textarea id="czechSummary" th:field="*{czechSummary}"></textarea>
                     <p class="error" th:if="${#fields.hasErrors('czechSummary')}" th:errors="*{czechSummary}">Error</p>
                 </div>
             </div>

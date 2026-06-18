@@ -3,6 +3,7 @@ package com.metabion.controller.web;
 import com.metabion.domain.EducationContentStatus;
 import com.metabion.domain.EducationLanguage;
 import com.metabion.domain.RoleName;
+import com.metabion.dto.EducationContentForm;
 import com.metabion.dto.EducationLessonResponse;
 import com.metabion.dto.EducationManagementDetailResponse;
 import com.metabion.dto.EducationManagementSummaryResponse;
@@ -24,11 +25,14 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -104,6 +108,7 @@ class WebEducationContentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("content-education-detail"))
                 .andExpect(model().attributeExists("version"))
+                .andExpect(model().attributeExists("reviewForm"))
                 .andExpect(content().string(containsString("ibd-basics")))
                 .andExpect(content().string(containsString("Submit review")))
                 .andExpect(content().string(containsString("What is IBD?")));
@@ -112,6 +117,7 @@ class WebEducationContentControllerTest {
     @Test
     void staffCanOpenEditForm() throws Exception {
         when(educationContentService.getManagedVersion(any(), eq("ibd-basics"), eq(1))).thenReturn(detailResponse());
+        when(educationContentService.getManagedVersionForm(any(), eq("ibd-basics"), eq(1))).thenReturn(fullForm());
 
         mvc.perform(get("/app/content/education/ibd-basics/versions/1/edit")
                         .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name())))
@@ -119,8 +125,41 @@ class WebEducationContentControllerTest {
                 .andExpect(view().name("content-education-edit"))
                 .andExpect(model().attributeExists("contentForm"))
                 .andExpect(content().string(containsString("Edit education content")))
-                .andExpect(content().string(containsString("action=\"/app/content/education/ibd-basics/versions/1/lessons\"")))
-                .andExpect(content().string(containsString("What is IBD?")));
+                .andExpect(content().string(containsString("action=\"/app/content/education/ibd-basics/versions/1\"")))
+                .andExpect(content().string(containsString("IBD basics updated")))
+                .andExpect(content().string(containsString("Co je IBD?")))
+                .andExpect(content().string(containsString("Cesky text lekce")));
+    }
+
+    @Test
+    void staffCanSaveEditWithFullUpdate() throws Exception {
+        mvc.perform(post("/app/content/education/ibd-basics/versions/1")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .param("slug", "ibd-basics")
+                        .param("topic", "IBD")
+                        .param("sortOrder", "20")
+                        .param("englishTitle", "IBD basics updated")
+                        .param("englishSummary", "Updated summary")
+                        .param("czechTitle", "Zaklady IBD")
+                        .param("czechSummary", "Cesky souhrn")
+                        .param("lessons[0].slug", "what-is-ibd")
+                        .param("lessons[0].sortOrder", "1")
+                        .param("lessons[0].englishTitle", "What is IBD?")
+                        .param("lessons[0].englishSummary", "A short introduction.")
+                        .param("lessons[0].englishBodyMarkdown", "**IBD**")
+                        .param("lessons[0].czechTitle", "Co je IBD?")
+                        .param("lessons[0].czechSummary", "Kratky uvod.")
+                        .param("lessons[0].czechBodyMarkdown", "Cesky text lekce"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app/content/education/ibd-basics/versions/1/edit"));
+
+        var formCaptor = forClass(EducationContentForm.class);
+        verify(educationContentService).updateDraft(any(), eq("ibd-basics"), eq(1), formCaptor.capture());
+        assertThat(formCaptor.getValue().getSortOrder()).isEqualTo(20);
+        assertThat(formCaptor.getValue().getEnglishTitle()).isEqualTo("IBD basics updated");
+        assertThat(formCaptor.getValue().getCzechTitle()).isEqualTo("Zaklady IBD");
+        assertThat(formCaptor.getValue().getLessons().getFirst().getCzechTitle()).isEqualTo("Co je IBD?");
     }
 
     @Test
@@ -176,5 +215,27 @@ class WebEducationContentControllerTest {
                         "**IBD**",
                         "<p><strong>IBD</strong></p>",
                         null)));
+    }
+
+    private EducationContentForm fullForm() {
+        var form = new EducationContentForm();
+        form.setSlug("ibd-basics");
+        form.setTopic("IBD");
+        form.setSortOrder(20);
+        form.setEnglishTitle("IBD basics updated");
+        form.setEnglishSummary("Updated summary");
+        form.setCzechTitle("Zaklady IBD");
+        form.setCzechSummary("Cesky souhrn");
+        var lesson = new EducationContentForm.LessonRow();
+        lesson.setSlug("what-is-ibd");
+        lesson.setSortOrder(1);
+        lesson.setEnglishTitle("What is IBD?");
+        lesson.setEnglishSummary("A short introduction.");
+        lesson.setEnglishBodyMarkdown("**IBD**");
+        lesson.setCzechTitle("Co je IBD?");
+        lesson.setCzechSummary("Kratky uvod.");
+        lesson.setCzechBodyMarkdown("Cesky text lekce");
+        form.setLessons(new ArrayList<>(List.of(lesson)));
+        return form;
     }
 }

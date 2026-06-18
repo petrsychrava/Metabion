@@ -1,7 +1,7 @@
 package com.metabion.controller.web;
 
 import com.metabion.dto.EducationContentForm;
-import com.metabion.dto.EducationManagementDetailResponse;
+import com.metabion.dto.EducationReviewRequest;
 import com.metabion.service.EducationContentService;
 import com.metabion.service.UserPreferenceService;
 import jakarta.validation.Valid;
@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 
 @Controller
 public class WebEducationContentController {
@@ -77,7 +76,7 @@ public class WebEducationContentController {
                          Model model,
                          Authentication authentication) {
         model.addAttribute("version", educationContentService.getManagedVersion(authentication, moduleSlug, version));
-        model.addAttribute("reviewNotes", "");
+        model.addAttribute("reviewForm", new EducationReviewRequest(""));
         addAppShell(model, authentication);
         return "content-education-detail";
     }
@@ -89,18 +88,30 @@ public class WebEducationContentController {
                        Authentication authentication) {
         var detail = educationContentService.getManagedVersion(authentication, moduleSlug, version);
         model.addAttribute("version", detail);
-        model.addAttribute("contentForm", toForm(detail));
+        var form = educationContentService.getManagedVersionForm(authentication, moduleSlug, version);
+        form.ensureRows(MIN_LESSON_ROWS);
+        model.addAttribute("contentForm", form);
         model.addAttribute("mode", "edit");
         addAppShell(model, authentication);
         return "content-education-edit";
     }
 
-    @PostMapping(ACTIVE_PATH + "/{moduleSlug}/versions/{version}/lessons")
-    public String updateLessons(@PathVariable String moduleSlug,
-                                @PathVariable int version,
-                                @ModelAttribute("contentForm") EducationContentForm form,
-                                Authentication authentication) {
-        form.toLessonRequests().forEach(lesson -> educationContentService.upsertLesson(authentication, moduleSlug, version, lesson));
+    @PostMapping(ACTIVE_PATH + "/{moduleSlug}/versions/{version}")
+    public String update(@PathVariable String moduleSlug,
+                         @PathVariable int version,
+                         @Valid @ModelAttribute("contentForm") EducationContentForm form,
+                         BindingResult binding,
+                         Model model,
+                         Authentication authentication) {
+        form.ensureRows(MIN_LESSON_ROWS);
+        if (binding.hasErrors()) {
+            model.addAttribute("version", educationContentService.getManagedVersion(authentication, moduleSlug, version));
+            model.addAttribute("mode", "edit");
+            addAppShell(model, authentication);
+            return "content-education-edit";
+        }
+
+        educationContentService.updateDraft(authentication, moduleSlug, version, form);
         return "redirect:" + ACTIVE_PATH + "/" + moduleSlug + "/versions/" + version + "/edit";
     }
 
@@ -115,18 +126,18 @@ public class WebEducationContentController {
     @PostMapping(ACTIVE_PATH + "/{moduleSlug}/versions/{version}/approve")
     public String approve(@PathVariable String moduleSlug,
                           @PathVariable int version,
-                          @RequestParam(name = "reviewNotes", required = false) String reviewNotes,
+                          @ModelAttribute("reviewForm") EducationReviewRequest reviewForm,
                           Authentication authentication) {
-        educationContentService.approve(authentication, moduleSlug, version, reviewNotes);
+        educationContentService.approve(authentication, moduleSlug, version, reviewForm.notes());
         return redirectToDetail(moduleSlug, version);
     }
 
     @PostMapping(ACTIVE_PATH + "/{moduleSlug}/versions/{version}/reject")
     public String reject(@PathVariable String moduleSlug,
                          @PathVariable int version,
-                         @RequestParam(name = "reviewNotes", required = false) String reviewNotes,
+                         @ModelAttribute("reviewForm") EducationReviewRequest reviewForm,
                          Authentication authentication) {
-        educationContentService.reject(authentication, moduleSlug, version, reviewNotes);
+        educationContentService.reject(authentication, moduleSlug, version, reviewForm.notes());
         return redirectToDetail(moduleSlug, version);
     }
 
@@ -144,28 +155,6 @@ public class WebEducationContentController {
                        Authentication authentication) {
         var copy = educationContentService.copyVersion(authentication, moduleSlug, version);
         return redirectToDetail(copy.moduleSlug(), copy.version());
-    }
-
-    private EducationContentForm toForm(EducationManagementDetailResponse detail) {
-        var form = new EducationContentForm();
-        form.setSlug(detail.moduleSlug());
-        form.setTopic(detail.topic());
-        form.setSortOrder(detail.sortOrder());
-        form.setEnglishTitle(detail.moduleSlug());
-        form.setEnglishSummary(detail.topic());
-        form.setLessons(new java.util.ArrayList<>(detail.lessons().stream()
-                .map(lesson -> {
-                    var row = new EducationContentForm.LessonRow();
-                    row.setSlug(lesson.lessonSlug());
-                    row.setSortOrder(lesson.sortOrder());
-                    row.setEnglishTitle(lesson.title());
-                    row.setEnglishSummary(lesson.summary());
-                    row.setEnglishBodyMarkdown(lesson.bodyMarkdown());
-                    return row;
-                })
-                .toList()));
-        form.ensureRows(MIN_LESSON_ROWS);
-        return form;
     }
 
     private String redirectToDetail(String moduleSlug, int version) {
