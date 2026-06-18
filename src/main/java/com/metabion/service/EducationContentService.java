@@ -197,9 +197,13 @@ public class EducationContentService {
         fetchPublishedVersionGraph(publishedModules.stream()
                 .map(EducationModule::getCurrentPublishedVersion)
                 .toList());
+        var completedLessonIds = completedLessonIds(patient, publishedModules.stream()
+                .flatMap(module -> module.getCurrentPublishedVersion().getLessons().stream())
+                .map(EducationLessonVersion::getId)
+                .toList());
 
         return publishedModules.stream()
-                .map(module -> summary(module.getCurrentPublishedVersion(), requestedLanguage, patient))
+                .map(module -> summary(module.getCurrentPublishedVersion(), requestedLanguage, patient, completedLessonIds))
                 .toList();
     }
 
@@ -406,12 +410,15 @@ public class EducationContentService {
     }
 
     Set<Long> completedLessonIds(PatientProfile patient, EducationModuleVersion version) {
+        return completedLessonIds(patient, version.getLessons().stream()
+                .map(EducationLessonVersion::getId)
+                .toList());
+    }
+
+    Set<Long> completedLessonIds(PatientProfile patient, List<Long> lessonVersionIds) {
         if (patient == null) {
             return Set.of();
         }
-        var lessonVersionIds = version.getLessons().stream()
-                .map(EducationLessonVersion::getId)
-                .toList();
         if (lessonVersionIds.isEmpty()) {
             return Set.of();
         }
@@ -423,10 +430,24 @@ public class EducationContentService {
             EducationModuleVersion version,
             EducationLanguage requestedLanguage,
             PatientProfile patient) {
+        return summary(version, requestedLanguage, patient, completedLessonIds(patient, version));
+    }
+
+    EducationModuleSummaryResponse summary(
+            EducationModuleVersion version,
+            EducationLanguage requestedLanguage,
+            PatientProfile patient,
+            Set<Long> completedLessonIds) {
         var module = version.getModule();
         var localization = localizationOrEnglish(version, requestedLanguage);
-        var completedLessonIds = completedLessonIds(patient, version);
-        Integer completedLessonCount = patient == null ? null : completedLessonIds.size();
+        var versionLessonIds = version.getLessons().stream()
+                .map(EducationLessonVersion::getId)
+                .collect(Collectors.toSet());
+        Integer completedLessonCount = patient == null
+                ? null
+                : (int) completedLessonIds.stream()
+                        .filter(versionLessonIds::contains)
+                        .count();
         Boolean completed = patient == null ? null : completedLessonCount == version.getLessons().size();
         return new EducationModuleSummaryResponse(
                 module.getSlug(),

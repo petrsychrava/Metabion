@@ -37,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -233,6 +234,30 @@ class EducationContentServiceReadProgressTest {
             assertThat(response.completed()).isNull();
         });
         verify(completions, never()).findCompletedLessonVersionIds(any(), any());
+    }
+
+    @Test
+    void patientPublishedListBatchesProgressAcrossModules() {
+        var patientUser = user(15L, "patient@example.com", RoleName.PATIENT);
+        var patient = patient(16L, patientUser);
+        var first = publishedModule("first-module", staff(17L), false);
+        var second = publishedModule("second-module", staff(18L), false);
+        second.setId(51L);
+        second.getCurrentPublishedVersion().setId(61L);
+        second.getCurrentPublishedVersion().getLessons().getFirst().setId(101L);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(15L)).thenReturn(Optional.of(patient));
+        when(modules.findByCurrentPublishedVersionIsNotNullOrderBySortOrderAscIdAsc()).thenReturn(List.of(first, second));
+        when(completions.findCompletedLessonVersionIds(16L, List.of(100L, 101L))).thenReturn(List.of(100L));
+
+        var responses = service.listPublishedModules(auth("patient@example.com"));
+
+        assertThat(responses).hasSize(2);
+        assertThat(responses.get(0).completedLessonCount()).isEqualTo(1);
+        assertThat(responses.get(0).completed()).isTrue();
+        assertThat(responses.get(1).completedLessonCount()).isZero();
+        assertThat(responses.get(1).completed()).isFalse();
+        verify(completions, times(1)).findCompletedLessonVersionIds(16L, List.of(100L, 101L));
     }
 
     private EducationModule publishedModule(String slug, User author, boolean includeCzech) {
