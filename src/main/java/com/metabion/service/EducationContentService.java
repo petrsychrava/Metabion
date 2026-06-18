@@ -14,6 +14,7 @@ import com.metabion.domain.User;
 import com.metabion.dto.EducationLessonResponse;
 import com.metabion.dto.EducationLessonUpsertRequest;
 import com.metabion.dto.EducationManagementDetailResponse;
+import com.metabion.dto.EducationManagementSummaryResponse;
 import com.metabion.dto.EducationModuleDetailResponse;
 import com.metabion.dto.EducationModuleRequest;
 import com.metabion.dto.EducationModuleSummaryResponse;
@@ -204,6 +205,18 @@ public class EducationContentService {
 
         return publishedModules.stream()
                 .map(module -> summary(module.getCurrentPublishedVersion(), requestedLanguage, patient, completedLessonIds))
+                .toList();
+    }
+
+    public List<EducationManagementSummaryResponse> listManagedVersions(Authentication authentication) {
+        var user = currentUser(authentication);
+        requireContentManager(user);
+        var managedVersions = versions.findAllByOrderByCreatedAtDesc();
+        if (!managedVersions.isEmpty()) {
+            versions.fetchLocalizations(managedVersions);
+        }
+        return managedVersions.stream()
+                .map(this::managementSummary)
                 .toList();
     }
 
@@ -519,6 +532,24 @@ public class EducationContentService {
                 version.getLessons().stream()
                         .map(this::lessonResponse)
                         .toList());
+    }
+
+    EducationManagementSummaryResponse managementSummary(EducationModuleVersion version) {
+        var module = version.getModule();
+        var localization = localizationOrEnglish(version, EducationLanguage.EN);
+        return new EducationManagementSummaryResponse(
+                module.getSlug(),
+                module.getTopic(),
+                version.getVersion(),
+                version.getStatus(),
+                localization == null ? null : localization.getTitle(),
+                email(version.getAuthor()),
+                email(version.getReviewedBy()),
+                email(version.getPublishedBy()),
+                version.getCreatedAt(),
+                version.getSubmittedAt(),
+                version.getReviewedAt(),
+                version.getPublishedAt());
     }
 
     String email(User user) {
