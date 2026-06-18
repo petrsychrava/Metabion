@@ -64,7 +64,7 @@
                         th:formaction="@{/app/content/education/{moduleSlug}/versions/{versionNumber}/reject(moduleSlug=${version.moduleSlug()},versionNumber=${version.version()})}"
                         th:text="#{contentEducation.reject}">Reject</button>
                 <button type="submit"
-                        th:if="${version.status().name() == 'APPROVED' || version.status().name() == 'DRAFT'}"
+                        th:if="${canPublish}"
                         th:formaction="@{/app/content/education/{moduleSlug}/versions/{versionNumber}/publish(moduleSlug=${version.moduleSlug()},versionNumber=${version.version()})}"
                         th:text="#{contentEducation.publish}">Publish</button>
                 <button type="submit"

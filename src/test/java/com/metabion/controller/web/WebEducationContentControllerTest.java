@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -113,6 +114,29 @@ class WebEducationContentControllerTest {
                 .andExpect(content().string(containsString("ibd-basics")))
                 .andExpect(content().string(containsString("Submit review")))
                 .andExpect(content().string(containsString("What is IBD?")));
+    }
+
+    @Test
+    void draftDetailDoesNotRenderPublishAction() throws Exception {
+        when(educationContentService.getManagedVersion(any(), eq("ibd-basics"), eq(1))).thenReturn(detailResponse());
+
+        mvc.perform(get("/app/content/education/ibd-basics/versions/1")
+                .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name())))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute("canPublish", Boolean.FALSE))
+                .andExpect(content().string(not(containsString("/app/content/education/ibd-basics/versions/1/publish"))));
+    }
+
+    @Test
+    void approvedDetailRendersPublishAction() throws Exception {
+        when(educationContentService.getManagedVersion(any(), eq("ibd-basics"), eq(1))).thenReturn(approvedDetailResponse());
+
+        mvc.perform(get("/app/content/education/ibd-basics/versions/1")
+                .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name())))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute("canPublish", Boolean.TRUE))
+                .andExpect(content().string(containsString("/app/content/education/ibd-basics/versions/1/publish")))
+                .andExpect(content().string(containsString("Publish")));
     }
 
     @Test
@@ -250,6 +274,34 @@ class WebEducationContentControllerTest {
                 Instant.parse("2026-06-10T10:00:00Z"),
                 Instant.parse("2026-06-11T10:00:00Z"),
                 null,
+                null,
+                List.of(new EducationLessonResponse(
+                        "what-is-ibd",
+                        1,
+                        EducationLanguage.EN,
+                        EducationLanguage.EN,
+                        "What is IBD?",
+                        "A short introduction.",
+                        "**IBD**",
+                        "<p><strong>IBD</strong></p>",
+                        null)));
+    }
+
+    private EducationManagementDetailResponse approvedDetailResponse() {
+        return new EducationManagementDetailResponse(
+                "ibd-basics",
+                "IBD",
+                10,
+                1,
+                EducationContentStatus.APPROVED,
+                "approved",
+                false,
+                "author@example.com",
+                "reviewer@example.com",
+                null,
+                Instant.parse("2026-06-10T10:00:00Z"),
+                Instant.parse("2026-06-11T10:00:00Z"),
+                Instant.parse("2026-06-12T10:00:00Z"),
                 null,
                 List.of(new EducationLessonResponse(
                         "what-is-ibd",

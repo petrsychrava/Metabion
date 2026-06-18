@@ -1,6 +1,8 @@
 package com.metabion.controller.web;
 
+import com.metabion.domain.EducationContentStatus;
 import com.metabion.dto.EducationContentForm;
+import com.metabion.dto.EducationManagementDetailResponse;
 import com.metabion.dto.EducationReviewRequest;
 import com.metabion.service.EducationContentService;
 import com.metabion.service.UserPreferenceService;
@@ -75,7 +77,7 @@ public class WebEducationContentController {
                          @PathVariable int version,
                          Model model,
                          Authentication authentication) {
-        model.addAttribute("version", educationContentService.getManagedVersion(authentication, moduleSlug, version));
+        addDetailModel(model, educationContentService.getManagedVersion(authentication, moduleSlug, version));
         model.addAttribute("reviewForm", new EducationReviewRequest(""));
         addAppShell(model, authentication);
         return "content-education-detail";
@@ -105,7 +107,7 @@ public class WebEducationContentController {
                          Authentication authentication) {
         form.ensureRows(MIN_LESSON_ROWS);
         if (binding.hasErrors()) {
-            model.addAttribute("version", educationContentService.getManagedVersion(authentication, moduleSlug, version));
+            addDetailModel(model, educationContentService.getManagedVersion(authentication, moduleSlug, version));
             model.addAttribute("mode", "edit");
             addAppShell(model, authentication);
             return "content-education-edit";
@@ -172,9 +174,14 @@ public class WebEducationContentController {
     }
 
     private String detailWithReviewErrors(String moduleSlug, int version, Model model, Authentication authentication) {
-        model.addAttribute("version", educationContentService.getManagedVersion(authentication, moduleSlug, version));
+        addDetailModel(model, educationContentService.getManagedVersion(authentication, moduleSlug, version));
         addAppShell(model, authentication);
         return "content-education-detail";
+    }
+
+    private void addDetailModel(Model model, EducationManagementDetailResponse version) {
+        model.addAttribute("version", version);
+        model.addAttribute("canPublish", Boolean.valueOf(version.status() == EducationContentStatus.APPROVED));
     }
 
     private void addAppShell(Model model, Authentication authentication) {
