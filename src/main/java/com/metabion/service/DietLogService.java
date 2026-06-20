@@ -138,11 +138,21 @@ public class DietLogService {
                                                               LocalDate to) {
         var currentUser = currentUser(authentication);
         requireClinicalReader(currentUser);
-        if (patientProfileId == null) {
-            throw badRequest("patientProfileId is required");
-        }
         validateRange(from, to);
+        if (patientProfileId == null) {
+            return clinicalPatientOptionsFor(currentUser).stream()
+                    .map(PatientOptionResponse::id)
+                    .flatMap(id -> listClinicalLogsForPatient(id, from, to).stream())
+                    .sorted(clinicalSummaryComparator())
+                    .toList();
+        }
         requireClinicalAccess(authentication, currentUser, patientProfileId);
+        return listClinicalLogsForPatient(patientProfileId, from, to);
+    }
+
+    private List<DailyDietLogSummaryResponse> listClinicalLogsForPatient(Long patientProfileId,
+                                                                         LocalDate from,
+                                                                         LocalDate to) {
         var logs = dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(patientProfileId, from, to);
         var measurementCounts = measurementCountsFor(logs);
         return logs.stream()
@@ -150,9 +160,20 @@ public class DietLogService {
                 .toList();
     }
 
+    private Comparator<DailyDietLogSummaryResponse> clinicalSummaryComparator() {
+        return Comparator
+                .comparing(DailyDietLogSummaryResponse::logDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(DailyDietLogSummaryResponse::patientEmail, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                .thenComparing(DailyDietLogSummaryResponse::id, Comparator.nullsLast(Comparator.naturalOrder()));
+    }
+
     public List<PatientOptionResponse> listClinicalPatientOptions(Authentication authentication) {
         var currentUser = currentUser(authentication);
         requireClinicalReader(currentUser);
+        return clinicalPatientOptionsFor(currentUser);
+    }
+
+    private List<PatientOptionResponse> clinicalPatientOptionsFor(User currentUser) {
         if (currentUser.hasRole(RoleName.ADMIN)) {
             return patientProfiles.findAllPatientOptions();
         }

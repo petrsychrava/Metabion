@@ -22,6 +22,7 @@ import java.time.LocalDate;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
@@ -141,6 +142,21 @@ class DietLogControllerTest {
                 eq(LocalDate.of(2026, 6, 1)),
                 eq(LocalDate.of(2026, 6, 10)));
         verify(dietLogService).getClinicalLog(any(), eq(99L));
+    }
+
+    @Test
+    void clinicalUserCanReadAllAssignedPatientsWhenPatientIsOmitted() throws Exception {
+        mvc.perform(get("/api/clinical/diet-logs")
+                        .with(user("doctor@example.com").roles("PHYSICIAN"))
+                        .param("from", "2026-06-01")
+                        .param("to", "2026-06-10"))
+                .andExpect(status().isOk());
+
+        verify(dietLogService).listClinicalLogs(
+                any(),
+                isNull(),
+                eq(LocalDate.of(2026, 6, 1)),
+                eq(LocalDate.of(2026, 6, 10)));
     }
 
     @Test

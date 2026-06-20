@@ -11,10 +11,10 @@
 
     <section class="panel app-panel">
         <form id="clinical-diet-log-filter" class="form" th:action="@{/app/clinical/diet-logs}" method="get"
-              data-default-range-days="30">
+              data-default-range-days="7" th:attr="data-default-range-days=${clinicalDefaultRangeDays}">
             <label class="field"><span th:text="#{dietLogs.patient}">Patient</span>
                 <select name="patientProfileId">
-                    <option value="" th:selected="${patientProfileId == null}" th:text="#{dietLogs.selectPatient}">Select patient</option>
+                    <option value="" th:selected="${patientProfileId == null}" th:text="#{dietLogs.allAssignedPatients}">All assigned patients</option>
                     <option th:each="patient : ${patientOptions}"
                             th:value="${patient.id()}"
                             th:selected="${patient.id() == patientProfileId}"
@@ -44,7 +44,7 @@
                     };
                     const today = new Date();
                     const defaultFrom = new Date(today);
-                    defaultFrom.setDate(today.getDate() - defaultRangeDays);
+                    defaultFrom.setDate(today.getDate() - (defaultRangeDays - 1));
 
                     if (!from.value) {
                         from.value = formatDate(defaultFrom);

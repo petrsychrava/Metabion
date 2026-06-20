@@ -433,6 +433,45 @@ class DietLogServiceTest {
     }
 
     @Test
+    void clinicalListWithoutPatientReturnsLogsForAssignedPatients() {
+        var reviewer = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var staffProfile = new StaffProfile(reviewer);
+        staffProfile.setId(55L);
+        var firstPatient = patientProfile(20L, user(4L, "alpha@example.com", RoleName.PATIENT));
+        var secondPatient = patientProfile(21L, user(5L, "beta@example.com", RoleName.PATIENT));
+        var older = savedLog(99L, firstPatient, LocalDate.of(2026, 6, 10));
+        var newer = savedLog(100L, secondPatient, LocalDate.of(2026, 6, 12));
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(reviewer));
+        when(staffProfiles.findByUserId(2L)).thenReturn(Optional.of(staffProfile));
+        when(patientProfiles.findAccessiblePatientOptionsForStaff(55L))
+                .thenReturn(List.of(
+                        new PatientOptionResponse(20L, "alpha@example.com"),
+                        new PatientOptionResponse(21L, "beta@example.com")));
+        when(dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(
+                20L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30))).thenReturn(List.of(older));
+        when(dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(
+                21L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30))).thenReturn(List.of(newer));
+        when(measurements.countByDailyDietLogIds(List.of(99L))).thenReturn(List.of());
+        when(measurements.countByDailyDietLogIds(List.of(100L))).thenReturn(List.of());
+
+        var summaries = service.listClinicalLogs(
+                auth("doctor@example.com"),
+                null,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30));
+
+        assertThat(summaries).extracting(DailyDietLogSummaryResponse::id)
+                .containsExactly(100L, 99L);
+        assertThat(summaries).extracting(DailyDietLogSummaryResponse::patientEmail)
+                .containsExactly("beta@example.com", "alpha@example.com");
+        verify(accessControl, never()).canAccessPatientProfile(any(), any());
+    }
+
+    @Test
     void clinicalPatientOptionsReturnAllPatientsForAdmin() {
         var admin = user(3L, "admin@example.com", RoleName.ADMIN);
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));

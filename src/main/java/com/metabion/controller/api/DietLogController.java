@@ -54,7 +54,7 @@ public class DietLogController {
     }
 
     @GetMapping("/api/clinical/diet-logs")
-    public List<DailyDietLogSummaryResponse> clinicalList(@RequestParam Long patientProfileId,
+    public List<DailyDietLogSummaryResponse> clinicalList(@RequestParam(required = false) Long patientProfileId,
                                                           @RequestParam LocalDate from,
                                                           @RequestParam LocalDate to,
                                                           Authentication authentication) {

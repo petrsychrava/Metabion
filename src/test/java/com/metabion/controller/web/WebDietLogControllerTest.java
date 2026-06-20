@@ -43,6 +43,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -225,27 +226,39 @@ class WebDietLogControllerTest {
     }
 
     @Test
-    void clinicalListRendersAndOnlyCallsServiceWhenAllFiltersPresent() throws Exception {
+    void clinicalListRendersDefaultRangeAndAllPatientsOnInitialOpen() throws Exception {
+        var today = LocalDate.now();
+        var defaultFrom = today.minusDays(6);
         when(dietLogService.listClinicalPatientOptions(any()))
                 .thenReturn(List.of(
                         new PatientOptionResponse(42L, "patient@example.com"),
                         new PatientOptionResponse(43L, "second@example.com")));
+        when(dietLogService.listClinicalLogs(any(), isNull(), eq(defaultFrom), eq(today)))
+                .thenReturn(List.of(summaryResponse()));
 
         mvc.perform(get("/app/clinical/diet-logs")
                         .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name())))
                 .andExpect(status().isOk())
                 .andExpect(view().name("clinical-diet-logs"))
-                .andExpect(model().attributeExists("logs"))
+                .andExpect(model().attribute("from", defaultFrom))
+                .andExpect(model().attribute("to", today))
+                .andExpect(model().attribute("logs", List.of(summaryResponse())))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
                 .andExpect(content().string(containsString("<select name=\"patientProfileId\"")))
                 .andExpect(content().string(containsString("value=\"42\"")))
                 .andExpect(content().string(containsString("patient@example.com")))
                 .andExpect(content().string(containsString("Profile #42")))
-                .andExpect(content().string(containsString("data-default-range-days=\"30\"")))
-                .andExpect(content().string(containsString("setDate(today.getDate() - defaultRangeDays)")))
+                .andExpect(content().string(containsString("data-default-range-days=\"7\"")))
+                .andExpect(content().string(containsString("defaultRangeDays - 1")))
                 .andExpect(content().string(not(containsString("type=\"number\" name=\"patientProfileId\""))));
 
-        verify(dietLogService, never()).listClinicalLogs(any(), any(), any(), any());
+        verify(dietLogService).listClinicalLogs(any(), isNull(), eq(defaultFrom), eq(today));
+    }
+
+    @Test
+    void clinicalListUsesSubmittedPatientAndRangeWhenPresent() throws Exception {
+        when(dietLogService.listClinicalPatientOptions(any()))
+                .thenReturn(List.of(new PatientOptionResponse(42L, "patient@example.com")));
 
         when(dietLogService.listClinicalLogs(
                 any(),

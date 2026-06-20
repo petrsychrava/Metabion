@@ -36,6 +36,7 @@ public class WebDietLogController {
     private static final String PATIENT_ACTIVE_PATH = "/app/diet-logs";
     private static final String CLINICAL_ACTIVE_PATH = "/app/clinical/diet-logs";
     private static final int MIN_FORM_ROWS = 3;
+    private static final int CLINICAL_DEFAULT_RANGE_DAYS = 7;
 
     private final DietLogService dietLogService;
     private final AppMenuCatalog appMenuCatalog;
@@ -94,16 +95,15 @@ public class WebDietLogController {
                                @RequestParam(required = false) LocalDate to,
                                Model model,
                                Authentication authentication) {
+        var selectedTo = to == null ? LocalDate.now() : to;
+        var selectedFrom = from == null ? selectedTo.minusDays(CLINICAL_DEFAULT_RANGE_DAYS - 1L) : from;
         addOptions(model);
         model.addAttribute("patientProfileId", patientProfileId);
         model.addAttribute("patientOptions", dietLogService.listClinicalPatientOptions(authentication));
-        model.addAttribute("from", from);
-        model.addAttribute("to", to);
-        if (patientProfileId != null && from != null && to != null) {
-            model.addAttribute("logs", dietLogService.listClinicalLogs(authentication, patientProfileId, from, to));
-        } else {
-            model.addAttribute("logs", List.of());
-        }
+        model.addAttribute("from", selectedFrom);
+        model.addAttribute("to", selectedTo);
+        model.addAttribute("clinicalDefaultRangeDays", String.valueOf(CLINICAL_DEFAULT_RANGE_DAYS));
+        model.addAttribute("logs", dietLogService.listClinicalLogs(authentication, patientProfileId, selectedFrom, selectedTo));
         addAppShell(model, authentication, CLINICAL_ACTIVE_PATH);
         return "clinical-diet-logs";
     }
@@ -244,15 +244,15 @@ public class WebDietLogController {
     }
 
     private void addOptions(Model model) {
-        model.addAttribute("adherenceOptions", DietAdherenceLevel.values());
-        model.addAttribute("appetiteOptions", AppetiteLevel.values());
-        model.addAttribute("mealTypes", MealType.values());
-        model.addAttribute("foodCategories", FoodCategory.values());
-        model.addAttribute("deviationCategories", DietDeviationCategory.values());
-        model.addAttribute("deviationSeverities", DietDeviationSeverity.values());
-        model.addAttribute("measurementTypes", MeasurementType.values());
-        model.addAttribute("measurementUnits", MeasurementUnit.values());
-        model.addAttribute("measurementContexts", MeasurementContext.values());
+        model.addAttribute("adherenceOptions", List.of(DietAdherenceLevel.values()));
+        model.addAttribute("appetiteOptions", List.of(AppetiteLevel.values()));
+        model.addAttribute("mealTypes", List.of(MealType.values()));
+        model.addAttribute("foodCategories", List.of(FoodCategory.values()));
+        model.addAttribute("deviationCategories", List.of(DietDeviationCategory.values()));
+        model.addAttribute("deviationSeverities", List.of(DietDeviationSeverity.values()));
+        model.addAttribute("measurementTypes", List.of(MeasurementType.values()));
+        model.addAttribute("measurementUnits", List.of(MeasurementUnit.values()));
+        model.addAttribute("measurementContexts", List.of(MeasurementContext.values()));
     }
 
     private void addAppShell(Model model, Authentication authentication, String activePath) {
