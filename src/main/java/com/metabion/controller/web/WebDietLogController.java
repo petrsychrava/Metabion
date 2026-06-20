@@ -96,6 +96,7 @@ public class WebDietLogController {
                                Authentication authentication) {
         addOptions(model);
         model.addAttribute("patientProfileId", patientProfileId);
+        model.addAttribute("patientOptions", dietLogService.listClinicalPatientOptions(authentication));
         model.addAttribute("from", from);
         model.addAttribute("to", to);
         if (patientProfileId != null && from != null && to != null) {

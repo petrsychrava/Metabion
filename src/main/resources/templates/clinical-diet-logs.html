@@ -10,9 +10,16 @@
     </header>
 
     <section class="panel app-panel">
-        <form class="form" th:action="@{/app/clinical/diet-logs}" method="get">
-            <label class="field"><span th:text="#{dietLogs.patientProfileId}">Patient profile ID</span>
-                <input type="number" name="patientProfileId" th:value="${patientProfileId}">
+        <form id="clinical-diet-log-filter" class="form" th:action="@{/app/clinical/diet-logs}" method="get"
+              data-default-range-days="30">
+            <label class="field"><span th:text="#{dietLogs.patient}">Patient</span>
+                <select name="patientProfileId">
+                    <option value="" th:selected="${patientProfileId == null}" th:text="#{dietLogs.selectPatient}">Select patient</option>
+                    <option th:each="patient : ${patientOptions}"
+                            th:value="${patient.id()}"
+                            th:selected="${patient.id() == patientProfileId}"
+                            th:text="#{dietLogs.patientOption(${patient.email()}, ${patient.id()})}">patient@example.com (Profile #42)</option>
+                </select>
             </label>
             <label class="field"><span th:text="#{dietLogs.from}">From</span>
                 <input type="date" name="from" th:value="${from}">
@@ -21,6 +28,32 @@
                 <input type="date" name="to" th:value="${to}">
             </label>
             <button type="submit" th:text="#{dietLogs.filter}">Filter</button>
+            <script>
+                document.addEventListener('DOMContentLoaded', () => {
+                    const form = document.getElementById('clinical-diet-log-filter');
+                    if (!form) return;
+
+                    const from = form.querySelector('input[name="from"]');
+                    const to = form.querySelector('input[name="to"]');
+                    const defaultRangeDays = Number.parseInt(form.dataset.defaultRangeDays, 10);
+                    if (!from || !to || Number.isNaN(defaultRangeDays)) return;
+
+                    const formatDate = (date) => {
+                        const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+                        return local.toISOString().slice(0, 10);
+                    };
+                    const today = new Date();
+                    const defaultFrom = new Date(today);
+                    defaultFrom.setDate(today.getDate() - defaultRangeDays);
+
+                    if (!from.value) {
+                        from.value = formatDate(defaultFrom);
+                    }
+                    if (!to.value) {
+                        to.value = formatDate(today);
+                    }
+                });
+            </script>
         </form>
     </section>
 

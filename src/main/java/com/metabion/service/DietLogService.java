@@ -11,9 +11,11 @@ import com.metabion.dto.DailyDietLogResponse;
 import com.metabion.dto.DailyDietLogSummaryResponse;
 import com.metabion.dto.DailyMeasurementEntryRequest;
 import com.metabion.dto.DailyMeasurementEntryResponse;
+import com.metabion.dto.PatientOptionResponse;
 import com.metabion.repository.DailyDietLogRepository;
 import com.metabion.repository.DailyMeasurementEntryRepository;
 import com.metabion.repository.PatientProfileRepository;
+import com.metabion.repository.StaffProfileRepository;
 import com.metabion.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
@@ -36,6 +38,7 @@ public class DietLogService {
 
     private final UserRepository users;
     private final PatientProfileRepository patientProfiles;
+    private final StaffProfileRepository staffProfiles;
     private final DailyDietLogRepository dailyDietLogs;
     private final DailyMeasurementEntryRepository measurements;
     private final AccessControlService accessControl;
@@ -47,6 +50,7 @@ public class DietLogService {
 
     public DietLogService(UserRepository users,
                           PatientProfileRepository patientProfiles,
+                          StaffProfileRepository staffProfiles,
                           DailyDietLogRepository dailyDietLogs,
                           DailyMeasurementEntryRepository measurements,
                           AccessControlService accessControl,
@@ -57,6 +61,7 @@ public class DietLogService {
                           DietLogPhotoService dietLogPhotoService) {
         this.users = users;
         this.patientProfiles = patientProfiles;
+        this.staffProfiles = staffProfiles;
         this.dailyDietLogs = dailyDietLogs;
         this.measurements = measurements;
         this.accessControl = accessControl;
@@ -143,6 +148,17 @@ public class DietLogService {
         return logs.stream()
                 .map(log -> responseAssembler.summary(log, measurementCounts.getOrDefault(log.getId(), 0)))
                 .toList();
+    }
+
+    public List<PatientOptionResponse> listClinicalPatientOptions(Authentication authentication) {
+        var currentUser = currentUser(authentication);
+        requireClinicalReader(currentUser);
+        if (currentUser.hasRole(RoleName.ADMIN)) {
+            return patientProfiles.findAllPatientOptions();
+        }
+        return staffProfiles.findByUserId(currentUser.getId())
+                .map(staffProfile -> patientProfiles.findAccessiblePatientOptionsForStaff(staffProfile.getId()))
+                .orElseGet(List::of);
     }
 
     public DailyDietLogResponse getClinicalLog(Authentication authentication, Long id) {

@@ -15,13 +15,16 @@ import com.metabion.domain.MeasurementType;
 import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
+import com.metabion.domain.StaffProfile;
 import com.metabion.domain.User;
 import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.dto.DailyDietLogSummaryResponse;
 import com.metabion.dto.DailyMeasurementEntryRequest;
+import com.metabion.dto.PatientOptionResponse;
 import com.metabion.repository.DailyDietLogRepository;
 import com.metabion.repository.DailyMeasurementEntryRepository;
 import com.metabion.repository.PatientProfileRepository;
+import com.metabion.repository.StaffProfileRepository;
 import com.metabion.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,6 +59,7 @@ class DietLogServiceTest {
 
     @Mock UserRepository users;
     @Mock PatientProfileRepository patientProfiles;
+    @Mock StaffProfileRepository staffProfiles;
     @Mock DailyDietLogRepository dailyDietLogs;
     @Mock DailyMeasurementEntryRepository measurements;
     @Mock AccessControlService accessControl;
@@ -72,6 +76,7 @@ class DietLogServiceTest {
         service = new DietLogService(
                 users,
                 patientProfiles,
+                staffProfiles,
                 dailyDietLogs,
                 measurements,
                 accessControl,
@@ -425,6 +430,41 @@ class DietLogServiceTest {
                 LocalDate.of(2026, 6, 30));
 
         assertThat(summaries).extracting(DailyDietLogSummaryResponse::id).containsExactly(99L);
+    }
+
+    @Test
+    void clinicalPatientOptionsReturnAllPatientsForAdmin() {
+        var admin = user(3L, "admin@example.com", RoleName.ADMIN);
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(patientProfiles.findAllPatientOptions())
+                .thenReturn(List.of(
+                        new PatientOptionResponse(20L, "alpha@example.com"),
+                        new PatientOptionResponse(21L, "beta@example.com")));
+
+        var options = service.listClinicalPatientOptions(auth("admin@example.com"));
+
+        assertThat(options).extracting(PatientOptionResponse::email)
+                .containsExactly("alpha@example.com", "beta@example.com");
+        verify(patientProfiles).findAllPatientOptions();
+        verify(patientProfiles, never()).findAccessiblePatientOptionsForStaff(any());
+    }
+
+    @Test
+    void clinicalPatientOptionsReturnAssignedPatientsForStaff() {
+        var reviewer = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var staffProfile = new StaffProfile(reviewer);
+        staffProfile.setId(55L);
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(reviewer));
+        when(staffProfiles.findByUserId(2L)).thenReturn(Optional.of(staffProfile));
+        when(patientProfiles.findAccessiblePatientOptionsForStaff(55L))
+                .thenReturn(List.of(new PatientOptionResponse(20L, "assigned@example.com")));
+
+        var options = service.listClinicalPatientOptions(auth("doctor@example.com"));
+
+        assertThat(options).extracting(PatientOptionResponse::id)
+                .containsExactly(20L);
+        verify(patientProfiles).findAccessiblePatientOptionsForStaff(55L);
+        verify(patientProfiles, never()).findAllPatientOptions();
     }
 
     @Test

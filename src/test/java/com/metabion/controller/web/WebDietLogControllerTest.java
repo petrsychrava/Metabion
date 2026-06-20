@@ -14,6 +14,7 @@ import com.metabion.domain.RoleName;
 import com.metabion.dto.DailyDietLogResponse;
 import com.metabion.dto.DailyDietLogSummaryResponse;
 import com.metabion.dto.DailyMeasurementEntryResponse;
+import com.metabion.dto.PatientOptionResponse;
 import com.metabion.service.DietLogService;
 import com.metabion.service.SecurityService;
 import com.metabion.service.UserPreferenceService;
@@ -225,12 +226,24 @@ class WebDietLogControllerTest {
 
     @Test
     void clinicalListRendersAndOnlyCallsServiceWhenAllFiltersPresent() throws Exception {
+        when(dietLogService.listClinicalPatientOptions(any()))
+                .thenReturn(List.of(
+                        new PatientOptionResponse(42L, "patient@example.com"),
+                        new PatientOptionResponse(43L, "second@example.com")));
+
         mvc.perform(get("/app/clinical/diet-logs")
                         .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name())))
                 .andExpect(status().isOk())
                 .andExpect(view().name("clinical-diet-logs"))
                 .andExpect(model().attributeExists("logs"))
-                .andExpect(content().string(containsString("class=\"sidebar\"")));
+                .andExpect(content().string(containsString("class=\"sidebar\"")))
+                .andExpect(content().string(containsString("<select name=\"patientProfileId\"")))
+                .andExpect(content().string(containsString("value=\"42\"")))
+                .andExpect(content().string(containsString("patient@example.com")))
+                .andExpect(content().string(containsString("Profile #42")))
+                .andExpect(content().string(containsString("data-default-range-days=\"30\"")))
+                .andExpect(content().string(containsString("setDate(today.getDate() - defaultRangeDays)")))
+                .andExpect(content().string(not(containsString("type=\"number\" name=\"patientProfileId\""))));
 
         verify(dietLogService, never()).listClinicalLogs(any(), any(), any(), any());
 
