@@ -2,7 +2,9 @@ package com.metabion.controller.web;
 
 import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.RoleName;
+import com.metabion.domain.Sex;
 import com.metabion.domain.ThemePreference;
+import com.metabion.dto.PatientProfileForm;
 import com.metabion.dto.LoginForm;
 import com.metabion.dto.LoginResponse;
 import com.metabion.exception.InvalidTokenException;
@@ -243,6 +245,8 @@ class WebAuthControllerTest {
         when(appMenuCatalog.sidebarItems(auth)).thenReturn(sidebarItems);
         when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.SYSTEM);
         when(userPreferenceService.currentGlucoseUnitPreference(auth)).thenReturn(MeasurementUnit.MG_DL);
+        when(userPreferenceService.currentPatientProfileForm(auth)).thenReturn(
+                new PatientProfileForm(java.time.LocalDate.of(1990, 1, 1), Sex.FEMALE, "CZ", "Europe/Prague"));
 
         mvc.perform(get("/app/account").principal(auth))
                 .andExpect(status().isOk())
@@ -250,11 +254,38 @@ class WebAuthControllerTest {
                 .andExpect(model().attribute("email", "user@example.com"))
                 .andExpect(model().attribute("roles", List.of(RoleName.PATIENT.name())))
                 .andExpect(model().attribute("patientAccount", true))
+                .andExpect(model().attributeExists("patientProfileForm"))
                 .andExpect(model().attribute("glucoseUnitPreference", MeasurementUnit.MG_DL))
                 .andExpect(model().attribute("appMenuItems", sidebarItems))
                 .andExpect(model().attribute("activePath", "/app/account"))
-                .andExpect(model().attribute("themePreference", ThemePreference.SYSTEM));
+                .andExpect(model().attribute("themePreference", ThemePreference.SYSTEM))
+                .andExpect(content().string(containsString("name=\"dateOfBirth\"")))
+                .andExpect(content().string(containsString("value=\"1990-01-01\"")))
+                .andExpect(content().string(containsString("id=\"sex\" name=\"sex\"")))
+                .andExpect(content().string(containsString("id=\"countryRegion\" name=\"countryRegion\" value=\"CZ\"")))
+                .andExpect(content().string(containsString("id=\"timezone\" name=\"timezone\" value=\"Europe/Prague\"")));
         verify(appMenuCatalog).sidebarItems(auth);
+    }
+
+    @Test
+    void account_profile_update_persists_patient_profile_and_redirects() throws Exception {
+        var auth = new TestingAuthenticationToken("user@example.com", "password", RoleName.PATIENT.authority());
+        auth.setAuthenticated(true);
+
+        mvc.perform(post("/app/account/profile").principal(auth)
+                        .param("dateOfBirth", "1990-01-01")
+                        .param("sex", "FEMALE")
+                        .param("countryRegion", "CZ")
+                        .param("timezone", "Europe/Prague"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app/account"));
+
+        verify(userPreferenceService).updatePatientProfile(
+                org.mockito.ArgumentMatchers.eq(auth),
+                argThat(form -> java.time.LocalDate.of(1990, 1, 1).equals(form.dateOfBirth())
+                        && form.sex() == Sex.FEMALE
+                        && "CZ".equals(form.countryRegion())
+                        && "Europe/Prague".equals(form.timezone())));
     }
 
     @Test

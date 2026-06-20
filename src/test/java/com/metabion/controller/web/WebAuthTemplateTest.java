@@ -4,7 +4,9 @@ import com.metabion.config.RateLimitingFilter;
 import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.RoleName;
+import com.metabion.domain.Sex;
 import com.metabion.domain.ThemePreference;
+import com.metabion.dto.PatientProfileForm;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.SecurityService;
 import com.metabion.service.StaffInvitationService;
@@ -22,6 +24,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -215,6 +219,9 @@ class WebAuthTemplateTest {
         patient.setAuthenticated(true);
         when(userPreferenceService.currentThemePreference(patient)).thenReturn(ThemePreference.SYSTEM);
         when(userPreferenceService.currentLanguagePreference(patient)).thenReturn(LanguagePreference.CS);
+        when(userPreferenceService.currentPatientProfileForm(patient)).thenReturn(
+                new PatientProfileForm(LocalDate.of(1990, 1, 1), Sex.FEMALE, "CZ", "Europe/Prague"));
+        when(userPreferenceService.currentGlucoseUnitPreference(patient)).thenReturn(MeasurementUnit.MG_DL);
 
         mvc.perform(get("/app/account").principal(patient).with(csrf()))
                 .andExpect(status().isOk())
@@ -256,6 +263,8 @@ class WebAuthTemplateTest {
         when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.DARK);
         when(userPreferenceService.currentLanguagePreference(auth)).thenReturn(LanguagePreference.EN);
         when(userPreferenceService.currentGlucoseUnitPreference(auth)).thenReturn(MeasurementUnit.MG_DL);
+        when(userPreferenceService.currentPatientProfileForm(auth)).thenReturn(
+                new PatientProfileForm(LocalDate.of(1990, 1, 1), Sex.FEMALE, "CZ", "Europe/Prague"));
 
         var response = mvc.perform(get("/app/account").principal(auth).with(csrf()))
                 .andExpect(status().isOk())
@@ -263,6 +272,9 @@ class WebAuthTemplateTest {
                 .andExpect(content().string(containsString("user@example.com")))
                 .andExpect(content().string(containsString("PATIENT")))
                 .andExpect(content().string(containsString("class=\"active\"")))
+                .andExpect(content().string(containsString("/app/account/profile")))
+                .andExpect(content().string(containsString("name=\"dateOfBirth\"")))
+                .andExpect(content().string(containsString("id=\"sex\" name=\"sex\"")))
                 .andExpect(content().string(containsString("name=\"themePreference\"")))
                 .andExpect(content().string(containsString("id=\"themePreference\"")))
                 .andExpect(content().string(containsString("selected=\"selected\">Dark")))

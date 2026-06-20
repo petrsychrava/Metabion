@@ -4,10 +4,9 @@ import com.metabion.domain.AdvancedTherapyExposure;
 import com.metabion.domain.DiseaseActivityEstimate;
 import com.metabion.domain.IbdDiagnosisType;
 import com.metabion.domain.OnboardingReviewStatus;
-import com.metabion.domain.Sex;
 import com.metabion.domain.SteroidUse;
+import com.metabion.dto.OnboardingForm;
 import com.metabion.dto.OnboardingReviewRequest;
-import com.metabion.dto.OnboardingSubmissionRequest;
 import com.metabion.dto.OnboardingSubmissionResponse;
 import com.metabion.service.OnboardingService;
 import com.metabion.service.UserPreferenceService;
@@ -45,9 +44,8 @@ public class WebOnboardingController {
                              Authentication authentication,
                              Model model) {
         var latest = latestOrNull(authentication, context);
-        model.addAttribute("onboardingForm", latest == null ? emptyForm(context) : formFromLatest(context, latest));
+        model.addAttribute("onboardingForm", emptyForm(context));
         model.addAttribute("context", context);
-        model.addAttribute("profileLocked", latest != null);
         model.addAttribute("latest", latest);
         addOptions(model);
         addAppShell(model, authentication, "/app/onboarding");
@@ -55,7 +53,7 @@ public class WebOnboardingController {
     }
 
     @PostMapping("/app/onboarding")
-    public String submit(@Valid @ModelAttribute("onboardingForm") OnboardingSubmissionRequest form,
+    public String submit(@Valid @ModelAttribute("onboardingForm") OnboardingForm form,
                          BindingResult bindingResult,
                          Authentication authentication,
                          Model model,
@@ -65,11 +63,10 @@ public class WebOnboardingController {
             model.addAttribute("context", form.onboardingContext());
             addAppShell(model, authentication, "/app/onboarding");
             var latest = latestOrNull(authentication, form.onboardingContext());
-            model.addAttribute("profileLocked", latest != null);
             model.addAttribute("latest", latest);
             return "onboarding";
         }
-        onboardingService.submitForCurrentPatient(authentication, form);
+        onboardingService.submitWebForCurrentPatient(authentication, form);
         redirectAttributes.addAttribute("context", OnboardingService.normalizeContext(form.onboardingContext()));
         return "redirect:/app/onboarding";
     }
@@ -125,37 +122,9 @@ public class WebOnboardingController {
         return "redirect:/app/clinical/onboarding/" + id;
     }
 
-    private OnboardingSubmissionRequest emptyForm(String context) {
-        return new OnboardingSubmissionRequest(
+    private OnboardingForm emptyForm(String context) {
+        return new OnboardingForm(
                 context,
-                null,
-                null,
-                "",
-                "",
-                null,
-                null,
-                "",
-                "",
-                null,
-                "",
-                null,
-                null,
-                "",
-                null,
-                null,
-                null,
-                null,
-                null,
-                "");
-    }
-
-    private OnboardingSubmissionRequest formFromLatest(String context, OnboardingSubmissionResponse latest) {
-        return new OnboardingSubmissionRequest(
-                context,
-                latest.dateOfBirth(),
-                latest.sex(),
-                latest.countryRegion(),
-                latest.timezone(),
                 null,
                 null,
                 "",
@@ -174,7 +143,6 @@ public class WebOnboardingController {
     }
 
     private void addOptions(Model model) {
-        model.addAttribute("sexOptions", Sex.values());
         model.addAttribute("diagnosisTypes", IbdDiagnosisType.values());
         model.addAttribute("activityOptions", DiseaseActivityEstimate.values());
         model.addAttribute("steroidOptions", SteroidUse.values());

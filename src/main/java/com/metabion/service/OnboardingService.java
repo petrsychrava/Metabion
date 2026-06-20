@@ -5,6 +5,7 @@ import com.metabion.domain.OnboardingSubmission;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
+import com.metabion.dto.OnboardingForm;
 import com.metabion.dto.OnboardingReviewRequest;
 import com.metabion.dto.OnboardingSubmissionRequest;
 import com.metabion.dto.OnboardingSubmissionResponse;
@@ -45,6 +46,20 @@ public class OnboardingService {
     public OnboardingSubmissionResponse submitForCurrentPatient(Authentication authentication,
                                                                OnboardingSubmissionRequest request) {
         var patient = currentPatientProfileForSubmission(authentication);
+        return submit(patient, request);
+    }
+
+    public OnboardingSubmissionResponse submitWebForCurrentPatient(Authentication authentication,
+                                                                  OnboardingForm form) {
+        var patient = currentPatientProfileForSubmission(authentication);
+        if (!hasStablePatientProfileFields(patient)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Complete patient profile before submitting onboarding");
+        }
+        return submit(patient, requestFrom(form, patient));
+    }
+
+    private OnboardingSubmissionResponse submit(PatientProfile patient, OnboardingSubmissionRequest request) {
         var context = normalizeContext(request.onboardingContext());
         var nextVersion = submissions.maxVersion(patient.getId(), context) + 1;
         var submission = new OnboardingSubmission(patient, context, nextVersion);
@@ -217,5 +232,29 @@ public class OnboardingService {
                 && patient.getSex() != null
                 && trimToNull(patient.getCountryRegion()) != null
                 && trimToNull(patient.getTimezone()) != null;
+    }
+
+    private static OnboardingSubmissionRequest requestFrom(OnboardingForm form, PatientProfile patient) {
+        return new OnboardingSubmissionRequest(
+                form.onboardingContext(),
+                patient.getDateOfBirth(),
+                patient.getSex(),
+                patient.getCountryRegion(),
+                patient.getTimezone(),
+                form.diagnosisType(),
+                form.diagnosisYear(),
+                form.diseaseLocation(),
+                form.diseaseBehavior(),
+                form.activityEstimate(),
+                form.currentMedications(),
+                form.steroidUse(),
+                form.advancedTherapyExposure(),
+                form.medicationNotes(),
+                form.labsCollectedAt(),
+                form.crpMgL(),
+                form.fecalCalprotectinUgG(),
+                form.hemoglobinGDl(),
+                form.albuminGDl(),
+                form.labNotes());
     }
 }

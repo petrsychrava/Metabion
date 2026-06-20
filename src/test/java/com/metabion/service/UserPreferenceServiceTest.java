@@ -4,8 +4,10 @@ import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
+import com.metabion.domain.Sex;
 import com.metabion.domain.ThemePreference;
 import com.metabion.domain.User;
+import com.metabion.dto.PatientProfileForm;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +21,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Optional;
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -121,6 +124,38 @@ class UserPreferenceServiceTest {
     @Test
     void updateGlucoseUnitPreferenceRejectsNullPreference() {
         assertStatus(() -> service.updateGlucoseUnitPreference(auth, null), HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void currentPatientProfileFormReturnsSavedProfileFields() {
+        patientProfile.setDateOfBirth(LocalDate.of(1990, 1, 1));
+        patientProfile.setSex(Sex.FEMALE);
+        patientProfile.setCountryRegion("CZ");
+        patientProfile.setTimezone("Europe/Prague");
+        when(users.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patientProfile));
+
+        var form = service.currentPatientProfileForm(auth);
+
+        assertThat(form.dateOfBirth()).isEqualTo(LocalDate.of(1990, 1, 1));
+        assertThat(form.sex()).isEqualTo(Sex.FEMALE);
+        assertThat(form.countryRegion()).isEqualTo("CZ");
+        assertThat(form.timezone()).isEqualTo("Europe/Prague");
+    }
+
+    @Test
+    void updatePatientProfilePersistsProfileFields() {
+        when(users.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patientProfile));
+
+        service.updatePatientProfile(auth,
+                new PatientProfileForm(LocalDate.of(1990, 1, 1), Sex.FEMALE, " CZ ", " Europe/Prague "));
+
+        assertThat(patientProfile.getDateOfBirth()).isEqualTo(LocalDate.of(1990, 1, 1));
+        assertThat(patientProfile.getSex()).isEqualTo(Sex.FEMALE);
+        assertThat(patientProfile.getCountryRegion()).isEqualTo("CZ");
+        assertThat(patientProfile.getTimezone()).isEqualTo("Europe/Prague");
+        verify(patientProfiles).save(patientProfile);
     }
 
     @Test

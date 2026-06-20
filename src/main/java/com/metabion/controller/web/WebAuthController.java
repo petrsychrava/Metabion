@@ -3,11 +3,13 @@ package com.metabion.controller.web;
 import com.metabion.dto.ForgotPasswordRequest;
 import com.metabion.dto.LoginForm;
 import com.metabion.dto.LoginRequest;
+import com.metabion.dto.PatientProfileForm;
 import com.metabion.dto.RegisterRequest;
 import com.metabion.dto.ResetPasswordRequest;
 import com.metabion.config.RateLimitingFilter;
 import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.RoleName;
+import com.metabion.domain.Sex;
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.service.SecurityService;
 import com.metabion.service.UserPreferenceService;
@@ -200,12 +202,34 @@ public class WebAuthController {
         model.addAttribute("email", authentication.getName());
         model.addAttribute("roles", roleNames);
         if (roleNames.contains(RoleName.PATIENT.name())) {
-            model.addAttribute("patientAccount", true);
+            model.addAttribute("patientAccount", Boolean.TRUE);
+            model.addAttribute("patientProfileForm", userPreferenceService.currentPatientProfileForm(authentication));
+            model.addAttribute("sexOptions", List.of(Sex.values()));
             model.addAttribute("glucoseUnitPreference", userPreferenceService.currentGlucoseUnitPreference(authentication));
-            model.addAttribute("measurementUnits", MeasurementUnit.values());
+            model.addAttribute("measurementUnits", List.of(MeasurementUnit.values()));
         }
         addAppShell(model, authentication, "/app/account");
         return "account";
+    }
+
+    @PostMapping("/app/account/profile")
+    public String updatePatientProfile(@Valid @ModelAttribute("patientProfileForm") PatientProfileForm form,
+                                       BindingResult bindingResult,
+                                       Authentication authentication,
+                                       Model model) {
+        if (bindingResult.hasErrors()) {
+            var roleNames = roles(authentication);
+            model.addAttribute("email", authentication.getName());
+            model.addAttribute("roles", roleNames);
+            model.addAttribute("patientAccount", Boolean.TRUE);
+            model.addAttribute("sexOptions", List.of(Sex.values()));
+            model.addAttribute("glucoseUnitPreference", userPreferenceService.currentGlucoseUnitPreference(authentication));
+            model.addAttribute("measurementUnits", List.of(MeasurementUnit.values()));
+            addAppShell(model, authentication, "/app/account");
+            return "account";
+        }
+        userPreferenceService.updatePatientProfile(authentication, form);
+        return "redirect:/app/account";
     }
 
     private boolean isAuthenticated(Authentication authentication) {

@@ -3,7 +3,9 @@ package com.metabion.controller.web;
 import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.RoleName;
+import com.metabion.domain.Sex;
 import com.metabion.domain.ThemePreference;
+import com.metabion.dto.PatientProfileForm;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -22,6 +24,7 @@ import org.thymeleaf.web.servlet.JakartaServletWebApplication;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -53,6 +56,9 @@ class ThymeleafAvailabilityTest {
         model.setVariable("activePath", "/app/account");
         model.setVariable("themePreference", ThemePreference.SYSTEM);
         model.setVariable("patientAccount", true);
+        model.setVariable("patientProfileForm",
+                new PatientProfileForm(LocalDate.of(1990, 1, 1), Sex.FEMALE, "CZ", "Europe/Prague"));
+        model.setVariable("sexOptions", List.of(Sex.FEMALE, Sex.MALE));
         model.setVariable("glucoseUnitPreference", MeasurementUnit.MG_DL);
         model.setVariable("measurementUnits", List.of(MeasurementUnit.MMOL_L, MeasurementUnit.MG_DL));
         model.setVariable("currentLanguage", LanguagePreference.CS);
