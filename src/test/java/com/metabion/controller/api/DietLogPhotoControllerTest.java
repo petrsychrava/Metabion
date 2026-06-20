@@ -1,5 +1,6 @@
 package com.metabion.controller.api;
 
+import com.metabion.domain.RoleName;
 import com.metabion.dto.DietLogPhotoUploadResponse;
 import com.metabion.dto.FileStorageResource;
 import com.metabion.service.DietLogPhotoService;
@@ -83,7 +84,7 @@ class DietLogPhotoControllerTest {
 
         mvc.perform(multipart("/api/diet-log-photos/uploads")
                         .file(new MockMultipartFile("file", "plate.jpg", "image/jpeg", new byte[]{1, 2, 3, 4}))
-                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.uploadId").value(50))
@@ -98,7 +99,7 @@ class DietLogPhotoControllerTest {
                         new FileStorageResource(new ByteArrayInputStream(new byte[]{1, 2, 3}), 3)));
 
         mvc.perform(get("/api/diet-log-photos/50/content")
-                        .with(user("doctor@example.com").roles("PHYSICIAN")))
+                        .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name())))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.IMAGE_JPEG))
                 .andExpect(content().bytes(new byte[]{1, 2, 3}));

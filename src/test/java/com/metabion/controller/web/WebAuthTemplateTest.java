@@ -3,6 +3,7 @@ package com.metabion.controller.web;
 import com.metabion.config.RateLimitingFilter;
 import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.MeasurementUnit;
+import com.metabion.domain.RoleName;
 import com.metabion.domain.ThemePreference;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.SecurityService;
@@ -168,7 +169,7 @@ class WebAuthTemplateTest {
 
     @Test
     void app_template_renders_authenticated_shell() throws Exception {
-        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        var auth = new TestingAuthenticationToken("user@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
         when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.DARK);
 
@@ -191,7 +192,7 @@ class WebAuthTemplateTest {
 
     @Test
     void authenticated_language_preference_wins_over_locale_cookie() throws Exception {
-        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        var auth = new TestingAuthenticationToken("user@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
         when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.DARK);
         when(userPreferenceService.currentLanguagePreference(auth)).thenReturn(LanguagePreference.CS);
@@ -210,7 +211,7 @@ class WebAuthTemplateTest {
 
     @Test
     void authenticated_account_and_staff_invitation_pages_render_in_czech() throws Exception {
-        var patient = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        var patient = new TestingAuthenticationToken("user@example.com", "password", RoleName.PATIENT.authority());
         patient.setAuthenticated(true);
         when(userPreferenceService.currentThemePreference(patient)).thenReturn(ThemePreference.SYSTEM);
         when(userPreferenceService.currentLanguagePreference(patient)).thenReturn(LanguagePreference.CS);
@@ -222,7 +223,7 @@ class WebAuthTemplateTest {
                 .andExpect(content().string(containsString("Profil")))
                 .andExpect(content().string(containsString("E-mail")));
 
-        var admin = new TestingAuthenticationToken("admin@example.com", "password", "ROLE_ADMIN");
+        var admin = new TestingAuthenticationToken("admin@example.com", "password", RoleName.ADMIN.authority());
         admin.setAuthenticated(true);
         when(userPreferenceService.currentThemePreference(admin)).thenReturn(ThemePreference.SYSTEM);
         when(userPreferenceService.currentLanguagePreference(admin)).thenReturn(LanguagePreference.CS);
@@ -237,7 +238,7 @@ class WebAuthTemplateTest {
 
     @Test
     void admin_app_template_renders_admin_dashboard_items() throws Exception {
-        var auth = new TestingAuthenticationToken("admin@example.com", "password", "ROLE_ADMIN");
+        var auth = new TestingAuthenticationToken("admin@example.com", "password", RoleName.ADMIN.authority());
         auth.setAuthenticated(true);
 
         mvc.perform(get("/app").principal(auth).with(csrf()))
@@ -250,7 +251,7 @@ class WebAuthTemplateTest {
 
     @Test
     void account_template_renders_authenticated_profile() throws Exception {
-        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        var auth = new TestingAuthenticationToken("user@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
         when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.DARK);
         when(userPreferenceService.currentLanguagePreference(auth)).thenReturn(LanguagePreference.EN);
@@ -283,7 +284,7 @@ class WebAuthTemplateTest {
 
     @Test
     void admin_staff_invitation_template_renders_form() throws Exception {
-        var auth = new TestingAuthenticationToken("admin@example.com", "password", "ROLE_ADMIN");
+        var auth = new TestingAuthenticationToken("admin@example.com", "password", RoleName.ADMIN.authority());
         auth.setAuthenticated(true);
 
         mvc.perform(get("/app/staff-invitations/new").principal(auth).with(csrf()))

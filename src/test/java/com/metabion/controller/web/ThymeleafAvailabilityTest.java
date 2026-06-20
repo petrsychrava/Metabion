@@ -2,6 +2,7 @@ package com.metabion.controller.web;
 
 import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.MeasurementUnit;
+import com.metabion.domain.RoleName;
 import com.metabion.domain.ThemePreference;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,7 +59,7 @@ class ThymeleafAvailabilityTest {
         model.setVariable("supportedLanguages", List.of(LanguagePreference.EN, LanguagePreference.CS));
         model.setVariable("appMenuItems", List.of());
         model.setVariable("email", "patient@example.com");
-        model.setVariable("roles", List.of("PATIENT"));
+        model.setVariable("roles", List.of(RoleName.PATIENT.name()));
         model.setVariable("dashboardItems", List.of());
         model.setVariable("_csrf", new CsrfToken() {
             @Override

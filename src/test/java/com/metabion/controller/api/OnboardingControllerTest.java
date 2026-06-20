@@ -4,6 +4,7 @@ import com.metabion.domain.AdvancedTherapyExposure;
 import com.metabion.domain.DiseaseActivityEstimate;
 import com.metabion.domain.IbdDiagnosisType;
 import com.metabion.domain.OnboardingReviewStatus;
+import com.metabion.domain.RoleName;
 import com.metabion.domain.Sex;
 import com.metabion.domain.SteroidUse;
 import com.metabion.dto.OnboardingReviewRequest;
@@ -81,7 +82,7 @@ class OnboardingControllerTest {
     @Test
     void patientCanSubmitOnboardingWithCsrf() throws Exception {
         mvc.perform(post("/api/onboarding/submissions")
-                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson()))
@@ -102,11 +103,11 @@ class OnboardingControllerTest {
     @Test
     void patientCanReadLatestAndHistory() throws Exception {
         mvc.perform(get("/api/onboarding/submissions/latest")
-                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .param("context", "default"))
                 .andExpect(status().isOk());
         mvc.perform(get("/api/onboarding/submissions")
-                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .param("context", "default"))
                 .andExpect(status().isOk());
 
@@ -119,7 +120,7 @@ class OnboardingControllerTest {
         var request = new OnboardingReviewRequest(OnboardingReviewStatus.REVIEWED, "ok");
 
         mvc.perform(post("/api/clinical/onboarding/submissions/99/review")
-                        .with(user("doctor@example.com").roles("PHYSICIAN"))
+                        .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name()))
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(reviewRequestJson(request)))
@@ -134,7 +135,7 @@ class OnboardingControllerTest {
                 .when(onboardingService).getReviewable(any(), eq(99L));
 
         mvc.perform(get("/api/clinical/onboarding/submissions/99")
-                        .with(user("doctor@example.com").roles("PHYSICIAN")))
+                        .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name())))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error").value("forbidden"));
     }

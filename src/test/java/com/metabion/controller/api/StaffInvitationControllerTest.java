@@ -1,6 +1,7 @@
 package com.metabion.controller.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.metabion.domain.RoleName;
 import com.metabion.dto.AcceptStaffInvitationRequest;
 import com.metabion.dto.CreateStaffInvitationRequest;
 import com.metabion.exception.StaffInvitationException;
@@ -78,10 +79,10 @@ class StaffInvitationControllerTest {
     void admin_can_create_staff_invitation_with_csrf() throws Exception {
         var request = new CreateStaffInvitationRequest(
                 "expert@example.com",
-                Set.of("PHYSICIAN", "COORDINATOR"));
+                Set.of(RoleName.PHYSICIAN.getName(), RoleName.COORDINATOR.getName()));
 
         mvc.perform(post("/api/admin/staff-invitations")
-                        .with(user("admin@example.com").roles("ADMIN"))
+                        .with(user("admin@example.com").roles(RoleName.ADMIN.name()))
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -92,7 +93,9 @@ class StaffInvitationControllerTest {
                 argThat("admin@example.com"::equals),
                 argThat(invitation -> {
                     assertThat(invitation.email()).isEqualTo("expert@example.com");
-                    assertThat(invitation.roles()).containsExactlyInAnyOrder("PHYSICIAN", "COORDINATOR");
+                    assertThat(invitation.roles()).containsExactlyInAnyOrder(
+                            RoleName.PHYSICIAN.getName(),
+                            RoleName.COORDINATOR.getName());
                     return true;
                 }));
     }
@@ -101,10 +104,10 @@ class StaffInvitationControllerTest {
     void non_admin_cannot_create_staff_invitation() throws Exception {
         var request = new CreateStaffInvitationRequest(
                 "expert@example.com",
-                Set.of("PHYSICIAN"));
+                Set.of(RoleName.PHYSICIAN.getName()));
 
         mvc.perform(post("/api/admin/staff-invitations")
-                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -115,7 +118,7 @@ class StaffInvitationControllerTest {
     void unauthenticated_cannot_create_staff_invitation_with_csrf() throws Exception {
         var request = new CreateStaffInvitationRequest(
                 "expert@example.com",
-                Set.of("PHYSICIAN"));
+                Set.of(RoleName.PHYSICIAN.getName()));
 
         mvc.perform(post("/api/admin/staff-invitations")
                         .with(csrf())

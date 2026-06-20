@@ -1,6 +1,7 @@
 package com.metabion.controller.web;
 
 import com.metabion.domain.MeasurementUnit;
+import com.metabion.domain.RoleName;
 import com.metabion.domain.ThemePreference;
 import com.metabion.dto.LoginForm;
 import com.metabion.dto.LoginResponse;
@@ -104,7 +105,7 @@ class WebAuthControllerTest {
 
     @Test
     void root_redirects_authenticated_to_app() throws Exception {
-        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        var auth = new TestingAuthenticationToken("user@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
 
         mvc.perform(get("/").principal(auth))
@@ -130,7 +131,7 @@ class WebAuthControllerTest {
 
     @Test
     void login_redirects_authenticated_user_to_app() throws Exception {
-        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        var auth = new TestingAuthenticationToken("user@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
 
         mvc.perform(get("/login").principal(auth))
@@ -164,7 +165,9 @@ class WebAuthControllerTest {
 
     @Test
     void app_renders_authenticated_shell() throws Exception {
-        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PHYSICIAN", "ROLE_COORDINATOR");
+        var auth = new TestingAuthenticationToken("user@example.com", "password",
+                RoleName.PHYSICIAN.authority(),
+                RoleName.COORDINATOR.authority());
         auth.setAuthenticated(true);
         var sidebarItems = List.of(
                 new AppMenuItem("Sidebar A", "/app/sidebar-a", false, true, "sidebar a"),
@@ -190,7 +193,7 @@ class WebAuthControllerTest {
 
     @Test
     void app_model_for_patient_contains_patient_items_only() throws Exception {
-        var auth = new TestingAuthenticationToken("patient@example.com", "password", "ROLE_PATIENT");
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
         var sidebarItems = List.of(
                 new AppMenuItem("Sidebar P1", "/app/patient/sidebar-1", false, true, "patient sidebar 1"),
@@ -211,7 +214,7 @@ class WebAuthControllerTest {
 
     @Test
     void app_model_for_admin_contains_admin_items_only() throws Exception {
-        var auth = new TestingAuthenticationToken("admin@example.com", "password", "ROLE_ADMIN");
+        var auth = new TestingAuthenticationToken("admin@example.com", "password", RoleName.ADMIN.authority());
         auth.setAuthenticated(true);
         var sidebarItems = List.of(
                 new AppMenuItem("Sidebar A1", "/app/admin/sidebar-1", false, true, "admin sidebar 1"),
@@ -232,7 +235,7 @@ class WebAuthControllerTest {
 
     @Test
     void account_renders_authenticated_account_page() throws Exception {
-        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        var auth = new TestingAuthenticationToken("user@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
         var sidebarItems = List.of(
                 new AppMenuItem("Home", "/app", false, false, "Application home"),
@@ -245,7 +248,7 @@ class WebAuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("account"))
                 .andExpect(model().attribute("email", "user@example.com"))
-                .andExpect(model().attribute("roles", List.of("PATIENT")))
+                .andExpect(model().attribute("roles", List.of(RoleName.PATIENT.name())))
                 .andExpect(model().attribute("patientAccount", true))
                 .andExpect(model().attribute("glucoseUnitPreference", MeasurementUnit.MG_DL))
                 .andExpect(model().attribute("appMenuItems", sidebarItems))
@@ -257,7 +260,7 @@ class WebAuthControllerTest {
     @Test
     void post_login_delegates_to_security_service_and_redirects_to_app() throws Exception {
         when(securityService.login(any(), any(), any()))
-                .thenReturn(LoginResponse.authenticated("user@example.com", List.of("PATIENT")));
+                .thenReturn(LoginResponse.authenticated("user@example.com", List.of(RoleName.PATIENT.name())));
 
         mvc.perform(post("/login")
                         .param("email", "user@example.com")
@@ -274,7 +277,10 @@ class WebAuthControllerTest {
     @Test
     void post_login_mfa_required_rerenders_generic_error() throws Exception {
         when(securityService.login(any(), any(), any()))
-                .thenReturn(LoginResponse.mfaRequired("user@example.com", List.of("PATIENT"), "challenge-id", List.of("totp")));
+                .thenReturn(LoginResponse.mfaRequired("user@example.com",
+                        List.of(RoleName.PATIENT.name()),
+                        "challenge-id",
+                        List.of("totp")));
 
         mvc.perform(post("/login")
                         .param("email", "user@example.com")

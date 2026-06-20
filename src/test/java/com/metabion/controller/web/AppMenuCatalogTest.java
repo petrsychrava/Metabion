@@ -1,5 +1,6 @@
 package com.metabion.controller.web;
 
+import com.metabion.domain.RoleName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.context.support.ResourceBundleMessageSource;
@@ -15,7 +16,7 @@ class AppMenuCatalogTest {
 
     @Test
     void patientReceivesPatientImplementedAndPlannedItems() {
-        var auth = auth("patient@example.com", "ROLE_PATIENT");
+        var auth = auth("patient@example.com", RoleName.PATIENT.authority());
 
         assertThat(catalog.sidebarItems(auth))
                 .extracting(AppMenuItem::displayLabel)
@@ -38,7 +39,7 @@ class AppMenuCatalogTest {
 
     @Test
     void clinicalStaffReceivesClinicalAndStudyItems() {
-        var auth = auth("doctor@example.com", "ROLE_PHYSICIAN");
+        var auth = auth("doctor@example.com", RoleName.PHYSICIAN.authority());
 
         assertThat(catalog.sidebarItems(auth))
                 .extracting(AppMenuItem::displayLabel)
@@ -59,7 +60,7 @@ class AppMenuCatalogTest {
 
     @Test
     void coordinatorReceivesClinicalAndStudyItems() {
-        var auth = auth("coordinator@example.com", "ROLE_COORDINATOR");
+        var auth = auth("coordinator@example.com", RoleName.COORDINATOR.authority());
 
         assertThat(catalog.sidebarItems(auth))
                 .extracting(AppMenuItem::displayLabel)
@@ -80,7 +81,7 @@ class AppMenuCatalogTest {
 
     @Test
     void adminReceivesAdminItemsOnly() {
-        var auth = auth("admin@example.com", "ROLE_ADMIN");
+        var auth = auth("admin@example.com", RoleName.ADMIN.authority());
 
         assertThat(catalog.sidebarItems(auth))
                 .extracting(AppMenuItem::displayLabel)
@@ -96,9 +97,9 @@ class AppMenuCatalogTest {
 
     @Test
     void implementedItemsHaveExpectedRoutes() {
-        var patient = auth("patient@example.com", "ROLE_PATIENT");
-        var clinician = auth("doctor@example.com", "ROLE_NUTRITION_SPECIALIST");
-        var admin = auth("admin@example.com", "ROLE_ADMIN");
+        var patient = auth("patient@example.com", RoleName.PATIENT.authority());
+        var clinician = auth("doctor@example.com", RoleName.NUTRITION_SPECIALIST.authority());
+        var admin = auth("admin@example.com", RoleName.ADMIN.authority());
 
         assertThat(catalog.sidebarItems(patient))
                 .filteredOn(item -> "Onboarding".equals(item.label()))
@@ -154,7 +155,7 @@ class AppMenuCatalogTest {
 
     @Test
     void dashboardItemsAreCuratedSubsetOfSidebarItems() {
-        var patient = auth("patient@example.com", "ROLE_PATIENT");
+        var patient = auth("patient@example.com", RoleName.PATIENT.authority());
 
         assertThat(catalog.dashboardItems(patient))
                 .extracting(AppMenuItem::displayLabel)
@@ -170,7 +171,7 @@ class AppMenuCatalogTest {
     void menuLabelsUseCurrentLocale() {
         LocaleContextHolder.setLocale(Locale.forLanguageTag("cs"));
         try {
-            var admin = auth("admin@example.com", "ROLE_ADMIN");
+            var admin = auth("admin@example.com", RoleName.ADMIN.authority());
 
             assertThat(catalog.sidebarItems(admin))
                     .extracting(AppMenuItem::displayLabel)

@@ -1,5 +1,6 @@
 package com.metabion.controller.web;
 
+import com.metabion.domain.RoleName;
 import com.metabion.dto.AcceptStaffInvitationRequest;
 import com.metabion.dto.CreateStaffInvitationRequest;
 import com.metabion.exception.StaffInvitationException;
@@ -83,7 +84,7 @@ class StaffInvitationWebControllerTest {
     @Test
     void admin_form_renders_with_form_and_staff_roles() throws Exception {
         mvc.perform(get("/app/staff-invitations/new")
-                        .with(user("admin@example.com").roles("ADMIN"))
+                        .with(user("admin@example.com").roles(RoleName.ADMIN.name()))
                         .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(view().name("admin-staff-invitation"))
@@ -97,10 +98,10 @@ class StaffInvitationWebControllerTest {
     @Test
     void admin_post_with_csrf_calls_service_and_renders_result() throws Exception {
         mvc.perform(post("/app/staff-invitations")
-                        .with(user("admin@example.com").roles("ADMIN"))
+                        .with(user("admin@example.com").roles(RoleName.ADMIN.name()))
                         .with(csrf())
                         .param("email", "expert@example.com")
-                        .param("roles", "PHYSICIAN", "COORDINATOR"))
+                        .param("roles", RoleName.PHYSICIAN.getName(), RoleName.COORDINATOR.getName()))
                 .andExpect(status().isOk())
                 .andExpect(view().name("result"))
                 .andExpect(model().attribute("title", "Invitation sent"));
@@ -110,13 +111,15 @@ class StaffInvitationWebControllerTest {
                 org.mockito.ArgumentMatchers.eq("admin@example.com"),
                 requestCaptor.capture());
         assertThat(requestCaptor.getValue().email()).isEqualTo("expert@example.com");
-        assertThat(requestCaptor.getValue().roles()).containsExactlyInAnyOrder("PHYSICIAN", "COORDINATOR");
+        assertThat(requestCaptor.getValue().roles()).containsExactlyInAnyOrder(
+                RoleName.PHYSICIAN.getName(),
+                RoleName.COORDINATOR.getName());
     }
 
     @Test
     void invalid_admin_post_rerenders_form_with_shell_and_roles() throws Exception {
         mvc.perform(post("/app/staff-invitations")
-                        .with(user("admin@example.com").roles("ADMIN"))
+                        .with(user("admin@example.com").roles(RoleName.ADMIN.name()))
                         .with(csrf())
                         .param("email", ""))
                 .andExpect(status().isOk())
@@ -133,7 +136,7 @@ class StaffInvitationWebControllerTest {
     @Test
     void admin_post_without_roles_rerenders_form_and_does_not_call_service() throws Exception {
         mvc.perform(post("/app/staff-invitations")
-                        .with(user("admin@example.com").roles("ADMIN"))
+                        .with(user("admin@example.com").roles(RoleName.ADMIN.name()))
                         .with(csrf())
                         .param("email", "expert@example.com"))
                 .andExpect(status().isOk())
@@ -150,26 +153,26 @@ class StaffInvitationWebControllerTest {
     @Test
     void admin_post_without_csrf_is_forbidden() throws Exception {
         mvc.perform(post("/app/staff-invitations")
-                        .with(user("admin@example.com").roles("ADMIN"))
+                        .with(user("admin@example.com").roles(RoleName.ADMIN.name()))
                         .param("email", "expert@example.com")
-                        .param("roles", "PHYSICIAN"))
+                        .param("roles", RoleName.PHYSICIAN.getName()))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     void non_admin_cannot_post_admin_invitation() throws Exception {
         mvc.perform(post("/app/staff-invitations")
-                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf())
                         .param("email", "expert@example.com")
-                        .param("roles", "PHYSICIAN"))
+                        .param("roles", RoleName.PHYSICIAN.getName()))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     void non_admin_cannot_open_admin_invite_form() throws Exception {
         mvc.perform(get("/app/staff-invitations/new")
-                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf()))
                 .andExpect(status().isForbidden());
     }
@@ -177,7 +180,7 @@ class StaffInvitationWebControllerTest {
     @Test
     void old_admin_invite_form_route_is_not_available() throws Exception {
         mvc.perform(get("/admin/staff-invitations/new")
-                        .with(user("admin@example.com").roles("ADMIN"))
+                        .with(user("admin@example.com").roles(RoleName.ADMIN.name()))
                         .with(csrf()))
                 .andExpect(status().isForbidden());
     }

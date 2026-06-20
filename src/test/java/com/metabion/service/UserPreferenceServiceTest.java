@@ -48,7 +48,7 @@ class UserPreferenceServiceTest {
         user.setId(1L);
         user.addRole(RoleName.PATIENT);
         patientProfile = new PatientProfile(user);
-        auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        auth = new TestingAuthenticationToken("user@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
     }
 
@@ -129,7 +129,7 @@ class UserPreferenceServiceTest {
         staff.setId(2L);
         staff.addRole(RoleName.PHYSICIAN);
         when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
-        var staffAuth = new TestingAuthenticationToken("staff@example.com", "password", "ROLE_PHYSICIAN");
+        var staffAuth = new TestingAuthenticationToken("staff@example.com", "password", RoleName.PHYSICIAN.authority());
         staffAuth.setAuthenticated(true);
 
         assertStatus(() -> service.currentGlucoseUnitPreference(staffAuth), HttpStatus.FORBIDDEN);
@@ -146,7 +146,7 @@ class UserPreferenceServiceTest {
     @Test
     void currentThemePreferenceRejectsUnknownUser() {
         when(users.findByEmail("missing@example.com")).thenReturn(Optional.empty());
-        var missingAuth = new TestingAuthenticationToken("missing@example.com", "password", "ROLE_PATIENT");
+        var missingAuth = new TestingAuthenticationToken("missing@example.com", "password", RoleName.PATIENT.authority());
         missingAuth.setAuthenticated(true);
 
         assertStatus(() -> service.currentThemePreference(missingAuth), HttpStatus.NOT_FOUND);

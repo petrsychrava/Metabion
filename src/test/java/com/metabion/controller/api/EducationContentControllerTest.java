@@ -1,6 +1,7 @@
 package com.metabion.controller.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.metabion.domain.RoleName;
 import com.metabion.dto.EducationModuleRequest;
 import com.metabion.dto.EducationReviewRequest;
 import com.metabion.service.EducationContentService;
@@ -72,7 +73,7 @@ class EducationContentControllerTest {
     @Test
     void staffCanCreateDraftWithCsrf() throws Exception {
         mvc.perform(post("/api/content/education/modules")
-                        .with(user("physician@example.com").roles("PHYSICIAN"))
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(validModuleRequest())))
@@ -86,7 +87,7 @@ class EducationContentControllerTest {
         var request = new EducationReviewRequest("Looks good");
 
         mvc.perform(post("/api/content/education/modules/ibd-basics/versions/1/approve")
-                        .with(user("coordinator@example.com").roles("COORDINATOR"))
+                        .with(user("coordinator@example.com").roles(RoleName.COORDINATOR.name()))
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -101,7 +102,7 @@ class EducationContentControllerTest {
                 .when(educationContentService).createDraft(any(), any(EducationModuleRequest.class));
 
         mvc.perform(post("/api/content/education/modules")
-                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(validModuleRequest())))

@@ -1,5 +1,6 @@
 package com.metabion.controller.api;
 
+import com.metabion.domain.RoleName;
 import com.metabion.service.EducationContentService;
 import com.metabion.service.SecurityService;
 import com.metabion.service.UserService;
@@ -66,7 +67,7 @@ class EducationControllerTest {
     @Test
     void authenticatedUserCanListPublishedModules() throws Exception {
         mvc.perform(get("/api/education/modules")
-                        .with(user("patient@example.com").roles("PATIENT")))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
                 .andExpect(status().isOk());
 
         verify(educationContentService).listPublishedModules(any());
@@ -75,7 +76,7 @@ class EducationControllerTest {
     @Test
     void patientCanMarkLessonCompleteWithCsrf() throws Exception {
         mvc.perform(post("/api/education/modules/ibd-basics/lessons/what-is-ibd/complete")
-                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ok"));
@@ -92,7 +93,7 @@ class EducationControllerTest {
     @Test
     void completionWithoutCsrfIsForbidden() throws Exception {
         mvc.perform(post("/api/education/modules/ibd-basics/lessons/what-is-ibd/complete")
-                        .with(user("patient@example.com").roles("PATIENT")))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
                 .andExpect(status().isForbidden());
     }
 }
