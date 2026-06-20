@@ -50,7 +50,12 @@ class OnboardingReviewIT extends AbstractAuthIT {
     @Test
     void assignedClinicalStaffCanReviewButUnassignedStaffCannot() {
         var patientUser = createUser("onboarding-patient@example.com", RoleName.PATIENT);
-        var patientProfile = patientProfileRepository.saveAndFlush(new PatientProfile(patientUser));
+        var patientProfile = new PatientProfile(patientUser);
+        patientProfile.setDateOfBirth(LocalDate.of(1990, 1, 1));
+        patientProfile.setSex(Sex.FEMALE);
+        patientProfile.setCountryRegion("CZ");
+        patientProfile.setTimezone("Europe/Prague");
+        patientProfile = patientProfileRepository.saveAndFlush(patientProfile);
         var assignedStaffUser = createUser("assigned-reviewer@example.com", RoleName.PHYSICIAN);
         var assignedStaff = staffProfileRepository.saveAndFlush(new StaffProfile(assignedStaffUser));
         var unassignedStaffUser = createUser("unassigned-reviewer@example.com", RoleName.PHYSICIAN);
@@ -92,10 +97,6 @@ class OnboardingReviewIT extends AbstractAuthIT {
     private OnboardingSubmissionRequest validRequest() {
         return new OnboardingSubmissionRequest(
                 "default",
-                LocalDate.of(1990, 1, 1),
-                Sex.FEMALE,
-                "CZ",
-                "Europe/Prague",
                 IbdDiagnosisType.CROHNS_DISEASE,
                 2018,
                 "Ileocolonic",

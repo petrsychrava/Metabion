@@ -3,28 +3,19 @@ package com.metabion.dto;
 import com.metabion.domain.AdvancedTherapyExposure;
 import com.metabion.domain.DiseaseActivityEstimate;
 import com.metabion.domain.IbdDiagnosisType;
-import com.metabion.domain.Sex;
 import com.metabion.domain.SteroidUse;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
-import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.Year;
-import java.time.ZoneId;
 
 public record OnboardingSubmissionRequest(
         @Size(max = 100) String onboardingContext,
-        @NotNull @Past LocalDate dateOfBirth,
-        @NotNull Sex sex,
-        @NotBlank @Size(max = 100) String countryRegion,
-        @NotBlank @Size(max = 100) String timezone,
         @NotNull IbdDiagnosisType diagnosisType,
         Integer diagnosisYear,
         @Size(max = 120) String diseaseLocation,
@@ -46,19 +37,6 @@ public record OnboardingSubmissionRequest(
     public boolean isDiagnosisYearPlausible() {
         return diagnosisYear == null
                 || (diagnosisYear >= 1900 && diagnosisYear <= Year.now().getValue());
-    }
-
-    @AssertTrue(message = "timezone must be a valid ZoneId")
-    public boolean isTimezoneValid() {
-        if (timezone == null || timezone.isBlank()) {
-            return true;
-        }
-        try {
-            ZoneId.of(timezone.trim());
-            return true;
-        } catch (DateTimeException ex) {
-            return false;
-        }
     }
 
     @AssertTrue(message = "labsCollectedAt is required when lab values are supplied")

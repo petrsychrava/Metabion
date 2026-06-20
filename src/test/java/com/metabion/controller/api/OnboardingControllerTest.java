@@ -5,7 +5,6 @@ import com.metabion.domain.DiseaseActivityEstimate;
 import com.metabion.domain.IbdDiagnosisType;
 import com.metabion.domain.OnboardingReviewStatus;
 import com.metabion.domain.RoleName;
-import com.metabion.domain.Sex;
 import com.metabion.domain.SteroidUse;
 import com.metabion.dto.OnboardingReviewRequest;
 import com.metabion.dto.OnboardingSubmissionRequest;
@@ -143,10 +142,6 @@ class OnboardingControllerTest {
     private OnboardingSubmissionRequest validRequest() {
         return new OnboardingSubmissionRequest(
                 "default",
-                LocalDate.of(1990, 1, 1),
-                Sex.FEMALE,
-                "CZ",
-                "Europe/Prague",
                 IbdDiagnosisType.CROHNS_DISEASE,
                 2018,
                 "Ileocolonic",
@@ -169,10 +164,6 @@ class OnboardingControllerTest {
         return """
                 {
                   "onboardingContext": "%s",
-                  "dateOfBirth": "%s",
-                  "sex": "%s",
-                  "countryRegion": "%s",
-                  "timezone": "%s",
                   "diagnosisType": "%s",
                   "diagnosisYear": %d,
                   "diseaseLocation": "%s",
@@ -191,10 +182,6 @@ class OnboardingControllerTest {
                 }
                 """.formatted(
                 request.onboardingContext(),
-                request.dateOfBirth(),
-                request.sex(),
-                request.countryRegion(),
-                request.timezone(),
                 request.diagnosisType(),
                 request.diagnosisYear(),
                 request.diseaseLocation(),

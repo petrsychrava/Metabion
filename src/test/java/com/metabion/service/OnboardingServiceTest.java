@@ -78,40 +78,9 @@ class OnboardingServiceTest {
     }
 
     @Test
-    void submissionRequestAllowsTimezoneWithSurroundingWhitespace() {
-        var request = new OnboardingSubmissionRequest(
-                "default",
-                LocalDate.of(1990, 1, 1),
-                Sex.FEMALE,
-                "CZ",
-                " Europe/Prague ",
-                IbdDiagnosisType.CROHNS_DISEASE,
-                2018,
-                "Ileocolonic",
-                "Inflammatory",
-                DiseaseActivityEstimate.MILD,
-                "Mesalamine",
-                SteroidUse.NONE,
-                AdvancedTherapyExposure.NEVER_USED,
-                "Stable regimen",
-                LocalDate.of(2026, 5, 20),
-                new BigDecimal("4.2"),
-                new BigDecimal("120"),
-                new BigDecimal("13.8"),
-                new BigDecimal("4.3"),
-                "Recent outpatient labs");
-
-        assertThat(validator.validate(request)).isEmpty();
-    }
-
-    @Test
     void labDateIsRequiredWhenLabValueIsPresent() {
         var request = new OnboardingSubmissionRequest(
                 "default",
-                LocalDate.of(1990, 1, 1),
-                Sex.FEMALE,
-                "CZ",
-                "Europe/Prague",
                 IbdDiagnosisType.CROHNS_DISEASE,
                 2018,
                 "Ileocolonic",
@@ -216,10 +185,6 @@ class OnboardingServiceTest {
         when(submissions.save(any(OnboardingSubmission.class))).thenAnswer(invocation -> invocation.getArgument(0));
         var request = new OnboardingSubmissionRequest(
                 " Study-A ",
-                validRequest().dateOfBirth(),
-                validRequest().sex(),
-                validRequest().countryRegion(),
-                validRequest().timezone(),
                 validRequest().diagnosisType(),
                 validRequest().diagnosisYear(),
                 validRequest().diseaseLocation(),
@@ -261,10 +226,6 @@ class OnboardingServiceTest {
         when(submissions.save(any(OnboardingSubmission.class))).thenAnswer(invocation -> invocation.getArgument(0));
         var request = new OnboardingSubmissionRequest(
                 "default",
-                LocalDate.of(1985, 6, 15),
-                Sex.MALE,
-                "US",
-                "America/New_York",
                 validRequest().diagnosisType(),
                 validRequest().diagnosisYear(),
                 validRequest().diseaseLocation(),
@@ -292,6 +253,24 @@ class OnboardingServiceTest {
         assertThat(patientProfile.getSex()).isEqualTo(Sex.FEMALE);
         assertThat(patientProfile.getCountryRegion()).isEqualTo("CZ");
         assertThat(patientProfile.getTimezone()).isEqualTo("Europe/Prague");
+    }
+
+    @Test
+    void submitForCurrentPatientRejectsIncompletePatientProfile() {
+        var patientUser = user(17L, "incomplete-profile@example.com", RoleName.PATIENT);
+        var patientProfile = patientProfile(170L, patientUser);
+        patientProfile.setDateOfBirth(null);
+        when(users.findByEmail("incomplete-profile@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(17L)).thenReturn(Optional.of(patientProfile));
+        when(patientProfiles.lockById(170L)).thenReturn(Optional.of(patientProfile));
+
+        assertThatThrownBy(() -> service.submitForCurrentPatient(
+                auth("incomplete-profile@example.com"),
+                validRequest()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST");
+
+        verify(submissions, never()).save(any());
     }
 
     @Test
@@ -425,10 +404,6 @@ class OnboardingServiceTest {
     static OnboardingSubmissionRequest validRequest() {
         return new OnboardingSubmissionRequest(
                 "default",
-                LocalDate.of(1990, 1, 1),
-                Sex.FEMALE,
-                "CZ",
-                "Europe/Prague",
                 IbdDiagnosisType.CROHNS_DISEASE,
                 2018,
                 "Ileocolonic",

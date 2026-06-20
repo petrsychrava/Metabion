@@ -46,24 +46,21 @@ public class OnboardingService {
     public OnboardingSubmissionResponse submitForCurrentPatient(Authentication authentication,
                                                                OnboardingSubmissionRequest request) {
         var patient = currentPatientProfileForSubmission(authentication);
+        requireCompletePatientProfile(patient);
         return submit(patient, request);
     }
 
     public OnboardingSubmissionResponse submitWebForCurrentPatient(Authentication authentication,
                                                                   OnboardingForm form) {
         var patient = currentPatientProfileForSubmission(authentication);
-        if (!hasStablePatientProfileFields(patient)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Complete patient profile before submitting onboarding");
-        }
-        return submit(patient, requestFrom(form, patient));
+        requireCompletePatientProfile(patient);
+        return submit(patient, requestFrom(form));
     }
 
     private OnboardingSubmissionResponse submit(PatientProfile patient, OnboardingSubmissionRequest request) {
         var context = normalizeContext(request.onboardingContext());
         var nextVersion = submissions.maxVersion(patient.getId(), context) + 1;
         var submission = new OnboardingSubmission(patient, context, nextVersion);
-        copyPatientProfile(request, patient);
         copyRequest(request, submission);
         return OnboardingSubmissionResponse.from(submissions.save(submission));
     }
@@ -217,16 +214,6 @@ public class OnboardingService {
         submission.setLabNotes(trimToNull(request.labNotes()));
     }
 
-    private static void copyPatientProfile(OnboardingSubmissionRequest request, PatientProfile patient) {
-        if (hasStablePatientProfileFields(patient)) {
-            return;
-        }
-        patient.setDateOfBirth(request.dateOfBirth());
-        patient.setSex(request.sex());
-        patient.setCountryRegion(trimToNull(request.countryRegion()));
-        patient.setTimezone(trimToNull(request.timezone()));
-    }
-
     private static boolean hasStablePatientProfileFields(PatientProfile patient) {
         return patient.getDateOfBirth() != null
                 && patient.getSex() != null
@@ -234,13 +221,16 @@ public class OnboardingService {
                 && trimToNull(patient.getTimezone()) != null;
     }
 
-    private static OnboardingSubmissionRequest requestFrom(OnboardingForm form, PatientProfile patient) {
+    private static void requireCompletePatientProfile(PatientProfile patient) {
+        if (!hasStablePatientProfileFields(patient)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Complete patient profile before submitting onboarding");
+        }
+    }
+
+    private static OnboardingSubmissionRequest requestFrom(OnboardingForm form) {
         return new OnboardingSubmissionRequest(
                 form.onboardingContext(),
-                patient.getDateOfBirth(),
-                patient.getSex(),
-                patient.getCountryRegion(),
-                patient.getTimezone(),
                 form.diagnosisType(),
                 form.diagnosisYear(),
                 form.diseaseLocation(),
