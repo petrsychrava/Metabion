@@ -155,8 +155,15 @@ class SecurityConfigTest {
     }
 
     @Test
-    void app_requires_authentication() throws Exception {
+    void app_redirects_unauthenticated_browser_to_login() throws Exception {
         mvc.perform(get("/app"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+    }
+
+    @Test
+    void api_requires_authentication_with_unauthorized_status() throws Exception {
+        mvc.perform(get("/api/whoami"))
                 .andExpect(status().isUnauthorized());
     }
 

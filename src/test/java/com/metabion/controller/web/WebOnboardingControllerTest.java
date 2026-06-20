@@ -75,7 +75,8 @@ class WebOnboardingControllerTest {
     @Test
     void patientOnboardingPageRequiresAuthentication() throws Exception {
         mvc.perform(get("/app/onboarding"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
     }
 
     @Test
