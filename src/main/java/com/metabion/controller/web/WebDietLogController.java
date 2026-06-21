@@ -240,6 +240,8 @@ public class WebDietLogController {
         var row = new DietLogForm.PhotoReferenceRow();
         row.setUploadId(photo.id());
         row.setCaption(photo.caption());
+        row.setOriginalFilename(photo.originalFilename());
+        row.setContentUrl(photo.contentUrl());
         return row;
     }
 

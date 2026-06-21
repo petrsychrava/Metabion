@@ -76,6 +76,18 @@
             margin-top: 10px;
         }
 
+        .photo-upload-status {
+            margin: 0;
+        }
+
+        .diet-photo-preview {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            height: 120px;
+            object-fit: cover;
+            width: 160px;
+        }
+
         .unit-pill {
             display: inline-flex;
             align-items: center;
@@ -215,7 +227,8 @@
                     <button type="button" class="secondary" data-add-meal th:text="#{dietLogs.addMeal}">Add meal</button>
                 </div>
 
-                <div class="meal-list" data-meal-list th:attr="data-caption-label=#{dietLogs.caption}">
+                <div class="meal-list" data-meal-list
+                     th:attr="data-caption-label=#{dietLogs.caption},data-uploaded-label=#{dietLogs.photoUploaded},data-uploaded-fallback=#{dietLogs.uploadedPhoto}">
                     <section class="meal-card" th:each="meal, row : *{meals}" data-meal-row th:attr="data-meal-index=${row.index}">
                         <div class="meal-card-header">
                             <h2>
@@ -277,6 +290,11 @@
                             <div data-photo-rows>
                                 <div class="photo-reference-row" th:each="photoReference, photoRow : ${meal.photoReferences}" data-photo-row>
                                     <input type="hidden" th:field="*{meals[__${row.index}__].photoReferences[__${photoRow.index}__].uploadId}">
+                                    <img class="diet-photo-preview" data-photo-preview th:if="${photoReference.uploadId != null}"
+                                         th:src="${photoReference.contentUrl == null || photoReference.contentUrl.isBlank() ? '/api/diet-log-photos/' + photoReference.uploadId + '/content' : photoReference.contentUrl}"
+                                         th:alt="${photoReference.originalFilename == null || photoReference.originalFilename.isBlank() ? #messages.msg('dietLogs.uploadedPhoto') : photoReference.originalFilename}">
+                                    <p class="hint photo-upload-status" data-photo-upload-status th:if="${photoReference.uploadId != null}"
+                                       th:text="#{dietLogs.uploadedPhoto}">Uploaded photo</p>
                                     <label class="field"><span th:text="#{dietLogs.caption}">Caption</span>
                                         <input th:field="*{meals[__${row.index}__].photoReferences[__${photoRow.index}__].caption}">
                                     </label>
@@ -332,6 +350,8 @@
                         });
                         const photoRows = Array.from(row.querySelectorAll('[data-photo-row]'));
                         photoRows.slice(1).forEach((photoRow) => photoRow.remove());
+                        row.querySelectorAll('[data-photo-upload-status]').forEach((status) => status.remove());
+                        row.querySelectorAll('[data-photo-preview]').forEach((preview) => preview.remove());
                     };
 
                     addMealButton?.addEventListener('click', () => {
@@ -360,6 +380,41 @@
                     const nextEmptyPhotoRow = (mealRow) => Array.from(mealRow.querySelectorAll('[data-photo-row]'))
                         .find((row) => !row.querySelector('input[name$=".uploadId"]')?.value);
 
+                    const showPhotoPreview = (row, upload) => {
+                        if (!upload.contentUrl) return;
+                        const uploadedFallback = mealList.dataset.uploadedFallback || 'Uploaded photo';
+                        const filename = upload['originalFilename'] || uploadedFallback;
+                        let preview = row.querySelector('[data-photo-preview]');
+                        if (!preview) {
+                            preview = document.createElement('img');
+                            preview.className = 'diet-photo-preview';
+                            preview.setAttribute('data-photo-preview', '');
+                            row.insertBefore(preview, row.querySelector('[data-photo-upload-status], label'));
+                        }
+                        preview.src = upload.contentUrl;
+                        preview.alt = filename;
+                    };
+
+                    const showPhotoUploadStatus = (row, upload) => {
+                        const uploadedLabel = mealList.dataset.uploadedLabel || 'Uploaded';
+                        const uploadedFallback = mealList.dataset.uploadedFallback || 'Uploaded photo';
+                        const filename = upload['originalFilename'] || uploadedFallback;
+                        let status = row.querySelector('[data-photo-upload-status]');
+                        if (!status) {
+                            status = document.createElement('p');
+                            status.className = 'hint photo-upload-status';
+                            status.setAttribute('data-photo-upload-status', '');
+                            row.insertBefore(status, row.querySelector('label'));
+                        }
+                        status.textContent = '';
+                        const label = document.createElement('span');
+                        label.textContent = `${uploadedLabel}: `;
+                        const name = document.createElement('span');
+                        name.setAttribute('data-photo-filename', '');
+                        name.textContent = filename;
+                        status.append(label, name);
+                    };
+
                     const appendPhotoRow = (mealRow, upload) => {
                         let row = nextEmptyPhotoRow(mealRow);
                         if (!row) {
@@ -371,6 +426,7 @@
                             row.setAttribute('data-photo-row', '');
                             row.innerHTML = `
                                 <input type="hidden" name="meals[${mealIndex}].photoReferences[${photoIndex}].uploadId">
+                                <p class="hint photo-upload-status" data-photo-upload-status></p>
                                 <label class="field"><span>${captionLabel}</span>
                                     <input name="meals[${mealIndex}].photoReferences[${photoIndex}].caption">
                                 </label>`;
@@ -378,6 +434,8 @@
                             reindexMeals();
                         }
                         row.querySelector('input[name$=".uploadId"]').value = upload.uploadId;
+                        showPhotoPreview(row, upload);
+                        showPhotoUploadStatus(row, upload);
                     };
 
                     mealList.addEventListener('change', async (event) => {

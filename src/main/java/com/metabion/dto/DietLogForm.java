@@ -347,6 +347,9 @@ public class DietLogForm {
         @Size(max = 500)
         private String caption;
 
+        private String originalFilename;
+        private String contentUrl;
+
         public DailyDietLogRequest.PhotoUploadReferenceRequest toRequest(int mealIndex) {
             return new DailyDietLogRequest.PhotoUploadReferenceRequest(mealIndex, uploadId, caption);
         }
@@ -370,6 +373,22 @@ public class DietLogForm {
 
         public void setCaption(String caption) {
             this.caption = caption;
+        }
+
+        public String getOriginalFilename() {
+            return originalFilename;
+        }
+
+        public void setOriginalFilename(String originalFilename) {
+            this.originalFilename = originalFilename;
+        }
+
+        public String getContentUrl() {
+            return contentUrl;
+        }
+
+        public void setContentUrl(String contentUrl) {
+            this.contentUrl = contentUrl;
         }
     }
 
