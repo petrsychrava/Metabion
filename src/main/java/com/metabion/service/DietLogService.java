@@ -199,6 +199,10 @@ public class DietLogService {
         return preference == null ? MeasurementUnit.MMOL_L : preference;
     }
 
+    public String currentPatientTimezone(Authentication authentication) {
+        return measurementWindows.zoneFor(currentPatientProfile(authentication)).getId();
+    }
+
     private User currentUser(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated() || authentication.getName() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
