@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.DateTimeException;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -47,22 +48,25 @@ public class WebDietLogController {
     private final DietLogService dietLogService;
     private final AppMenuCatalog appMenuCatalog;
     private final UserPreferenceService userPreferenceService;
+    private final Clock clock;
 
     public WebDietLogController(DietLogService dietLogService,
                                 AppMenuCatalog appMenuCatalog,
-                                UserPreferenceService userPreferenceService) {
+                                UserPreferenceService userPreferenceService,
+                                Clock clock) {
         this.dietLogService = dietLogService;
         this.appMenuCatalog = appMenuCatalog;
         this.userPreferenceService = userPreferenceService;
+        this.clock = clock;
     }
 
     @GetMapping("/app/diet-logs")
     public String patientForm(@RequestParam(required = false) LocalDate date,
                               Model model,
                               Authentication authentication) {
-        var selectedDate = date == null ? LocalDate.now() : date;
         var glucosePreference = dietLogService.currentPatientGlucoseUnitPreference(authentication);
         var patientTimezone = currentPatientTimezone(authentication);
+        var selectedDate = date == null ? currentDate(patientTimezone) : date;
         var form = existingLogFormOrEmpty(authentication, selectedDate, glucosePreference, patientTimezone);
         addOptions(model);
         model.addAttribute("dietLogForm", form);
@@ -260,6 +264,10 @@ public class WebDietLogController {
         } catch (DateTimeException exception) {
             return ZoneId.systemDefault();
         }
+    }
+
+    private LocalDate currentDate(String patientTimezone) {
+        return LocalDate.ofInstant(clock.instant(), zoneOrSystemDefault(patientTimezone));
     }
 
     private void applyPatientDefaultsForDisplay(DietLogForm form, Authentication authentication) {
