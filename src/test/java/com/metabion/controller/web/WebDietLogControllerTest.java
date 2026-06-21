@@ -180,7 +180,9 @@ class WebDietLogControllerTest {
                 .andExpect(content().string(containsString("alt=\"photo-1.jpg\"")))
                 .andExpect(content().string(not(containsString("name=\"photoReferences[1].storageKey\""))))
                 .andExpect(content().string(containsString("name=\"glucoseMeasurement.measuredTime\"")))
-                .andExpect(content().string(containsString("name=\"ketoneMeasurement.measuredTime\"")));
+                .andExpect(content().string(containsString("name=\"ketoneMeasurement.measuredTime\"")))
+                .andExpect(content().string(containsString("name=\"glucoseMeasurement.measuredTime\" value=\"09:30\"")))
+                .andExpect(content().string(containsString("name=\"ketoneMeasurement.measuredTime\" value=\"22:00\"")));
     }
 
     @Test

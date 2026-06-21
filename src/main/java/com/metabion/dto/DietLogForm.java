@@ -13,6 +13,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.math.BigDecimal;
 import java.time.DateTimeException;
@@ -399,7 +400,10 @@ public class DietLogForm {
         private BigDecimal value;
 
         private MeasurementUnit unit;
+
+        @DateTimeFormat(pattern = "HH:mm")
         private LocalTime measuredTime;
+
         private Instant measuredAt;
         private MeasurementContext context;
 
