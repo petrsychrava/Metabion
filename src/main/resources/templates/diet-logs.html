@@ -144,7 +144,7 @@
 
                 <div class="diet-log-grid">
                     <label class="field"><span th:text="#{dietLogs.logDate}">Date</span>
-                        <input type="date" id="logDate" name="logDate"
+                        <input type="date" id="logDate" name="logDate" data-log-date
                                th:value="${dietLogForm.logDate == null ? '' : #temporals.format(dietLogForm.logDate, 'yyyy-MM-dd')}"
                                required>
                     </label>
@@ -309,7 +309,15 @@
                 document.addEventListener('DOMContentLoaded', () => {
                     const mealList = document.querySelector('[data-meal-list]');
                     const addMealButton = document.querySelector('[data-add-meal]');
+                    const logDateInput = document.querySelector('[data-log-date]');
                     const csrf = document.querySelector('input[name="_csrf"]');
+                    logDateInput?.addEventListener('change', () => {
+                        if (!logDateInput.value) return;
+                        const target = new URL(window.location.href);
+                        if (target.searchParams.get('date') === logDateInput.value) return;
+                        target.searchParams.set('date', logDateInput.value);
+                        window.location.href = target.toString();
+                    });
                     if (!mealList) return;
 
                     const mealRows = () => Array.from(mealList.querySelectorAll('[data-meal-row]'));

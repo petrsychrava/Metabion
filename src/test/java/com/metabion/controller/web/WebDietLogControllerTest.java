@@ -159,6 +159,20 @@ class WebDietLogControllerTest {
     }
 
     @Test
+    void patientDietLogPageReloadsSelectedDateThroughQueryParameter() throws Exception {
+        doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND))
+                .when(dietLogService).getCurrentPatientLog(any(), any());
+
+        mvc.perform(get("/app/diet-logs")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("diet-logs"))
+                .andExpect(content().string(containsString("data-log-date")))
+                .andExpect(content().string(containsString("searchParams.set('date', logDateInput.value)")))
+                .andExpect(content().string(containsString("window.location.href = target.toString()")));
+    }
+
+    @Test
     void patientDietLogPageRendersExistingRowsWithDistinctIndexedNames() throws Exception {
         when(dietLogService.currentPatientGlucoseUnitPreference(any())).thenReturn(MeasurementUnit.MG_DL);
         when(dietLogService.getCurrentPatientLog(any(), eq(LocalDate.of(2026, 6, 10))))
