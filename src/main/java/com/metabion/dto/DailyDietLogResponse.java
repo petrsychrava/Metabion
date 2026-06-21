@@ -120,10 +120,9 @@ public record DailyDietLogResponse(
     ) {
 
         private static DeviationResponse from(DailyDietLogDeviation deviation) {
-            var meal = deviation.getMeal();
             return new DeviationResponse(
                     deviation.getId(),
-                    meal == null ? null : meal.getId(),
+                    Objects.requireNonNull(deviation.getMeal(), "deviation meal is required").getId(),
                     deviation.getDeviationCategory(),
                     deviation.getSeverity(),
                     deviation.getNotes(),
