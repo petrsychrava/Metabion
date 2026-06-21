@@ -23,7 +23,8 @@ public class DietLogRequestMapper {
         log.setAppetiteLevel(request.appetiteLevel());
         log.setNotes(trimToNull(request.notes()));
         log.setMetadata(trimToNull(request.metadata()));
-        log.replaceChildren(mealsFrom(request), deviationsFrom(request));
+        var meals = mealsFrom(request);
+        log.replaceChildren(meals, deviationsFrom(request, meals));
     }
 
     public DailyMeasurementEntry measurementFrom(PatientProfile patient,
@@ -73,7 +74,8 @@ public class DietLogRequestMapper {
         return meals;
     }
 
-    private List<DailyDietLogDeviation> deviationsFrom(DailyDietLogRequest request) {
+    private List<DailyDietLogDeviation> deviationsFrom(DailyDietLogRequest request,
+                                                       List<DailyDietLogMeal> meals) {
         var requests = request.deviationsOrEmpty();
         var deviations = new ArrayList<DailyDietLogDeviation>(requests.size());
         for (var i = 0; i < requests.size(); i++) {
@@ -87,11 +89,18 @@ public class DietLogRequestMapper {
             if (deviation.severity() == null) {
                 throw badRequest("severity is required");
             }
-            deviations.add(new DailyDietLogDeviation(
+            var mapped = new DailyDietLogDeviation(
                     deviation.deviationCategory(),
                     deviation.severity(),
                     trimToNull(deviation.notes()),
-                    i));
+                    i);
+            if (deviation.mealIndex() != null) {
+                if (deviation.mealIndex() < 0 || deviation.mealIndex() >= meals.size()) {
+                    throw badRequest("deviation mealIndex is invalid");
+                }
+                mapped.setMeal(meals.get(deviation.mealIndex()));
+            }
+            deviations.add(mapped);
         }
         return deviations;
     }
