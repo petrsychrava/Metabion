@@ -138,6 +138,36 @@ class DailyDietLogRepositoryTest {
     }
 
     @Test
+    void persistsDeviationMealAssociation() {
+        var patient = createPatient("deviation-meal@example.com");
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        log.setAdherenceLevel(DietAdherenceLevel.MOSTLY);
+        log.setAppetiteLevel(AppetiteLevel.NORMAL);
+        var meal = new DailyDietLogMeal(
+                MealType.LUNCH,
+                FoodCategory.PROTEIN,
+                "Salmon",
+                "Meal notes",
+                0);
+        log.addMeal(meal);
+        var deviation = new DailyDietLogDeviation(
+                DietDeviationCategory.DINING_OUT,
+                DietDeviationSeverity.MINOR,
+                "Restaurant",
+                0);
+        deviation.setMeal(meal);
+        log.addDeviation(deviation);
+
+        var saved = dailyDietLogs.saveAndFlush(log);
+        entityManager.clear();
+
+        var reloaded = dailyDietLogs.findById(saved.getId()).orElseThrow();
+        assertThat(reloaded.getDeviations()).singleElement()
+                .satisfies(row -> assertThat(row.getMeal().getId())
+                        .isEqualTo(reloaded.getMeals().getFirst().getId()));
+    }
+
+    @Test
     void photoReferenceStoresUploadLifecycleMetadata() {
         var patient = createPatient("photo-lifecycle@example.com");
         var uploader = patient.getUser();

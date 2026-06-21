@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -23,6 +24,10 @@ public class DailyDietLogDeviation {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "daily_diet_log_id", nullable = false)
     private DailyDietLog dailyDietLog;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "meal_id", foreignKey = @ForeignKey(name = "fk_daily_diet_log_deviations_meal"))
+    private DailyDietLogMeal meal;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "deviation_category", nullable = false, length = 60)
@@ -62,6 +67,14 @@ public class DailyDietLogDeviation {
 
     public void setDailyDietLog(DailyDietLog dailyDietLog) {
         this.dailyDietLog = dailyDietLog;
+    }
+
+    public DailyDietLogMeal getMeal() {
+        return meal;
+    }
+
+    public void setMeal(DailyDietLogMeal meal) {
+        this.meal = meal;
     }
 
     public DietDeviationCategory getDeviationCategory() {

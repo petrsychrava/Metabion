@@ -202,6 +202,7 @@ class DietLogFormTest {
                 "Small deviation",
                 2);
         ReflectionTestUtils.setField(deviation, "id", 40L);
+        deviation.setMeal(meal);
         log.addDeviation(deviation);
 
         var photo = new DailyDietLogPhotoReference(
@@ -239,6 +240,7 @@ class DietLogFormTest {
         assertThat(response.deviations()).singleElement()
                 .satisfies(row -> {
                     assertThat(row.id()).isEqualTo(40L);
+                    assertThat(row.mealId()).isEqualTo(30L);
                     assertThat(row.deviationCategory()).isEqualTo(DietDeviationCategory.DINING_OUT);
                     assertThat(row.severity()).isEqualTo(DietDeviationSeverity.MINOR);
                     assertThat(row.notes()).isEqualTo("Small deviation");

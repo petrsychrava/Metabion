@@ -99,6 +99,7 @@ public record DailyDietLogResponse(
 
     public record DeviationResponse(
             Long id,
+            Long mealId,
             DietDeviationCategory deviationCategory,
             DietDeviationSeverity severity,
             String notes,
@@ -106,8 +107,10 @@ public record DailyDietLogResponse(
     ) {
 
         private static DeviationResponse from(DailyDietLogDeviation deviation) {
+            var meal = deviation.getMeal();
             return new DeviationResponse(
                     deviation.getId(),
+                    meal == null ? null : meal.getId(),
                     deviation.getDeviationCategory(),
                     deviation.getSeverity(),
                     deviation.getNotes(),

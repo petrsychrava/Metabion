@@ -375,6 +375,7 @@ class WebDietLogControllerTest {
                         0)),
                 List.of(new DailyDietLogResponse.DeviationResponse(
                         2L,
+                        1L,
                         DietDeviationCategory.DINING_OUT,
                         DietDeviationSeverity.MINOR,
                         "Restaurant lunch",
@@ -430,12 +431,14 @@ class WebDietLogControllerTest {
                 List.of(
                         new DailyDietLogResponse.DeviationResponse(
                                 3L,
+                                1L,
                                 DietDeviationCategory.DINING_OUT,
                                 DietDeviationSeverity.MINOR,
                                 "Restaurant lunch",
                                 0),
                         new DailyDietLogResponse.DeviationResponse(
                                 4L,
+                                2L,
                                 DietDeviationCategory.MISSED_MEAL,
                                 DietDeviationSeverity.MODERATE,
                                 "Skipped dinner",
