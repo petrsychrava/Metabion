@@ -8,7 +8,6 @@ import com.metabion.domain.FoodCategory;
 import com.metabion.domain.MealType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
@@ -22,7 +21,7 @@ public record DailyDietLogRequest(
         @Size(max = 2000) String metadata,
         @Valid List<MealRequest> meals,
         @Valid List<DeviationRequest> deviations,
-        @Valid List<PhotoReferenceRequest> photoReferences,
+        @Valid List<PhotoUploadReferenceRequest> photoReferences,
         @Valid List<DailyMeasurementEntryRequest> measurements
 ) {
 
@@ -32,7 +31,7 @@ public record DailyDietLogRequest(
                                String notes,
                                List<MealRequest> meals,
                                List<DeviationRequest> deviations,
-                               List<PhotoReferenceRequest> photoReferences,
+                               List<PhotoUploadReferenceRequest> photoReferences,
                                List<DailyMeasurementEntryRequest> measurements) {
         this(logDate, adherenceLevel, appetiteLevel, notes, null, meals, deviations, photoReferences, measurements);
     }
@@ -45,7 +44,7 @@ public record DailyDietLogRequest(
         return deviations == null ? List.of() : deviations;
     }
 
-    public List<PhotoReferenceRequest> photoReferencesOrEmpty() {
+    public List<PhotoUploadReferenceRequest> photoReferencesOrEmpty() {
         return photoReferences == null ? List.of() : photoReferences;
     }
 
@@ -75,18 +74,25 @@ public record DailyDietLogRequest(
     }
 
     public record DeviationRequest(
+            Integer mealIndex,
             @NotNull DietDeviationCategory deviationCategory,
             @NotNull DietDeviationSeverity severity,
             @Size(max = 1000) String notes
     ) {
+        public DeviationRequest(DietDeviationCategory deviationCategory,
+                                DietDeviationSeverity severity,
+                                String notes) {
+            this(null, deviationCategory, severity, notes);
+        }
     }
 
-    public record PhotoReferenceRequest(
-            @Size(max = 255) String originalFilename,
-            @Size(max = 120) String contentType,
-            @PositiveOrZero Long sizeBytes,
-            @Size(max = 500) String storageKey,
+    public record PhotoUploadReferenceRequest(
+            Integer mealIndex,
+            @NotNull Long uploadId,
             @Size(max = 500) String caption
     ) {
+        public PhotoUploadReferenceRequest(Long uploadId, String caption) {
+            this(null, uploadId, caption);
+        }
     }
 }

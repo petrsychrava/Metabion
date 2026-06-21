@@ -5,6 +5,7 @@ import com.metabion.domain.OnboardingSubmission;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
+import com.metabion.dto.OnboardingForm;
 import com.metabion.dto.OnboardingReviewRequest;
 import com.metabion.dto.OnboardingSubmissionRequest;
 import com.metabion.dto.OnboardingSubmissionResponse;
@@ -45,10 +46,21 @@ public class OnboardingService {
     public OnboardingSubmissionResponse submitForCurrentPatient(Authentication authentication,
                                                                OnboardingSubmissionRequest request) {
         var patient = currentPatientProfileForSubmission(authentication);
+        requireCompletePatientProfile(patient);
+        return submit(patient, request);
+    }
+
+    public OnboardingSubmissionResponse submitWebForCurrentPatient(Authentication authentication,
+                                                                  OnboardingForm form) {
+        var patient = currentPatientProfileForSubmission(authentication);
+        requireCompletePatientProfile(patient);
+        return submit(patient, requestFrom(form));
+    }
+
+    private OnboardingSubmissionResponse submit(PatientProfile patient, OnboardingSubmissionRequest request) {
         var context = normalizeContext(request.onboardingContext());
         var nextVersion = submissions.maxVersion(patient.getId(), context) + 1;
         var submission = new OnboardingSubmission(patient, context, nextVersion);
-        copyPatientProfile(request, patient);
         copyRequest(request, submission);
         return OnboardingSubmissionResponse.from(submissions.save(submission));
     }
@@ -202,20 +214,37 @@ public class OnboardingService {
         submission.setLabNotes(trimToNull(request.labNotes()));
     }
 
-    private static void copyPatientProfile(OnboardingSubmissionRequest request, PatientProfile patient) {
-        if (hasStablePatientProfileFields(patient)) {
-            return;
-        }
-        patient.setDateOfBirth(request.dateOfBirth());
-        patient.setSex(request.sex());
-        patient.setCountryRegion(trimToNull(request.countryRegion()));
-        patient.setTimezone(trimToNull(request.timezone()));
-    }
-
     private static boolean hasStablePatientProfileFields(PatientProfile patient) {
         return patient.getDateOfBirth() != null
                 && patient.getSex() != null
                 && trimToNull(patient.getCountryRegion()) != null
                 && trimToNull(patient.getTimezone()) != null;
+    }
+
+    private static void requireCompletePatientProfile(PatientProfile patient) {
+        if (!hasStablePatientProfileFields(patient)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Complete patient profile before submitting onboarding");
+        }
+    }
+
+    private static OnboardingSubmissionRequest requestFrom(OnboardingForm form) {
+        return new OnboardingSubmissionRequest(
+                form.onboardingContext(),
+                form.diagnosisType(),
+                form.diagnosisYear(),
+                form.diseaseLocation(),
+                form.diseaseBehavior(),
+                form.activityEstimate(),
+                form.currentMedications(),
+                form.steroidUse(),
+                form.advancedTherapyExposure(),
+                form.medicationNotes(),
+                form.labsCollectedAt(),
+                form.crpMgL(),
+                form.fecalCalprotectinUgG(),
+                form.hemoglobinGDl(),
+                form.albuminGDl(),
+                form.labNotes());
     }
 }

@@ -5,6 +5,7 @@ import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.ThemePreference;
 import com.metabion.domain.User;
+import com.metabion.dto.PatientProfileForm;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
 import jakarta.transaction.Transactional;
@@ -69,6 +70,27 @@ public class UserPreferenceService {
         patientProfiles.save(patient);
     }
 
+    public PatientProfileForm currentPatientProfileForm(Authentication authentication) {
+        var user = currentPatientUser(authentication);
+        return patientProfiles.findByUserId(user.getId())
+                .map(PatientProfileForm::from)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "patient profile not found"));
+    }
+
+    public void updatePatientProfile(Authentication authentication, PatientProfileForm form) {
+        if (form == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "patient profile is required");
+        }
+        var user = currentPatientUser(authentication);
+        var patient = patientProfiles.findByUserId(user.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "patient profile not found"));
+        patient.setDateOfBirth(form.dateOfBirth());
+        patient.setSex(form.sex());
+        patient.setCountryRegion(trimToNull(form.countryRegion()));
+        patient.setTimezone(trimToNull(form.timezone()));
+        patientProfiles.save(patient);
+    }
+
     private User currentUser(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated() || authentication.getName() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "authentication required");
@@ -83,5 +105,13 @@ public class UserPreferenceService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "patient role is required");
         }
         return user;
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        var trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

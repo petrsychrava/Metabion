@@ -28,6 +28,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -74,7 +75,8 @@ class WebOnboardingControllerTest {
     @Test
     void patientOnboardingPageRequiresAuthentication() throws Exception {
         mvc.perform(get("/app/onboarding"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
     }
 
     @Test
@@ -86,7 +88,7 @@ class WebOnboardingControllerTest {
                 .andExpect(model().attributeExists("onboardingForm"))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
                 .andExpect(content().string(containsString("Onboarding history")))
-                .andExpect(content().string(containsString("Education library - planned")));
+                .andExpect(content().string(containsString("Education library")));
     }
 
     @Test
@@ -101,8 +103,6 @@ class WebOnboardingControllerTest {
                 .andExpect(content().string(containsString("Pacientský vstupní dotazník")))
                 .andExpect(content().string(containsString("Historie")))
                 .andExpect(content().string(containsString("Odeslat výchozí údaje")))
-                .andExpect(content().string(containsString("Datum narození")))
-                .andExpect(content().string(containsString(">Žena<")))
                 .andExpect(content().string(containsString(">Crohnova choroba<")))
                 .andExpect(content().string(containsString(">Mírná<")))
                 .andExpect(content().string(containsString(">Žádné<")))
@@ -140,21 +140,18 @@ class WebOnboardingControllerTest {
     }
 
     @Test
-    void patientOnboardingPageRendersExistingPatientProfileFieldsReadOnly() throws Exception {
+    void patientOnboardingPageDoesNotRenderPatientProfileFields() throws Exception {
         when(onboardingService.getLatestForCurrentPatient(any(), eq("default"))).thenReturn(fullSubmissionResponse());
 
         mvc.perform(get("/app/onboarding")
                         .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
                 .andExpect(status().isOk())
                 .andExpect(view().name("onboarding"))
-                .andExpect(content().string(containsString("id=\"dateOfBirth\" name=\"dateOfBirth\"")))
-                .andExpect(content().string(containsString("value=\"1990-01-01\"")))
-                .andExpect(content().string(containsString("readonly=\"readonly\"")))
-                .andExpect(content().string(containsString("class=\"locked-profile-field\"")))
-                .andExpect(content().string(containsString("name=\"sex\" value=\"FEMALE\"")))
-                .andExpect(content().string(containsString("disabled=\"disabled\" class=\"locked-profile-field\" id=\"sex\" name=\"sex\"")))
-                .andExpect(content().string(containsString("class=\"locked-profile-field\" id=\"countryRegion\" name=\"countryRegion\" value=\"CZ\"")))
-                .andExpect(content().string(containsString("class=\"locked-profile-field\" id=\"timezone\" name=\"timezone\" value=\"Europe/Prague\"")));
+                .andExpect(content().string(not(containsString("name=\"dateOfBirth\""))))
+                .andExpect(content().string(not(containsString("name=\"sex\""))))
+                .andExpect(content().string(not(containsString("name=\"countryRegion\""))))
+                .andExpect(content().string(not(containsString("name=\"timezone\""))))
+                .andExpect(content().string(not(containsString("locked-profile-field"))));
     }
 
     @Test
@@ -173,10 +170,6 @@ class WebOnboardingControllerTest {
                         .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf())
                         .param("onboardingContext", "default")
-                        .param("dateOfBirth", "1990-01-01")
-                        .param("sex", "FEMALE")
-                        .param("countryRegion", "CZ")
-                        .param("timezone", "Europe/Prague")
                         .param("diagnosisType", "CROHNS_DISEASE")
                         .param("diagnosisYear", "2018")
                         .param("activityEstimate", "MILD")
@@ -185,7 +178,7 @@ class WebOnboardingControllerTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/app/onboarding?context=default"));
 
-        verify(onboardingService).submitForCurrentPatient(any(), any());
+        verify(onboardingService).submitWebForCurrentPatient(any(), any());
     }
 
     @Test
@@ -199,10 +192,9 @@ class WebOnboardingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("onboarding"))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
-                .andExpect(content().string(containsString("Education library - planned")))
+                .andExpect(content().string(containsString("Education library")))
                 .andExpect(content().string(containsString("Latest baseline")))
-                .andExpect(content().string(containsString("must not be null")))
-                .andExpect(content().string(containsString("must not be blank")));
+                .andExpect(content().string(containsString("must not be null")));
     }
 
     @Test
@@ -211,10 +203,6 @@ class WebOnboardingControllerTest {
                         .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf())
                         .param("onboardingContext", " Study-A ")
-                        .param("dateOfBirth", "1990-01-01")
-                        .param("sex", "FEMALE")
-                        .param("countryRegion", "CZ")
-                        .param("timezone", "Europe/Prague")
                         .param("diagnosisType", "CROHNS_DISEASE")
                         .param("diagnosisYear", "2018")
                         .param("activityEstimate", "MILD")

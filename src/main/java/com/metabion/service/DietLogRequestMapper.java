@@ -3,7 +3,6 @@ package com.metabion.service;
 import com.metabion.domain.DailyDietLog;
 import com.metabion.domain.DailyDietLogDeviation;
 import com.metabion.domain.DailyDietLogMeal;
-import com.metabion.domain.DailyDietLogPhotoReference;
 import com.metabion.domain.DailyMeasurementEntry;
 import com.metabion.domain.PatientProfile;
 import com.metabion.dto.DailyDietLogRequest;
@@ -18,19 +17,14 @@ import java.util.List;
 @Service
 public class DietLogRequestMapper {
 
-    private final StorageKeyValidator storageKeyValidator;
-
-    public DietLogRequestMapper(StorageKeyValidator storageKeyValidator) {
-        this.storageKeyValidator = storageKeyValidator;
-    }
-
     public void applyTo(DailyDietLog log, DailyDietLogRequest request) {
         log.setLogDate(request.logDate());
         log.setAdherenceLevel(request.adherenceLevel());
         log.setAppetiteLevel(request.appetiteLevel());
         log.setNotes(trimToNull(request.notes()));
         log.setMetadata(trimToNull(request.metadata()));
-        log.replaceChildren(mealsFrom(request), deviationsFrom(request), photoReferencesFrom(request));
+        var meals = mealsFrom(request);
+        log.replaceChildren(meals, deviationsFrom(request, meals));
     }
 
     public DailyMeasurementEntry measurementFrom(PatientProfile patient,
@@ -80,7 +74,8 @@ public class DietLogRequestMapper {
         return meals;
     }
 
-    private List<DailyDietLogDeviation> deviationsFrom(DailyDietLogRequest request) {
+    private List<DailyDietLogDeviation> deviationsFrom(DailyDietLogRequest request,
+                                                       List<DailyDietLogMeal> meals) {
         var requests = request.deviationsOrEmpty();
         var deviations = new ArrayList<DailyDietLogDeviation>(requests.size());
         for (var i = 0; i < requests.size(); i++) {
@@ -94,34 +89,20 @@ public class DietLogRequestMapper {
             if (deviation.severity() == null) {
                 throw badRequest("severity is required");
             }
-            deviations.add(new DailyDietLogDeviation(
+            var mapped = new DailyDietLogDeviation(
                     deviation.deviationCategory(),
                     deviation.severity(),
                     trimToNull(deviation.notes()),
-                    i));
+                    i);
+            if (deviation.mealIndex() == null
+                    || deviation.mealIndex() < 0
+                    || deviation.mealIndex() >= meals.size()) {
+                throw badRequest("deviation mealIndex is invalid");
+            }
+            mapped.setMeal(meals.get(deviation.mealIndex()));
+            deviations.add(mapped);
         }
         return deviations;
-    }
-
-    private List<DailyDietLogPhotoReference> photoReferencesFrom(DailyDietLogRequest request) {
-        var requests = request.photoReferencesOrEmpty();
-        var photoReferences = new ArrayList<DailyDietLogPhotoReference>(requests.size());
-        for (var i = 0; i < requests.size(); i++) {
-            var photo = requests.get(i);
-            if (photo == null) {
-                throw badRequest("photoReference is required");
-            }
-            var storageKey = trimToNull(photo.storageKey());
-            storageKeyValidator.validate(storageKey);
-            photoReferences.add(new DailyDietLogPhotoReference(
-                    trimToNull(photo.originalFilename()),
-                    trimToNull(photo.contentType()),
-                    photo.sizeBytes(),
-                    storageKey,
-                    trimToNull(photo.caption()),
-                    i));
-        }
-        return photoReferences;
     }
 
     private static ResponseStatusException badRequest(String reason) {

@@ -1,5 +1,6 @@
 package com.metabion.controller.web;
 
+import com.metabion.domain.RoleName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.context.support.ResourceBundleMessageSource;
@@ -15,15 +16,15 @@ class AppMenuCatalogTest {
 
     @Test
     void patientReceivesPatientImplementedAndPlannedItems() {
-        var auth = auth("patient@example.com", "ROLE_PATIENT");
+        var auth = auth("patient@example.com", RoleName.PATIENT.authority());
 
         assertThat(catalog.sidebarItems(auth))
                 .extracting(AppMenuItem::displayLabel)
                 .containsExactly(
                         "Home",
+                        "Education library",
                         "Onboarding",
                         "Onboarding history",
-                        "Education library - planned",
                         "Diet logs",
                         "Lab trends - planned",
                         "Protocol phase - planned",
@@ -38,14 +39,16 @@ class AppMenuCatalogTest {
 
     @Test
     void clinicalStaffReceivesClinicalAndStudyItems() {
-        var auth = auth("doctor@example.com", "ROLE_PHYSICIAN");
+        var auth = auth("doctor@example.com", RoleName.PHYSICIAN.authority());
 
         assertThat(catalog.sidebarItems(auth))
                 .extracting(AppMenuItem::displayLabel)
                 .containsExactly(
                         "Home",
+                        "Education library",
                         "Onboarding review",
                         "Diet log review",
+                        "Content management",
                         "Assigned patient overview - planned",
                         "Red-flag monitoring - planned",
                         "Data completeness - planned",
@@ -57,14 +60,16 @@ class AppMenuCatalogTest {
 
     @Test
     void coordinatorReceivesClinicalAndStudyItems() {
-        var auth = auth("coordinator@example.com", "ROLE_COORDINATOR");
+        var auth = auth("coordinator@example.com", RoleName.COORDINATOR.authority());
 
         assertThat(catalog.sidebarItems(auth))
                 .extracting(AppMenuItem::displayLabel)
                 .containsExactly(
                         "Home",
+                        "Education library",
                         "Onboarding review",
                         "Diet log review",
+                        "Content management",
                         "Assigned patient overview - planned",
                         "Red-flag monitoring - planned",
                         "Data completeness - planned",
@@ -76,14 +81,15 @@ class AppMenuCatalogTest {
 
     @Test
     void adminReceivesAdminItemsOnly() {
-        var auth = auth("admin@example.com", "ROLE_ADMIN");
+        var auth = auth("admin@example.com", RoleName.ADMIN.authority());
 
         assertThat(catalog.sidebarItems(auth))
                 .extracting(AppMenuItem::displayLabel)
                 .containsExactly(
                         "Home",
+                        "Education library",
                         "Staff invitations",
-                        "Content management - planned",
+                        "Content management",
                         "Rule configuration - planned",
                         "Audit review - planned",
                         "Account");
@@ -91,9 +97,9 @@ class AppMenuCatalogTest {
 
     @Test
     void implementedItemsHaveExpectedRoutes() {
-        var patient = auth("patient@example.com", "ROLE_PATIENT");
-        var clinician = auth("doctor@example.com", "ROLE_NUTRITION_SPECIALIST");
-        var admin = auth("admin@example.com", "ROLE_ADMIN");
+        var patient = auth("patient@example.com", RoleName.PATIENT.authority());
+        var clinician = auth("doctor@example.com", RoleName.NUTRITION_SPECIALIST.authority());
+        var admin = auth("admin@example.com", RoleName.ADMIN.authority());
 
         assertThat(catalog.sidebarItems(patient))
                 .filteredOn(item -> "Onboarding".equals(item.label()))
@@ -105,6 +111,21 @@ class AppMenuCatalogTest {
                 .singleElement()
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/diet-logs");
+        assertThat(catalog.sidebarItems(patient))
+                .filteredOn(item -> "Education library".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/education");
+        assertThat(catalog.sidebarItems(clinician))
+                .filteredOn(item -> "Education library".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/education");
+        assertThat(catalog.sidebarItems(admin))
+                .filteredOn(item -> "Education library".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/education");
         assertThat(catalog.sidebarItems(clinician))
                 .filteredOn(item -> "Onboarding review".equals(item.label()))
                 .singleElement()
@@ -115,22 +136,32 @@ class AppMenuCatalogTest {
                 .singleElement()
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/clinical/diet-logs");
+        assertThat(catalog.sidebarItems(clinician))
+                .filteredOn(item -> "Content management".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/content/education");
         assertThat(catalog.sidebarItems(admin))
                 .filteredOn(item -> "Staff invitations".equals(item.label()))
                 .singleElement()
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/staff-invitations/new");
+        assertThat(catalog.sidebarItems(admin))
+                .filteredOn(item -> "Content management".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/content/education");
     }
 
     @Test
     void dashboardItemsAreCuratedSubsetOfSidebarItems() {
-        var patient = auth("patient@example.com", "ROLE_PATIENT");
+        var patient = auth("patient@example.com", RoleName.PATIENT.authority());
 
         assertThat(catalog.dashboardItems(patient))
                 .extracting(AppMenuItem::displayLabel)
                 .containsExactly(
+                        "Education library",
                         "Onboarding",
-                        "Education library - planned",
                         "Diet logs",
                         "Lab trends - planned",
                         "Red-flag guidance - planned");
@@ -140,14 +171,15 @@ class AppMenuCatalogTest {
     void menuLabelsUseCurrentLocale() {
         LocaleContextHolder.setLocale(Locale.forLanguageTag("cs"));
         try {
-            var admin = auth("admin@example.com", "ROLE_ADMIN");
+            var admin = auth("admin@example.com", RoleName.ADMIN.authority());
 
             assertThat(catalog.sidebarItems(admin))
                     .extracting(AppMenuItem::displayLabel)
                     .containsExactly(
                             "Domů",
+                            "Vzdělávací knihovna",
                             "Pozvánky pracovníků",
-                            "Správa obsahu - plánováno",
+                            "Správa obsahu",
                             "Nastavení pravidel - plánováno",
                             "Kontrola auditu - plánováno",
                             "Účet");

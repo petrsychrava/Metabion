@@ -1,5 +1,6 @@
 package com.metabion.config;
 
+import com.metabion.domain.RoleName;
 import com.metabion.dto.LoginResponse;
 import com.metabion.service.SecurityService;
 import com.metabion.service.StaffInvitationService;
@@ -117,7 +118,7 @@ class SecurityConfigTest {
     @Test
     void admin_staff_invitation_create_without_csrf_is_forbidden_for_admin() throws Exception {
         mvc.perform(post("/api/admin/staff-invitations")
-                        .with(user("admin@example.com").roles("ADMIN"))
+                        .with(user("admin@example.com").roles(RoleName.ADMIN.name()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isForbidden());
@@ -154,8 +155,15 @@ class SecurityConfigTest {
     }
 
     @Test
-    void app_requires_authentication() throws Exception {
+    void app_redirects_unauthenticated_browser_to_login() throws Exception {
         mvc.perform(get("/app"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+    }
+
+    @Test
+    void api_requires_authentication_with_unauthorized_status() throws Exception {
+        mvc.perform(get("/api/whoami"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -170,7 +178,7 @@ class SecurityConfigTest {
     @Test
     void theme_preference_post_without_csrf_is_forbidden_for_authenticated_user() throws Exception {
         mvc.perform(post("/app/preferences/theme")
-                        .with(user("user@example.com").roles("PATIENT"))
+                        .with(user("user@example.com").roles(RoleName.PATIENT.name()))
                         .param("themePreference", "DARK"))
                 .andExpect(status().isForbidden());
     }
@@ -261,7 +269,7 @@ class SecurityConfigTest {
         when(securityService.login(any(), any(), any()))
                 .thenReturn(LoginResponse.mfaRequired(
                         "user@example.com",
-                        List.of("PATIENT"),
+                        List.of(RoleName.PATIENT.name()),
                         "challenge-id",
                         List.of("totp")));
 

@@ -82,7 +82,7 @@ class AuthControllerLoginTest {
     void loginReturnsMfaRequiredWhenMfaEnabled() {
         var request = new LoginRequest("admin@example.com", "password123");
         var response = LoginResponse.mfaRequired("admin@example.com",
-                List.of("ADMIN"), "challenge-123", List.of("totp"));
+                List.of(RoleName.ADMIN.name()), "challenge-123", List.of("totp"));
 
         when(securityService.login(
                 argThat(r -> r != null && "admin@example.com".equals(r.email())),
@@ -113,11 +113,11 @@ class AuthControllerLoginTest {
 
     @Test
     void meReturns200WithAuthenticatedEmailAndRoles() throws Exception {
-        var auth = new TestingAuthenticationToken("patient@example.com", "password", "ROLE_PATIENT");
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
 
         mockMvc().perform(get("/api/auth/me")
-                        .with(user("patient@example.com").roles("PATIENT"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .principal(auth))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("patient@example.com"))
@@ -133,7 +133,7 @@ class AuthControllerLoginTest {
 
     @Test
     void meReturns401WhenAuthenticationIsNotAuthenticated() {
-        var auth = new TestingAuthenticationToken("patient@example.com", "password", "ROLE_PATIENT");
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(false);
 
         var result = authController.me(auth);

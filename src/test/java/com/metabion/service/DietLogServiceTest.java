@@ -15,13 +15,16 @@ import com.metabion.domain.MeasurementType;
 import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
+import com.metabion.domain.StaffProfile;
 import com.metabion.domain.User;
 import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.dto.DailyDietLogSummaryResponse;
 import com.metabion.dto.DailyMeasurementEntryRequest;
+import com.metabion.dto.PatientOptionResponse;
 import com.metabion.repository.DailyDietLogRepository;
 import com.metabion.repository.DailyMeasurementEntryRepository;
 import com.metabion.repository.PatientProfileRepository;
+import com.metabion.repository.StaffProfileRepository;
 import com.metabion.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,9 +59,11 @@ class DietLogServiceTest {
 
     @Mock UserRepository users;
     @Mock PatientProfileRepository patientProfiles;
+    @Mock StaffProfileRepository staffProfiles;
     @Mock DailyDietLogRepository dailyDietLogs;
     @Mock DailyMeasurementEntryRepository measurements;
     @Mock AccessControlService accessControl;
+    @Mock DietLogPhotoService dietLogPhotoService;
 
     DietLogService service;
 
@@ -66,19 +71,20 @@ class DietLogServiceTest {
     void setUp() {
         var measurementWindows = new MeasurementWindowService();
         var measurementValidator = new MeasurementValidator(measurementWindows);
-        var storageKeyValidator = new StorageKeyValidator();
-        var requestMapper = new DietLogRequestMapper(storageKeyValidator);
+        var requestMapper = new DietLogRequestMapper();
         var responseAssembler = new DietLogResponseAssembler();
         service = new DietLogService(
                 users,
                 patientProfiles,
+                staffProfiles,
                 dailyDietLogs,
                 measurements,
                 accessControl,
                 measurementWindows,
                 measurementValidator,
                 requestMapper,
-                responseAssembler);
+                responseAssembler,
+                dietLogPhotoService);
     }
 
     @Test
@@ -217,7 +223,106 @@ class DietLogServiceTest {
         assertThat(existing.getMeals()).hasSize(1);
         assertThat(existing.getMeals().getFirst().getMealType()).isEqualTo(MealType.LUNCH);
         assertThat(existing.getDeviations()).hasSize(1);
-        assertThat(existing.getPhotoReferences()).hasSize(1);
+        assertThat(existing.getPhotoReferences()).isEmpty();
+    }
+
+    @Test
+    void saveForCurrentPatientLinksDeviationToSubmittedMealIndex() {
+        givenAuthenticatedPatient();
+        when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
+                .thenReturn(Optional.empty());
+        when(dailyDietLogs.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        var request = new DailyDietLogRequest(
+                LocalDate.of(2026, 6, 10),
+                DietAdherenceLevel.MOSTLY,
+                AppetiteLevel.NORMAL,
+                "Stable",
+                List.of(
+                        new DailyDietLogRequest.MealRequest(
+                                MealType.LUNCH,
+                                FoodCategory.PROTEIN,
+                                "Salmon",
+                                null),
+                        new DailyDietLogRequest.MealRequest(
+                                MealType.DINNER,
+                                FoodCategory.LOW_CARB_VEGETABLES,
+                                "Greens",
+                                null)),
+                List.of(new DailyDietLogRequest.DeviationRequest(
+                        1,
+                        DietDeviationCategory.DINING_OUT,
+                        DietDeviationSeverity.MINOR,
+                        "Dinner out")),
+                List.of(),
+                List.of());
+
+        service.saveForCurrentPatient(auth("patient@example.com"), request);
+
+        var captor = ArgumentCaptor.forClass(DailyDietLog.class);
+        verify(dailyDietLogs).save(captor.capture());
+        var saved = captor.getValue();
+        assertThat(saved.getDeviations()).singleElement()
+                .satisfies(deviation -> assertThat(deviation.getMeal())
+                        .isSameAs(saved.getMeals().get(1)));
+    }
+
+    @Test
+    void saveForCurrentPatientRejectsDeviationWithInvalidMealIndex() {
+        givenAuthenticatedPatient();
+        when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
+                .thenReturn(Optional.empty());
+        var request = new DailyDietLogRequest(
+                LocalDate.of(2026, 6, 10),
+                DietAdherenceLevel.MOSTLY,
+                AppetiteLevel.NORMAL,
+                "Stable",
+                List.of(new DailyDietLogRequest.MealRequest(
+                        MealType.LUNCH,
+                        FoodCategory.PROTEIN,
+                        "Salmon",
+                        null)),
+                List.of(new DailyDietLogRequest.DeviationRequest(
+                        2,
+                        DietDeviationCategory.DINING_OUT,
+                        DietDeviationSeverity.MINOR,
+                        "Bad index")),
+                List.of(),
+                List.of());
+
+        assertThatThrownBy(() -> service.saveForCurrentPatient(auth("patient@example.com"), request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("deviation mealIndex is invalid");
+        verify(dailyDietLogs, never()).save(any());
+    }
+
+    @Test
+    void saveForCurrentPatientRejectsDeviationWithMissingMealIndex() {
+        givenAuthenticatedPatient();
+        when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
+                .thenReturn(Optional.empty());
+        var request = new DailyDietLogRequest(
+                LocalDate.of(2026, 6, 10),
+                DietAdherenceLevel.MOSTLY,
+                AppetiteLevel.NORMAL,
+                "Stable",
+                List.of(new DailyDietLogRequest.MealRequest(
+                        MealType.LUNCH,
+                        FoodCategory.PROTEIN,
+                        "Salmon",
+                        null)),
+                List.of(new DailyDietLogRequest.DeviationRequest(
+                        DietDeviationCategory.DINING_OUT,
+                        DietDeviationSeverity.MINOR,
+                        "No meal index")),
+                List.of(),
+                List.of());
+
+        assertThatThrownBy(() -> service.saveForCurrentPatient(auth("patient@example.com"), request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("deviation mealIndex is invalid");
+        verify(dailyDietLogs, never()).save(any());
     }
 
     @Test
@@ -427,6 +532,80 @@ class DietLogServiceTest {
     }
 
     @Test
+    void clinicalListWithoutPatientReturnsLogsForAssignedPatients() {
+        var reviewer = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var staffProfile = new StaffProfile(reviewer);
+        staffProfile.setId(55L);
+        var firstPatient = patientProfile(20L, user(4L, "alpha@example.com", RoleName.PATIENT));
+        var secondPatient = patientProfile(21L, user(5L, "beta@example.com", RoleName.PATIENT));
+        var older = savedLog(99L, firstPatient, LocalDate.of(2026, 6, 10));
+        var newer = savedLog(100L, secondPatient, LocalDate.of(2026, 6, 12));
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(reviewer));
+        when(staffProfiles.findByUserId(2L)).thenReturn(Optional.of(staffProfile));
+        when(patientProfiles.findAccessiblePatientOptionsForStaff(55L))
+                .thenReturn(List.of(
+                        new PatientOptionResponse(20L, "alpha@example.com"),
+                        new PatientOptionResponse(21L, "beta@example.com")));
+        when(dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(
+                20L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30))).thenReturn(List.of(older));
+        when(dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(
+                21L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30))).thenReturn(List.of(newer));
+        when(measurements.countByDailyDietLogIds(List.of(99L))).thenReturn(List.of());
+        when(measurements.countByDailyDietLogIds(List.of(100L))).thenReturn(List.of());
+
+        var summaries = service.listClinicalLogs(
+                auth("doctor@example.com"),
+                null,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30));
+
+        assertThat(summaries).extracting(DailyDietLogSummaryResponse::id)
+                .containsExactly(100L, 99L);
+        assertThat(summaries).extracting(DailyDietLogSummaryResponse::patientEmail)
+                .containsExactly("beta@example.com", "alpha@example.com");
+        verify(accessControl, never()).canAccessPatientProfile(any(), any());
+    }
+
+    @Test
+    void clinicalPatientOptionsReturnAllPatientsForAdmin() {
+        var admin = user(3L, "admin@example.com", RoleName.ADMIN);
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(patientProfiles.findAllPatientOptions())
+                .thenReturn(List.of(
+                        new PatientOptionResponse(20L, "alpha@example.com"),
+                        new PatientOptionResponse(21L, "beta@example.com")));
+
+        var options = service.listClinicalPatientOptions(auth("admin@example.com"));
+
+        assertThat(options).extracting(PatientOptionResponse::email)
+                .containsExactly("alpha@example.com", "beta@example.com");
+        verify(patientProfiles).findAllPatientOptions();
+        verify(patientProfiles, never()).findAccessiblePatientOptionsForStaff(any());
+    }
+
+    @Test
+    void clinicalPatientOptionsReturnAssignedPatientsForStaff() {
+        var reviewer = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var staffProfile = new StaffProfile(reviewer);
+        staffProfile.setId(55L);
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(reviewer));
+        when(staffProfiles.findByUserId(2L)).thenReturn(Optional.of(staffProfile));
+        when(patientProfiles.findAccessiblePatientOptionsForStaff(55L))
+                .thenReturn(List.of(new PatientOptionResponse(20L, "assigned@example.com")));
+
+        var options = service.listClinicalPatientOptions(auth("doctor@example.com"));
+
+        assertThat(options).extracting(PatientOptionResponse::id)
+                .containsExactly(20L);
+        verify(patientProfiles).findAccessiblePatientOptionsForStaff(55L);
+        verify(patientProfiles, never()).findAllPatientOptions();
+    }
+
+    @Test
     void adminClinicalReadSkipsAssignmentCheck() {
         var admin = user(2L, "admin@example.com", RoleName.ADMIN);
         var patient = patientProfile(20L, user(3L, "patient2@example.com", RoleName.PATIENT));
@@ -467,23 +646,30 @@ class DietLogServiceTest {
     }
 
     @Test
-    void storageKeyGuardRejectsUnsafeValues() {
-        givenAuthenticatedPatient();
+    void saveForCurrentPatientAttachesUploadedPhotosAfterSavingLog() {
+        var patient = givenAuthenticatedPatient();
+        var saved = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
+        when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
+                .thenReturn(Optional.empty());
+        when(dailyDietLogs.save(any())).thenReturn(saved);
+        var photoReference = new DailyDietLogRequest.PhotoUploadReferenceRequest(0, 50L, "Lunch plate");
+        var request = new DailyDietLogRequest(
+                LocalDate.of(2026, 6, 10),
+                DietAdherenceLevel.MOSTLY,
+                AppetiteLevel.NORMAL,
+                "Stable",
+                List.of(new DailyDietLogRequest.MealRequest(MealType.LUNCH, FoodCategory.PROTEIN, "Lunch", null)),
+                List.of(),
+                List.of(photoReference),
+                List.of());
 
-        assertUnsafeStorageKey("https://example.com/meal.jpg");
-        assertUnsafeStorageKey("../meal.jpg");
-        assertUnsafeStorageKey("/tmp/meal.jpg");
-        assertUnsafeStorageKey("C:\\Users\\x\\meal.jpg");
-        assertUnsafeStorageKey("\\\\server\\share\\meal.jpg");
-        assertUnsafeStorageKey("~/meal.jpg");
-        assertUnsafeStorageKey("file:/tmp/meal.jpg");
-        assertUnsafeStorageKey("meal.jpg?token=abc");
-        assertUnsafeStorageKey("meal.jpg#sig");
-        assertUnsafeStorageKey("pending/meal.jpg?signature=abc");
+        service.saveForCurrentPatient(auth("patient@example.com"), request);
+
+        verify(dietLogPhotoService).attachToLog(patient, saved, List.of(photoReference));
     }
 
     @Test
-    void storageKeyGuardAllowsOpaqueRelativeKeys() {
+    void emptyPhotoReferencesStillSave() {
         givenAuthenticatedPatient();
         when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
                 .thenReturn(Optional.empty());
@@ -492,25 +678,8 @@ class DietLogServiceTest {
 
         var response = service.saveForCurrentPatient(auth("patient@example.com"), validRequest(LocalDate.of(2026, 6, 10)));
 
-        assertThat(response.photoReferences()).hasSize(1);
-        assertThat(response.photoReferences().getFirst().storageKey()).isEqualTo("pending/meal.jpg");
-    }
-
-    private void assertUnsafeStorageKey(String storageKey) {
-        var baseRequest = validRequest(LocalDate.of(2026, 6, 10));
-        var request = new DailyDietLogRequest(
-                baseRequest.logDate(),
-                baseRequest.adherenceLevel(),
-                baseRequest.appetiteLevel(),
-                baseRequest.notes(),
-                baseRequest.meals(),
-                baseRequest.deviations(),
-                List.of(new DailyDietLogRequest.PhotoReferenceRequest("meal.jpg", "image/jpeg", 123L, storageKey, "Lunch")),
-                baseRequest.measurements());
-
-        assertThatThrownBy(() -> service.saveForCurrentPatient(auth("patient@example.com"), request))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("400 BAD_REQUEST");
+        assertThat(response.photoReferences()).isEmpty();
+        verify(dietLogPhotoService).attachToLog(any(), any(), eq(List.of()));
     }
 
     private DailyDietLogRequest validRequest(LocalDate date) {
@@ -520,8 +689,8 @@ class DietLogServiceTest {
                 AppetiteLevel.NORMAL,
                 " Stable day ",
                 List.of(new DailyDietLogRequest.MealRequest(MealType.LUNCH, FoodCategory.PROTEIN, " Salmon ", " ok ")),
-                List.of(new DailyDietLogRequest.DeviationRequest(DietDeviationCategory.DINING_OUT, DietDeviationSeverity.MINOR, " small ")),
-                List.of(new DailyDietLogRequest.PhotoReferenceRequest(" meal.jpg ", " image/jpeg ", 123L, "pending/meal.jpg", " Lunch ")),
+                List.of(new DailyDietLogRequest.DeviationRequest(0, DietDeviationCategory.DINING_OUT, DietDeviationSeverity.MINOR, " small ")),
+                List.of(),
                 List.of(new DailyMeasurementEntryRequest(
                         MeasurementType.GLUCOSE,
                         new BigDecimal("5.8"),

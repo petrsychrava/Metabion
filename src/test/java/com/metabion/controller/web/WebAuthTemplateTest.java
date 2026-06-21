@@ -3,7 +3,10 @@ package com.metabion.controller.web;
 import com.metabion.config.RateLimitingFilter;
 import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.MeasurementUnit;
+import com.metabion.domain.RoleName;
+import com.metabion.domain.Sex;
 import com.metabion.domain.ThemePreference;
+import com.metabion.dto.PatientProfileForm;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.SecurityService;
 import com.metabion.service.StaffInvitationService;
@@ -21,6 +24,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -168,7 +173,7 @@ class WebAuthTemplateTest {
 
     @Test
     void app_template_renders_authenticated_shell() throws Exception {
-        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        var auth = new TestingAuthenticationToken("user@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
         when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.DARK);
 
@@ -178,7 +183,7 @@ class WebAuthTemplateTest {
                 .andExpect(content().string(containsString("class=\"workbench\"")))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
                 .andExpect(content().string(containsString("Onboarding")))
-                .andExpect(content().string(containsString("Education library - planned")))
+                .andExpect(content().string(containsString("Education library")))
                 .andExpect(content().string(containsString("user@example.com")))
                 .andExpect(content().string(not(containsString("name=\"themePreference\""))))
                 .andExpect(content().string(not(containsString("id=\"themePreference\""))))
@@ -191,7 +196,7 @@ class WebAuthTemplateTest {
 
     @Test
     void authenticated_language_preference_wins_over_locale_cookie() throws Exception {
-        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        var auth = new TestingAuthenticationToken("user@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
         when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.DARK);
         when(userPreferenceService.currentLanguagePreference(auth)).thenReturn(LanguagePreference.CS);
@@ -203,17 +208,20 @@ class WebAuthTemplateTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("lang=\"cs\"")))
                 .andExpect(content().string(containsString("Pracovní plocha")))
-                .andExpect(content().string(containsString("Vzdělávací knihovna - plánováno")))
+                .andExpect(content().string(containsString("Vzdělávací knihovna")))
                 .andExpect(content().string(not(containsString("Vzhled"))))
                 .andExpect(content().string(containsString("Odhlásit se")));
     }
 
     @Test
     void authenticated_account_and_staff_invitation_pages_render_in_czech() throws Exception {
-        var patient = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        var patient = new TestingAuthenticationToken("user@example.com", "password", RoleName.PATIENT.authority());
         patient.setAuthenticated(true);
         when(userPreferenceService.currentThemePreference(patient)).thenReturn(ThemePreference.SYSTEM);
         when(userPreferenceService.currentLanguagePreference(patient)).thenReturn(LanguagePreference.CS);
+        when(userPreferenceService.currentPatientProfileForm(patient)).thenReturn(
+                new PatientProfileForm(LocalDate.of(1990, 1, 1), Sex.FEMALE, "CZ", "Europe/Prague"));
+        when(userPreferenceService.currentGlucoseUnitPreference(patient)).thenReturn(MeasurementUnit.MG_DL);
 
         mvc.perform(get("/app/account").principal(patient).with(csrf()))
                 .andExpect(status().isOk())
@@ -222,7 +230,7 @@ class WebAuthTemplateTest {
                 .andExpect(content().string(containsString("Profil")))
                 .andExpect(content().string(containsString("E-mail")));
 
-        var admin = new TestingAuthenticationToken("admin@example.com", "password", "ROLE_ADMIN");
+        var admin = new TestingAuthenticationToken("admin@example.com", "password", RoleName.ADMIN.authority());
         admin.setAuthenticated(true);
         when(userPreferenceService.currentThemePreference(admin)).thenReturn(ThemePreference.SYSTEM);
         when(userPreferenceService.currentLanguagePreference(admin)).thenReturn(LanguagePreference.CS);
@@ -237,24 +245,26 @@ class WebAuthTemplateTest {
 
     @Test
     void admin_app_template_renders_admin_dashboard_items() throws Exception {
-        var auth = new TestingAuthenticationToken("admin@example.com", "password", "ROLE_ADMIN");
+        var auth = new TestingAuthenticationToken("admin@example.com", "password", RoleName.ADMIN.authority());
         auth.setAuthenticated(true);
 
         mvc.perform(get("/app").principal(auth).with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Staff invitations")))
                 .andExpect(content().string(containsString("/app/staff-invitations/new")))
-                .andExpect(content().string(containsString("Content management - planned")))
+                .andExpect(content().string(containsString("Content management")))
                 .andExpect(content().string(not(containsString("Onboarding review"))));
     }
 
     @Test
     void account_template_renders_authenticated_profile() throws Exception {
-        var auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        var auth = new TestingAuthenticationToken("user@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
         when(userPreferenceService.currentThemePreference(auth)).thenReturn(ThemePreference.DARK);
         when(userPreferenceService.currentLanguagePreference(auth)).thenReturn(LanguagePreference.EN);
         when(userPreferenceService.currentGlucoseUnitPreference(auth)).thenReturn(MeasurementUnit.MG_DL);
+        when(userPreferenceService.currentPatientProfileForm(auth)).thenReturn(
+                new PatientProfileForm(LocalDate.of(1990, 1, 1), Sex.FEMALE, "CZ", "Europe/Prague"));
 
         var response = mvc.perform(get("/app/account").principal(auth).with(csrf()))
                 .andExpect(status().isOk())
@@ -262,6 +272,9 @@ class WebAuthTemplateTest {
                 .andExpect(content().string(containsString("user@example.com")))
                 .andExpect(content().string(containsString("PATIENT")))
                 .andExpect(content().string(containsString("class=\"active\"")))
+                .andExpect(content().string(containsString("/app/account/profile")))
+                .andExpect(content().string(containsString("name=\"dateOfBirth\"")))
+                .andExpect(content().string(containsString("id=\"sex\" name=\"sex\"")))
                 .andExpect(content().string(containsString("name=\"themePreference\"")))
                 .andExpect(content().string(containsString("id=\"themePreference\"")))
                 .andExpect(content().string(containsString("selected=\"selected\">Dark")))
@@ -283,7 +296,7 @@ class WebAuthTemplateTest {
 
     @Test
     void admin_staff_invitation_template_renders_form() throws Exception {
-        var auth = new TestingAuthenticationToken("admin@example.com", "password", "ROLE_ADMIN");
+        var auth = new TestingAuthenticationToken("admin@example.com", "password", RoleName.ADMIN.authority());
         auth.setAuthenticated(true);
 
         mvc.perform(get("/app/staff-invitations/new").principal(auth).with(csrf()))

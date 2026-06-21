@@ -22,35 +22,38 @@
 
     <section class="panel app-panel">
         <h2 th:text="#{dietLogs.meals}">Meals</h2>
-        <dl class="details" th:each="meal : ${log.meals()}">
-            <dt th:text="#{dietLogs.mealType}">Meal type</dt><dd th:text="${#messages.msg('enum.mealType.' + meal.mealType().name())}">Lunch</dd>
-            <dt th:text="#{dietLogs.foodCategory}">Food category</dt><dd th:text="${#messages.msg('enum.foodCategory.' + meal.foodCategory().name())}">Low-carb vegetables</dd>
-            <dt th:text="#{dietLogs.foodDescription}">Food description</dt><dd th:text="${meal.foodDescription()} ?: #{dietLogs.notProvided}">Avocado salad</dd>
-            <dt th:text="#{dietLogs.notes}">Notes</dt><dd th:text="${meal.notes()} ?: #{dietLogs.notProvided}">Meal notes</dd>
-        </dl>
+        <div th:each="meal, mealRow : ${log.meals()}"
+             th:with="mealDeviations=${log.deviationsForMeal(meal.id())}, mealPhotos=${log.photoReferencesForMeal(meal.id())}">
+            <h3>
+                <span th:text="#{dietLogs.meal}">Meal</span>
+                <span th:text="${mealRow.index + 1}">1</span>
+            </h3>
+            <dl class="details">
+                <dt th:text="#{dietLogs.mealType}">Meal type</dt><dd th:text="${#messages.msg('enum.mealType.' + meal.mealType().name())}">Lunch</dd>
+                <dt th:text="#{dietLogs.foodCategory}">Food category</dt><dd th:text="${#messages.msg('enum.foodCategory.' + meal.foodCategory().name())}">Low-carb vegetables</dd>
+                <dt th:text="#{dietLogs.foodDescription}">Food description</dt><dd th:text="${meal.foodDescription()} ?: #{dietLogs.notProvided}">Avocado salad</dd>
+                <dt th:text="#{dietLogs.notes}">Notes</dt><dd th:text="${meal.notes()} ?: #{dietLogs.notProvided}">Meal notes</dd>
+            </dl>
+
+            <h4 th:text="#{dietLogs.deviation}">Deviation</h4>
+            <dl class="details" th:each="deviation : ${mealDeviations}">
+                <dt th:text="#{dietLogs.deviationCategory}">Category</dt><dd th:text="${#messages.msg('enum.dietDeviationCategory.' + deviation.deviationCategory().name())}">Dining out</dd>
+                <dt th:text="#{dietLogs.deviationSeverity}">Severity</dt><dd th:text="${#messages.msg('enum.dietDeviationSeverity.' + deviation.severity().name())}">Minor</dd>
+                <dt th:text="#{dietLogs.notes}">Notes</dt><dd th:text="${deviation.notes()} ?: #{dietLogs.notProvided}">Deviation notes</dd>
+            </dl>
+            <p th:if="${#lists.isEmpty(mealDeviations)}" th:text="#{dietLogs.noDeviations}">No deviations recorded</p>
+
+            <h4 th:text="#{dietLogs.photoReference}">Photos</h4>
+            <div th:each="photo : ${mealPhotos}">
+                <p>
+                    <a th:href="${photo.contentUrl()}" th:text="${photo.originalFilename()} ?: #{dietLogs.photo}">plate.jpg</a>
+                    <span th:text="${photo.caption()} ?: #{dietLogs.notProvided}">Lunch</span>
+                </p>
+                <img th:src="${photo.contentUrl()}" th:alt="${photo.caption()} ?: ${photo.originalFilename()}" style="max-width: 240px; height: auto;">
+            </div>
+            <p th:if="${#lists.isEmpty(mealPhotos)}" th:text="#{dietLogs.noPhotoReferences}">No photos recorded</p>
+        </div>
         <p th:if="${#lists.isEmpty(log.meals())}" th:text="#{dietLogs.noMeals}">No meals recorded</p>
-    </section>
-
-    <section class="panel app-panel">
-        <h2 th:text="#{dietLogs.deviations}">Deviations</h2>
-        <dl class="details" th:each="deviation : ${log.deviations()}">
-            <dt th:text="#{dietLogs.deviationCategory}">Category</dt><dd th:text="${#messages.msg('enum.dietDeviationCategory.' + deviation.deviationCategory().name())}">Dining out</dd>
-            <dt th:text="#{dietLogs.deviationSeverity}">Severity</dt><dd th:text="${#messages.msg('enum.dietDeviationSeverity.' + deviation.severity().name())}">Minor</dd>
-            <dt th:text="#{dietLogs.notes}">Notes</dt><dd th:text="${deviation.notes()} ?: #{dietLogs.notProvided}">Deviation notes</dd>
-        </dl>
-        <p th:if="${#lists.isEmpty(log.deviations())}" th:text="#{dietLogs.noDeviations}">No deviations recorded</p>
-    </section>
-
-    <section class="panel app-panel">
-        <h2 th:text="#{dietLogs.photoReference}">Photo metadata</h2>
-        <dl class="details" th:each="photo : ${log.photoReferences()}">
-            <dt th:text="#{dietLogs.originalFilename}">Original filename</dt><dd th:text="${photo.originalFilename()} ?: #{dietLogs.notProvided}">photo-1.jpg</dd>
-            <dt th:text="#{dietLogs.contentType}">Content type</dt><dd th:text="${photo.contentType()} ?: #{dietLogs.notProvided}">image/jpeg</dd>
-            <dt th:text="#{dietLogs.sizeBytes}">Size bytes</dt><dd th:text="${photo.sizeBytes()} ?: #{dietLogs.notProvided}">1024</dd>
-            <dt th:text="#{dietLogs.storageKey}">Storage key</dt><dd th:text="${photo.storageKey()} ?: #{dietLogs.notProvided}">diet/photo-1</dd>
-            <dt th:text="#{dietLogs.caption}">Caption</dt><dd th:text="${photo.caption()} ?: #{dietLogs.notProvided}">Lunch</dd>
-        </dl>
-        <p th:if="${#lists.isEmpty(log.photoReferences())}" th:text="#{dietLogs.noPhotoReferences}">No photo metadata recorded</p>
     </section>
 
     <section class="panel app-panel">

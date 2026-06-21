@@ -9,6 +9,7 @@ import com.metabion.domain.DailyMeasurementEntry;
 import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.DietDeviationCategory;
 import com.metabion.domain.DietDeviationSeverity;
+import com.metabion.domain.DietLogPhotoStatus;
 import com.metabion.domain.FoodCategory;
 import com.metabion.domain.MealType;
 import com.metabion.domain.PatientProfile;
@@ -17,6 +18,7 @@ import com.metabion.domain.User;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 
 public record DailyDietLogResponse(
         Long id,
@@ -67,10 +69,25 @@ public record DailyDietLogResponse(
                 log.getUpdatedAt(),
                 log.getMeals().stream().map(MealResponse::from).toList(),
                 log.getDeviations().stream().map(DeviationResponse::from).toList(),
-                log.getPhotoReferences().stream().map(PhotoReferenceResponse::from).toList(),
+                log.getPhotoReferences().stream()
+                        .filter(photo -> photo.getStatus() == DietLogPhotoStatus.ATTACHED)
+                        .map(PhotoReferenceResponse::from)
+                        .toList(),
                 measurements == null
                         ? List.of()
                         : measurements.stream().map(DailyMeasurementEntryResponse::from).toList());
+    }
+
+    public List<DeviationResponse> deviationsForMeal(Long mealId) {
+        return (deviations == null ? List.<DeviationResponse>of() : deviations).stream()
+                .filter(deviation -> Objects.equals(deviation.mealId(), mealId))
+                .toList();
+    }
+
+    public List<PhotoReferenceResponse> photoReferencesForMeal(Long mealId) {
+        return (photoReferences == null ? List.<PhotoReferenceResponse>of() : photoReferences).stream()
+                .filter(photo -> Objects.equals(photo.mealId(), mealId))
+                .toList();
     }
 
     public record MealResponse(
@@ -95,6 +112,7 @@ public record DailyDietLogResponse(
 
     public record DeviationResponse(
             Long id,
+            Long mealId,
             DietDeviationCategory deviationCategory,
             DietDeviationSeverity severity,
             String notes,
@@ -104,6 +122,7 @@ public record DailyDietLogResponse(
         private static DeviationResponse from(DailyDietLogDeviation deviation) {
             return new DeviationResponse(
                     deviation.getId(),
+                    Objects.requireNonNull(deviation.getMeal(), "deviation meal is required").getId(),
                     deviation.getDeviationCategory(),
                     deviation.getSeverity(),
                     deviation.getNotes(),
@@ -117,21 +136,22 @@ public record DailyDietLogResponse(
             String originalFilename,
             String contentType,
             Long sizeBytes,
-            String storageKey,
             String caption,
+            String contentUrl,
             int sortOrder
     ) {
 
         private static PhotoReferenceResponse from(DailyDietLogPhotoReference photoReference) {
             var meal = photoReference.getMeal();
+            var id = photoReference.getId();
             return new PhotoReferenceResponse(
-                    photoReference.getId(),
+                    id,
                     meal == null ? null : meal.getId(),
                     photoReference.getOriginalFilename(),
                     photoReference.getContentType(),
                     photoReference.getSizeBytes(),
-                    photoReference.getStorageKey(),
                     photoReference.getCaption(),
+                    id == null ? null : "/api/diet-log-photos/" + id + "/content",
                     photoReference.getSortOrder());
         }
     }

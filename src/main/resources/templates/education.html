@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell(#{education.pageTitle}, ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Metabion</p>
+            <h1 th:text="#{education.title}">Education library</h1>
+            <p class="muted" th:text="#{education.description}">Published patient education modules.</p>
+        </div>
+    </header>
+
+    <section class="panel app-panel" th:if="${#lists.isEmpty(modules)}">
+        <p class="muted" th:text="#{education.empty}">No education modules are available yet.</p>
+    </section>
+
+    <section class="dashboard-grid" th:if="${!#lists.isEmpty(modules)}">
+        <article class="dashboard-card" th:each="module : ${modules}">
+            <p class="eyebrow" th:text="${module.topic()}">IBD</p>
+            <h2 th:text="${module.title()}">Module title</h2>
+            <p class="muted" th:text="${module.summary()}">Module summary</p>
+            <dl class="details">
+                <dt th:text="#{education.version}">Version</dt>
+                <dd th:text="${module.version()}">1</dd>
+                <dt th:text="#{education.lessons}">Lessons</dt>
+                <dd th:text="${module.lessonCount()}">3</dd>
+            </dl>
+            <div class="progress-meter"
+                 th:if="${module.completedLessonCount() != null}"
+                 role="meter"
+                 aria-valuemin="0"
+                 th:attr="aria-label=#{education.progress},aria-valuenow=${module.completedLessonCount()},aria-valuemax=${module.lessonCount()}">
+                <div class="progress-meter-fill"
+                     th:style="'width: ' + ${module.lessonCount() == 0 ? 0 : (module.completedLessonCount() * 100 / module.lessonCount())} + '%'"></div>
+            </div>
+            <p class="hint" th:if="${module.completedLessonCount() != null}"
+               th:text="#{education.progressCount(${module.completedLessonCount()}, ${module.lessonCount()})}">
+                0 of 3 lessons complete
+            </p>
+            <p class="links">
+                <a class="button-link"
+                   th:href="@{/app/education/{moduleSlug}(moduleSlug=${module.moduleSlug()})}"
+                   th:text="#{education.open}">Open</a>
+            </p>
+        </article>
+    </section>
+</th:block>
+</html>

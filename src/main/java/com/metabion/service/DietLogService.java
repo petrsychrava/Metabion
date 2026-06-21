@@ -11,9 +11,11 @@ import com.metabion.dto.DailyDietLogResponse;
 import com.metabion.dto.DailyDietLogSummaryResponse;
 import com.metabion.dto.DailyMeasurementEntryRequest;
 import com.metabion.dto.DailyMeasurementEntryResponse;
+import com.metabion.dto.PatientOptionResponse;
 import com.metabion.repository.DailyDietLogRepository;
 import com.metabion.repository.DailyMeasurementEntryRepository;
 import com.metabion.repository.PatientProfileRepository;
+import com.metabion.repository.StaffProfileRepository;
 import com.metabion.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
@@ -36,6 +38,7 @@ public class DietLogService {
 
     private final UserRepository users;
     private final PatientProfileRepository patientProfiles;
+    private final StaffProfileRepository staffProfiles;
     private final DailyDietLogRepository dailyDietLogs;
     private final DailyMeasurementEntryRepository measurements;
     private final AccessControlService accessControl;
@@ -43,18 +46,22 @@ public class DietLogService {
     private final MeasurementValidator measurementValidator;
     private final DietLogRequestMapper requestMapper;
     private final DietLogResponseAssembler responseAssembler;
+    private final DietLogPhotoService dietLogPhotoService;
 
     public DietLogService(UserRepository users,
                           PatientProfileRepository patientProfiles,
+                          StaffProfileRepository staffProfiles,
                           DailyDietLogRepository dailyDietLogs,
                           DailyMeasurementEntryRepository measurements,
                           AccessControlService accessControl,
                           MeasurementWindowService measurementWindows,
                           MeasurementValidator measurementValidator,
                           DietLogRequestMapper requestMapper,
-                          DietLogResponseAssembler responseAssembler) {
+                          DietLogResponseAssembler responseAssembler,
+                          DietLogPhotoService dietLogPhotoService) {
         this.users = users;
         this.patientProfiles = patientProfiles;
+        this.staffProfiles = staffProfiles;
         this.dailyDietLogs = dailyDietLogs;
         this.measurements = measurements;
         this.accessControl = accessControl;
@@ -62,6 +69,7 @@ public class DietLogService {
         this.measurementValidator = measurementValidator;
         this.requestMapper = requestMapper;
         this.responseAssembler = responseAssembler;
+        this.dietLogPhotoService = dietLogPhotoService;
     }
 
     public DailyDietLogResponse saveForCurrentPatient(Authentication authentication, DailyDietLogRequest request) {
@@ -86,6 +94,7 @@ public class DietLogService {
 
         var replacingPersistedLog = log.getId() != null;
         var saved = dailyDietLogs.save(log);
+        dietLogPhotoService.attachToLog(patient, saved, request.photoReferencesOrEmpty());
         if (replacingPersistedLog) {
             measurements.deleteByDailyDietLogId(saved.getId());
         }
@@ -129,16 +138,48 @@ public class DietLogService {
                                                               LocalDate to) {
         var currentUser = currentUser(authentication);
         requireClinicalReader(currentUser);
-        if (patientProfileId == null) {
-            throw badRequest("patientProfileId is required");
-        }
         validateRange(from, to);
+        if (patientProfileId == null) {
+            return clinicalPatientOptionsFor(currentUser).stream()
+                    .map(PatientOptionResponse::id)
+                    .flatMap(id -> listClinicalLogsForPatient(id, from, to).stream())
+                    .sorted(clinicalSummaryComparator())
+                    .toList();
+        }
         requireClinicalAccess(authentication, currentUser, patientProfileId);
+        return listClinicalLogsForPatient(patientProfileId, from, to);
+    }
+
+    private List<DailyDietLogSummaryResponse> listClinicalLogsForPatient(Long patientProfileId,
+                                                                         LocalDate from,
+                                                                         LocalDate to) {
         var logs = dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(patientProfileId, from, to);
         var measurementCounts = measurementCountsFor(logs);
         return logs.stream()
                 .map(log -> responseAssembler.summary(log, measurementCounts.getOrDefault(log.getId(), 0)))
                 .toList();
+    }
+
+    private Comparator<DailyDietLogSummaryResponse> clinicalSummaryComparator() {
+        return Comparator
+                .comparing(DailyDietLogSummaryResponse::logDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(DailyDietLogSummaryResponse::patientEmail, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                .thenComparing(DailyDietLogSummaryResponse::id, Comparator.nullsLast(Comparator.naturalOrder()));
+    }
+
+    public List<PatientOptionResponse> listClinicalPatientOptions(Authentication authentication) {
+        var currentUser = currentUser(authentication);
+        requireClinicalReader(currentUser);
+        return clinicalPatientOptionsFor(currentUser);
+    }
+
+    private List<PatientOptionResponse> clinicalPatientOptionsFor(User currentUser) {
+        if (currentUser.hasRole(RoleName.ADMIN)) {
+            return patientProfiles.findAllPatientOptions();
+        }
+        return staffProfiles.findByUserId(currentUser.getId())
+                .map(staffProfile -> patientProfiles.findAccessiblePatientOptionsForStaff(staffProfile.getId()))
+                .orElseGet(List::of);
     }
 
     public DailyDietLogResponse getClinicalLog(Authentication authentication, Long id) {
@@ -156,6 +197,10 @@ public class DietLogService {
     public MeasurementUnit currentPatientGlucoseUnitPreference(Authentication authentication) {
         var preference = currentPatientProfile(authentication).getGlucoseUnitPreference();
         return preference == null ? MeasurementUnit.MMOL_L : preference;
+    }
+
+    public String currentPatientTimezone(Authentication authentication) {
+        return measurementWindows.zoneFor(currentPatientProfile(authentication)).getId();
     }
 
     private User currentUser(Authentication authentication) {

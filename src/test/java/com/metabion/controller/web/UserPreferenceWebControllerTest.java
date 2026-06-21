@@ -3,6 +3,7 @@ package com.metabion.controller.web;
 import com.metabion.config.LocalizationConfig;
 import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.MeasurementUnit;
+import com.metabion.domain.RoleName;
 import com.metabion.domain.ThemePreference;
 import com.metabion.service.UserPreferenceService;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,7 +48,7 @@ class UserPreferenceWebControllerTest {
                     };
                 })
                 .build();
-        auth = new TestingAuthenticationToken("user@example.com", "password", "ROLE_PATIENT");
+        auth = new TestingAuthenticationToken("user@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
     }
 
