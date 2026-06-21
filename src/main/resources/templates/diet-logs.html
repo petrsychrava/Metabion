@@ -132,7 +132,9 @@
 
                 <div class="diet-log-grid">
                     <label class="field"><span th:text="#{dietLogs.logDate}">Date</span>
-                        <input type="date" th:field="*{logDate}" required>
+                        <input type="date" id="logDate" name="logDate"
+                               th:value="${dietLogForm.logDate == null ? '' : #temporals.format(dietLogForm.logDate, 'yyyy-MM-dd')}"
+                               required>
                     </label>
                     <label class="field"><span th:text="#{dietLogs.adherenceLevel}">Adherence</span>
                         <select th:field="*{adherenceLevel}" required>

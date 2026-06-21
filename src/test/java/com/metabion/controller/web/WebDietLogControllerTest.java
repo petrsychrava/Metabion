@@ -37,8 +37,10 @@ import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -77,6 +79,7 @@ class WebDietLogControllerTest {
     @MockitoBean SecurityService securityService;
     @MockitoBean DietLogService dietLogService;
     @MockitoBean UserPreferenceService userPreferenceService;
+    @MockitoBean Clock clock;
 
     private MockMvc mvc;
 
@@ -89,6 +92,8 @@ class WebDietLogControllerTest {
                 .build();
         when(dietLogService.currentPatientGlucoseUnitPreference(any())).thenReturn(MeasurementUnit.MMOL_L);
         when(dietLogService.currentPatientTimezone(any())).thenReturn("Europe/Prague");
+        when(clock.instant()).thenReturn(Instant.parse("2026-06-21T08:00:00Z"));
+        when(clock.getZone()).thenReturn(ZoneId.of("UTC"));
     }
 
     @Test
@@ -128,6 +133,23 @@ class WebDietLogControllerTest {
                 .andExpect(content().string(not(containsString("name=\"glucoseMeasurement.unit\""))))
                 .andExpect(content().string(not(containsString("name=\"ketoneMeasurement.unit\""))))
                 .andExpect(content().string(not(containsString("name=\"glucoseUnitPreference\""))));
+    }
+
+    @Test
+    void patientDietLogPagePrefillsCurrentDateInPatientTimezone() throws Exception {
+        when(clock.instant()).thenReturn(Instant.parse("2026-06-21T11:30:00Z"));
+        when(dietLogService.currentPatientTimezone(any())).thenReturn("Pacific/Kiritimati");
+        doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND))
+                .when(dietLogService).getCurrentPatientLog(any(), any());
+
+        mvc.perform(get("/app/diet-logs")
+                .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("diet-logs"))
+                .andExpect(content().string(containsString("name=\"logDate\"")))
+                .andExpect(content().string(containsString("value=\"2026-06-22\"")));
+
+        verify(dietLogService).getCurrentPatientLog(any(), eq(LocalDate.of(2026, 6, 22)));
     }
 
     @Test
