@@ -104,17 +104,20 @@ class DailyDietLogRepositoryTest {
     void cascadesMealsDeviationsAndPhotoReferences() {
         var patient = createPatient("daily-log-children@example.com");
         var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
-        log.addMeal(new DailyDietLogMeal(
+        var meal = new DailyDietLogMeal(
                 MealType.BREAKFAST,
                 FoodCategory.PROTEIN,
                 "Eggs",
                 "No issues",
-                0));
-        log.addDeviation(new DailyDietLogDeviation(
+                0);
+        log.addMeal(meal);
+        var deviation = new DailyDietLogDeviation(
                 DietDeviationCategory.DINING_OUT,
                 DietDeviationSeverity.MINOR,
                 "Restaurant meal",
-                0));
+                0);
+        deviation.setMeal(meal);
+        log.addDeviation(deviation);
         var photoReference = DailyDietLogPhotoReference.pending(
                 patient,
                 patient.getUser(),
@@ -124,6 +127,7 @@ class DailyDietLogRepositoryTest {
                 "3".repeat(64),
                 "daily-logs/1/breakfast.jpg");
         photoReference.attachTo(log, "Breakfast", 0);
+        photoReference.setMeal(meal);
         log.addPhotoReference(photoReference);
 
         dailyDietLogs.saveAndFlush(log);
@@ -135,6 +139,36 @@ class DailyDietLogRepositoryTest {
         assertThat(loaded.getMeals()).hasSize(1);
         assertThat(loaded.getDeviations()).hasSize(1);
         assertThat(loaded.getPhotoReferences()).hasSize(1);
+    }
+
+    @Test
+    void persistsDeviationMealAssociation() {
+        var patient = createPatient("deviation-meal@example.com");
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        log.setAdherenceLevel(DietAdherenceLevel.MOSTLY);
+        log.setAppetiteLevel(AppetiteLevel.NORMAL);
+        var meal = new DailyDietLogMeal(
+                MealType.LUNCH,
+                FoodCategory.PROTEIN,
+                "Salmon",
+                "Meal notes",
+                0);
+        log.addMeal(meal);
+        var deviation = new DailyDietLogDeviation(
+                DietDeviationCategory.DINING_OUT,
+                DietDeviationSeverity.MINOR,
+                "Restaurant",
+                0);
+        deviation.setMeal(meal);
+        log.addDeviation(deviation);
+
+        var saved = dailyDietLogs.saveAndFlush(log);
+        entityManager.clear();
+
+        var reloaded = dailyDietLogs.findById(saved.getId()).orElseThrow();
+        assertThat(reloaded.getDeviations()).singleElement()
+                .satisfies(row -> assertThat(row.getMeal().getId())
+                        .isEqualTo(reloaded.getMeals().getFirst().getId()));
     }
 
     @Test
@@ -352,6 +386,28 @@ class DailyDietLogRepositoryTest {
         var photoReference = new DailyDietLogPhotoReference(null, null, 1024L, null, "Wrong meal link", 0);
         photoReference.setMeal(meal);
         otherLog.addPhotoReference(photoReference);
+
+        assertThatThrownBy(() -> dailyDietLogs.saveAndFlush(otherLog))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void deviationMealMustBelongToSameDailyLog() {
+        var patient = createPatient("deviation-meal-owner@example.com");
+        var logWithMeal = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var meal = new DailyDietLogMeal(MealType.LUNCH, FoodCategory.PROTEIN, "Salmon", null, 0);
+        logWithMeal.addMeal(meal);
+        dailyDietLogs.saveAndFlush(logWithMeal);
+
+        var otherLog = new DailyDietLog(patient, LocalDate.of(2026, 6, 11));
+        var deviation = new DailyDietLogDeviation(
+                DietDeviationCategory.DINING_OUT,
+                DietDeviationSeverity.MINOR,
+                "Wrong meal link",
+                0);
+        deviation.setMeal(meal);
+        otherLog.addDeviation(deviation);
 
         assertThatThrownBy(() -> dailyDietLogs.saveAndFlush(otherLog))
                 .isInstanceOf(DataIntegrityViolationException.class);

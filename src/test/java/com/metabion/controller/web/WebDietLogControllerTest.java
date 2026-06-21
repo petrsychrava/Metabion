@@ -11,6 +11,7 @@ import com.metabion.domain.MeasurementContext;
 import com.metabion.domain.MeasurementType;
 import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.RoleName;
+import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.dto.DailyDietLogResponse;
 import com.metabion.dto.DailyDietLogSummaryResponse;
 import com.metabion.dto.DailyMeasurementEntryResponse;
@@ -22,6 +23,7 @@ import com.metabion.service.UserService;
 import jakarta.servlet.Filter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
@@ -39,6 +41,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
@@ -84,6 +87,8 @@ class WebDietLogControllerTest {
                 .addFilters(filters)
                 .apply(SecurityMockMvcConfigurers.springSecurity())
                 .build();
+        when(dietLogService.currentPatientGlucoseUnitPreference(any())).thenReturn(MeasurementUnit.MMOL_L);
+        when(dietLogService.currentPatientTimezone(any())).thenReturn("Europe/Prague");
     }
 
     @Test
@@ -99,19 +104,29 @@ class WebDietLogControllerTest {
                 .andExpect(model().attributeExists("dietLogForm"))
                 .andExpect(content().string(containsString("class=\"sidebar\"")))
                 .andExpect(content().string(containsString("Diet logs")))
-                .andExpect(content().string(containsString("Glucose unit default")))
+                .andExpect(content().string(containsString("Unit from profile")))
                 .andExpect(content().string(containsString("mg/dL")))
-                .andExpect(content().string(containsString("name=\"meals[2].mealType\"")))
-                .andExpect(content().string(containsString("name=\"deviations[2].severity\"")))
+                .andExpect(content().string(containsString("name=\"patientTimezone\"")))
+                .andExpect(content().string(containsString("name=\"meals[1].mealType\"")))
+                .andExpect(content().string(not(containsString("name=\"meals[2].mealType\""))))
+                .andExpect(content().string(containsString("name=\"meals[1].deviation.severity\"")))
+                .andExpect(content().string(not(containsString("name=\"deviations[1].severity\""))))
                 .andExpect(content().string(containsString("type=\"file\"")))
                 .andExpect(content().string(containsString("headers: {'X-XSRF-TOKEN': csrf.value}")))
                 .andExpect(content().string(not(containsString("headers: {'X-CSRF-TOKEN': csrf.value}"))))
-                .andExpect(content().string(containsString("name=\"photoReferences[2].uploadId\"")))
-                .andExpect(content().string(not(containsString("name=\"photoReferences[2].storageKey\""))))
-                .andExpect(content().string(not(containsString("name=\"photoReferences[2].contentType\""))))
-                .andExpect(content().string(not(containsString("name=\"photoReferences[2].sizeBytes\""))))
-                .andExpect(content().string(not(containsString("name=\"photoReferences[2].originalFilename\""))))
-                .andExpect(content().string(containsString("name=\"measurements[2].unit\"")))
+                .andExpect(content().string(containsString("name=\"meals[1].photoReferences[0].uploadId\"")))
+                .andExpect(content().string(not(containsString("name=\"photoReferences[1].uploadId\""))))
+                .andExpect(content().string(not(containsString("storageKey\""))))
+                .andExpect(content().string(not(containsString("contentType\""))))
+                .andExpect(content().string(not(containsString("sizeBytes\""))))
+                .andExpect(content().string(not(containsString("originalFilename\""))))
+                .andExpect(content().string(containsString("name=\"glucoseMeasurement.value\"")))
+                .andExpect(content().string(containsString("name=\"glucoseMeasurement.measuredTime\"")))
+                .andExpect(content().string(containsString("name=\"ketoneMeasurement.value\"")))
+                .andExpect(content().string(containsString("name=\"ketoneMeasurement.measuredTime\"")))
+                .andExpect(content().string(not(containsString("name=\"measurements[0].unit\""))))
+                .andExpect(content().string(not(containsString("name=\"glucoseMeasurement.unit\""))))
+                .andExpect(content().string(not(containsString("name=\"ketoneMeasurement.unit\""))))
                 .andExpect(content().string(not(containsString("name=\"glucoseUnitPreference\""))));
     }
 
@@ -130,10 +145,11 @@ class WebDietLogControllerTest {
                 .andExpect(content().string(containsString("Protein shake")))
                 .andExpect(content().string(containsString("name=\"meals[0].mealType\"")))
                 .andExpect(content().string(containsString("name=\"meals[1].mealType\"")))
-                .andExpect(content().string(containsString("name=\"deviations[1].severity\"")))
-                .andExpect(content().string(containsString("name=\"photoReferences[1].uploadId\"")))
+                .andExpect(content().string(containsString("name=\"meals[1].deviation.severity\"")))
+                .andExpect(content().string(containsString("name=\"meals[1].photoReferences[0].uploadId\"")))
                 .andExpect(content().string(not(containsString("name=\"photoReferences[1].storageKey\""))))
-                .andExpect(content().string(containsString("name=\"measurements[1].measuredAt\"")));
+                .andExpect(content().string(containsString("name=\"glucoseMeasurement.measuredTime\"")))
+                .andExpect(content().string(containsString("name=\"ketoneMeasurement.measuredTime\"")));
     }
 
     @Test
@@ -148,6 +164,46 @@ class WebDietLogControllerTest {
                 .andExpect(redirectedUrl("/app/diet-logs?date=2026-06-10"));
 
         verify(dietLogService).saveForCurrentPatient(any(), any());
+    }
+
+    @Test
+    void patientSaveCombinesMeasurementTimesWithLogDateAndPatientTimezone() throws Exception {
+        when(dietLogService.currentPatientGlucoseUnitPreference(any())).thenReturn(MeasurementUnit.MG_DL);
+
+        mvc.perform(post("/app/diet-logs")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("logDate", "2026-06-10")
+                        .param("patientTimezone", "UTC")
+                        .param("adherenceLevel", "MOSTLY")
+                        .param("appetiteLevel", "NORMAL")
+                        .param("glucoseMeasurement.value", "104.00")
+                        .param("glucoseMeasurement.measuredTime", "07:30")
+                        .param("glucoseMeasurement.context", "FASTING")
+                        .param("ketoneMeasurement.value", "1.20")
+                        .param("ketoneMeasurement.measuredTime", "20:15")
+                        .param("ketoneMeasurement.context", "BEDTIME"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app/diet-logs?date=2026-06-10"));
+
+        var requestCaptor = ArgumentCaptor.forClass(DailyDietLogRequest.class);
+        verify(dietLogService).saveForCurrentPatient(any(), requestCaptor.capture());
+
+        assertThat(requestCaptor.getValue().measurementsOrEmpty())
+                .hasSize(2)
+                .satisfiesExactly(
+                        glucose -> {
+                            assertThat(glucose.measurementType()).isEqualTo(MeasurementType.GLUCOSE);
+                            assertThat(glucose.unit()).isEqualTo(MeasurementUnit.MG_DL);
+                            assertThat(glucose.measuredAt()).isEqualTo(Instant.parse("2026-06-10T05:30:00Z"));
+                            assertThat(glucose.context()).isEqualTo(MeasurementContext.FASTING);
+                        },
+                        ketone -> {
+                            assertThat(ketone.measurementType()).isEqualTo(MeasurementType.KETONE);
+                            assertThat(ketone.unit()).isEqualTo(MeasurementUnit.MMOL_L);
+                            assertThat(ketone.measuredAt()).isEqualTo(Instant.parse("2026-06-10T18:15:00Z"));
+                            assertThat(ketone.context()).isEqualTo(MeasurementContext.BEDTIME);
+                        });
     }
 
     @Test
@@ -288,7 +344,7 @@ class WebDietLogControllerTest {
     void clinicalDetailRendersResponseContent() throws Exception {
         when(dietLogService.getClinicalLog(any(), eq(99L))).thenReturn(detailResponse());
 
-        mvc.perform(get("/app/clinical/diet-logs/99")
+        var response = mvc.perform(get("/app/clinical/diet-logs/99")
                         .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name())))
                 .andExpect(status().isOk())
                 .andExpect(view().name("clinical-diet-log-detail"))
@@ -298,7 +354,15 @@ class WebDietLogControllerTest {
                 .andExpect(content().string(containsString("photo-1.jpg")))
                 .andExpect(content().string(containsString("/api/diet-log-photos/3/content")))
                 .andExpect(content().string(not(containsString("Storage key"))))
-                .andExpect(content().string(containsString("5.8")));
+                .andExpect(content().string(containsString("5.8")))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(response).contains("Avocado salad", "Restaurant lunch", "photo-1.jpg");
+        assertThat(response.indexOf("Avocado salad")).isLessThan(response.indexOf("Restaurant lunch"));
+        assertThat(response.indexOf("Restaurant lunch")).isLessThan(response.indexOf("photo-1.jpg"));
+        assertThat(response).doesNotContain("<h2>Deviations</h2>", "<h2>Photos</h2>");
     }
 
     @Test
@@ -375,6 +439,7 @@ class WebDietLogControllerTest {
                         0)),
                 List.of(new DailyDietLogResponse.DeviationResponse(
                         2L,
+                        1L,
                         DietDeviationCategory.DINING_OUT,
                         DietDeviationSeverity.MINOR,
                         "Restaurant lunch",
@@ -430,12 +495,14 @@ class WebDietLogControllerTest {
                 List.of(
                         new DailyDietLogResponse.DeviationResponse(
                                 3L,
+                                1L,
                                 DietDeviationCategory.DINING_OUT,
                                 DietDeviationSeverity.MINOR,
                                 "Restaurant lunch",
                                 0),
                         new DailyDietLogResponse.DeviationResponse(
                                 4L,
+                                2L,
                                 DietDeviationCategory.MISSED_MEAL,
                                 DietDeviationSeverity.MODERATE,
                                 "Skipped dinner",

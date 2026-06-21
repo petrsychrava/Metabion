@@ -15,8 +15,11 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -38,38 +41,33 @@ public class DietLogForm {
     private List<MealRow> meals = new ArrayList<>();
 
     @Valid
-    private List<DeviationRow> deviations = new ArrayList<>();
+    private MeasurementRow glucoseMeasurement = new MeasurementRow();
 
     @Valid
-    private List<PhotoReferenceRow> photoReferences = new ArrayList<>();
+    private MeasurementRow ketoneMeasurement = new MeasurementRow();
 
-    @Valid
-    private List<MeasurementRow> measurements = new ArrayList<>();
+    private String patientTimezone = "UTC";
 
     private MeasurementUnit glucoseUnitPreference;
 
     public DailyDietLogRequest toRequest() {
+        var populatedMeals = mealsOrEmpty().stream()
+                .filter(row -> !row.isBlank())
+                .toList();
+        var deviations = deviationsFrom(populatedMeals);
+        var photoReferences = photoReferencesFrom(populatedMeals);
+        var measurements = fixedMeasurements();
         return new DailyDietLogRequest(
                 logDate,
                 adherenceLevel,
                 appetiteLevel,
                 notes,
-                mealsOrEmpty().stream()
-                        .filter(row -> !row.isBlank())
+                populatedMeals.stream()
                         .map(MealRow::toRequest)
                         .toList(),
-                deviationsOrEmpty().stream()
-                        .filter(row -> !row.isBlank())
-                        .map(DeviationRow::toRequest)
-                        .toList(),
-                photoReferencesOrEmpty().stream()
-                        .filter(row -> !row.isBlank())
-                        .map(PhotoReferenceRow::toRequest)
-                        .toList(),
-                measurementsOrEmpty().stream()
-                        .filter(row -> !row.isBlank())
-                        .map(MeasurementRow::toRequest)
-                        .toList());
+                deviations,
+                photoReferences,
+                measurements);
     }
 
     public LocalDate getLogDate() {
@@ -112,28 +110,34 @@ public class DietLogForm {
         this.meals = meals;
     }
 
-    public List<DeviationRow> getDeviations() {
-        return deviations;
+    public MeasurementRow getGlucoseMeasurement() {
+        if (glucoseMeasurement == null) {
+            glucoseMeasurement = new MeasurementRow();
+        }
+        return glucoseMeasurement;
     }
 
-    public void setDeviations(List<DeviationRow> deviations) {
-        this.deviations = deviations;
+    public void setGlucoseMeasurement(MeasurementRow glucoseMeasurement) {
+        this.glucoseMeasurement = glucoseMeasurement;
     }
 
-    public List<PhotoReferenceRow> getPhotoReferences() {
-        return photoReferences;
+    public MeasurementRow getKetoneMeasurement() {
+        if (ketoneMeasurement == null) {
+            ketoneMeasurement = new MeasurementRow();
+        }
+        return ketoneMeasurement;
     }
 
-    public void setPhotoReferences(List<PhotoReferenceRow> photoReferences) {
-        this.photoReferences = photoReferences;
+    public void setKetoneMeasurement(MeasurementRow ketoneMeasurement) {
+        this.ketoneMeasurement = ketoneMeasurement;
     }
 
-    public List<MeasurementRow> getMeasurements() {
-        return measurements;
+    public String getPatientTimezone() {
+        return patientTimezone;
     }
 
-    public void setMeasurements(List<MeasurementRow> measurements) {
-        this.measurements = measurements;
+    public void setPatientTimezone(String patientTimezone) {
+        this.patientTimezone = patientTimezone;
     }
 
     public MeasurementUnit getGlucoseUnitPreference() {
@@ -148,20 +152,67 @@ public class DietLogForm {
         return meals == null ? List.of() : meals;
     }
 
-    private List<DeviationRow> deviationsOrEmpty() {
-        return deviations == null ? List.of() : deviations;
-    }
-
-    private List<PhotoReferenceRow> photoReferencesOrEmpty() {
-        return photoReferences == null ? List.of() : photoReferences;
-    }
-
-    private List<MeasurementRow> measurementsOrEmpty() {
-        return measurements == null ? List.of() : measurements;
-    }
-
     private static boolean blank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private List<DailyDietLogRequest.DeviationRequest> deviationsFrom(List<MealRow> populatedMeals) {
+        var result = new ArrayList<DailyDietLogRequest.DeviationRequest>();
+        for (var i = 0; i < populatedMeals.size(); i++) {
+            var deviation = populatedMeals.get(i).getDeviation();
+            if (!deviation.isBlank()) {
+                result.add(deviation.toRequest(i));
+            }
+        }
+        return result;
+    }
+
+    private List<DailyDietLogRequest.PhotoUploadReferenceRequest> photoReferencesFrom(List<MealRow> populatedMeals) {
+        var result = new ArrayList<DailyDietLogRequest.PhotoUploadReferenceRequest>();
+        for (var i = 0; i < populatedMeals.size(); i++) {
+            for (var photo : populatedMeals.get(i).getPhotoReferences()) {
+                if (!photo.isBlank()) {
+                    result.add(photo.toRequest(i));
+                }
+            }
+        }
+        return result;
+    }
+
+    private List<DailyMeasurementEntryRequest> fixedMeasurements() {
+        var result = new ArrayList<DailyMeasurementEntryRequest>();
+        if (glucoseMeasurement != null && !glucoseMeasurement.isBlank()) {
+            result.add(glucoseMeasurement.toRequest(
+                    MeasurementType.GLUCOSE,
+                    glucoseUnitPreference == null ? MeasurementUnit.MMOL_L : glucoseUnitPreference,
+                    measuredAt(glucoseMeasurement)));
+        }
+        if (ketoneMeasurement != null && !ketoneMeasurement.isBlank()) {
+            result.add(ketoneMeasurement.toRequest(
+                    MeasurementType.KETONE,
+                    MeasurementUnit.MMOL_L,
+                    measuredAt(ketoneMeasurement)));
+        }
+        return result;
+    }
+
+    private Instant measuredAt(MeasurementRow row) {
+        if (logDate == null || row.getMeasuredTime() == null) {
+            return null;
+        }
+        var zone = zoneOrUtc(patientTimezone);
+        return logDate.atTime(row.getMeasuredTime()).atZone(zone).toInstant();
+    }
+
+    private ZoneId zoneOrUtc(String zoneId) {
+        if (zoneId == null || zoneId.isBlank()) {
+            return ZoneId.of("UTC");
+        }
+        try {
+            return ZoneId.of(zoneId);
+        } catch (DateTimeException exception) {
+            return ZoneId.of("UTC");
+        }
     }
 
     public static class MealRow {
@@ -174,6 +225,12 @@ public class DietLogForm {
         @Size(max = 1000)
         private String notes;
 
+        @Valid
+        private DeviationRow deviation = new DeviationRow();
+
+        @Valid
+        private List<PhotoReferenceRow> photoReferences = new ArrayList<>();
+
         public DailyDietLogRequest.MealRequest toRequest() {
             return new DailyDietLogRequest.MealRequest(mealType, foodCategory, foodDescription, notes);
         }
@@ -182,7 +239,9 @@ public class DietLogForm {
             return mealType == null
                     && foodCategory == null
                     && blank(foodDescription)
-                    && blank(notes);
+                    && blank(notes)
+                    && getDeviation().isBlank()
+                    && getPhotoReferences().stream().allMatch(PhotoReferenceRow::isBlank);
         }
 
         public MealType getMealType() {
@@ -216,6 +275,28 @@ public class DietLogForm {
         public void setNotes(String notes) {
             this.notes = notes;
         }
+
+        public DeviationRow getDeviation() {
+            if (deviation == null) {
+                deviation = new DeviationRow();
+            }
+            return deviation;
+        }
+
+        public void setDeviation(DeviationRow deviation) {
+            this.deviation = deviation;
+        }
+
+        public List<PhotoReferenceRow> getPhotoReferences() {
+            if (photoReferences == null) {
+                photoReferences = new ArrayList<>();
+            }
+            return photoReferences;
+        }
+
+        public void setPhotoReferences(List<PhotoReferenceRow> photoReferences) {
+            this.photoReferences = photoReferences;
+        }
     }
 
     public static class DeviationRow {
@@ -225,8 +306,8 @@ public class DietLogForm {
         @Size(max = 1000)
         private String notes;
 
-        public DailyDietLogRequest.DeviationRequest toRequest() {
-            return new DailyDietLogRequest.DeviationRequest(deviationCategory, severity, notes);
+        public DailyDietLogRequest.DeviationRequest toRequest(int mealIndex) {
+            return new DailyDietLogRequest.DeviationRequest(mealIndex, deviationCategory, severity, notes);
         }
 
         boolean isBlank() {
@@ -266,8 +347,8 @@ public class DietLogForm {
         @Size(max = 500)
         private String caption;
 
-        public DailyDietLogRequest.PhotoUploadReferenceRequest toRequest() {
-            return new DailyDietLogRequest.PhotoUploadReferenceRequest(uploadId, caption);
+        public DailyDietLogRequest.PhotoUploadReferenceRequest toRequest(int mealIndex) {
+            return new DailyDietLogRequest.PhotoUploadReferenceRequest(mealIndex, uploadId, caption);
         }
 
         boolean isBlank() {
@@ -299,13 +380,16 @@ public class DietLogForm {
         private BigDecimal value;
 
         private MeasurementUnit unit;
+        private LocalTime measuredTime;
         private Instant measuredAt;
         private MeasurementContext context;
 
         @Size(max = 1000)
         private String notes;
 
-        public DailyMeasurementEntryRequest toRequest() {
+        public DailyMeasurementEntryRequest toRequest(MeasurementType measurementType,
+                                                      MeasurementUnit unit,
+                                                      Instant measuredAt) {
             return new DailyMeasurementEntryRequest(
                     measurementType,
                     value,
@@ -316,8 +400,8 @@ public class DietLogForm {
         }
 
         boolean isBlank() {
-            return measurementType == null
-                    && value == null
+            return value == null
+                    && measuredTime == null
                     && measuredAt == null
                     && context == null
                     && blank(notes);
@@ -347,12 +431,21 @@ public class DietLogForm {
             this.unit = unit;
         }
 
+        public LocalTime getMeasuredTime() {
+            return measuredTime;
+        }
+
+        public void setMeasuredTime(LocalTime measuredTime) {
+            this.measuredTime = measuredTime;
+        }
+
         public Instant getMeasuredAt() {
             return measuredAt;
         }
 
         public void setMeasuredAt(Instant measuredAt) {
             this.measuredAt = measuredAt;
+            this.measuredTime = measuredAt == null ? null : measuredAt.atZone(java.time.ZoneOffset.UTC).toLocalTime();
         }
 
         public MeasurementContext getContext() {

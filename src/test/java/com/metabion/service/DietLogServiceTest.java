@@ -227,6 +227,105 @@ class DietLogServiceTest {
     }
 
     @Test
+    void saveForCurrentPatientLinksDeviationToSubmittedMealIndex() {
+        givenAuthenticatedPatient();
+        when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
+                .thenReturn(Optional.empty());
+        when(dailyDietLogs.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        var request = new DailyDietLogRequest(
+                LocalDate.of(2026, 6, 10),
+                DietAdherenceLevel.MOSTLY,
+                AppetiteLevel.NORMAL,
+                "Stable",
+                List.of(
+                        new DailyDietLogRequest.MealRequest(
+                                MealType.LUNCH,
+                                FoodCategory.PROTEIN,
+                                "Salmon",
+                                null),
+                        new DailyDietLogRequest.MealRequest(
+                                MealType.DINNER,
+                                FoodCategory.LOW_CARB_VEGETABLES,
+                                "Greens",
+                                null)),
+                List.of(new DailyDietLogRequest.DeviationRequest(
+                        1,
+                        DietDeviationCategory.DINING_OUT,
+                        DietDeviationSeverity.MINOR,
+                        "Dinner out")),
+                List.of(),
+                List.of());
+
+        service.saveForCurrentPatient(auth("patient@example.com"), request);
+
+        var captor = ArgumentCaptor.forClass(DailyDietLog.class);
+        verify(dailyDietLogs).save(captor.capture());
+        var saved = captor.getValue();
+        assertThat(saved.getDeviations()).singleElement()
+                .satisfies(deviation -> assertThat(deviation.getMeal())
+                        .isSameAs(saved.getMeals().get(1)));
+    }
+
+    @Test
+    void saveForCurrentPatientRejectsDeviationWithInvalidMealIndex() {
+        givenAuthenticatedPatient();
+        when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
+                .thenReturn(Optional.empty());
+        var request = new DailyDietLogRequest(
+                LocalDate.of(2026, 6, 10),
+                DietAdherenceLevel.MOSTLY,
+                AppetiteLevel.NORMAL,
+                "Stable",
+                List.of(new DailyDietLogRequest.MealRequest(
+                        MealType.LUNCH,
+                        FoodCategory.PROTEIN,
+                        "Salmon",
+                        null)),
+                List.of(new DailyDietLogRequest.DeviationRequest(
+                        2,
+                        DietDeviationCategory.DINING_OUT,
+                        DietDeviationSeverity.MINOR,
+                        "Bad index")),
+                List.of(),
+                List.of());
+
+        assertThatThrownBy(() -> service.saveForCurrentPatient(auth("patient@example.com"), request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("deviation mealIndex is invalid");
+        verify(dailyDietLogs, never()).save(any());
+    }
+
+    @Test
+    void saveForCurrentPatientRejectsDeviationWithMissingMealIndex() {
+        givenAuthenticatedPatient();
+        when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
+                .thenReturn(Optional.empty());
+        var request = new DailyDietLogRequest(
+                LocalDate.of(2026, 6, 10),
+                DietAdherenceLevel.MOSTLY,
+                AppetiteLevel.NORMAL,
+                "Stable",
+                List.of(new DailyDietLogRequest.MealRequest(
+                        MealType.LUNCH,
+                        FoodCategory.PROTEIN,
+                        "Salmon",
+                        null)),
+                List.of(new DailyDietLogRequest.DeviationRequest(
+                        DietDeviationCategory.DINING_OUT,
+                        DietDeviationSeverity.MINOR,
+                        "No meal index")),
+                List.of(),
+                List.of());
+
+        assertThatThrownBy(() -> service.saveForCurrentPatient(auth("patient@example.com"), request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("deviation mealIndex is invalid");
+        verify(dailyDietLogs, never()).save(any());
+    }
+
+    @Test
     void secondFullSaveClearsOldLinkedMeasurementsBeforeSavingReplacements() {
         var patient = givenAuthenticatedPatient();
         var existing = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
@@ -553,14 +652,13 @@ class DietLogServiceTest {
         when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
                 .thenReturn(Optional.empty());
         when(dailyDietLogs.save(any())).thenReturn(saved);
-        var photoReference = new DailyDietLogRequest.PhotoUploadReferenceRequest(50L, "Lunch plate");
+        var photoReference = new DailyDietLogRequest.PhotoUploadReferenceRequest(0, 50L, "Lunch plate");
         var request = new DailyDietLogRequest(
                 LocalDate.of(2026, 6, 10),
                 DietAdherenceLevel.MOSTLY,
                 AppetiteLevel.NORMAL,
                 "Stable",
-                null,
-                List.of(),
+                List.of(new DailyDietLogRequest.MealRequest(MealType.LUNCH, FoodCategory.PROTEIN, "Lunch", null)),
                 List.of(),
                 List.of(photoReference),
                 List.of());
@@ -591,7 +689,7 @@ class DietLogServiceTest {
                 AppetiteLevel.NORMAL,
                 " Stable day ",
                 List.of(new DailyDietLogRequest.MealRequest(MealType.LUNCH, FoodCategory.PROTEIN, " Salmon ", " ok ")),
-                List.of(new DailyDietLogRequest.DeviationRequest(DietDeviationCategory.DINING_OUT, DietDeviationSeverity.MINOR, " small ")),
+                List.of(new DailyDietLogRequest.DeviationRequest(0, DietDeviationCategory.DINING_OUT, DietDeviationSeverity.MINOR, " small ")),
                 List.of(),
                 List.of(new DailyMeasurementEntryRequest(
                         MeasurementType.GLUCOSE,

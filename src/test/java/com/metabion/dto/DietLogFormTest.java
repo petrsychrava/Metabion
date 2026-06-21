@@ -23,6 +23,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,10 +56,11 @@ class DietLogFormTest {
                 "Eggs",
                 "No issues");
         var deviation = new DailyDietLogRequest.DeviationRequest(
+                0,
                 DietDeviationCategory.DINING_OUT,
                 DietDeviationSeverity.MINOR,
                 "Restaurant lunch");
-        var photo = new DailyDietLogRequest.PhotoUploadReferenceRequest(50L, "Breakfast");
+        var photo = new DailyDietLogRequest.PhotoUploadReferenceRequest(0, 50L, "Breakfast");
         var request = new DailyDietLogRequest(
                 LocalDate.of(2026, 6, 10),
                 DietAdherenceLevel.FULL,
@@ -84,17 +86,21 @@ class DietLogFormTest {
         assertThat(updated.notes()).isEqualTo(request.notes());
         assertThat(updated.meals()).containsExactly(meal);
         assertThat(updated.deviations()).containsExactly(deviation);
+        assertThat(updated.deviations().getFirst().mealIndex()).isZero();
         assertThat(updated.photoReferences()).containsExactly(photo);
+        assertThat(updated.photoReferences().getFirst().mealIndex()).isZero();
         assertThat(updated.measurements()).containsExactly(measurement);
     }
 
     @Test
-    void formToRequestFiltersBlankOptionalRowsAndKeepsPopulatedRows() {
+    void formToRequestMapsMealScopedDeviationPhotosAndFixedMeasurements() {
         var form = new DietLogForm();
         form.setLogDate(LocalDate.of(2026, 6, 10));
         form.setAdherenceLevel(DietAdherenceLevel.PARTIAL);
         form.setAppetiteLevel(AppetiteLevel.VARIABLE);
         form.setNotes("  Felt fine overall  ");
+        form.setGlucoseUnitPreference(MeasurementUnit.MG_DL);
+        form.setPatientTimezone("Europe/Prague");
 
         var blankMeal = new DietLogForm.MealRow();
         var meal = new DietLogForm.MealRow();
@@ -102,30 +108,28 @@ class DietLogFormTest {
         meal.setFoodCategory(FoodCategory.LOW_CARB_VEGETABLES);
         meal.setFoodDescription("Steamed greens");
         meal.setNotes("Good tolerance");
-        form.setMeals(List.of(blankMeal, meal));
-
-        var blankDeviation = new DietLogForm.DeviationRow();
-        var deviation = new DietLogForm.DeviationRow();
-        deviation.setDeviationCategory(DietDeviationCategory.EXCESS_CARBS);
-        deviation.setSeverity(DietDeviationSeverity.MODERATE);
-        deviation.setNotes("Small dessert");
-        form.setDeviations(List.of(blankDeviation, deviation));
-
-        var blankPhoto = new DietLogForm.PhotoReferenceRow();
+        meal.getDeviation().setDeviationCategory(DietDeviationCategory.EXCESS_CARBS);
+        meal.getDeviation().setSeverity(DietDeviationSeverity.MODERATE);
+        meal.getDeviation().setNotes("Small dessert");
         var photo = new DietLogForm.PhotoReferenceRow();
         photo.setUploadId(51L);
         photo.setCaption("Dinner plate");
-        form.setPhotoReferences(List.of(blankPhoto, photo));
+        meal.setPhotoReferences(List.of(new DietLogForm.PhotoReferenceRow(), photo));
+        form.setMeals(List.of(blankMeal, meal));
 
-        var blankMeasurement = new DietLogForm.MeasurementRow();
-        var measurement = new DietLogForm.MeasurementRow();
-        measurement.setMeasurementType(MeasurementType.KETONE);
-        measurement.setValue(new BigDecimal("1.20"));
-        measurement.setUnit(MeasurementUnit.MMOL_L);
-        measurement.setMeasuredAt(Instant.parse("2026-06-10T20:00:00Z"));
-        measurement.setContext(MeasurementContext.BEDTIME);
-        measurement.setNotes("Evening");
-        form.setMeasurements(List.of(blankMeasurement, measurement));
+        var glucose = new DietLogForm.MeasurementRow();
+        glucose.setValue(new BigDecimal("104.00"));
+        glucose.setMeasuredTime(LocalTime.of(7, 30));
+        glucose.setContext(MeasurementContext.FASTING);
+        glucose.setNotes("Morning");
+        form.setGlucoseMeasurement(glucose);
+
+        var ketone = new DietLogForm.MeasurementRow();
+        ketone.setValue(new BigDecimal("1.20"));
+        ketone.setMeasuredTime(LocalTime.of(20, 0));
+        ketone.setContext(MeasurementContext.BEDTIME);
+        ketone.setNotes("Evening");
+        form.setKetoneMeasurement(ketone);
 
         var request = form.toRequest();
 
@@ -142,40 +146,95 @@ class DietLogFormTest {
                 });
         assertThat(request.deviationsOrEmpty()).singleElement()
                 .satisfies(row -> {
+                    assertThat(row.mealIndex()).isZero();
                     assertThat(row.deviationCategory()).isEqualTo(DietDeviationCategory.EXCESS_CARBS);
                     assertThat(row.severity()).isEqualTo(DietDeviationSeverity.MODERATE);
                     assertThat(row.notes()).isEqualTo("Small dessert");
                 });
         assertThat(request.photoReferencesOrEmpty()).singleElement()
                 .satisfies(row -> {
+                    assertThat(row.mealIndex()).isZero();
                     assertThat(row.uploadId()).isEqualTo(51L);
                     assertThat(row.caption()).isEqualTo("Dinner plate");
                 });
-        assertThat(request.measurementsOrEmpty()).singleElement()
-                .satisfies(row -> {
-                    assertThat(row.measurementType()).isEqualTo(MeasurementType.KETONE);
-                    assertThat(row.value()).isEqualByComparingTo("1.20");
-                    assertThat(row.unit()).isEqualTo(MeasurementUnit.MMOL_L);
-                    assertThat(row.measuredAt()).isEqualTo(Instant.parse("2026-06-10T20:00:00Z"));
-                    assertThat(row.context()).isEqualTo(MeasurementContext.BEDTIME);
-                    assertThat(row.notes()).isEqualTo("Evening");
-                });
+        assertThat(request.measurementsOrEmpty()).hasSize(2);
+        assertThat(request.measurementsOrEmpty()).extracting("measurementType")
+                .containsExactly(MeasurementType.GLUCOSE, MeasurementType.KETONE);
+        assertThat(request.measurementsOrEmpty().get(0).value()).isEqualByComparingTo("104.00");
+        assertThat(request.measurementsOrEmpty().get(0).unit()).isEqualTo(MeasurementUnit.MG_DL);
+        assertThat(request.measurementsOrEmpty().get(0).measuredAt())
+                .isEqualTo(Instant.parse("2026-06-10T05:30:00Z"));
+        assertThat(request.measurementsOrEmpty().get(0).context()).isEqualTo(MeasurementContext.FASTING);
+        assertThat(request.measurementsOrEmpty().get(0).notes()).isEqualTo("Morning");
+        assertThat(request.measurementsOrEmpty().get(1).value()).isEqualByComparingTo("1.20");
+        assertThat(request.measurementsOrEmpty().get(1).unit()).isEqualTo(MeasurementUnit.MMOL_L);
+        assertThat(request.measurementsOrEmpty().get(1).measuredAt())
+                .isEqualTo(Instant.parse("2026-06-10T18:00:00Z"));
+        assertThat(request.measurementsOrEmpty().get(1).context()).isEqualTo(MeasurementContext.BEDTIME);
+        assertThat(request.measurementsOrEmpty().get(1).notes()).isEqualTo("Evening");
     }
 
     @Test
-    void formToRequestFiltersMeasurementRowWithOnlyUnit() {
+    void formToRequestFiltersEmptyFixedMeasurementRows() {
         var form = new DietLogForm();
         form.setLogDate(LocalDate.of(2026, 6, 10));
         form.setAdherenceLevel(DietAdherenceLevel.FULL);
         form.setAppetiteLevel(AppetiteLevel.NORMAL);
-
-        var unitOnlyMeasurement = new DietLogForm.MeasurementRow();
-        unitOnlyMeasurement.setUnit(MeasurementUnit.MMOL_L);
-        form.setMeasurements(List.of(unitOnlyMeasurement));
+        form.setGlucoseUnitPreference(MeasurementUnit.MMOL_L);
+        form.setPatientTimezone("UTC");
+        form.setGlucoseMeasurement(new DietLogForm.MeasurementRow());
+        form.setKetoneMeasurement(new DietLogForm.MeasurementRow());
 
         var request = form.toRequest();
 
         assertThat(request.measurementsOrEmpty()).isEmpty();
+    }
+
+    @Test
+    void formToRequestFallsBackToUtcForInvalidPatientTimezone() {
+        var form = new DietLogForm();
+        form.setLogDate(LocalDate.of(2026, 6, 10));
+        form.setAdherenceLevel(DietAdherenceLevel.FULL);
+        form.setAppetiteLevel(AppetiteLevel.NORMAL);
+        form.setPatientTimezone("not/a-zone");
+
+        var glucose = new DietLogForm.MeasurementRow();
+        glucose.setValue(new BigDecimal("5.60"));
+        glucose.setMeasuredTime(LocalTime.of(7, 30));
+        form.setGlucoseMeasurement(glucose);
+
+        var request = form.toRequest();
+
+        assertThat(request.measurementsOrEmpty()).singleElement()
+                .satisfies(row -> assertThat(row.measuredAt())
+                        .isEqualTo(Instant.parse("2026-06-10T07:30:00Z")));
+    }
+
+    @Test
+    void formToRequestUsesPostFilterMealIndexesForNestedDeviations() {
+        var form = new DietLogForm();
+        form.setLogDate(LocalDate.of(2026, 6, 10));
+        form.setAdherenceLevel(DietAdherenceLevel.PARTIAL);
+        form.setAppetiteLevel(AppetiteLevel.VARIABLE);
+
+        var firstMeal = new DietLogForm.MealRow();
+        firstMeal.setMealType(MealType.BREAKFAST);
+        firstMeal.setFoodCategory(FoodCategory.PROTEIN);
+        firstMeal.getDeviation().setDeviationCategory(DietDeviationCategory.DINING_OUT);
+        firstMeal.getDeviation().setSeverity(DietDeviationSeverity.MINOR);
+
+        var secondMeal = new DietLogForm.MealRow();
+        secondMeal.setMealType(MealType.DINNER);
+        secondMeal.setFoodCategory(FoodCategory.LOW_CARB_VEGETABLES);
+        secondMeal.getDeviation().setDeviationCategory(DietDeviationCategory.EXCESS_CARBS);
+        secondMeal.getDeviation().setSeverity(DietDeviationSeverity.MODERATE);
+
+        form.setMeals(List.of(firstMeal, new DietLogForm.MealRow(), secondMeal));
+
+        var request = form.toRequest();
+
+        assertThat(request.deviationsOrEmpty()).extracting(DailyDietLogRequest.DeviationRequest::mealIndex)
+                .containsExactly(0, 1);
     }
 
     @Test
@@ -202,6 +261,7 @@ class DietLogFormTest {
                 "Small deviation",
                 2);
         ReflectionTestUtils.setField(deviation, "id", 40L);
+        deviation.setMeal(meal);
         log.addDeviation(deviation);
 
         var photo = new DailyDietLogPhotoReference(
@@ -239,6 +299,7 @@ class DietLogFormTest {
         assertThat(response.deviations()).singleElement()
                 .satisfies(row -> {
                     assertThat(row.id()).isEqualTo(40L);
+                    assertThat(row.mealId()).isEqualTo(30L);
                     assertThat(row.deviationCategory()).isEqualTo(DietDeviationCategory.DINING_OUT);
                     assertThat(row.severity()).isEqualTo(DietDeviationSeverity.MINOR);
                     assertThat(row.notes()).isEqualTo("Small deviation");

@@ -18,6 +18,7 @@ import com.metabion.domain.User;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 
 public record DailyDietLogResponse(
         Long id,
@@ -77,6 +78,18 @@ public record DailyDietLogResponse(
                         : measurements.stream().map(DailyMeasurementEntryResponse::from).toList());
     }
 
+    public List<DeviationResponse> deviationsForMeal(Long mealId) {
+        return (deviations == null ? List.<DeviationResponse>of() : deviations).stream()
+                .filter(deviation -> Objects.equals(deviation.mealId(), mealId))
+                .toList();
+    }
+
+    public List<PhotoReferenceResponse> photoReferencesForMeal(Long mealId) {
+        return (photoReferences == null ? List.<PhotoReferenceResponse>of() : photoReferences).stream()
+                .filter(photo -> Objects.equals(photo.mealId(), mealId))
+                .toList();
+    }
+
     public record MealResponse(
             Long id,
             MealType mealType,
@@ -99,6 +112,7 @@ public record DailyDietLogResponse(
 
     public record DeviationResponse(
             Long id,
+            Long mealId,
             DietDeviationCategory deviationCategory,
             DietDeviationSeverity severity,
             String notes,
@@ -108,6 +122,7 @@ public record DailyDietLogResponse(
         private static DeviationResponse from(DailyDietLogDeviation deviation) {
             return new DeviationResponse(
                     deviation.getId(),
+                    Objects.requireNonNull(deviation.getMeal(), "deviation meal is required").getId(),
                     deviation.getDeviationCategory(),
                     deviation.getSeverity(),
                     deviation.getNotes(),

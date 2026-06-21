@@ -74,15 +74,25 @@ public record DailyDietLogRequest(
     }
 
     public record DeviationRequest(
+            Integer mealIndex,
             @NotNull DietDeviationCategory deviationCategory,
             @NotNull DietDeviationSeverity severity,
             @Size(max = 1000) String notes
     ) {
+        public DeviationRequest(DietDeviationCategory deviationCategory,
+                                DietDeviationSeverity severity,
+                                String notes) {
+            this(null, deviationCategory, severity, notes);
+        }
     }
 
     public record PhotoUploadReferenceRequest(
+            Integer mealIndex,
             @NotNull Long uploadId,
             @Size(max = 500) String caption
     ) {
+        public PhotoUploadReferenceRequest(Long uploadId, String caption) {
+            this(null, uploadId, caption);
+        }
     }
 }
