@@ -15,6 +15,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -57,6 +58,21 @@ public class DietLogForm {
         var populatedMeals = mealsOrEmpty().stream()
                 .filter(row -> !row.isBlank())
                 .toList();
+        var deviations = deviationsFrom(populatedMeals);
+        deviations.addAll(legacyDeviationsOrEmpty().stream()
+                .filter(row -> !row.isBlank())
+                .map(DeviationRow::toRequest)
+                .toList());
+        var photoReferences = photoReferencesFrom(populatedMeals);
+        photoReferences.addAll(legacyPhotoReferencesOrEmpty().stream()
+                .filter(row -> !row.isBlank())
+                .map(PhotoReferenceRow::toRequest)
+                .toList());
+        var measurements = fixedMeasurements();
+        measurements.addAll(legacyMeasurementsOrEmpty().stream()
+                .filter(row -> !row.isBlank())
+                .map(MeasurementRow::toRequest)
+                .toList());
         return new DailyDietLogRequest(
                 logDate,
                 adherenceLevel,
@@ -65,9 +81,9 @@ public class DietLogForm {
                 populatedMeals.stream()
                         .map(MealRow::toRequest)
                         .toList(),
-                deviationsFrom(populatedMeals),
-                photoReferencesFrom(populatedMeals),
-                fixedMeasurements());
+                deviations,
+                photoReferences,
+                measurements);
     }
 
     public LocalDate getLogDate() {
@@ -176,6 +192,18 @@ public class DietLogForm {
         return meals == null ? List.of() : meals;
     }
 
+    private List<DeviationRow> legacyDeviationsOrEmpty() {
+        return legacyDeviations == null ? List.of() : legacyDeviations;
+    }
+
+    private List<PhotoReferenceRow> legacyPhotoReferencesOrEmpty() {
+        return legacyPhotoReferences == null ? List.of() : legacyPhotoReferences;
+    }
+
+    private List<MeasurementRow> legacyMeasurementsOrEmpty() {
+        return legacyMeasurements == null ? List.of() : legacyMeasurements;
+    }
+
     private static boolean blank(String value) {
         return value == null || value.isBlank();
     }
@@ -224,10 +252,19 @@ public class DietLogForm {
         if (logDate == null || row.getMeasuredTime() == null) {
             return null;
         }
-        var zone = patientTimezone == null || patientTimezone.isBlank()
-                ? ZoneId.of("UTC")
-                : ZoneId.of(patientTimezone);
+        var zone = zoneOrUtc(patientTimezone);
         return logDate.atTime(row.getMeasuredTime()).atZone(zone).toInstant();
+    }
+
+    private ZoneId zoneOrUtc(String zoneId) {
+        if (zoneId == null || zoneId.isBlank()) {
+            return ZoneId.of("UTC");
+        }
+        try {
+            return ZoneId.of(zoneId);
+        } catch (DateTimeException exception) {
+            return ZoneId.of("UTC");
+        }
     }
 
     public static class MealRow {
@@ -325,6 +362,10 @@ public class DietLogForm {
             return new DailyDietLogRequest.DeviationRequest(mealIndex, deviationCategory, severity, notes);
         }
 
+        public DailyDietLogRequest.DeviationRequest toRequest() {
+            return new DailyDietLogRequest.DeviationRequest(deviationCategory, severity, notes);
+        }
+
         boolean isBlank() {
             return deviationCategory == null
                     && severity == null
@@ -366,6 +407,10 @@ public class DietLogForm {
             return new DailyDietLogRequest.PhotoUploadReferenceRequest(mealIndex, uploadId, caption);
         }
 
+        public DailyDietLogRequest.PhotoUploadReferenceRequest toRequest() {
+            return new DailyDietLogRequest.PhotoUploadReferenceRequest(uploadId, caption);
+        }
+
         boolean isBlank() {
             return uploadId == null
                     && blank(caption);
@@ -396,6 +441,7 @@ public class DietLogForm {
 
         private MeasurementUnit unit;
         private LocalTime measuredTime;
+        private Instant measuredAt;
         private MeasurementContext context;
 
         @Size(max = 1000)
@@ -413,9 +459,20 @@ public class DietLogForm {
                     notes);
         }
 
+        public DailyMeasurementEntryRequest toRequest() {
+            return new DailyMeasurementEntryRequest(
+                    measurementType,
+                    value,
+                    unit,
+                    measuredAt,
+                    context,
+                    notes);
+        }
+
         boolean isBlank() {
             return value == null
                     && measuredTime == null
+                    && measuredAt == null
                     && context == null
                     && blank(notes);
         }
@@ -453,10 +510,11 @@ public class DietLogForm {
         }
 
         public Instant getMeasuredAt() {
-            return null;
+            return measuredAt;
         }
 
         public void setMeasuredAt(Instant measuredAt) {
+            this.measuredAt = measuredAt;
             this.measuredTime = measuredAt == null ? null : measuredAt.atZone(java.time.ZoneOffset.UTC).toLocalTime();
         }
 
