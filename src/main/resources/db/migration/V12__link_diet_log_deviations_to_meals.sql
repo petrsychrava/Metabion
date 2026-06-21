@@ -1,5 +1,5 @@
 ALTER TABLE daily_diet_log_deviations
-    ADD COLUMN meal_id BIGINT;
+    ADD COLUMN meal_id BIGINT NOT NULL;
 
 ALTER TABLE daily_diet_log_deviations
     ADD CONSTRAINT fk_daily_diet_log_deviations_meal_log

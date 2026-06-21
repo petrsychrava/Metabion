@@ -56,10 +56,11 @@ class DietLogFormTest {
                 "Eggs",
                 "No issues");
         var deviation = new DailyDietLogRequest.DeviationRequest(
+                0,
                 DietDeviationCategory.DINING_OUT,
                 DietDeviationSeverity.MINOR,
                 "Restaurant lunch");
-        var photo = new DailyDietLogRequest.PhotoUploadReferenceRequest(50L, "Breakfast");
+        var photo = new DailyDietLogRequest.PhotoUploadReferenceRequest(0, 50L, "Breakfast");
         var request = new DailyDietLogRequest(
                 LocalDate.of(2026, 6, 10),
                 DietAdherenceLevel.FULL,
@@ -85,9 +86,9 @@ class DietLogFormTest {
         assertThat(updated.notes()).isEqualTo(request.notes());
         assertThat(updated.meals()).containsExactly(meal);
         assertThat(updated.deviations()).containsExactly(deviation);
-        assertThat(updated.deviations().getFirst().mealIndex()).isNull();
+        assertThat(updated.deviations().getFirst().mealIndex()).isZero();
         assertThat(updated.photoReferences()).containsExactly(photo);
-        assertThat(updated.photoReferences().getFirst().mealIndex()).isNull();
+        assertThat(updated.photoReferences().getFirst().mealIndex()).isZero();
         assertThat(updated.measurements()).containsExactly(measurement);
     }
 
@@ -187,84 +188,6 @@ class DietLogFormTest {
         var request = form.toRequest();
 
         assertThat(request.measurementsOrEmpty()).isEmpty();
-    }
-
-    @Test
-    void formToRequestIncludesLegacyTopLevelOptionalRows() {
-        var form = new DietLogForm();
-        form.setLogDate(LocalDate.of(2026, 6, 10));
-        form.setAdherenceLevel(DietAdherenceLevel.PARTIAL);
-        form.setAppetiteLevel(AppetiteLevel.VARIABLE);
-
-        var deviation = new DietLogForm.DeviationRow();
-        deviation.setDeviationCategory(DietDeviationCategory.EXCESS_CARBS);
-        deviation.setSeverity(DietDeviationSeverity.MODERATE);
-        deviation.setNotes("Legacy dessert");
-        form.setDeviations(List.of(new DietLogForm.DeviationRow(), deviation));
-
-        var photo = new DietLogForm.PhotoReferenceRow();
-        photo.setUploadId(52L);
-        photo.setCaption("Legacy plate");
-        form.setPhotoReferences(List.of(new DietLogForm.PhotoReferenceRow(), photo));
-
-        var measuredAt = Instant.parse("2026-06-10T20:00:00Z");
-        var measurement = new DietLogForm.MeasurementRow();
-        measurement.setMeasurementType(MeasurementType.KETONE);
-        measurement.setValue(new BigDecimal("1.20"));
-        measurement.setUnit(MeasurementUnit.MMOL_L);
-        measurement.setMeasuredAt(measuredAt);
-        measurement.setContext(MeasurementContext.BEDTIME);
-        measurement.setNotes("Legacy evening");
-        form.setMeasurements(List.of(new DietLogForm.MeasurementRow(), measurement));
-
-        var request = form.toRequest();
-
-        assertThat(request.deviationsOrEmpty()).singleElement()
-                .satisfies(row -> {
-                    assertThat(row.mealIndex()).isNull();
-                    assertThat(row.deviationCategory()).isEqualTo(DietDeviationCategory.EXCESS_CARBS);
-                    assertThat(row.severity()).isEqualTo(DietDeviationSeverity.MODERATE);
-                    assertThat(row.notes()).isEqualTo("Legacy dessert");
-                });
-        assertThat(request.photoReferencesOrEmpty()).singleElement()
-                .satisfies(row -> {
-                    assertThat(row.mealIndex()).isNull();
-                    assertThat(row.uploadId()).isEqualTo(52L);
-                    assertThat(row.caption()).isEqualTo("Legacy plate");
-                });
-        assertThat(request.measurementsOrEmpty()).singleElement()
-                .satisfies(row -> {
-                    assertThat(row.measurementType()).isEqualTo(MeasurementType.KETONE);
-                    assertThat(row.value()).isEqualByComparingTo("1.20");
-                    assertThat(row.unit()).isEqualTo(MeasurementUnit.MMOL_L);
-                    assertThat(row.measuredAt()).isEqualTo(measuredAt);
-                    assertThat(row.context()).isEqualTo(MeasurementContext.BEDTIME);
-                    assertThat(row.notes()).isEqualTo("Legacy evening");
-                });
-        assertThat(measurement.getMeasuredAt()).isEqualTo(measuredAt);
-    }
-
-    @Test
-    void formToRequestKeepsLegacyMeasurementWithOnlyTypeSelected() {
-        var form = new DietLogForm();
-        form.setLogDate(LocalDate.of(2026, 6, 10));
-        form.setAdherenceLevel(DietAdherenceLevel.FULL);
-        form.setAppetiteLevel(AppetiteLevel.NORMAL);
-
-        var measurement = new DietLogForm.MeasurementRow();
-        measurement.setMeasurementType(MeasurementType.GLUCOSE);
-        form.setMeasurements(List.of(measurement));
-
-        var request = form.toRequest();
-
-        assertThat(request.measurementsOrEmpty()).singleElement()
-                .satisfies(row -> {
-                    assertThat(row.measurementType()).isEqualTo(MeasurementType.GLUCOSE);
-                    assertThat(row.value()).isNull();
-                    assertThat(row.unit()).isNull();
-                    assertThat(row.measuredAt()).isNull();
-                    assertThat(row.context()).isNull();
-                });
     }
 
     @Test

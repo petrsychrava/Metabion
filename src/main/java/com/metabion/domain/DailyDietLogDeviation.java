@@ -25,7 +25,7 @@ public class DailyDietLogDeviation {
     private DailyDietLog dailyDietLog;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "meal_id")
+    @JoinColumn(name = "meal_id", nullable = false)
     private DailyDietLogMeal meal;
 
     @Enumerated(EnumType.STRING)

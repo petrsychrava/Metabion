@@ -104,17 +104,20 @@ class DailyDietLogRepositoryTest {
     void cascadesMealsDeviationsAndPhotoReferences() {
         var patient = createPatient("daily-log-children@example.com");
         var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
-        log.addMeal(new DailyDietLogMeal(
+        var meal = new DailyDietLogMeal(
                 MealType.BREAKFAST,
                 FoodCategory.PROTEIN,
                 "Eggs",
                 "No issues",
-                0));
-        log.addDeviation(new DailyDietLogDeviation(
+                0);
+        log.addMeal(meal);
+        var deviation = new DailyDietLogDeviation(
                 DietDeviationCategory.DINING_OUT,
                 DietDeviationSeverity.MINOR,
                 "Restaurant meal",
-                0));
+                0);
+        deviation.setMeal(meal);
+        log.addDeviation(deviation);
         var photoReference = DailyDietLogPhotoReference.pending(
                 patient,
                 patient.getUser(),
@@ -124,6 +127,7 @@ class DailyDietLogRepositoryTest {
                 "3".repeat(64),
                 "daily-logs/1/breakfast.jpg");
         photoReference.attachTo(log, "Breakfast", 0);
+        photoReference.setMeal(meal);
         log.addPhotoReference(photoReference);
 
         dailyDietLogs.saveAndFlush(log);

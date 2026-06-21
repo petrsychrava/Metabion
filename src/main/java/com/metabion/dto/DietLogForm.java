@@ -50,35 +50,13 @@ public class DietLogForm {
 
     private MeasurementUnit glucoseUnitPreference;
 
-    // Compatibility bridge for the current MVC template until it binds nested meal-card rows.
-    @Valid
-    private List<DeviationRow> legacyDeviations = new ArrayList<>();
-
-    @Valid
-    private List<PhotoReferenceRow> legacyPhotoReferences = new ArrayList<>();
-
-    @Valid
-    private List<MeasurementRow> legacyMeasurements = new ArrayList<>();
-
     public DailyDietLogRequest toRequest() {
         var populatedMeals = mealsOrEmpty().stream()
                 .filter(row -> !row.isBlank())
                 .toList();
         var deviations = deviationsFrom(populatedMeals);
-        deviations.addAll(legacyDeviationsOrEmpty().stream()
-                .filter(row -> !row.isBlank())
-                .map(DeviationRow::toRequest)
-                .toList());
         var photoReferences = photoReferencesFrom(populatedMeals);
-        photoReferences.addAll(legacyPhotoReferencesOrEmpty().stream()
-                .filter(row -> !row.isBlank())
-                .map(PhotoReferenceRow::toRequest)
-                .toList());
         var measurements = fixedMeasurements();
-        measurements.addAll(legacyMeasurementsOrEmpty().stream()
-                .filter(row -> !row.isLegacyBlank())
-                .map(MeasurementRow::toRequest)
-                .toList());
         return new DailyDietLogRequest(
                 logDate,
                 adherenceLevel,
@@ -132,30 +110,6 @@ public class DietLogForm {
         this.meals = meals;
     }
 
-    public List<DeviationRow> getDeviations() {
-        return legacyDeviations;
-    }
-
-    public void setDeviations(List<DeviationRow> deviations) {
-        this.legacyDeviations = deviations;
-    }
-
-    public List<PhotoReferenceRow> getPhotoReferences() {
-        return legacyPhotoReferences;
-    }
-
-    public void setPhotoReferences(List<PhotoReferenceRow> photoReferences) {
-        this.legacyPhotoReferences = photoReferences;
-    }
-
-    public List<MeasurementRow> getMeasurements() {
-        return legacyMeasurements;
-    }
-
-    public void setMeasurements(List<MeasurementRow> measurements) {
-        this.legacyMeasurements = measurements;
-    }
-
     public MeasurementRow getGlucoseMeasurement() {
         if (glucoseMeasurement == null) {
             glucoseMeasurement = new MeasurementRow();
@@ -196,18 +150,6 @@ public class DietLogForm {
 
     private List<MealRow> mealsOrEmpty() {
         return meals == null ? List.of() : meals;
-    }
-
-    private List<DeviationRow> legacyDeviationsOrEmpty() {
-        return legacyDeviations == null ? List.of() : legacyDeviations;
-    }
-
-    private List<PhotoReferenceRow> legacyPhotoReferencesOrEmpty() {
-        return legacyPhotoReferences == null ? List.of() : legacyPhotoReferences;
-    }
-
-    private List<MeasurementRow> legacyMeasurementsOrEmpty() {
-        return legacyMeasurements == null ? List.of() : legacyMeasurements;
     }
 
     private static boolean blank(String value) {
@@ -368,10 +310,6 @@ public class DietLogForm {
             return new DailyDietLogRequest.DeviationRequest(mealIndex, deviationCategory, severity, notes);
         }
 
-        public DailyDietLogRequest.DeviationRequest toRequest() {
-            return new DailyDietLogRequest.DeviationRequest(deviationCategory, severity, notes);
-        }
-
         boolean isBlank() {
             return deviationCategory == null
                     && severity == null
@@ -411,10 +349,6 @@ public class DietLogForm {
 
         public DailyDietLogRequest.PhotoUploadReferenceRequest toRequest(int mealIndex) {
             return new DailyDietLogRequest.PhotoUploadReferenceRequest(mealIndex, uploadId, caption);
-        }
-
-        public DailyDietLogRequest.PhotoUploadReferenceRequest toRequest() {
-            return new DailyDietLogRequest.PhotoUploadReferenceRequest(uploadId, caption);
         }
 
         boolean isBlank() {
@@ -465,27 +399,8 @@ public class DietLogForm {
                     notes);
         }
 
-        public DailyMeasurementEntryRequest toRequest() {
-            return new DailyMeasurementEntryRequest(
-                    measurementType,
-                    value,
-                    unit,
-                    measuredAt,
-                    context,
-                    notes);
-        }
-
         boolean isBlank() {
             return value == null
-                    && measuredTime == null
-                    && measuredAt == null
-                    && context == null
-                    && blank(notes);
-        }
-
-        boolean isLegacyBlank() {
-            return measurementType == null
-                    && value == null
                     && measuredTime == null
                     && measuredAt == null
                     && context == null

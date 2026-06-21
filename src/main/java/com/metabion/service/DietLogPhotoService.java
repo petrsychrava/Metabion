@@ -157,9 +157,7 @@ public class DietLogPhotoService {
             var request = safeRequests.get(i);
             var photo = found.get(request.uploadId());
             photo.attachTo(log, DietLogRequestMapper.trimToNull(request.caption()), i);
-            if (request.mealIndex() != null) {
-                photo.setMeal(log.getMeals().get(request.mealIndex()));
-            }
+            photo.setMeal(log.getMeals().get(request.mealIndex()));
             if (!log.getPhotoReferences().contains(photo)) {
                 log.addPhotoReference(photo);
             }
@@ -167,8 +165,9 @@ public class DietLogPhotoService {
     }
 
     private static void validateMealIndex(DailyDietLog log, DailyDietLogRequest.PhotoUploadReferenceRequest request) {
-        if (request.mealIndex() != null
-                && (request.mealIndex() < 0 || request.mealIndex() >= log.getMeals().size())) {
+        if (request.mealIndex() == null
+                || request.mealIndex() < 0
+                || request.mealIndex() >= log.getMeals().size()) {
             throw invalidPhotoUpload();
         }
     }

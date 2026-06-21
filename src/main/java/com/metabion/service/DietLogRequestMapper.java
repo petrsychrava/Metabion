@@ -94,12 +94,12 @@ public class DietLogRequestMapper {
                     deviation.severity(),
                     trimToNull(deviation.notes()),
                     i);
-            if (deviation.mealIndex() != null) {
-                if (deviation.mealIndex() < 0 || deviation.mealIndex() >= meals.size()) {
-                    throw badRequest("deviation mealIndex is invalid");
-                }
-                mapped.setMeal(meals.get(deviation.mealIndex()));
+            if (deviation.mealIndex() == null
+                    || deviation.mealIndex() < 0
+                    || deviation.mealIndex() >= meals.size()) {
+                throw badRequest("deviation mealIndex is invalid");
             }
+            mapped.setMeal(meals.get(deviation.mealIndex()));
             deviations.add(mapped);
         }
         return deviations;
