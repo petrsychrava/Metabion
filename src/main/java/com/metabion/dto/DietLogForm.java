@@ -50,8 +50,14 @@ public class DietLogForm {
 
     private MeasurementUnit glucoseUnitPreference;
 
+    // Compatibility bridge for the current MVC template until it binds nested meal-card rows.
+    @Valid
     private List<DeviationRow> legacyDeviations = new ArrayList<>();
+
+    @Valid
     private List<PhotoReferenceRow> legacyPhotoReferences = new ArrayList<>();
+
+    @Valid
     private List<MeasurementRow> legacyMeasurements = new ArrayList<>();
 
     public DailyDietLogRequest toRequest() {
@@ -70,7 +76,7 @@ public class DietLogForm {
                 .toList());
         var measurements = fixedMeasurements();
         measurements.addAll(legacyMeasurementsOrEmpty().stream()
-                .filter(row -> !row.isBlank())
+                .filter(row -> !row.isLegacyBlank())
                 .map(MeasurementRow::toRequest)
                 .toList());
         return new DailyDietLogRequest(
@@ -471,6 +477,15 @@ public class DietLogForm {
 
         boolean isBlank() {
             return value == null
+                    && measuredTime == null
+                    && measuredAt == null
+                    && context == null
+                    && blank(notes);
+        }
+
+        boolean isLegacyBlank() {
+            return measurementType == null
+                    && value == null
                     && measuredTime == null
                     && measuredAt == null
                     && context == null

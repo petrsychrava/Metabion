@@ -245,6 +245,29 @@ class DietLogFormTest {
     }
 
     @Test
+    void formToRequestKeepsLegacyMeasurementWithOnlyTypeSelected() {
+        var form = new DietLogForm();
+        form.setLogDate(LocalDate.of(2026, 6, 10));
+        form.setAdherenceLevel(DietAdherenceLevel.FULL);
+        form.setAppetiteLevel(AppetiteLevel.NORMAL);
+
+        var measurement = new DietLogForm.MeasurementRow();
+        measurement.setMeasurementType(MeasurementType.GLUCOSE);
+        form.setMeasurements(List.of(measurement));
+
+        var request = form.toRequest();
+
+        assertThat(request.measurementsOrEmpty()).singleElement()
+                .satisfies(row -> {
+                    assertThat(row.measurementType()).isEqualTo(MeasurementType.GLUCOSE);
+                    assertThat(row.value()).isNull();
+                    assertThat(row.unit()).isNull();
+                    assertThat(row.measuredAt()).isNull();
+                    assertThat(row.context()).isNull();
+                });
+    }
+
+    @Test
     void formToRequestFallsBackToUtcForInvalidPatientTimezone() {
         var form = new DietLogForm();
         form.setLogDate(LocalDate.of(2026, 6, 10));
