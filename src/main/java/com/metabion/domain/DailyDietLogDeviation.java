@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -26,7 +25,7 @@ public class DailyDietLogDeviation {
     private DailyDietLog dailyDietLog;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "meal_id", foreignKey = @ForeignKey(name = "fk_daily_diet_log_deviations_meal"))
+    @JoinColumn(name = "meal_id")
     private DailyDietLogMeal meal;
 
     @Enumerated(EnumType.STRING)

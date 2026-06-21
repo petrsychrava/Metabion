@@ -387,6 +387,28 @@ class DailyDietLogRepositoryTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void deviationMealMustBelongToSameDailyLog() {
+        var patient = createPatient("deviation-meal-owner@example.com");
+        var logWithMeal = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var meal = new DailyDietLogMeal(MealType.LUNCH, FoodCategory.PROTEIN, "Salmon", null, 0);
+        logWithMeal.addMeal(meal);
+        dailyDietLogs.saveAndFlush(logWithMeal);
+
+        var otherLog = new DailyDietLog(patient, LocalDate.of(2026, 6, 11));
+        var deviation = new DailyDietLogDeviation(
+                DietDeviationCategory.DINING_OUT,
+                DietDeviationSeverity.MINOR,
+                "Wrong meal link",
+                0);
+        deviation.setMeal(meal);
+        otherLog.addDeviation(deviation);
+
+        assertThatThrownBy(() -> dailyDietLogs.saveAndFlush(otherLog))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
     private PatientProfile createPatient(String email) {
         var profile = new PatientProfile(createUser(email, RoleName.PATIENT));
         profile.setDateOfBirth(LocalDate.of(1990, 1, 1));
