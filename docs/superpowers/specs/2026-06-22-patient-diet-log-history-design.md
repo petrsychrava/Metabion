@@ -113,7 +113,7 @@ Reuse existing diet-log labels for table columns and the empty state where possi
 Add or update web controller tests for:
 
 - `/app/diet-logs/history` renders for a patient with the default 30-day range in the patient's timezone.
-- Submitted `from` and `to` query parameters are passed to `listCurrentPatientLogs`.
+- Submitted `from` and `to` query parameters are passed to the patient-owned history listing service method.
 - History rows render date, adherence, appetite, glucose, ketones, and `Open/Edit` links to `/app/diet-logs?date=...`.
 - History rows render `Not provided` when glucose or ketone measurements are absent.
 - The edit page contains a `View history` link.
