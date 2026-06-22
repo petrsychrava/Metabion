@@ -12,6 +12,7 @@ import com.metabion.domain.MeasurementType;
 import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.RoleName;
 import com.metabion.dto.DailyDietLogRequest;
+import com.metabion.dto.DailyDietLogHistoryRowResponse;
 import com.metabion.dto.DailyDietLogResponse;
 import com.metabion.dto.DailyDietLogSummaryResponse;
 import com.metabion.dto.DailyMeasurementEntryResponse;
@@ -173,6 +174,18 @@ class WebDietLogControllerTest {
     }
 
     @Test
+    void patientDietLogPageLinksToHistory() throws Exception {
+        doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND))
+                .when(dietLogService).getCurrentPatientLog(any(), any());
+
+        mvc.perform(get("/app/diet-logs")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("/app/diet-logs/history")))
+                .andExpect(content().string(containsString("View history")));
+    }
+
+    @Test
     void patientDietLogPageRendersExistingRowsWithDistinctIndexedNames() throws Exception {
         when(dietLogService.currentPatientGlucoseUnitPreference(any())).thenReturn(MeasurementUnit.MG_DL);
         when(dietLogService.getCurrentPatientLog(any(), eq(LocalDate.of(2026, 6, 10))))
@@ -211,6 +224,55 @@ class WebDietLogControllerTest {
                 .andExpect(redirectedUrl("/app/diet-logs?date=2026-06-10"));
 
         verify(dietLogService).saveForCurrentPatient(any(), any());
+    }
+
+    @Test
+    void patientHistoryUsesDefaultThirtyDayRangeInPatientTimezone() throws Exception {
+        when(clock.instant()).thenReturn(Instant.parse("2026-06-21T08:00:00Z"));
+        when(dietLogService.currentPatientTimezone(any())).thenReturn("Europe/Prague");
+        when(dietLogService.listCurrentPatientHistoryRows(
+                any(),
+                eq(LocalDate.of(2026, 5, 23)),
+                eq(LocalDate.of(2026, 6, 21))))
+                .thenReturn(List.of(historyRow()));
+
+        mvc.perform(get("/app/diet-logs/history")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("diet-log-history"))
+                .andExpect(model().attribute("from", LocalDate.of(2026, 5, 23)))
+                .andExpect(model().attribute("to", LocalDate.of(2026, 6, 21)))
+                .andExpect(content().string(containsString("Diet log history")))
+                .andExpect(content().string(containsString("New log")))
+                .andExpect(content().string(containsString("/app/diet-logs?date=2026-06-10")))
+                .andExpect(content().string(containsString("5.80")))
+                .andExpect(content().string(containsString("1.20")));
+    }
+
+    @Test
+    void patientHistoryUsesSubmittedRangeAndRendersMissingMeasurements() throws Exception {
+        when(dietLogService.listCurrentPatientHistoryRows(
+                any(),
+                eq(LocalDate.of(2026, 6, 1)),
+                eq(LocalDate.of(2026, 6, 10))))
+                .thenReturn(List.of(new DailyDietLogHistoryRowResponse(
+                        100L,
+                        LocalDate.of(2026, 6, 9),
+                        DietAdherenceLevel.FULL,
+                        AppetiteLevel.LOW,
+                        null,
+                        null)));
+
+        mvc.perform(get("/app/diet-logs/history")
+                        .param("from", "2026-06-01")
+                        .param("to", "2026-06-10")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("diet-log-history"))
+                .andExpect(model().attribute("from", LocalDate.of(2026, 6, 1)))
+                .andExpect(model().attribute("to", LocalDate.of(2026, 6, 10)))
+                .andExpect(content().string(containsString("2026-06-09")))
+                .andExpect(content().string(containsString("Not provided")));
     }
 
     @Test
@@ -464,6 +526,16 @@ class WebDietLogControllerTest {
                 1,
                 1,
                 "Stable day");
+    }
+
+    private DailyDietLogHistoryRowResponse historyRow() {
+        return new DailyDietLogHistoryRowResponse(
+                99L,
+                LocalDate.of(2026, 6, 10),
+                DietAdherenceLevel.MOSTLY,
+                AppetiteLevel.NORMAL,
+                new DailyDietLogHistoryRowResponse.MeasurementValue(new BigDecimal("5.80"), MeasurementUnit.MMOL_L),
+                new DailyDietLogHistoryRowResponse.MeasurementValue(new BigDecimal("1.20"), MeasurementUnit.MMOL_L));
     }
 
     private DailyDietLogResponse detailResponse() {

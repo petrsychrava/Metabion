@@ -44,6 +44,7 @@ public class WebDietLogController {
     private static final int DEFAULT_MEAL_ROWS = 2;
     private static final int DEFAULT_PHOTO_ROWS_PER_MEAL = 1;
     private static final int CLINICAL_DEFAULT_RANGE_DAYS = 7;
+    private static final int PATIENT_HISTORY_DEFAULT_RANGE_DAYS = 30;
 
     private final DietLogService dietLogService;
     private final AppMenuCatalog appMenuCatalog;
@@ -97,6 +98,21 @@ public class WebDietLogController {
             return "diet-logs";
         }
         return "redirect:/app/diet-logs?date=" + form.getLogDate();
+    }
+
+    @GetMapping("/app/diet-logs/history")
+    public String patientHistory(@RequestParam(required = false) LocalDate from,
+                                 @RequestParam(required = false) LocalDate to,
+                                 Model model,
+                                 Authentication authentication) {
+        var patientTimezone = currentPatientTimezone(authentication);
+        var selectedTo = to == null ? currentDate(patientTimezone) : to;
+        var selectedFrom = from == null ? selectedTo.minusDays(PATIENT_HISTORY_DEFAULT_RANGE_DAYS - 1L) : from;
+        model.addAttribute("from", selectedFrom);
+        model.addAttribute("to", selectedTo);
+        model.addAttribute("logs", dietLogService.listCurrentPatientHistoryRows(authentication, selectedFrom, selectedTo));
+        addAppShell(model, authentication, PATIENT_ACTIVE_PATH);
+        return "diet-log-history";
     }
 
     @GetMapping("/app/clinical/diet-logs")
