@@ -17,6 +17,8 @@ public interface DailyMeasurementEntryRepository extends JpaRepository<DailyMeas
 
     List<DailyMeasurementEntry> findByDailyDietLogIdOrderByMeasuredAtDesc(Long dailyDietLogId);
 
+    List<DailyMeasurementEntry> findByDailyDietLogIdInOrderByMeasuredAtDesc(List<Long> dailyDietLogIds);
+
     List<DailyMeasurementEntry> findByPatientProfileIdAndDailyDietLogIsNullAndMeasuredAtGreaterThanEqualAndMeasuredAtLessThanOrderByMeasuredAtDesc(
             Long patientProfileId,
             Instant fromInclusive,

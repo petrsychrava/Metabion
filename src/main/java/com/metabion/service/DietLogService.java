@@ -6,6 +6,7 @@ import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
+import com.metabion.dto.DailyDietLogHistoryRowResponse;
 import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.dto.DailyDietLogResponse;
 import com.metabion.dto.DailyDietLogSummaryResponse;
@@ -119,6 +120,18 @@ public class DietLogService {
         var measurementCounts = measurementCountsFor(logs);
         return logs.stream()
                 .map(log -> responseAssembler.summary(log, measurementCounts.getOrDefault(log.getId(), 0)))
+                .toList();
+    }
+
+    public List<DailyDietLogHistoryRowResponse> listCurrentPatientHistoryRows(Authentication authentication,
+                                                                              LocalDate from,
+                                                                              LocalDate to) {
+        var patient = currentPatientProfile(authentication);
+        validateRange(from, to);
+        var logs = dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(patient.getId(), from, to);
+        var measurementsByLogId = historyMeasurementsFor(patient, logs);
+        return logs.stream()
+                .map(log -> responseAssembler.historyRow(log, measurementsByLogId.getOrDefault(log.getId(), List.of())))
                 .toList();
     }
 
@@ -312,6 +325,58 @@ public class DietLogService {
                 .flatMap(List::stream)
                 .forEach(id -> counts.merge(id, 1, Integer::sum));
         return counts;
+    }
+
+    private Map<Long, List<DailyMeasurementEntry>> historyMeasurementsFor(PatientProfile patient,
+                                                                          List<DailyDietLog> logs) {
+        if (logs == null || logs.isEmpty()) {
+            return Map.of();
+        }
+        var logIds = logs.stream()
+                .map(DailyDietLog::getId)
+                .filter(id -> id != null)
+                .toList();
+        var entriesByLogId = new HashMap<Long, List<DailyMeasurementEntry>>();
+        if (!logIds.isEmpty()) {
+            measurements.findByDailyDietLogIdInOrderByMeasuredAtDesc(logIds)
+                    .forEach(entry -> {
+                        var log = entry.getDailyDietLog();
+                        if (log != null && log.getId() != null) {
+                            entriesByLogId.merge(log.getId(), List.of(entry), DietLogService::appendMeasurements);
+                        }
+                    });
+        }
+
+        var patientProfileId = patient == null ? null : patient.getId();
+        var logsByDate = logs.stream()
+                .filter(log -> log.getId() != null && log.getLogDate() != null)
+                .collect(Collectors.groupingBy(
+                        DailyDietLog::getLogDate,
+                        Collectors.mapping(DailyDietLog::getId, Collectors.toList())));
+        if (patientProfileId == null || logsByDate.isEmpty()) {
+            return entriesByLogId;
+        }
+        var zone = measurementWindows.zoneFor(patient);
+        var window = measurementWindows.dateRangeWindow(patient, logsByDate.keySet());
+        measurements
+                .findByPatientProfileIdAndDailyDietLogIsNullAndMeasuredAtGreaterThanEqualAndMeasuredAtLessThanOrderByMeasuredAtDesc(
+                        patientProfileId,
+                        window.fromInclusive(),
+                        window.toExclusive())
+                .stream()
+                .filter(entry -> entry.getMeasuredAt() != null)
+                .forEach(entry -> {
+                    var ids = logsByDate.get(entry.getMeasuredAt().atZone(zone).toLocalDate());
+                    if (ids != null) {
+                        ids.forEach(id -> entriesByLogId.merge(id, List.of(entry), DietLogService::appendMeasurements));
+                    }
+                });
+        return entriesByLogId;
+    }
+
+    private static List<DailyMeasurementEntry> appendMeasurements(List<DailyMeasurementEntry> existing,
+                                                                  List<DailyMeasurementEntry> added) {
+        return Stream.concat(existing.stream(), added.stream()).toList();
     }
 
     private List<DailyMeasurementEntry> measurementsFor(DailyDietLog log) {

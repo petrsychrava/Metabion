@@ -18,6 +18,7 @@ import com.metabion.domain.RoleName;
 import com.metabion.domain.StaffProfile;
 import com.metabion.domain.User;
 import com.metabion.dto.DailyDietLogRequest;
+import com.metabion.dto.DailyDietLogHistoryRowResponse;
 import com.metabion.dto.DailyDietLogSummaryResponse;
 import com.metabion.dto.DailyMeasurementEntryRequest;
 import com.metabion.dto.PatientOptionResponse;
@@ -458,6 +459,65 @@ class DietLogServiceTest {
     }
 
     @Test
+    void listCurrentPatientHistoryRowsReturnsLatestGlucoseAndKetoneValues() {
+        var patient = givenAuthenticatedPatient();
+        var log = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
+        when(dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(
+                10L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30))).thenReturn(List.of(log));
+        when(measurements.findByDailyDietLogIdInOrderByMeasuredAtDesc(List.of(99L)))
+                .thenReturn(List.of(
+                        measurement(patient, log, MeasurementType.GLUCOSE, "5.9", MeasurementUnit.MMOL_L,
+                                Instant.parse("2026-06-10T09:30:00Z")),
+                        measurement(patient, log, MeasurementType.KETONE, "1.2", MeasurementUnit.MMOL_L,
+                                Instant.parse("2026-06-10T20:00:00Z")),
+                        measurement(patient, log, MeasurementType.GLUCOSE, "5.4", MeasurementUnit.MMOL_L,
+                                Instant.parse("2026-06-10T07:30:00Z"))));
+        when(measurements.findByPatientProfileIdAndDailyDietLogIsNullAndMeasuredAtGreaterThanEqualAndMeasuredAtLessThanOrderByMeasuredAtDesc(
+                eq(10L),
+                eq(Instant.parse("2026-06-10T00:00:00Z")),
+                eq(Instant.parse("2026-06-11T00:00:00Z"))))
+                .thenReturn(List.of());
+
+        var rows = service.listCurrentPatientHistoryRows(
+                auth("patient@example.com"),
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30));
+
+        assertThat(rows).extracting(DailyDietLogHistoryRowResponse::id).containsExactly(99L);
+        assertThat(rows.getFirst().glucose().value()).isEqualByComparingTo("5.9");
+        assertThat(rows.getFirst().glucose().unit()).isEqualTo(MeasurementUnit.MMOL_L);
+        assertThat(rows.getFirst().ketones().value()).isEqualByComparingTo("1.2");
+        assertThat(rows.getFirst().ketones().unit()).isEqualTo(MeasurementUnit.MMOL_L);
+    }
+
+    @Test
+    void listCurrentPatientHistoryRowsIncludesStandaloneMeasurementsForLogDate() {
+        var patient = givenAuthenticatedPatient();
+        var log = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
+        when(dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(
+                10L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30))).thenReturn(List.of(log));
+        when(measurements.findByDailyDietLogIdInOrderByMeasuredAtDesc(List.of(99L))).thenReturn(List.of());
+        when(measurements.findByPatientProfileIdAndDailyDietLogIsNullAndMeasuredAtGreaterThanEqualAndMeasuredAtLessThanOrderByMeasuredAtDesc(
+                eq(10L),
+                eq(Instant.parse("2026-06-10T00:00:00Z")),
+                eq(Instant.parse("2026-06-11T00:00:00Z"))))
+                .thenReturn(List.of(measurement(patient, null, MeasurementType.KETONE, "0.8", MeasurementUnit.MMOL_L,
+                        Instant.parse("2026-06-10T19:00:00Z"))));
+
+        var rows = service.listCurrentPatientHistoryRows(
+                auth("patient@example.com"),
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30));
+
+        assertThat(rows.getFirst().glucose()).isNull();
+        assertThat(rows.getFirst().ketones().value()).isEqualByComparingTo("0.8");
+    }
+
+    @Test
     void addMeasurementForCurrentPatientAllowsMissingLogAndValidatesKetone() {
         givenAuthenticatedPatient();
         when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
@@ -730,6 +790,23 @@ class DietLogServiceTest {
                 Instant.now(),
                 MeasurementContext.FASTING,
                 "morning");
+    }
+
+    private DailyMeasurementEntry measurement(PatientProfile patient,
+                                              DailyDietLog log,
+                                              MeasurementType type,
+                                              String value,
+                                              MeasurementUnit unit,
+                                              Instant measuredAt) {
+        return new DailyMeasurementEntry(
+                patient,
+                log,
+                type,
+                new BigDecimal(value),
+                unit,
+                measuredAt,
+                MeasurementContext.FASTING,
+                null);
     }
 
     private PatientProfile givenAuthenticatedPatient() {

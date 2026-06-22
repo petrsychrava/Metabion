@@ -2,6 +2,7 @@ package com.metabion.service;
 
 import com.metabion.domain.DailyDietLog;
 import com.metabion.domain.DailyMeasurementEntry;
+import com.metabion.dto.DailyDietLogHistoryRowResponse;
 import com.metabion.dto.DailyDietLogResponse;
 import com.metabion.dto.DailyDietLogSummaryResponse;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,10 @@ public class DietLogResponseAssembler {
                 log.getDeviations().size(),
                 measurementCount,
                 notesPreview(log.getNotes()));
+    }
+
+    public DailyDietLogHistoryRowResponse historyRow(DailyDietLog log, List<DailyMeasurementEntry> measurements) {
+        return DailyDietLogHistoryRowResponse.from(log, measurements);
     }
 
     private static Long patientProfileId(DailyDietLog log) {
