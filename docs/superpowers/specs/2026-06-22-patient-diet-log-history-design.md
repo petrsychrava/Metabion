@@ -13,7 +13,7 @@ The missing capability is in the patient web experience: a patient has no page w
 - Keep `/app/diet-logs` focused on creating or updating one selected date.
 - Let patients navigate from the edit page to history and from history back to the edit page.
 - Limit the default history view so daily logging does not create an overly long initial page.
-- Reuse the existing patient diet-log summary service path where practical.
+- Reuse the existing patient diet-log listing path where practical, extending the rendered history row data only where needed.
 
 ## Non-Goals
 
@@ -34,11 +34,11 @@ Each row should show:
 - Date
 - Adherence
 - Appetite
-- Meal count
-- Deviation count
-- Measurement count
-- Notes preview
+- Glucose
+- Ketones
 - `Open/Edit` action
+
+Glucose and ketones should display compact measurement values for the log. If a log has no measurement of that type, show the existing `Not provided` text. If a log has more than one measurement of the same type, show the latest measurement by measured time for that type.
 
 The `Open/Edit` action links to `/app/diet-logs?date=YYYY-MM-DD`, reusing the existing selected-date edit form.
 
@@ -69,8 +69,10 @@ Defaults:
 
 Data:
 
-- Call `dietLogService.listCurrentPatientLogs(authentication, from, to)`.
-- Render `DailyDietLogSummaryResponse` values directly in the history template.
+- Reuse the current patient-owned diet-log range query and ownership checks.
+- Render patient history row data containing the log date, adherence, appetite, glucose display value, ketone display value, and edit link target.
+- Prefer a small web-focused patient-history response/assembler if the existing `DailyDietLogSummaryResponse` is not a good fit.
+- Preserve the existing `GET /api/diet-logs?from=&to=` response shape unless the implementation deliberately updates and tests that API contract.
 
 This should not require repository, entity, or database changes because the current service and repository already support patient-owned range listing.
 
@@ -92,7 +94,7 @@ The history page must use the current-patient service path, not the clinical lis
 
 Patients should not be able to pass a patient profile ID or otherwise select another patient's logs.
 
-Diet-log summaries are health-related data. Do not log full summary contents, notes, session IDs, tokens, or other sensitive request state.
+Diet-log history rows are health-related data. Do not log full row contents, notes, session IDs, tokens, or other sensitive request state.
 
 ## Localization
 
@@ -101,6 +103,8 @@ Add English and Czech message bundle entries for new patient-facing labels:
 - `View history`
 - `New log`
 - `Diet log history`
+- `Glucose`
+- `Ketones`
 
 Reuse existing diet-log labels for table columns and the empty state where possible.
 
@@ -110,7 +114,8 @@ Add or update web controller tests for:
 
 - `/app/diet-logs/history` renders for a patient with the default 30-day range in the patient's timezone.
 - Submitted `from` and `to` query parameters are passed to `listCurrentPatientLogs`.
-- History rows render summary data and include `Open/Edit` links to `/app/diet-logs?date=...`.
+- History rows render date, adherence, appetite, glucose, ketones, and `Open/Edit` links to `/app/diet-logs?date=...`.
+- History rows render `Not provided` when glucose or ketone measurements are absent.
 - The edit page contains a `View history` link.
 - The history page contains a `New log` link.
 - Invalid range errors continue through the existing web error path.
@@ -119,9 +124,10 @@ Existing service and API tests should remain valid. No new persistence test is e
 
 ## Acceptance Criteria
 
-- A patient can open `/app/diet-logs/history` and see only their own diet-log summaries.
+- A patient can open `/app/diet-logs/history` and see only their own diet-log history rows.
 - The default history view shows the last 30 days, newest first.
 - A patient can filter history by `from` and `to`.
+- History rows show date, adherence, appetite, glucose, ketones, and an open/edit action.
 - A patient can open a history row in the existing edit form.
 - A patient can navigate from the edit form to history and from history back to a new/current log form.
 - No schema migration is required.
