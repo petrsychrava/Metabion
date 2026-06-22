@@ -35,6 +35,7 @@ public record DailyDietLogHistoryRowResponse(
     private static MeasurementValue latest(List<DailyMeasurementEntry> measurements, MeasurementType type) {
         return measurements.stream()
                 .filter(measurement -> measurement.getMeasurementType() == type)
+                .filter(measurement -> measurement.getMeasuredAt() != null)
                 .max(Comparator.comparing(
                         DailyMeasurementEntry::getMeasuredAt,
                         Comparator.nullsLast(Comparator.naturalOrder())))

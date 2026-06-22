@@ -518,6 +518,34 @@ class DietLogServiceTest {
     }
 
     @Test
+    void listCurrentPatientHistoryRowsUsesLatestDatedMeasurementWhenStandaloneIsNewer() {
+        var patient = givenAuthenticatedPatient();
+        var log = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
+        when(dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(
+                10L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30))).thenReturn(List.of(log));
+        when(measurements.findByDailyDietLogIdInOrderByMeasuredAtDesc(List.of(99L)))
+                .thenReturn(List.of(
+                        measurement(patient, log, MeasurementType.GLUCOSE, "9.9", MeasurementUnit.MMOL_L, null),
+                        measurement(patient, log, MeasurementType.GLUCOSE, "5.4", MeasurementUnit.MMOL_L,
+                                Instant.parse("2026-06-10T07:30:00Z"))));
+        when(measurements.findByPatientProfileIdAndDailyDietLogIsNullAndMeasuredAtGreaterThanEqualAndMeasuredAtLessThanOrderByMeasuredAtDesc(
+                eq(10L),
+                eq(Instant.parse("2026-06-10T00:00:00Z")),
+                eq(Instant.parse("2026-06-11T00:00:00Z"))))
+                .thenReturn(List.of(measurement(patient, null, MeasurementType.GLUCOSE, "6.1", MeasurementUnit.MMOL_L,
+                        Instant.parse("2026-06-10T09:30:00Z"))));
+
+        var rows = service.listCurrentPatientHistoryRows(
+                auth("patient@example.com"),
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30));
+
+        assertThat(rows.getFirst().glucose().value()).isEqualByComparingTo("6.1");
+    }
+
+    @Test
     void addMeasurementForCurrentPatientAllowsMissingLogAndValidatesKetone() {
         givenAuthenticatedPatient();
         when(dailyDietLogs.findByPatientProfileIdAndLogDate(10L, LocalDate.of(2026, 6, 10)))
