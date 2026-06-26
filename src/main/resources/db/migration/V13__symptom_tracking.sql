@@ -36,6 +36,7 @@ CREATE TABLE symptom_questions (
     min_numeric_value           NUMERIC(8,2),
     max_numeric_value           NUMERIC(8,2),
     CONSTRAINT ux_symptom_questions_version_key UNIQUE (questionnaire_version_id, stable_key),
+    CONSTRAINT ux_symptom_questions_id_version UNIQUE (id, questionnaire_version_id),
     CONSTRAINT chk_symptom_questions_key CHECK (length(trim(stable_key)) > 0),
     CONSTRAINT chk_symptom_questions_label CHECK (length(trim(label)) > 0),
     CONSTRAINT chk_symptom_questions_type CHECK (answer_type IN ('SINGLE_CHOICE', 'NUMERIC', 'TEXT')),
@@ -72,6 +73,7 @@ CREATE TABLE symptom_check_ins (
     total_symptom_score         NUMERIC(8,2) NOT NULL DEFAULT 0.00,
     created_at                  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at                  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    CONSTRAINT ux_symptom_check_ins_id_version UNIQUE (id, questionnaire_version_id),
     CONSTRAINT ux_symptom_check_ins_patient_date
         UNIQUE (patient_profile_id, check_in_date),
     CONSTRAINT chk_symptom_check_ins_flare CHECK (flare_state IN ('NO_FLARE', 'SUSPECTED_FLARE', 'ACTIVE_FLARE')),
@@ -82,12 +84,19 @@ CREATE TABLE symptom_check_ins (
 CREATE TABLE symptom_check_in_answers (
     id                  BIGSERIAL PRIMARY KEY,
     check_in_id         BIGINT NOT NULL REFERENCES symptom_check_ins(id) ON DELETE CASCADE,
+    questionnaire_version_id BIGINT NOT NULL,
     question_id         BIGINT NOT NULL REFERENCES symptom_questions(id),
     option_id           BIGINT REFERENCES symptom_question_options(id),
     answer_text         VARCHAR(1000),
     answer_numeric      NUMERIC(8,2),
     numeric_score       NUMERIC(8,2) NOT NULL DEFAULT 0.00,
     CONSTRAINT ux_symptom_check_in_answers_check_question UNIQUE (check_in_id, question_id),
+    CONSTRAINT fk_symptom_check_in_answers_check_version
+        FOREIGN KEY (check_in_id, questionnaire_version_id)
+        REFERENCES symptom_check_ins(id, questionnaire_version_id),
+    CONSTRAINT fk_symptom_check_in_answers_question_version
+        FOREIGN KEY (question_id, questionnaire_version_id)
+        REFERENCES symptom_questions(id, questionnaire_version_id),
     CONSTRAINT fk_symptom_check_in_answers_option_question
         FOREIGN KEY (option_id, question_id)
         REFERENCES symptom_question_options(id, question_id),

@@ -4,9 +4,11 @@ import com.metabion.domain.FlareState;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.QuestionnaireVersionStatus;
 import com.metabion.domain.RoleName;
+import com.metabion.domain.SymptomAnswerType;
 import com.metabion.domain.SymptomCheckIn;
 import com.metabion.domain.SymptomCheckInAnswer;
 import com.metabion.domain.SymptomQuestion;
+import com.metabion.domain.SymptomQuestionOption;
 import com.metabion.domain.SymptomQuestionnaireVersion;
 import com.metabion.domain.SymptomScoringMethod;
 import com.metabion.domain.User;
@@ -127,6 +129,21 @@ class SymptomTrackingRepositoryTest {
     }
 
     @Test
+    void choiceFactoryRejectsQuestionFromDifferentQuestionnaireVersion() {
+        var patient = patientProfiles.saveAndFlush(new PatientProfile(patientUser("symptom-version-choice@example.com")));
+        var activeVersion = versions.findActiveByQuestionnaireStableKey("ibd-symptom-check-in").orElseThrow();
+        var alternateQuestion = createAlternateQuestionnaireVersionQuestion(2);
+        var checkIn = new SymptomCheckIn(patient, activeVersion, LocalDate.of(2026, 6, 29), FlareState.NO_FLARE);
+
+        assertThatThrownBy(() -> SymptomCheckInAnswer.choice(
+                checkIn,
+                alternateQuestion,
+                alternateQuestion.getOptions().getFirst()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Answer question must belong to the check-in questionnaire version");
+    }
+
+    @Test
     void databaseRejectsAnswerOptionFromDifferentQuestion() {
         var patient = patientProfiles.saveAndFlush(new PatientProfile(patientUser("symptom-db-mismatch@example.com")));
         var version = versions.findActiveByQuestionnaireStableKey("ibd-symptom-check-in").orElseThrow();
@@ -141,9 +158,37 @@ class SymptomTrackingRepositoryTest {
         entityManager.clear();
 
         assertThatThrownBy(() -> jdbcTemplate.update("""
-                insert into symptom_check_in_answers (check_in_id, question_id, option_id, numeric_score)
-                values (?, ?, ?, 0.00)
-                """, checkIn.getId(), secondQuestion.getId(), firstQuestion.getOptions().getFirst().getId()))
+                insert into symptom_check_in_answers (
+                    check_in_id, questionnaire_version_id, question_id, option_id, numeric_score
+                )
+                values (?, ?, ?, ?, 0.00)
+                """,
+                checkIn.getId(),
+                version.getId(),
+                secondQuestion.getId(),
+                firstQuestion.getOptions().getFirst().getId()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void databaseRejectsAnswerQuestionFromDifferentQuestionnaireVersion() {
+        var patient = patientProfiles.saveAndFlush(new PatientProfile(patientUser("symptom-db-version@example.com")));
+        var activeVersion = versions.findActiveByQuestionnaireStableKey("ibd-symptom-check-in").orElseThrow();
+        var alternateQuestion = createAlternateQuestionnaireVersionQuestion(3);
+        var checkIn = new SymptomCheckIn(patient, activeVersion, LocalDate.of(2026, 6, 30), FlareState.NO_FLARE);
+        checkIns.saveAndFlush(checkIn);
+        entityManager.clear();
+
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                insert into symptom_check_in_answers (
+                    check_in_id, questionnaire_version_id, question_id, option_id, numeric_score
+                )
+                values (?, ?, ?, ?, 0.00)
+                """,
+                checkIn.getId(),
+                activeVersion.getId(),
+                alternateQuestion.getId(),
+                alternateQuestion.getOptions().getFirst().getId()))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -170,5 +215,25 @@ class SymptomTrackingRepositoryTest {
                 .filter(question -> !question.getOptions().isEmpty())
                 .findFirst()
                 .orElseThrow();
+    }
+
+    private SymptomQuestion createAlternateQuestionnaireVersionQuestion(int versionNumber) {
+        var questionnaire = questionnaires.findByStableKey("ibd-symptom-check-in").orElseThrow();
+        var alternateVersion = new SymptomQuestionnaireVersion(questionnaire, versionNumber);
+        alternateVersion.setStatus(QuestionnaireVersionStatus.DRAFT);
+        alternateVersion.setScoringMethod(SymptomScoringMethod.SUM);
+        var alternateQuestion = new SymptomQuestion(
+                "alternate-pain-" + versionNumber,
+                "Alternate pain",
+                SymptomAnswerType.SINGLE_CHOICE,
+                10);
+        alternateQuestion.addOption(new SymptomQuestionOption(
+                "none",
+                "None",
+                BigDecimal.ZERO,
+                10));
+        alternateVersion.addQuestion(alternateQuestion);
+        versions.saveAndFlush(alternateVersion);
+        return alternateQuestion;
     }
 }

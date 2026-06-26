@@ -29,6 +29,10 @@ public class SymptomCheckInAnswer {
     private SymptomQuestion question;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "questionnaire_version_id", nullable = false)
+    private SymptomQuestionnaireVersion questionnaireVersion;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "option_id")
     private SymptomQuestionOption option;
 
@@ -51,8 +55,12 @@ public class SymptomCheckInAnswer {
         if (!optionBelongsToQuestion(option, question)) {
             throw new IllegalArgumentException("Answer option must belong to the answered question");
         }
+        if (!questionBelongsToCheckInVersion(question, checkIn)) {
+            throw new IllegalArgumentException("Answer question must belong to the check-in questionnaire version");
+        }
         var answer = new SymptomCheckInAnswer();
         answer.setQuestion(question);
+        answer.setQuestionnaireVersion(checkIn.getQuestionnaireVersion());
         answer.setOption(option);
         answer.setNumericScore(option.getNumericScore().multiply(question.getScoreWeight()));
         checkIn.addAnswer(answer);
@@ -70,6 +78,22 @@ public class SymptomCheckInAnswer {
             return false;
         }
         return option.getQuestion().getId().equals(question.getId());
+    }
+
+    private static boolean questionBelongsToCheckInVersion(SymptomQuestion question, SymptomCheckIn checkIn) {
+        if (question == null || checkIn == null
+                || question.getQuestionnaireVersion() == null
+                || checkIn.getQuestionnaireVersion() == null) {
+            return false;
+        }
+        if (question.getQuestionnaireVersion() == checkIn.getQuestionnaireVersion()) {
+            return true;
+        }
+        if (question.getQuestionnaireVersion().getId() == null
+                || checkIn.getQuestionnaireVersion().getId() == null) {
+            return false;
+        }
+        return question.getQuestionnaireVersion().getId().equals(checkIn.getQuestionnaireVersion().getId());
     }
 
     public Long getId() {
@@ -90,6 +114,14 @@ public class SymptomCheckInAnswer {
 
     public void setQuestion(SymptomQuestion question) {
         this.question = question;
+    }
+
+    public SymptomQuestionnaireVersion getQuestionnaireVersion() {
+        return questionnaireVersion;
+    }
+
+    public void setQuestionnaireVersion(SymptomQuestionnaireVersion questionnaireVersion) {
+        this.questionnaireVersion = questionnaireVersion;
     }
 
     public SymptomQuestionOption getOption() {
