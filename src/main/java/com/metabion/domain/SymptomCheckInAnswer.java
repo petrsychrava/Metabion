@@ -48,12 +48,28 @@ public class SymptomCheckInAnswer {
             SymptomCheckIn checkIn,
             SymptomQuestion question,
             SymptomQuestionOption option) {
+        if (!optionBelongsToQuestion(option, question)) {
+            throw new IllegalArgumentException("Answer option must belong to the answered question");
+        }
         var answer = new SymptomCheckInAnswer();
-        answer.setCheckIn(checkIn);
         answer.setQuestion(question);
         answer.setOption(option);
         answer.setNumericScore(option.getNumericScore().multiply(question.getScoreWeight()));
+        checkIn.addAnswer(answer);
         return answer;
+    }
+
+    private static boolean optionBelongsToQuestion(SymptomQuestionOption option, SymptomQuestion question) {
+        if (option == null || question == null || option.getQuestion() == null) {
+            return false;
+        }
+        if (option.getQuestion() == question) {
+            return true;
+        }
+        if (option.getQuestion().getId() == null || question.getId() == null) {
+            return false;
+        }
+        return option.getQuestion().getId().equals(question.getId());
     }
 
     public Long getId() {

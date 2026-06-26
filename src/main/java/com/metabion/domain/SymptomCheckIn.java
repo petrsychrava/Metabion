@@ -79,6 +79,7 @@ public class SymptomCheckIn {
     }
 
     public void clearAnswers() {
+        new ArrayList<>(answers).forEach(answer -> answer.setCheckIn(null));
         answers.clear();
     }
 

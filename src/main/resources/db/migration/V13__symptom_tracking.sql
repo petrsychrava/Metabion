@@ -56,6 +56,7 @@ CREATE TABLE symptom_question_options (
     numeric_score   NUMERIC(8,2) NOT NULL DEFAULT 0.00,
     sort_order      INT NOT NULL DEFAULT 0,
     CONSTRAINT ux_symptom_question_options_question_key UNIQUE (question_id, stable_key),
+    CONSTRAINT ux_symptom_question_options_id_question UNIQUE (id, question_id),
     CONSTRAINT chk_symptom_question_options_key CHECK (length(trim(stable_key)) > 0),
     CONSTRAINT chk_symptom_question_options_label CHECK (length(trim(label)) > 0),
     CONSTRAINT chk_symptom_question_options_sort_order CHECK (sort_order >= 0)
@@ -87,6 +88,9 @@ CREATE TABLE symptom_check_in_answers (
     answer_numeric      NUMERIC(8,2),
     numeric_score       NUMERIC(8,2) NOT NULL DEFAULT 0.00,
     CONSTRAINT ux_symptom_check_in_answers_check_question UNIQUE (check_in_id, question_id),
+    CONSTRAINT fk_symptom_check_in_answers_option_question
+        FOREIGN KEY (option_id, question_id)
+        REFERENCES symptom_question_options(id, question_id),
     CONSTRAINT chk_symptom_check_in_answers_text CHECK (answer_text IS NULL OR length(trim(answer_text)) > 0),
     CONSTRAINT chk_symptom_check_in_answers_score CHECK (numeric_score >= 0),
     CONSTRAINT chk_symptom_check_in_answers_one_value CHECK (
