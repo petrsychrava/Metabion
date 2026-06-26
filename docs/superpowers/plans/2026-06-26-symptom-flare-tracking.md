@@ -156,7 +156,10 @@ class SymptomTrackingRepositoryTest {
     void persistsCheckInAnswersAndEnforcesOneCheckInPerPatientVersionDate() {
         var patient = patientProfiles.saveAndFlush(new PatientProfile(patientUser("symptom-patient@example.com")));
         var version = versions.findActiveByQuestionnaireStableKey("ibd-symptom-check-in").orElseThrow();
-        var firstQuestion = version.getQuestions().getFirst();
+        var firstQuestion = version.getQuestions().stream()
+                .filter(question -> !question.getOptions().isEmpty())
+                .findFirst()
+                .orElseThrow();
         var option = firstQuestion.getOptions().getFirst();
 
         var checkIn = new SymptomCheckIn(patient, version, LocalDate.of(2026, 6, 26), FlareState.SUSPECTED_FLARE);
