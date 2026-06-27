@@ -1,0 +1,231 @@
+package com.metabion.controller.web;
+
+import com.metabion.domain.AppetiteLevel;
+import com.metabion.domain.DietAdherenceLevel;
+import com.metabion.domain.FlareState;
+import com.metabion.domain.MeasurementContext;
+import com.metabion.domain.MeasurementType;
+import com.metabion.domain.MeasurementUnit;
+import com.metabion.domain.RoleName;
+import com.metabion.domain.SymptomAnswerType;
+import com.metabion.dto.DailyCheckInForm;
+import com.metabion.dto.SymptomQuestionnaireResponse;
+import com.metabion.service.DailyCheckInService;
+import com.metabion.service.DietLogService;
+import com.metabion.service.SecurityService;
+import com.metabion.service.SymptomTrackingService;
+import com.metabion.service.UserPreferenceService;
+import com.metabion.service.UserService;
+import jakarta.servlet.Filter;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
+import org.springframework.session.FindByIndexNameSessionRepository;
+import org.springframework.session.Session;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
+
+@SpringBootTest(properties = {
+        "spring.profiles.active=dev",
+        "spring.flyway.enabled=false",
+        "spring.jpa.hibernate.ddl-auto=none",
+        "spring.datasource.url=jdbc:h2:mem:web_daily_check_in_controller_test;DB_CLOSE_DELAY=-1",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.autoconfigure.exclude=org.springframework.boot.session.jdbc.autoconfigure.JdbcSessionAutoConfiguration"
+})
+class WebDailyCheckInControllerTest {
+
+    @Autowired WebApplicationContext context;
+    @MockitoBean FindByIndexNameSessionRepository<Session> sessions;
+    @MockitoBean UserService userService;
+    @MockitoBean SecurityService securityService;
+    @MockitoBean DietLogService dietLogService;
+    @MockitoBean DailyCheckInService dailyCheckInService;
+    @MockitoBean SymptomTrackingService symptomTrackingService;
+    @MockitoBean UserPreferenceService userPreferenceService;
+    @MockitoBean Clock clock;
+
+    private MockMvc mvc;
+
+    @BeforeEach
+    void setUp() {
+        Filter[] filters = context.getBeansOfType(Filter.class).values().toArray(new Filter[0]);
+        mvc = MockMvcBuilders.webAppContextSetup(context)
+                .addFilters(filters)
+                .apply(SecurityMockMvcConfigurers.springSecurity())
+                .build();
+        when(symptomTrackingService.activeQuestionnaire()).thenReturn(questionnaireResponse());
+        when(dietLogService.currentPatientGlucoseUnitPreference(any())).thenReturn(MeasurementUnit.MMOL_L);
+        when(dietLogService.currentPatientTimezone(any())).thenReturn("Europe/Prague");
+        doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND))
+                .when(dietLogService).getCurrentPatientLog(any(), any());
+        when(clock.instant()).thenReturn(Instant.parse("2026-06-21T08:00:00Z"));
+        when(clock.getZone()).thenReturn(ZoneId.of("UTC"));
+    }
+
+    @Test
+    void dailyCheckInPageRendersDietMeasurementsSymptomsAndFlareState() throws Exception {
+        mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("daily-check-in"))
+                .andExpect(model().attributeExists("dailyCheckInForm"))
+                .andExpect(content().string(containsString("Daily check-in")))
+                .andExpect(content().string(containsString("Diet")))
+                .andExpect(content().string(containsString("Measurements")))
+                .andExpect(content().string(containsString("Symptoms")))
+                .andExpect(content().string(containsString("Flare state")))
+                .andExpect(content().string(containsString("Stool frequency")))
+                .andExpect(content().string(containsString("Abdominal pain")))
+                .andExpect(content().string(containsString("Glucose")))
+                .andExpect(content().string(containsString("Ketones")))
+                .andExpect(content().string(containsString("name=\"questionnaireVersionId\" value=\"30\"")))
+                .andExpect(content().string(containsString("name=\"symptomAnswers[0].questionId\" value=\"1\"")))
+                .andExpect(content().string(containsString("name=\"symptomAnswers[1].optionId\"")));
+    }
+
+    @Test
+    void invalidDailyCheckInRedisplaysWithoutSuccessRedirect() throws Exception {
+        doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "required symptom answers are missing"))
+                .when(dailyCheckInService).saveForCurrentPatient(any(), any());
+
+        mvc.perform(post("/app/daily-check-in")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("logDate", "2026-06-26")
+                        .param("adherenceLevel", "FULL")
+                        .param("appetiteLevel", "NORMAL")
+                        .param("flareState", "NO_FLARE")
+                        .param("questionnaireVersionId", "30")
+                        .param("symptomAnswers[0].questionId", "1")
+                        .param("symptomAnswers[0].answerNumeric", "3")
+                        .param("symptomAnswers[1].questionId", "2")
+                        .param("symptomAnswers[1].optionId", "11")
+                        .param("symptomNotes", "Submitted notes"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("daily-check-in"))
+                .andExpect(model().attribute("dailyCheckInError", "required symptom answers are missing"))
+                .andExpect(content().string(containsString("required symptom answers are missing")))
+                .andExpect(content().string(containsString("Submitted notes")));
+    }
+
+    @Test
+    void successfulDailyCheckInSaveDelegatesAndRedirectsToSelectedDate() throws Exception {
+        mvc.perform(post("/app/daily-check-in")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("logDate", "2026-06-26")
+                        .param("patientTimezone", "UTC")
+                        .param("adherenceLevel", "FULL")
+                        .param("appetiteLevel", "NORMAL")
+                        .param("glucoseMeasurement.value", "5.40")
+                        .param("glucoseMeasurement.measuredTime", "07:30")
+                        .param("glucoseMeasurement.context", "FASTING")
+                        .param("ketoneMeasurement.value", "1.20")
+                        .param("ketoneMeasurement.measuredTime", "20:15")
+                        .param("ketoneMeasurement.context", "BEDTIME")
+                        .param("flareState", "SUSPECTED_FLARE")
+                        .param("questionnaireVersionId", "30")
+                        .param("symptomAnswers[0].questionId", "1")
+                        .param("symptomAnswers[0].answerNumeric", "3")
+                        .param("symptomAnswers[1].questionId", "2")
+                        .param("symptomAnswers[1].optionId", "11")
+                        .param("symptomNotes", "More fatigue"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app/daily-check-in?date=2026-06-26"));
+
+        var formCaptor = ArgumentCaptor.forClass(DailyCheckInForm.class);
+        verify(dailyCheckInService).saveForCurrentPatient(any(), formCaptor.capture());
+
+        var form = formCaptor.getValue();
+        assertThat(form.dietLogRequest().logDate()).isEqualTo(LocalDate.of(2026, 6, 26));
+        assertThat(form.dietLogRequest().adherenceLevel()).isEqualTo(DietAdherenceLevel.FULL);
+        assertThat(form.dietLogRequest().appetiteLevel()).isEqualTo(AppetiteLevel.NORMAL);
+        assertThat(form.dietLogRequest().measurementsOrEmpty()).extracting("measurementType")
+                .containsExactly(MeasurementType.GLUCOSE, MeasurementType.KETONE);
+        assertThat(form.dietLogRequest().measurementsOrEmpty()).extracting("context")
+                .containsExactly(MeasurementContext.FASTING, MeasurementContext.BEDTIME);
+        assertThat(form.symptomCheckInRequest().checkInDate()).isEqualTo(LocalDate.of(2026, 6, 26));
+        assertThat(form.symptomCheckInRequest().questionnaireVersionId()).isEqualTo(30L);
+        assertThat(form.symptomCheckInRequest().flareState()).isEqualTo(FlareState.SUSPECTED_FLARE);
+        assertThat(form.symptomCheckInRequest().answersOrEmpty()).hasSize(2);
+        assertThat(form.symptomCheckInRequest().notes()).isEqualTo("More fatigue");
+    }
+
+    @Test
+    void dietLogsAliasRendersUnifiedDailyCheckInPage() throws Exception {
+        mvc.perform(get("/app/diet-logs")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("daily-check-in"))
+                .andExpect(content().string(containsString("Daily check-in")))
+                .andExpect(content().string(containsString("Symptoms")));
+    }
+
+    private SymptomQuestionnaireResponse questionnaireResponse() {
+        return new SymptomQuestionnaireResponse(
+                5L,
+                "ibd-symptom-check-in",
+                "IBD symptom check-in",
+                30L,
+                1,
+                List.of(
+                        new SymptomQuestionnaireResponse.QuestionResponse(
+                                1L,
+                                "stool-frequency",
+                                "Stool frequency",
+                                "Number of stools in the last 24 hours",
+                                SymptomAnswerType.NUMERIC,
+                                true,
+                                BigDecimal.ZERO,
+                                new BigDecimal("30.00"),
+                                List.of()),
+                        new SymptomQuestionnaireResponse.QuestionResponse(
+                                2L,
+                                "abdominal-pain",
+                                "Abdominal pain",
+                                "Pain severity in the last 24 hours",
+                                SymptomAnswerType.SINGLE_CHOICE,
+                                true,
+                                null,
+                                null,
+                                List.of(
+                                        new SymptomQuestionnaireResponse.OptionResponse(
+                                                10L, "none", "None", BigDecimal.ZERO),
+                                        new SymptomQuestionnaireResponse.OptionResponse(
+                                                11L, "mild", "Mild", BigDecimal.ONE)))));
+    }
+}

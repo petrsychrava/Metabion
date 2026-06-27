@@ -25,7 +25,7 @@ class AppMenuCatalogTest {
                         "Education library",
                         "Onboarding",
                         "Onboarding history",
-                        "Diet logs",
+                        "Daily check-in",
                         "Lab trends - planned",
                         "Protocol phase - planned",
                         "Red-flag guidance - planned",
@@ -107,10 +107,10 @@ class AppMenuCatalogTest {
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/onboarding");
         assertThat(catalog.sidebarItems(patient))
-                .filteredOn(item -> "Diet logs".equals(item.label()))
+                .filteredOn(item -> "Daily check-in".equals(item.label()))
                 .singleElement()
                 .extracting(AppMenuItem::route)
-                .isEqualTo("/app/diet-logs");
+                .isEqualTo("/app/daily-check-in");
         assertThat(catalog.sidebarItems(patient))
                 .filteredOn(item -> "Education library".equals(item.label()))
                 .singleElement()
@@ -162,7 +162,7 @@ class AppMenuCatalogTest {
                 .containsExactly(
                         "Education library",
                         "Onboarding",
-                        "Diet logs",
+                        "Daily check-in",
                         "Lab trends - planned",
                         "Red-flag guidance - planned");
     }

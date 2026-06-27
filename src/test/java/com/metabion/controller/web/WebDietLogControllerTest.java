@@ -11,20 +11,20 @@ import com.metabion.domain.MeasurementContext;
 import com.metabion.domain.MeasurementType;
 import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.RoleName;
-import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.dto.DailyDietLogHistoryRowResponse;
 import com.metabion.dto.DailyDietLogResponse;
 import com.metabion.dto.DailyDietLogSummaryResponse;
 import com.metabion.dto.DailyMeasurementEntryResponse;
 import com.metabion.dto.PatientOptionResponse;
+import com.metabion.service.DailyCheckInService;
 import com.metabion.service.DietLogService;
 import com.metabion.service.SecurityService;
+import com.metabion.service.SymptomTrackingService;
 import com.metabion.service.UserPreferenceService;
 import com.metabion.service.UserService;
 import jakarta.servlet.Filter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
@@ -51,16 +51,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
@@ -79,6 +75,8 @@ class WebDietLogControllerTest {
     @MockitoBean UserService userService;
     @MockitoBean SecurityService securityService;
     @MockitoBean DietLogService dietLogService;
+    @MockitoBean DailyCheckInService dailyCheckInService;
+    @MockitoBean SymptomTrackingService symptomTrackingService;
     @MockitoBean UserPreferenceService userPreferenceService;
     @MockitoBean Clock clock;
 
@@ -95,135 +93,6 @@ class WebDietLogControllerTest {
         when(dietLogService.currentPatientTimezone(any())).thenReturn("Europe/Prague");
         when(clock.instant()).thenReturn(Instant.parse("2026-06-21T08:00:00Z"));
         when(clock.getZone()).thenReturn(ZoneId.of("UTC"));
-    }
-
-    @Test
-    void patientDietLogPageRendersWithGlucosePreferenceAndShell() throws Exception {
-        when(dietLogService.currentPatientGlucoseUnitPreference(any())).thenReturn(MeasurementUnit.MG_DL);
-        doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND))
-                .when(dietLogService).getCurrentPatientLog(any(), any());
-
-        mvc.perform(get("/app/diet-logs")
-                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
-                .andExpect(status().isOk())
-                .andExpect(view().name("diet-logs"))
-                .andExpect(model().attributeExists("dietLogForm"))
-                .andExpect(content().string(containsString("class=\"sidebar\"")))
-                .andExpect(content().string(containsString("Diet logs")))
-                .andExpect(content().string(containsString("Unit from profile")))
-                .andExpect(content().string(containsString("mg/dL")))
-                .andExpect(content().string(containsString("name=\"patientTimezone\"")))
-                .andExpect(content().string(containsString("name=\"meals[1].mealType\"")))
-                .andExpect(content().string(not(containsString("name=\"meals[2].mealType\""))))
-                .andExpect(content().string(containsString("name=\"meals[1].deviation.severity\"")))
-                .andExpect(content().string(not(containsString("name=\"deviations[1].severity\""))))
-                .andExpect(content().string(containsString("type=\"file\"")))
-                .andExpect(content().string(containsString("data-uploaded-label=\"Uploaded\"")))
-                .andExpect(content().string(containsString("data-uploaded-fallback=\"Uploaded photo\"")))
-                .andExpect(content().string(containsString("data-photo-preview")))
-                .andExpect(content().string(containsString("data-photo-filename")))
-                .andExpect(content().string(containsString("originalFilename")))
-                .andExpect(content().string(containsString("upload.contentUrl")))
-                .andExpect(content().string(containsString("headers: {'X-XSRF-TOKEN': csrf.value}")))
-                .andExpect(content().string(not(containsString("headers: {'X-CSRF-TOKEN': csrf.value}"))))
-                .andExpect(content().string(containsString("name=\"meals[1].photoReferences[0].uploadId\"")))
-                .andExpect(content().string(not(containsString("name=\"photoReferences[1].uploadId\""))))
-                .andExpect(content().string(not(containsString("storageKey\""))))
-                .andExpect(content().string(not(containsString("contentType\""))))
-                .andExpect(content().string(not(containsString("sizeBytes\""))))
-                .andExpect(content().string(not(containsString("originalFilename\""))))
-                .andExpect(content().string(containsString("name=\"glucoseMeasurement.value\"")))
-                .andExpect(content().string(containsString("name=\"glucoseMeasurement.measuredTime\"")))
-                .andExpect(content().string(containsString("name=\"ketoneMeasurement.value\"")))
-                .andExpect(content().string(containsString("name=\"ketoneMeasurement.measuredTime\"")))
-                .andExpect(content().string(not(containsString("name=\"measurements[0].unit\""))))
-                .andExpect(content().string(not(containsString("name=\"glucoseMeasurement.unit\""))))
-                .andExpect(content().string(not(containsString("name=\"ketoneMeasurement.unit\""))))
-                .andExpect(content().string(not(containsString("name=\"glucoseUnitPreference\""))));
-    }
-
-    @Test
-    void patientDietLogPagePrefillsCurrentDateInPatientTimezone() throws Exception {
-        when(clock.instant()).thenReturn(Instant.parse("2026-06-21T11:30:00Z"));
-        when(dietLogService.currentPatientTimezone(any())).thenReturn("Pacific/Kiritimati");
-        doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND))
-                .when(dietLogService).getCurrentPatientLog(any(), any());
-
-        mvc.perform(get("/app/diet-logs")
-                .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
-                .andExpect(status().isOk())
-                .andExpect(view().name("diet-logs"))
-                .andExpect(content().string(containsString("name=\"logDate\"")))
-                .andExpect(content().string(containsString("value=\"2026-06-22\"")));
-
-        verify(dietLogService).getCurrentPatientLog(any(), eq(LocalDate.of(2026, 6, 22)));
-    }
-
-    @Test
-    void patientDietLogPageReloadsSelectedDateThroughQueryParameter() throws Exception {
-        doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND))
-                .when(dietLogService).getCurrentPatientLog(any(), any());
-
-        mvc.perform(get("/app/diet-logs")
-                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
-                .andExpect(status().isOk())
-                .andExpect(view().name("diet-logs"))
-                .andExpect(content().string(containsString("data-log-date")))
-                .andExpect(content().string(containsString("searchParams.set('date', logDateInput.value)")))
-                .andExpect(content().string(containsString("window.location.href = target.toString()")));
-    }
-
-    @Test
-    void patientDietLogPageLinksToHistory() throws Exception {
-        doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND))
-                .when(dietLogService).getCurrentPatientLog(any(), any());
-
-        mvc.perform(get("/app/diet-logs")
-                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("/app/diet-logs/history")))
-                .andExpect(content().string(containsString("View history")));
-    }
-
-    @Test
-    void patientDietLogPageRendersExistingRowsWithDistinctIndexedNames() throws Exception {
-        when(dietLogService.currentPatientGlucoseUnitPreference(any())).thenReturn(MeasurementUnit.MG_DL);
-        when(dietLogService.getCurrentPatientLog(any(), eq(LocalDate.of(2026, 6, 10))))
-                .thenReturn(multiRowDetailResponse());
-
-        mvc.perform(get("/app/diet-logs")
-                        .param("date", "2026-06-10")
-                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
-                .andExpect(status().isOk())
-                .andExpect(view().name("diet-logs"))
-                .andExpect(content().string(containsString("Avocado salad")))
-                .andExpect(content().string(containsString("Protein shake")))
-                .andExpect(content().string(containsString("name=\"meals[0].mealType\"")))
-                .andExpect(content().string(containsString("name=\"meals[1].mealType\"")))
-                .andExpect(content().string(containsString("name=\"meals[1].deviation.severity\"")))
-                .andExpect(content().string(containsString("name=\"meals[1].photoReferences[0].uploadId\"")))
-                .andExpect(content().string(containsString("class=\"diet-photo-preview\"")))
-                .andExpect(content().string(containsString("src=\"/api/diet-log-photos/5/content\"")))
-                .andExpect(content().string(containsString("alt=\"photo-1.jpg\"")))
-                .andExpect(content().string(not(containsString("name=\"photoReferences[1].storageKey\""))))
-                .andExpect(content().string(containsString("name=\"glucoseMeasurement.measuredTime\"")))
-                .andExpect(content().string(containsString("name=\"ketoneMeasurement.measuredTime\"")))
-                .andExpect(content().string(containsString("name=\"glucoseMeasurement.measuredTime\" value=\"09:30\"")))
-                .andExpect(content().string(containsString("name=\"ketoneMeasurement.measuredTime\" value=\"22:00\"")));
-    }
-
-    @Test
-    void patientSaveRedirectsToSelectedDateAndDelegates() throws Exception {
-        mvc.perform(post("/app/diet-logs")
-                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
-                        .with(csrf())
-                        .param("logDate", "2026-06-10")
-                        .param("adherenceLevel", "MOSTLY")
-                        .param("appetiteLevel", "NORMAL"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/app/diet-logs?date=2026-06-10"));
-
-        verify(dietLogService).saveForCurrentPatient(any(), any());
     }
 
     @Test
@@ -273,121 +142,6 @@ class WebDietLogControllerTest {
                 .andExpect(model().attribute("to", LocalDate.of(2026, 6, 10)))
                 .andExpect(content().string(containsString("2026-06-09")))
                 .andExpect(content().string(containsString("Not provided")));
-    }
-
-    @Test
-    void patientSaveCombinesMeasurementTimesWithLogDateAndPatientTimezone() throws Exception {
-        when(dietLogService.currentPatientGlucoseUnitPreference(any())).thenReturn(MeasurementUnit.MG_DL);
-
-        mvc.perform(post("/app/diet-logs")
-                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
-                        .with(csrf())
-                        .param("logDate", "2026-06-10")
-                        .param("patientTimezone", "UTC")
-                        .param("adherenceLevel", "MOSTLY")
-                        .param("appetiteLevel", "NORMAL")
-                        .param("glucoseMeasurement.value", "104.00")
-                        .param("glucoseMeasurement.measuredTime", "07:30")
-                        .param("glucoseMeasurement.context", "FASTING")
-                        .param("ketoneMeasurement.value", "1.20")
-                        .param("ketoneMeasurement.measuredTime", "20:15")
-                        .param("ketoneMeasurement.context", "BEDTIME"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/app/diet-logs?date=2026-06-10"));
-
-        var requestCaptor = ArgumentCaptor.forClass(DailyDietLogRequest.class);
-        verify(dietLogService).saveForCurrentPatient(any(), requestCaptor.capture());
-
-        assertThat(requestCaptor.getValue().measurementsOrEmpty())
-                .hasSize(2)
-                .satisfiesExactly(
-                        glucose -> {
-                            assertThat(glucose.measurementType()).isEqualTo(MeasurementType.GLUCOSE);
-                            assertThat(glucose.unit()).isEqualTo(MeasurementUnit.MG_DL);
-                            assertThat(glucose.measuredAt()).isEqualTo(Instant.parse("2026-06-10T05:30:00Z"));
-                            assertThat(glucose.context()).isEqualTo(MeasurementContext.FASTING);
-                        },
-                        ketone -> {
-                            assertThat(ketone.measurementType()).isEqualTo(MeasurementType.KETONE);
-                            assertThat(ketone.unit()).isEqualTo(MeasurementUnit.MMOL_L);
-                            assertThat(ketone.measuredAt()).isEqualTo(Instant.parse("2026-06-10T18:15:00Z"));
-                            assertThat(ketone.context()).isEqualTo(MeasurementContext.BEDTIME);
-                        });
-    }
-
-    @Test
-    void invalidPatientFormRedisplaysWithShellAndBindingError() throws Exception {
-        mvc.perform(post("/app/diet-logs")
-                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
-                        .with(csrf())
-                        .param("logDate", "not-a-date")
-                        .param("adherenceLevel", "MOSTLY")
-                        .param("appetiteLevel", "NORMAL"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("diet-logs"))
-                .andExpect(model().attributeHasFieldErrors("dietLogForm", "logDate"))
-                .andExpect(content().string(containsString("class=\"sidebar\"")))
-                .andExpect(content().string(containsString("Diet logs")));
-
-        verify(dietLogService, never()).saveForCurrentPatient(any(), any());
-    }
-
-    @Test
-    void oversizedPatientNotesRedisplayWithBindingError() throws Exception {
-        mvc.perform(post("/app/diet-logs")
-                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
-                        .with(csrf())
-                        .param("logDate", "2026-06-10")
-                        .param("adherenceLevel", "MOSTLY")
-                        .param("appetiteLevel", "NORMAL")
-                        .param("notes", "x".repeat(1001)))
-                .andExpect(status().isOk())
-                .andExpect(view().name("diet-logs"))
-                .andExpect(model().attributeHasFieldErrors("dietLogForm", "notes"))
-                .andExpect(content().string(containsString("class=\"sidebar\"")))
-                .andExpect(content().string(containsString("Diet logs")));
-
-        verify(dietLogService, never()).saveForCurrentPatient(any(), any());
-    }
-
-    @Test
-    void oversizedNestedPatientMealRedisplaysWithBindingError() throws Exception {
-        mvc.perform(post("/app/diet-logs")
-                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
-                        .with(csrf())
-                        .param("logDate", "2026-06-10")
-                        .param("adherenceLevel", "MOSTLY")
-                        .param("appetiteLevel", "NORMAL")
-                        .param("meals[0].mealType", "LUNCH")
-                        .param("meals[0].foodCategory", "PROTEIN")
-                        .param("meals[0].foodDescription", "x".repeat(501)))
-                .andExpect(status().isOk())
-                .andExpect(view().name("diet-logs"))
-                .andExpect(model().attributeHasFieldErrors("dietLogForm", "meals[0].foodDescription"))
-                .andExpect(content().string(containsString("class=\"sidebar\"")))
-                .andExpect(content().string(containsString("Diet logs")));
-
-        verify(dietLogService, never()).saveForCurrentPatient(any(), any());
-    }
-
-    @Test
-    void patientServiceBadRequestRedisplaysSubmittedFormWithShell() throws Exception {
-        doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "mealType is required"))
-                .when(dietLogService).saveForCurrentPatient(any(), any());
-
-        mvc.perform(post("/app/diet-logs")
-                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
-                        .with(csrf())
-                        .param("logDate", "2026-06-10")
-                        .param("adherenceLevel", "MOSTLY")
-                        .param("appetiteLevel", "NORMAL")
-                        .param("meals[0].foodDescription", "Submitted meal"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("diet-logs"))
-                .andExpect(model().attribute("dietLogError", "mealType is required"))
-                .andExpect(content().string(containsString("class=\"sidebar\"")))
-                .andExpect(content().string(containsString("mealType is required")))
-                .andExpect(content().string(containsString("Submitted meal")));
     }
 
     @Test

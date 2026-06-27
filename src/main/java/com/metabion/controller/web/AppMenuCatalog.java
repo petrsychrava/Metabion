@@ -70,11 +70,11 @@ public class AppMenuCatalog {
                         false,
                         "menu.onboardingHistory.description"),
                 item(
-                        "menu.dietLogs",
-                        "/app/diet-logs",
+                        "menu.dailyCheckIn",
+                        "/app/daily-check-in",
                         false,
                         true,
-                        "menu.dietLogs.description"),
+                        "menu.dailyCheckIn.description"),
                 item(
                         "menu.labTrends",
                         null,
