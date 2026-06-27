@@ -86,6 +86,10 @@ public class SymptomTrackingService {
 
         var checkIn = checkIns.findByPatientProfileIdAndCheckInDate(patient.getId(), request.checkInDate())
                 .orElseGet(() -> new SymptomCheckIn(patient, version, request.checkInDate(), request.flareState()));
+        if (checkIn.getId() != null
+                && !Objects.equals(checkIn.getQuestionnaireVersion().getId(), version.getId())) {
+            throw badRequest("cannot edit symptom check-in from a retired questionnaire version");
+        }
         checkIn.setPatientProfile(patient);
         checkIn.setQuestionnaireVersion(version);
         checkIn.setCheckInDate(request.checkInDate());

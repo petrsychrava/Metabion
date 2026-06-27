@@ -92,6 +92,7 @@ class AppMenuCatalogTest {
                         "Home",
                         "Education library",
                         "Staff invitations",
+                        "Patient trends",
                         "Content management",
                         "Rule configuration - planned",
                         "Audit review - planned",
@@ -160,6 +161,11 @@ class AppMenuCatalogTest {
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/staff-invitations/new");
         assertThat(catalog.sidebarItems(admin))
+                .filteredOn(item -> "Patient trends".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/clinical/trends");
+        assertThat(catalog.sidebarItems(admin))
                 .filteredOn(item -> "Content management".equals(item.label()))
                 .singleElement()
                 .extracting(AppMenuItem::route)
@@ -193,6 +199,7 @@ class AppMenuCatalogTest {
                             "Domů",
                             "Vzdělávací knihovna",
                             "Pozvánky pracovníků",
+                            "Trendy pacientů",
                             "Správa obsahu",
                             "Nastavení pravidel - plánováno",
                             "Kontrola auditu - plánováno",

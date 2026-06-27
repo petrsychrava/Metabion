@@ -174,6 +174,12 @@ public class AppMenuCatalog {
                         false,
                         true,
                         "menu.staffInvitations.description"),
+                item(
+                        "menu.clinicalTrends",
+                        "/app/clinical/trends",
+                        false,
+                        true,
+                        "menu.clinicalTrends.description"),
                 contentManagement(),
                 item(
                         "menu.ruleConfiguration",

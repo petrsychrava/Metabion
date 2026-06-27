@@ -86,6 +86,30 @@ class DailyCheckInServiceTest {
     }
 
     @Test
+    void saveRequiresDietLogSection() {
+        var form = new DailyCheckInForm(null, symptomCheckInRequest());
+
+        assertThatThrownBy(() -> service.saveForCurrentPatient(patientAuth, form))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("diet log section is required");
+        verify(dietLogService, never()).saveForCurrentPatient(any(), any());
+        verify(symptomTrackingService, never()).saveForCurrentPatient(any(), any());
+    }
+
+    @Test
+    void saveRequiresSymptomSection() {
+        var form = new DailyCheckInForm(dietLogRequest(), null);
+
+        assertThatThrownBy(() -> service.saveForCurrentPatient(patientAuth, form))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("symptom section is required");
+        verify(dietLogService, never()).saveForCurrentPatient(any(), any());
+        verify(symptomTrackingService, never()).saveForCurrentPatient(any(), any());
+    }
+
+    @Test
     void saveRejectsMismatchedDietAndSymptomDates() {
         var form = new DailyCheckInForm(
                 dietLogRequest(),

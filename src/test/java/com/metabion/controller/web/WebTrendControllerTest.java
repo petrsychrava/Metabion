@@ -102,6 +102,7 @@ class WebTrendControllerTest {
                 .andExpect(content().string(containsString("Flare state")))
                 .andExpect(content().string(containsString("Glucose")))
                 .andExpect(content().string(containsString("Ketones")))
+                .andExpect(content().string(containsString("href=\"/app/daily-check-in?date=2026-06-26\"")))
                 .andExpect(content().string(containsString("<svg role=\"img\"></svg>")));
 
         verify(dailyTrendService).currentPatientTrend(any(), eq(LocalDate.of(2026, 6, 1)), eq(LocalDate.of(2026, 6, 26)));
@@ -160,7 +161,8 @@ class WebTrendControllerTest {
                 .andExpect(content().string(containsString("patient@example.com")))
                 .andExpect(content().string(containsString("Symptom score")))
                 .andExpect(content().string(containsString("Glucose")))
-                .andExpect(content().string(containsString("Ketones")));
+                .andExpect(content().string(containsString("Ketones")))
+                .andExpect(content().string(containsString("href=\"/app/clinical/diet-logs/200\"")));
 
         verify(dietLogService).listClinicalPatientOptions(any(Authentication.class));
         verify(dailyTrendService).clinicalTrend(any(), eq(10L), eq(LocalDate.of(2026, 6, 1)), eq(LocalDate.of(2026, 6, 26)));
@@ -203,6 +205,23 @@ class WebTrendControllerTest {
         assertThat(to.getValue()).isEqualTo(LocalDate.of(2026, 6, 27));
     }
 
+    @Test
+    void clinicalTrendPageDoesNotLinkDaysWithoutDietLog() throws Exception {
+        when(dailyTrendService.clinicalTrend(any(), eq(10L), any(), any())).thenReturn(trendResponseWithoutDietLog());
+        when(dietLogService.listClinicalPatientOptions(any()))
+                .thenReturn(List.of(new PatientOptionResponse(10L, "patient@example.com")));
+
+        mvc.perform(get("/app/clinical/trends")
+                        .param("patientProfileId", "10")
+                        .param("from", "2026-06-01")
+                        .param("to", "2026-06-26")
+                        .with(user("staff@example.com").roles(RoleName.PHYSICIAN.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("clinical-trends"))
+                .andExpect(content().string(containsString("2026-06-26")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("/app/clinical/diet-logs/"))));
+    }
+
     private DailyTrendResponse trendResponse() {
         return new DailyTrendResponse(10L, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 26),
                 List.of(new DailyTrendResponse.DayTrend(
@@ -227,5 +246,19 @@ class WebTrendControllerTest {
                                 MeasurementUnit.MMOL_L,
                                 Instant.parse("2026-06-26T20:00:00Z"),
                                 MeasurementContext.BEDTIME)))));
+    }
+
+    private DailyTrendResponse trendResponseWithoutDietLog() {
+        return new DailyTrendResponse(10L, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 26),
+                List.of(new DailyTrendResponse.DayTrend(
+                        LocalDate.of(2026, 6, 26),
+                        100L,
+                        new BigDecimal("5.00"),
+                        FlareState.SUSPECTED_FLARE,
+                        null,
+                        null,
+                        null,
+                        List.of(),
+                        List.of())));
     }
 }

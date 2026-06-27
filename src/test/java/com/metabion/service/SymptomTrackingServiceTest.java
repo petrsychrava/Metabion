@@ -6,6 +6,7 @@ import com.metabion.domain.QuestionnaireVersionStatus;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.SymptomAnswerType;
 import com.metabion.domain.SymptomCheckIn;
+import com.metabion.domain.SymptomCheckInAnswer;
 import com.metabion.domain.SymptomQuestion;
 import com.metabion.domain.SymptomQuestionOption;
 import com.metabion.domain.SymptomQuestionnaire;
@@ -168,6 +169,32 @@ class SymptomTrackingServiceTest {
         assertThatThrownBy(() -> service.saveForCurrentPatient(patientAuth, request))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("questionnaireVersionId must reference the active IBD symptom questionnaire version");
+    }
+
+    @Test
+    void saveForCurrentPatientRejectsOverwriteOfDifferentQuestionnaireVersionCheckIn() {
+        var date = LocalDate.of(2026, 6, 26);
+        var retiredVersion = activeVersion(2);
+        retiredVersion.setStatus(QuestionnaireVersionStatus.RETIRED);
+        var existing = new SymptomCheckIn(patientProfile, retiredVersion, date, FlareState.SUSPECTED_FLARE);
+        ReflectionTestUtils.setField(existing, "id", 200L);
+        var retiredQuestion = retiredVersion.getQuestions().stream()
+                .filter(question -> question.getStableKey().equals("stool-frequency"))
+                .findFirst()
+                .orElseThrow();
+        SymptomCheckInAnswer.numeric(existing, retiredQuestion, new BigDecimal("9"), new BigDecimal("9"));
+        when(checkIns.findByPatientProfileIdAndCheckInDate(10L, date)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.saveForCurrentPatient(patientAuth,
+                completeRequest(date, FlareState.ACTIVE_FLARE, "severe")))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("cannot edit symptom check-in from a retired questionnaire version");
+
+        assertThat(existing.getQuestionnaireVersion()).isSameAs(retiredVersion);
+        assertThat(existing.getFlareState()).isEqualTo(FlareState.SUSPECTED_FLARE);
+        assertThat(existing.getAnswers()).hasSize(1);
+        assertThat(existing.getAnswers().getFirst().getQuestionnaireVersion()).isSameAs(retiredVersion);
+        assertThat(existing.getAnswers().getFirst().getAnswerNumeric()).isEqualByComparingTo("9");
     }
 
     @Test

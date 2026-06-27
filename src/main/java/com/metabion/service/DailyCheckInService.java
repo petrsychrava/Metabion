@@ -25,6 +25,12 @@ public class DailyCheckInService {
         if (form == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "daily check-in form is required");
         }
+        if (form.dietLogRequest() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "diet log section is required");
+        }
+        if (form.symptomCheckInRequest() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "symptom section is required");
+        }
         if (!Objects.equals(form.dietLogRequest().logDate(), form.symptomCheckInRequest().checkInDate())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "diet logDate must match symptom checkInDate");
         }
