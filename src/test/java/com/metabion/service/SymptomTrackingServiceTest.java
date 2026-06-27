@@ -73,6 +73,8 @@ class SymptomTrackingServiceTest {
         lenient().when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
         lenient().when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patientProfile));
         lenient().when(versions.findById(activeVersionId)).thenReturn(Optional.of(activeVersion));
+        lenient().when(versions.findActiveVersionsByQuestionnaireStableKey("ibd-symptom-check-in"))
+                .thenReturn(List.of(activeVersion));
         lenient().when(checkIns.findByPatientProfileIdAndCheckInDate(any(), any())).thenReturn(Optional.empty());
         lenient().when(checkIns.save(any())).thenAnswer(invocation -> {
             var checkIn = (SymptomCheckIn) invocation.getArgument(0);
@@ -118,7 +120,8 @@ class SymptomTrackingServiceTest {
     @Test
     void weightedChoiceScoreIsStoredAsThePerAnswerContribution() {
         var version = activeVersionWithWeightedAbdominalPain(new BigDecimal("2.00"));
-        when(versions.findById(activeVersionId)).thenReturn(Optional.of(version));
+        when(versions.findActiveVersionsByQuestionnaireStableKey("ibd-symptom-check-in"))
+                .thenReturn(List.of(version));
         activeVersion = version;
 
         var response = service.saveForCurrentPatient(patientAuth,
@@ -151,6 +154,42 @@ class SymptomTrackingServiceTest {
         assertThatThrownBy(() -> service.activeQuestionnaire())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Expected exactly one active IBD symptom questionnaire version");
+    }
+
+    @Test
+    void saveForCurrentPatientRejectsNonActiveQuestionnaireVersionId() {
+        var request = new SymptomCheckInRequest(
+                LocalDate.of(2026, 6, 26),
+                activeVersionId + 99,
+                FlareState.NO_FLARE,
+                List.of(answer("stool-frequency", new BigDecimal("3"))),
+                null);
+
+        assertThatThrownBy(() -> service.saveForCurrentPatient(patientAuth, request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("questionnaireVersionId must reference the active IBD symptom questionnaire version");
+    }
+
+    @Test
+    void saveForCurrentPatientRejectsBlankTextAnswer() {
+        activeVersion = activeVersionWithOptionalTextQuestion();
+        when(versions.findActiveVersionsByQuestionnaireStableKey("ibd-symptom-check-in"))
+                .thenReturn(List.of(activeVersion));
+        var baseRequest = completeRequest(LocalDate.of(2026, 6, 26), FlareState.NO_FLARE, "none");
+        var request = new SymptomCheckInRequest(
+                baseRequest.checkInDate(),
+                baseRequest.questionnaireVersionId(),
+                baseRequest.flareState(),
+                append(baseRequest.answersOrEmpty(), new SymptomCheckInRequest.AnswerRequest(
+                        question("symptom-note").getId(),
+                        null,
+                        "   ",
+                        null)),
+                baseRequest.notes());
+
+        assertThatThrownBy(() -> service.saveForCurrentPatient(patientAuth, request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("symptom-note requires a non-blank text answer");
     }
 
     private SymptomCheckInRequest completeRequest(LocalDate date, FlareState flareState, String painLevel) {
@@ -206,6 +245,21 @@ class SymptomTrackingServiceTest {
                 .orElseThrow()
                 .setScoreWeight(weight);
         return version;
+    }
+
+    private SymptomQuestionnaireVersion activeVersionWithOptionalTextQuestion() {
+        var version = activeVersion(1);
+        var question = new SymptomQuestion("symptom-note", "Symptom note", SymptomAnswerType.TEXT, 6);
+        ReflectionTestUtils.setField(question, "id", 1005L);
+        question.setRequired(false);
+        version.addQuestion(question);
+        return version;
+    }
+
+    private List<SymptomCheckInRequest.AnswerRequest> append(
+            List<SymptomCheckInRequest.AnswerRequest> answers,
+            SymptomCheckInRequest.AnswerRequest answer) {
+        return java.util.stream.Stream.concat(answers.stream(), java.util.stream.Stream.of(answer)).toList();
     }
 
     private SymptomQuestionnaireVersion activeVersion(int versionNumber) {

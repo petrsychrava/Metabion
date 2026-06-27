@@ -15,10 +15,10 @@ import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.SymptomCheckInRepository;
 import com.metabion.repository.SymptomQuestionnaireVersionRepository;
 import com.metabion.repository.UserRepository;
-import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -29,9 +29,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Service
-@Transactional
+@Transactional(readOnly = true)
 public class SymptomTrackingService {
 
     static final String IBD_SYMPTOM_CHECK_IN_KEY = "ibd-symptom-check-in";
@@ -62,6 +63,7 @@ public class SymptomTrackingService {
         return assembler.questionnaire(activeVersion());
     }
 
+    @Transactional
     public SymptomCheckInResponse saveForCurrentPatient(Authentication authentication, SymptomCheckInRequest request) {
         var patient = currentPatientProfile(authentication);
         if (request == null) {
@@ -75,8 +77,10 @@ public class SymptomTrackingService {
             throw badRequest("flareState is required");
         }
 
-        var version = versions.findById(request.questionnaireVersionId())
-                .orElseThrow(() -> badRequest("symptom questionnaire version not found"));
+        var version = activeVersion();
+        if (!Objects.equals(request.questionnaireVersionId(), version.getId())) {
+            throw badRequest("questionnaireVersionId must reference the active IBD symptom questionnaire version");
+        }
         var answersByQuestionId = answersByQuestionId(request.answersOrEmpty());
         validateRequiredAnswers(version, answersByQuestionId);
 
@@ -87,7 +91,11 @@ public class SymptomTrackingService {
         checkIn.setCheckInDate(request.checkInDate());
         checkIn.setFlareState(request.flareState());
         checkIn.setNotes(trimToNull(request.notes()));
+        var replacingPersistedCheckIn = checkIn.getId() != null;
         checkIn.clearAnswers();
+        if (replacingPersistedCheckIn) {
+            checkIns.flush();
+        }
 
         var totalScore = BigDecimal.ZERO;
         var questionsById = questionsById(version);
@@ -168,6 +176,7 @@ public class SymptomTrackingService {
         if (request.optionId() != null || trimToNull(request.answerText()) != null) {
             throw badRequest(question.getStableKey() + " only accepts a numeric answer");
         }
+        validateNumericScale(question, request.answerNumeric());
         validateNumericRange(question, request.answerNumeric());
         return SymptomCheckInAnswer.numeric(
                 checkIn,
@@ -180,8 +189,8 @@ public class SymptomTrackingService {
                                             SymptomQuestion question,
                                             SymptomCheckInRequest.AnswerRequest request) {
         var text = trimToNull(request.answerText());
-        if (question.isRequired() && text == null) {
-            throw badRequest(question.getStableKey() + " requires a text answer");
+        if (text == null) {
+            throw badRequest(question.getStableKey() + " requires a non-blank text answer");
         }
         if (request.optionId() != null || request.answerNumeric() != null) {
             throw badRequest(question.getStableKey() + " only accepts a text answer");
@@ -208,6 +217,12 @@ public class SymptomTrackingService {
         }
         if (question.getMaxNumericValue() != null && value.compareTo(question.getMaxNumericValue()) > 0) {
             throw badRequest(question.getStableKey() + " is above the allowed range");
+        }
+    }
+
+    private void validateNumericScale(SymptomQuestion question, BigDecimal value) {
+        if (Math.max(0, value.stripTrailingZeros().scale()) > 2) {
+            throw badRequest(question.getStableKey() + " allows at most 2 fractional digits");
         }
     }
 

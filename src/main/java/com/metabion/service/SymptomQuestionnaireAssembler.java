@@ -40,7 +40,7 @@ public class SymptomQuestionnaireAssembler {
                 checkIn.getTotalSymptomScore(),
                 checkIn.getNotes(),
                 checkIn.getAnswers().stream()
-                        .sorted(Comparator.comparing(answer -> answer.getQuestion().getSortOrder()))
+                        .sorted(answerComparator())
                         .map(this::answer)
                         .toList(),
                 checkIn.getCreatedAt(),
@@ -86,5 +86,11 @@ public class SymptomQuestionnaireAssembler {
                 answer.getAnswerText(),
                 answer.getAnswerNumeric(),
                 answer.getNumericScore());
+    }
+
+    private Comparator<SymptomCheckInAnswer> answerComparator() {
+        return Comparator
+                .comparing((SymptomCheckInAnswer answer) -> answer.getQuestion().getSortOrder())
+                .thenComparing(answer -> answer.getQuestion().getId());
     }
 }
