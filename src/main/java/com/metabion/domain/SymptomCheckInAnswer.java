@@ -67,6 +67,39 @@ public class SymptomCheckInAnswer {
         return answer;
     }
 
+    public static SymptomCheckInAnswer numeric(
+            SymptomCheckIn checkIn,
+            SymptomQuestion question,
+            BigDecimal answerNumeric,
+            BigDecimal numericScore) {
+        if (!questionBelongsToCheckInVersion(question, checkIn)) {
+            throw new IllegalArgumentException("Answer question must belong to the check-in questionnaire version");
+        }
+        var answer = new SymptomCheckInAnswer();
+        answer.setQuestion(question);
+        answer.setQuestionnaireVersion(checkIn.getQuestionnaireVersion());
+        answer.setAnswerNumeric(answerNumeric);
+        answer.setNumericScore(numericScore);
+        checkIn.addAnswer(answer);
+        return answer;
+    }
+
+    public static SymptomCheckInAnswer text(
+            SymptomCheckIn checkIn,
+            SymptomQuestion question,
+            String answerText) {
+        if (!questionBelongsToCheckInVersion(question, checkIn)) {
+            throw new IllegalArgumentException("Answer question must belong to the check-in questionnaire version");
+        }
+        var answer = new SymptomCheckInAnswer();
+        answer.setQuestion(question);
+        answer.setQuestionnaireVersion(checkIn.getQuestionnaireVersion());
+        answer.setAnswerText(answerText);
+        answer.setNumericScore(BigDecimal.ZERO);
+        checkIn.addAnswer(answer);
+        return answer;
+    }
+
     private static boolean optionBelongsToQuestion(SymptomQuestionOption option, SymptomQuestion question) {
         if (option == null || question == null || option.getQuestion() == null) {
             return false;
