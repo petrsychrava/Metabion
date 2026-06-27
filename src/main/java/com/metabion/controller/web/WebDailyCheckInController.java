@@ -94,7 +94,7 @@ public class WebDailyCheckInController {
                        Authentication authentication) {
         applyPatientDefaultsForDisplay(form, authentication);
         var questionnaire = symptomTrackingService.activeQuestionnaire();
-        refreshSymptomRows(form, questionnaire, null);
+        refreshSymptomRows(form, questionnaire, null, false);
         ensureRows(form);
         if (binding.hasErrors()) {
             addFormModel(model, authentication, questionnaire, form);
@@ -131,12 +131,13 @@ public class WebDailyCheckInController {
         }
         try {
             refreshSymptomRows(form, questionnaire,
-                    symptomTrackingService.getCurrentPatientCheckIn(authentication, selectedDate));
+                    symptomTrackingService.getCurrentPatientCheckIn(authentication, selectedDate),
+                    true);
         } catch (ResponseStatusException ex) {
             if (ex.getStatusCode() != HttpStatus.NOT_FOUND) {
                 throw ex;
             }
-            refreshSymptomRows(form, questionnaire, null);
+            refreshSymptomRows(form, questionnaire, null, true);
         }
         return form;
     }
@@ -204,8 +205,11 @@ public class WebDailyCheckInController {
 
     private void refreshSymptomRows(DailyCheckInWebForm form,
                                     SymptomQuestionnaireResponse questionnaire,
-                                    SymptomCheckInResponse checkIn) {
-        form.setQuestionnaireVersionId(questionnaire.versionId());
+                                    SymptomCheckInResponse checkIn,
+                                    boolean useActiveQuestionnaireVersion) {
+        if (useActiveQuestionnaireVersion) {
+            form.setQuestionnaireVersionId(questionnaire.versionId());
+        }
         if (checkIn != null) {
             form.setFlareState(checkIn.flareState());
             form.setSymptomNotes(checkIn.notes());

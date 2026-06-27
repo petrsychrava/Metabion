@@ -40,6 +40,7 @@ import java.time.ZoneId;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -173,15 +174,46 @@ class WebDailyCheckInControllerTest {
         assertThat(form.dietLogRequest().logDate()).isEqualTo(LocalDate.of(2026, 6, 26));
         assertThat(form.dietLogRequest().adherenceLevel()).isEqualTo(DietAdherenceLevel.FULL);
         assertThat(form.dietLogRequest().appetiteLevel()).isEqualTo(AppetiteLevel.NORMAL);
-        assertThat(form.dietLogRequest().measurementsOrEmpty()).extracting("measurementType")
-                .containsExactly(MeasurementType.GLUCOSE, MeasurementType.KETONE);
-        assertThat(form.dietLogRequest().measurementsOrEmpty()).extracting("context")
-                .containsExactly(MeasurementContext.FASTING, MeasurementContext.BEDTIME);
+        assertThat(form.dietLogRequest().measurementsOrEmpty())
+                .extracting("measurementType", "value", "unit", "measuredAt", "context")
+                .containsExactly(
+                        tuple(MeasurementType.GLUCOSE, new BigDecimal("5.40"), MeasurementUnit.MMOL_L,
+                                Instant.parse("2026-06-26T05:30:00Z"), MeasurementContext.FASTING),
+                        tuple(MeasurementType.KETONE, new BigDecimal("1.20"), MeasurementUnit.MMOL_L,
+                                Instant.parse("2026-06-26T18:15:00Z"), MeasurementContext.BEDTIME));
         assertThat(form.symptomCheckInRequest().checkInDate()).isEqualTo(LocalDate.of(2026, 6, 26));
         assertThat(form.symptomCheckInRequest().questionnaireVersionId()).isEqualTo(30L);
         assertThat(form.symptomCheckInRequest().flareState()).isEqualTo(FlareState.SUSPECTED_FLARE);
-        assertThat(form.symptomCheckInRequest().answersOrEmpty()).hasSize(2);
+        assertThat(form.symptomCheckInRequest().answersOrEmpty())
+                .extracting("questionId", "optionId", "answerText", "answerNumeric")
+                .containsExactly(
+                        tuple(1L, null, null, new BigDecimal("3")),
+                        tuple(2L, 11L, null, null));
         assertThat(form.symptomCheckInRequest().notes()).isEqualTo("More fatigue");
+    }
+
+    @Test
+    void staleQuestionnaireVersionIsPassedThroughToDailyCheckInService() throws Exception {
+        mvc.perform(post("/app/daily-check-in")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("logDate", "2026-06-26")
+                        .param("adherenceLevel", "FULL")
+                        .param("appetiteLevel", "NORMAL")
+                        .param("flareState", "SUSPECTED_FLARE")
+                        .param("questionnaireVersionId", "29")
+                        .param("symptomAnswers[0].questionId", "1")
+                        .param("symptomAnswers[0].answerNumeric", "3")
+                        .param("symptomAnswers[1].questionId", "2")
+                        .param("symptomAnswers[1].optionId", "11")
+                        .param("symptomNotes", "Submitted against stale version"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app/daily-check-in?date=2026-06-26"));
+
+        var formCaptor = ArgumentCaptor.forClass(DailyCheckInForm.class);
+        verify(dailyCheckInService).saveForCurrentPatient(any(), formCaptor.capture());
+
+        assertThat(formCaptor.getValue().symptomCheckInRequest().questionnaireVersionId()).isEqualTo(29L);
     }
 
     @Test
