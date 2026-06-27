@@ -25,7 +25,8 @@ class AppMenuCatalogTest {
                         "Education library",
                         "Onboarding",
                         "Onboarding history",
-                        "Diet logs",
+                        "Daily check-in",
+                        "Trends",
                         "Lab trends - planned",
                         "Protocol phase - planned",
                         "Red-flag guidance - planned",
@@ -48,6 +49,7 @@ class AppMenuCatalogTest {
                         "Education library",
                         "Onboarding review",
                         "Diet log review",
+                        "Patient trends",
                         "Content management",
                         "Assigned patient overview - planned",
                         "Red-flag monitoring - planned",
@@ -69,6 +71,7 @@ class AppMenuCatalogTest {
                         "Education library",
                         "Onboarding review",
                         "Diet log review",
+                        "Patient trends",
                         "Content management",
                         "Assigned patient overview - planned",
                         "Red-flag monitoring - planned",
@@ -89,6 +92,7 @@ class AppMenuCatalogTest {
                         "Home",
                         "Education library",
                         "Staff invitations",
+                        "Patient trends",
                         "Content management",
                         "Rule configuration - planned",
                         "Audit review - planned",
@@ -107,10 +111,15 @@ class AppMenuCatalogTest {
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/onboarding");
         assertThat(catalog.sidebarItems(patient))
-                .filteredOn(item -> "Diet logs".equals(item.label()))
+                .filteredOn(item -> "Daily check-in".equals(item.label()))
                 .singleElement()
                 .extracting(AppMenuItem::route)
-                .isEqualTo("/app/diet-logs");
+                .isEqualTo("/app/daily-check-in");
+        assertThat(catalog.sidebarItems(patient))
+                .filteredOn(item -> "Trends".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/trends");
         assertThat(catalog.sidebarItems(patient))
                 .filteredOn(item -> "Education library".equals(item.label()))
                 .singleElement()
@@ -137,6 +146,11 @@ class AppMenuCatalogTest {
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/clinical/diet-logs");
         assertThat(catalog.sidebarItems(clinician))
+                .filteredOn(item -> "Patient trends".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/clinical/trends");
+        assertThat(catalog.sidebarItems(clinician))
                 .filteredOn(item -> "Content management".equals(item.label()))
                 .singleElement()
                 .extracting(AppMenuItem::route)
@@ -146,6 +160,11 @@ class AppMenuCatalogTest {
                 .singleElement()
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/staff-invitations/new");
+        assertThat(catalog.sidebarItems(admin))
+                .filteredOn(item -> "Patient trends".equals(item.label()))
+                .singleElement()
+                .extracting(AppMenuItem::route)
+                .isEqualTo("/app/clinical/trends");
         assertThat(catalog.sidebarItems(admin))
                 .filteredOn(item -> "Content management".equals(item.label()))
                 .singleElement()
@@ -162,7 +181,8 @@ class AppMenuCatalogTest {
                 .containsExactly(
                         "Education library",
                         "Onboarding",
-                        "Diet logs",
+                        "Daily check-in",
+                        "Trends",
                         "Lab trends - planned",
                         "Red-flag guidance - planned");
     }
@@ -179,6 +199,7 @@ class AppMenuCatalogTest {
                             "Domů",
                             "Vzdělávací knihovna",
                             "Pozvánky pracovníků",
+                            "Trendy pacientů",
                             "Správa obsahu",
                             "Nastavení pravidel - plánováno",
                             "Kontrola auditu - plánováno",

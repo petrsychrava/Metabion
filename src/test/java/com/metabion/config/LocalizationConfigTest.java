@@ -40,6 +40,24 @@ class LocalizationConfigTest {
     }
 
     @Test
+    void resolvesSymptomTrackingMessagesInEnglishAndCzech() {
+        assertThat(messages.getMessage("menu.dailyCheckIn", null, Locale.ENGLISH)).isEqualTo("Daily check-in");
+        assertThat(messages.getMessage("menu.trends", null, Locale.ENGLISH)).isEqualTo("Trends");
+        assertThat(messages.getMessage("dailyCheckIn.flareState", null, Locale.ENGLISH)).isEqualTo("Flare state");
+        assertThat(messages.getMessage("enum.flareState.NO_FLARE", null, Locale.ENGLISH)).isEqualTo("No flare");
+
+        var czech = Locale.forLanguageTag("cs");
+        assertThat(messages.getMessage("menu.dailyCheckIn", null, czech)).isEqualTo("Denní záznam");
+        assertThat(messages.getMessage("menu.trends", null, czech)).isEqualTo("Trendy");
+        assertThat(messages.getMessage("dailyCheckIn.flareState", null, czech)).isEqualTo("Stav vzplanutí");
+        assertThat(messages.getMessage("enum.flareState.NO_FLARE", null, czech)).isEqualTo("Bez vzplanutí");
+        assertThat(messages.getMessage("enum.flareState.SUSPECTED_FLARE", null, czech))
+                .isEqualTo("Podezření na vzplanutí");
+        assertThat(messages.getMessage("enum.flareState.ACTIVE_FLARE", null, czech))
+                .isEqualTo("Aktivní vzplanutí");
+    }
+
+    @Test
     void fallsBackToEnglishForMissingCzechMessage() {
         assertThat(messages.getMessage("test.englishOnly", null, Locale.forLanguageTag("cs")))
                 .isEqualTo("English fallback");

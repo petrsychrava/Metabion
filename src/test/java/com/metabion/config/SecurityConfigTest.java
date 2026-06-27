@@ -162,8 +162,40 @@ class SecurityConfigTest {
     }
 
     @Test
+    void symptomTrackingAppRoutesRedirectUnauthenticatedBrowserToLogin() throws Exception {
+        mvc.perform(get("/app/daily-check-in"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+        mvc.perform(get("/app/trends"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+        mvc.perform(get("/app/clinical/trends"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+    }
+
+    @Test
     void api_requires_authentication_with_unauthorized_status() throws Exception {
         mvc.perform(get("/api/whoami"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void symptomTrackingApiRoutesRequireAuthentication() throws Exception {
+        mvc.perform(get("/api/symptom-questionnaires/active"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/symptom-check-ins")
+                        .param("from", "2026-06-01")
+                        .param("to", "2026-06-26"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/trends/daily")
+                        .param("from", "2026-06-01")
+                        .param("to", "2026-06-26"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/clinical/trends/daily")
+                        .param("patientProfileId", "20")
+                        .param("from", "2026-06-01")
+                        .param("to", "2026-06-26"))
                 .andExpect(status().isUnauthorized());
     }
 

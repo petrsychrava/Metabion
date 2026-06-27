@@ -70,11 +70,17 @@ public class AppMenuCatalog {
                         false,
                         "menu.onboardingHistory.description"),
                 item(
-                        "menu.dietLogs",
-                        "/app/diet-logs",
+                        "menu.dailyCheckIn",
+                        "/app/daily-check-in",
                         false,
                         true,
-                        "menu.dietLogs.description"),
+                        "menu.dailyCheckIn.description"),
+                item(
+                        "menu.trends",
+                        "/app/trends",
+                        false,
+                        true,
+                        "menu.trends.description"),
                 item(
                         "menu.labTrends",
                         null,
@@ -115,6 +121,12 @@ public class AppMenuCatalog {
                         false,
                         true,
                         "menu.dietLogReview.description"),
+                item(
+                        "menu.clinicalTrends",
+                        "/app/clinical/trends",
+                        false,
+                        true,
+                        "menu.clinicalTrends.description"),
                 contentManagement(),
                 item(
                         "menu.assignedPatientOverview",
@@ -162,6 +174,12 @@ public class AppMenuCatalog {
                         false,
                         true,
                         "menu.staffInvitations.description"),
+                item(
+                        "menu.clinicalTrends",
+                        "/app/clinical/trends",
+                        false,
+                        true,
+                        "menu.clinicalTrends.description"),
                 contentManagement(),
                 item(
                         "menu.ruleConfiguration",

@@ -358,6 +358,83 @@ a {
     color: var(--error);
 }
 
+.trend-chart-wrap {
+    overflow-x: auto;
+}
+
+.trend-chart {
+    display: block;
+    min-width: 640px;
+    width: 100%;
+    height: auto;
+}
+
+.trend-axis {
+    stroke: var(--border);
+    stroke-width: 1;
+}
+
+.trend-line-symptoms {
+    stroke: var(--accent);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 3;
+}
+
+.trend-marker-flare.suspected {
+    fill: #d28b22;
+}
+
+.trend-marker-flare.active {
+    fill: var(--error);
+}
+
+.trend-marker-measurement.glucose {
+    fill: #2d8fcc;
+}
+
+.trend-marker-measurement.ketone {
+    fill: #7a4ab8;
+}
+
+.trend-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    margin-top: 14px;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.trend-legend > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.legend-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    background: var(--accent);
+}
+
+.legend-swatch.flare {
+    background: var(--error);
+}
+
+.legend-swatch.glucose {
+    background: #2d8fcc;
+}
+
+.legend-swatch.ketone {
+    background: #7a4ab8;
+}
+
+.trend-measurement {
+    display: block;
+}
+
 .progress-meter {
     width: 100%;
     height: 10px;
