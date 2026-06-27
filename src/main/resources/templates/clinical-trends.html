@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell(#{trends.clinical.pageTitle}, ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Metabion</p>
+            <h1 th:text="#{menu.clinicalTrends}">Patient trends</h1>
+        </div>
+    </header>
+
+    <section class="panel app-panel">
+        <form class="form form-grid" th:action="@{/app/clinical/trends}" method="get">
+            <label class="field"><span th:text="#{dietLogs.patient}">Patient</span>
+                <select name="patientProfileId">
+                    <option value="" th:selected="${patientProfileId == null}" th:text="#{dietLogs.selectPatient}">Select patient</option>
+                    <option th:each="patient : ${patientOptions}"
+                            th:value="${patient.id()}"
+                            th:selected="${patient.id() == patientProfileId}"
+                            th:text="#{dietLogs.patientOption(${patient.email()}, ${patient.id()})}">patient@example.com (Profile #42)</option>
+                </select>
+            </label>
+            <label class="field"><span th:text="#{dietLogs.from}">From</span>
+                <input type="date" name="from" th:value="${from}">
+            </label>
+            <label class="field"><span th:text="#{dietLogs.to}">To</span>
+                <input type="date" name="to" th:value="${to}">
+            </label>
+            <button type="submit" th:text="#{dietLogs.filter}">Filter</button>
+        </form>
+    </section>
+
+    <section class="panel app-panel">
+        <p class="hint" th:if="${trend == null}" th:text="#{trends.selectPatient}">Select a patient to review trends.</p>
+        <div class="trend-chart-wrap" th:if="${trend != null}" th:utext="${trendSvg}">
+            <svg class="trend-chart" role="img"></svg>
+        </div>
+        <div class="trend-legend" th:if="${trend != null}" aria-label="Trend legend">
+            <span><span class="legend-swatch symptom"></span><span th:text="#{trends.symptomScore}">Symptom score</span></span>
+            <span><span class="legend-swatch flare"></span><span th:text="#{trends.flareState}">Flare state</span></span>
+            <span><span class="legend-swatch glucose"></span><span th:text="#{trends.glucose}">Glucose</span></span>
+            <span><span class="legend-swatch ketone"></span><span th:text="#{trends.ketones}">Ketones</span></span>
+        </div>
+    </section>
+
+    <section class="panel app-panel" th:if="${trend != null}">
+        <table class="table trend-table">
+            <thead>
+            <tr>
+                <th th:text="#{dietLogs.logDate}">Date</th>
+                <th th:text="#{trends.symptomScore}">Symptom score</th>
+                <th th:text="#{trends.flareState}">Flare state</th>
+                <th th:text="#{trends.glucose}">Glucose</th>
+                <th th:text="#{trends.ketones}">Ketones</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="day : ${trend.days()}">
+                <td th:text="${day.date()}">2026-06-26</td>
+                <td th:text="${day.symptomScore() == null ? #messages.msg('trends.notProvided') : day.symptomScore()}">5.00</td>
+                <td th:text="${day.flareState() == null ? #messages.msg('trends.notProvided') : #messages.msg('enum.flareState.' + day.flareState().name())}">No flare</td>
+                <td>
+                    <span th:if="${#lists.isEmpty(day.glucoseMeasurements())}" th:text="#{trends.notProvided}">Not provided</span>
+                    <span class="trend-measurement" th:each="measurement : ${day.glucoseMeasurements()}"
+                          th:text="${measurement.value() + ' ' + #messages.msg('enum.measurementUnit.' + measurement.unit().name()) + ' ' + measurement.measuredAt()}">5.80 mmol/L</span>
+                </td>
+                <td>
+                    <span th:if="${#lists.isEmpty(day.ketoneMeasurements())}" th:text="#{trends.notProvided}">Not provided</span>
+                    <span class="trend-measurement" th:each="measurement : ${day.ketoneMeasurements()}"
+                          th:text="${measurement.value() + ' ' + #messages.msg('enum.measurementUnit.' + measurement.unit().name()) + ' ' + measurement.measuredAt()}">1.20 mmol/L</span>
+                </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(trend.days())}">
+                <td colspan="5" th:text="#{trends.noData}">No trend data</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+</th:block>
+</html>

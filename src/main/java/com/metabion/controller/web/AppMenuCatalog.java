@@ -76,6 +76,12 @@ public class AppMenuCatalog {
                         true,
                         "menu.dailyCheckIn.description"),
                 item(
+                        "menu.trends",
+                        "/app/trends",
+                        false,
+                        true,
+                        "menu.trends.description"),
+                item(
                         "menu.labTrends",
                         null,
                         true,
@@ -115,6 +121,12 @@ public class AppMenuCatalog {
                         false,
                         true,
                         "menu.dietLogReview.description"),
+                item(
+                        "menu.clinicalTrends",
+                        "/app/clinical/trends",
+                        false,
+                        true,
+                        "menu.clinicalTrends.description"),
                 contentManagement(),
                 item(
                         "menu.assignedPatientOverview",
