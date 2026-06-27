@@ -1,8 +1,10 @@
 package com.metabion.controller.api;
 
+import com.metabion.dto.DailyTrendResponse;
 import com.metabion.dto.SymptomCheckInRequest;
 import com.metabion.dto.SymptomCheckInResponse;
 import com.metabion.dto.SymptomQuestionnaireResponse;
+import com.metabion.service.DailyTrendService;
 import com.metabion.service.SymptomTrackingService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
@@ -20,9 +22,12 @@ import java.util.List;
 public class SymptomTrackingController {
 
     private final SymptomTrackingService symptomTrackingService;
+    private final DailyTrendService dailyTrendService;
 
-    public SymptomTrackingController(SymptomTrackingService symptomTrackingService) {
+    public SymptomTrackingController(SymptomTrackingService symptomTrackingService,
+                                     DailyTrendService dailyTrendService) {
         this.symptomTrackingService = symptomTrackingService;
+        this.dailyTrendService = dailyTrendService;
     }
 
     @GetMapping("/api/symptom-questionnaires/active")
@@ -47,5 +52,12 @@ public class SymptomTrackingController {
                                              @RequestParam LocalDate to,
                                              Authentication authentication) {
         return symptomTrackingService.listCurrentPatientCheckIns(authentication, from, to);
+    }
+
+    @GetMapping("/api/trends/daily")
+    public DailyTrendResponse dailyTrend(@RequestParam LocalDate from,
+                                         @RequestParam LocalDate to,
+                                         Authentication authentication) {
+        return dailyTrendService.currentPatientTrend(authentication, from, to);
     }
 }

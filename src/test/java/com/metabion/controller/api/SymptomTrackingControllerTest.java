@@ -1,10 +1,15 @@
 package com.metabion.controller.api;
 
 import com.metabion.domain.FlareState;
+import com.metabion.domain.MeasurementContext;
+import com.metabion.domain.MeasurementType;
+import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.SymptomAnswerType;
+import com.metabion.dto.DailyTrendResponse;
 import com.metabion.dto.SymptomCheckInResponse;
 import com.metabion.dto.SymptomQuestionnaireResponse;
+import com.metabion.service.DailyTrendService;
 import com.metabion.service.SecurityService;
 import com.metabion.service.SymptomTrackingService;
 import com.metabion.service.UserService;
@@ -62,6 +67,9 @@ class SymptomTrackingControllerTest {
 
     @MockitoBean
     SymptomTrackingService symptomTrackingService;
+
+    @MockitoBean
+    DailyTrendService dailyTrendService;
 
     private MockMvc mvc;
 
@@ -144,6 +152,30 @@ class SymptomTrackingControllerTest {
     }
 
     @Test
+    void patientCanReadDailyTrendRange() throws Exception {
+        when(dailyTrendService.currentPatientTrend(
+                any(),
+                eq(LocalDate.of(2026, 6, 1)),
+                eq(LocalDate.of(2026, 6, 2))))
+                .thenReturn(trendResponse());
+
+        mvc.perform(get("/api/trends/daily")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .param("from", "2026-06-01")
+                        .param("to", "2026-06-02"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.patientProfileId").value(20))
+                .andExpect(jsonPath("$.days[0].date").value("2026-06-01"))
+                .andExpect(jsonPath("$.days[0].symptomCheckInId").value(10))
+                .andExpect(jsonPath("$.days[0].glucoseMeasurements[0].measurementType").value("GLUCOSE"));
+
+        verify(dailyTrendService).currentPatientTrend(
+                any(),
+                eq(LocalDate.of(2026, 6, 1)),
+                eq(LocalDate.of(2026, 6, 2)));
+    }
+
+    @Test
     void clinicalTrendHistoryRequiresAccessiblePatientId() throws Exception {
         when(symptomTrackingService.listClinicalCheckIns(
                 any(),
@@ -165,6 +197,31 @@ class SymptomTrackingControllerTest {
                 eq(20L),
                 eq(LocalDate.of(2026, 6, 1)),
                 eq(LocalDate.of(2026, 6, 26)));
+    }
+
+    @Test
+    void clinicalCanReadDailyTrendRange() throws Exception {
+        when(dailyTrendService.clinicalTrend(
+                any(),
+                eq(20L),
+                eq(LocalDate.of(2026, 6, 1)),
+                eq(LocalDate.of(2026, 6, 2))))
+                .thenReturn(trendResponse());
+
+        mvc.perform(get("/api/clinical/trends/daily")
+                        .with(user("staff@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .param("patientProfileId", "20")
+                        .param("from", "2026-06-01")
+                        .param("to", "2026-06-02"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.patientProfileId").value(20))
+                .andExpect(jsonPath("$.days[0].ketoneMeasurements[0].context").value("BEDTIME"));
+
+        verify(dailyTrendService).clinicalTrend(
+                any(),
+                eq(20L),
+                eq(LocalDate.of(2026, 6, 1)),
+                eq(LocalDate.of(2026, 6, 2)));
     }
 
     private SymptomQuestionnaireResponse questionnaireResponse() {
@@ -198,6 +255,46 @@ class SymptomTrackingControllerTest {
                 List.of(),
                 Instant.parse("2026-06-26T08:00:00Z"),
                 Instant.parse("2026-06-26T08:00:00Z"));
+    }
+
+    private DailyTrendResponse trendResponse() {
+        return new DailyTrendResponse(
+                20L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 2),
+                List.of(
+                        new DailyTrendResponse.DayTrend(
+                                LocalDate.of(2026, 6, 1),
+                                10L,
+                                new BigDecimal("4.00"),
+                                FlareState.NO_FLARE,
+                                40L,
+                                null,
+                                null,
+                                List.of(new DailyTrendResponse.MeasurementPoint(
+                                        50L,
+                                        MeasurementType.GLUCOSE,
+                                        new BigDecimal("5.8"),
+                                        MeasurementUnit.MMOL_L,
+                                        Instant.parse("2026-06-01T07:30:00Z"),
+                                        MeasurementContext.FASTING)),
+                                List.of(new DailyTrendResponse.MeasurementPoint(
+                                        51L,
+                                        MeasurementType.KETONE,
+                                        new BigDecimal("1.2"),
+                                        MeasurementUnit.MMOL_L,
+                                        Instant.parse("2026-06-01T20:30:00Z"),
+                                        MeasurementContext.BEDTIME))),
+                        new DailyTrendResponse.DayTrend(
+                                LocalDate.of(2026, 6, 2),
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                List.of(),
+                                List.of())));
     }
 
     private String validCheckInJson() {

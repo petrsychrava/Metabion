@@ -19,13 +19,13 @@ import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.StaffProfileRepository;
 import com.metabion.repository.UserRepository;
 import jakarta.transaction.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -48,6 +48,7 @@ public class DietLogService {
     private final DietLogRequestMapper requestMapper;
     private final DietLogResponseAssembler responseAssembler;
     private final DietLogPhotoService dietLogPhotoService;
+    private final DateRangeValidator dateRangeValidator;
 
     public DietLogService(UserRepository users,
                           PatientProfileRepository patientProfiles,
@@ -60,6 +61,23 @@ public class DietLogService {
                           DietLogRequestMapper requestMapper,
                           DietLogResponseAssembler responseAssembler,
                           DietLogPhotoService dietLogPhotoService) {
+        this(users, patientProfiles, staffProfiles, dailyDietLogs, measurements, accessControl, measurementWindows,
+                measurementValidator, requestMapper, responseAssembler, dietLogPhotoService, new DateRangeValidator());
+    }
+
+    @Autowired
+    public DietLogService(UserRepository users,
+                          PatientProfileRepository patientProfiles,
+                          StaffProfileRepository staffProfiles,
+                          DailyDietLogRepository dailyDietLogs,
+                          DailyMeasurementEntryRepository measurements,
+                          AccessControlService accessControl,
+                          MeasurementWindowService measurementWindows,
+                          MeasurementValidator measurementValidator,
+                          DietLogRequestMapper requestMapper,
+                          DietLogResponseAssembler responseAssembler,
+                          DietLogPhotoService dietLogPhotoService,
+                          DateRangeValidator dateRangeValidator) {
         this.users = users;
         this.patientProfiles = patientProfiles;
         this.staffProfiles = staffProfiles;
@@ -71,6 +89,7 @@ public class DietLogService {
         this.requestMapper = requestMapper;
         this.responseAssembler = responseAssembler;
         this.dietLogPhotoService = dietLogPhotoService;
+        this.dateRangeValidator = dateRangeValidator;
     }
 
     public DailyDietLogResponse saveForCurrentPatient(Authentication authentication, DailyDietLogRequest request) {
@@ -263,15 +282,7 @@ public class DietLogService {
     }
 
     private void validateRange(LocalDate from, LocalDate to) {
-        if (from == null || to == null) {
-            throw badRequest("from and to are required");
-        }
-        if (from.isAfter(to)) {
-            throw badRequest("from must be on or before to");
-        }
-        if (ChronoUnit.DAYS.between(from, to) > 370) {
-            throw badRequest("date range cannot exceed 370 days");
-        }
+        dateRangeValidator.validate(from, to);
     }
 
     private List<DailyMeasurementEntry> saveMeasurements(PatientProfile patient,
