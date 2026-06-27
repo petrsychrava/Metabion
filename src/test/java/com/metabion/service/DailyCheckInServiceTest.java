@@ -26,6 +26,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -81,6 +83,25 @@ class DailyCheckInServiceTest {
         assertThatThrownBy(() -> service.saveForCurrentPatient(patientAuth, null))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("daily check-in form is required");
+    }
+
+    @Test
+    void saveRejectsMismatchedDietAndSymptomDates() {
+        var form = new DailyCheckInForm(
+                dietLogRequest(),
+                new SymptomCheckInRequest(
+                        LocalDate.of(2026, 6, 27),
+                        10L,
+                        FlareState.NO_FLARE,
+                        List.of(new SymptomCheckInRequest.AnswerRequest(100L, null, null, new BigDecimal("3"))),
+                        "symptom note"));
+
+        assertThatThrownBy(() -> service.saveForCurrentPatient(patientAuth, form))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("diet logDate must match symptom checkInDate");
+        verify(dietLogService, never()).saveForCurrentPatient(any(), any());
+        verify(symptomTrackingService, never()).saveForCurrentPatient(any(), any());
     }
 
     private DailyCheckInForm validDailyCheckInForm() {
