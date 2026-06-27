@@ -2,6 +2,21 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout :: appShell(#{dailyCheckIn.pageTitle}, ${activePath}, ~{::content})}">
 <th:block th:fragment="content">
+    <style>
+        .photo-preview-link {
+            display: inline-flex;
+            width: fit-content;
+        }
+
+        .diet-photo-preview {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            height: 120px;
+            object-fit: cover;
+            width: 160px;
+        }
+    </style>
+
     <header class="app-header">
         <div>
             <p class="eyebrow">Metabion</p>
@@ -168,9 +183,13 @@
                             <div data-photo-rows>
                                 <div class="photo-reference-row" th:each="photoReference, photoRow : ${meal.photoReferences}" data-photo-row>
                                     <input type="hidden" th:field="*{meals[__${row.index}__].photoReferences[__${photoRow.index}__].uploadId}">
-                                    <img class="diet-photo-preview" data-photo-preview th:if="${photoReference.uploadId != null}"
-                                         th:src="${photoReference.contentUrl == null || photoReference.contentUrl.isBlank() ? '/api/diet-log-photos/' + photoReference.uploadId + '/content' : photoReference.contentUrl}"
-                                         th:alt="${photoReference.originalFilename == null || photoReference.originalFilename.isBlank() ? #messages.msg('dietLogs.uploadedPhoto') : photoReference.originalFilename}">
+                                    <a class="photo-preview-link" data-photo-preview-link th:if="${photoReference.uploadId != null}"
+                                       th:href="${photoReference.contentUrl == null || photoReference.contentUrl.isBlank() ? '/api/diet-log-photos/' + photoReference.uploadId + '/content' : photoReference.contentUrl}"
+                                       target="_blank" rel="noopener">
+                                        <img class="diet-photo-preview" data-photo-preview
+                                             th:src="${photoReference.contentUrl == null || photoReference.contentUrl.isBlank() ? '/api/diet-log-photos/' + photoReference.uploadId + '/content' : photoReference.contentUrl}"
+                                             th:alt="${photoReference.originalFilename == null || photoReference.originalFilename.isBlank() ? #messages.msg('dietLogs.uploadedPhoto') : photoReference.originalFilename}">
+                                    </a>
                                     <label class="field"><span th:text="#{dietLogs.caption}">Caption</span>
                                         <input th:field="*{meals[__${row.index}__].photoReferences[__${photoRow.index}__].caption}">
                                     </label>
@@ -284,7 +303,7 @@
                         const photoRows = Array.from(row.querySelectorAll('[data-photo-row]'));
                         photoRows.slice(1).forEach((photoRow) => photoRow.remove());
                         row.querySelectorAll('[data-photo-upload-status]').forEach((status) => status.remove());
-                        row.querySelectorAll('[data-photo-preview]').forEach((preview) => preview.remove());
+                        row.querySelectorAll('[data-photo-preview-link], [data-photo-preview]').forEach((preview) => preview.remove());
                     };
 
                     addMealButton?.addEventListener('click', () => {
@@ -317,12 +336,23 @@
                         if (!upload.contentUrl) return;
                         const uploadedFallback = mealList.dataset.uploadedFallback || 'Uploaded photo';
                         const filename = upload['originalFilename'] || uploadedFallback;
-                        let preview = row.querySelector('[data-photo-preview]');
+                        let link = row.querySelector('[data-photo-preview-link]');
+                        if (!link) {
+                            link = document.createElement('a');
+                            link.className = 'photo-preview-link';
+                            link.setAttribute('data-photo-preview-link', '');
+                            link.target = '_blank';
+                            link.rel = 'noopener';
+                            row.insertBefore(link, row.querySelector('[data-photo-upload-status], label'));
+                        }
+                        link.href = upload.contentUrl;
+
+                        let preview = link.querySelector('[data-photo-preview]');
                         if (!preview) {
                             preview = document.createElement('img');
                             preview.className = 'diet-photo-preview';
                             preview.setAttribute('data-photo-preview', '');
-                            row.insertBefore(preview, row.querySelector('[data-photo-upload-status], label'));
+                            link.appendChild(preview);
                         }
                         preview.src = upload.contentUrl;
                         preview.alt = filename;

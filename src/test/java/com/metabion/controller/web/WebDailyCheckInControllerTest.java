@@ -3,13 +3,16 @@ package com.metabion.controller.web;
 import com.metabion.domain.AppetiteLevel;
 import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.FlareState;
+import com.metabion.domain.FoodCategory;
 import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.MeasurementContext;
 import com.metabion.domain.MeasurementType;
 import com.metabion.domain.MeasurementUnit;
+import com.metabion.domain.MealType;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.SymptomAnswerType;
 import com.metabion.dto.DailyCheckInForm;
+import com.metabion.dto.DailyDietLogResponse;
 import com.metabion.dto.SymptomQuestionnaireResponse;
 import com.metabion.service.DailyCheckInService;
 import com.metabion.service.DietLogService;
@@ -46,6 +49,8 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -137,6 +142,30 @@ class WebDailyCheckInControllerTest {
                 .andExpect(content().string(not(containsString(">Blood in stool</h3>"))))
                 .andExpect(content().string(not(containsString(">Urgency</h3>"))))
                 .andExpect(content().string(not(containsString(">General wellbeing</h3>"))));
+    }
+
+    @Test
+    void dailyCheckInExistingPhotoRendersThumbnailThatOpensFullImage() throws Exception {
+        doReturn(dailyDietLogWithPhoto())
+                .when(dietLogService).getCurrentPatientLog(any(), eq(LocalDate.of(2026, 6, 26)));
+
+        var response = mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(".diet-photo-preview")))
+                .andExpect(content().string(containsString("height: 120px")))
+                .andExpect(content().string(containsString("width: 160px")))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(response)
+                .contains("class=\"photo-preview-link\"")
+                .contains("href=\"/api/diet-log-photos/3/content\"")
+                .contains("target=\"_blank\"")
+                .contains("rel=\"noopener\"")
+                .contains("<img class=\"diet-photo-preview\"");
     }
 
     @Test
@@ -323,5 +352,36 @@ class WebDailyCheckInControllerTest {
                                                 16L, "well", "Well", BigDecimal.ZERO),
                                         new SymptomQuestionnaireResponse.OptionResponse(
                                                 17L, "slightly-unwell", "Slightly unwell", BigDecimal.ONE)))));
+    }
+
+    private DailyDietLogResponse dailyDietLogWithPhoto() {
+        return new DailyDietLogResponse(
+                88L,
+                42L,
+                "patient@example.com",
+                LocalDate.of(2026, 6, 26),
+                DietAdherenceLevel.FULL,
+                AppetiteLevel.NORMAL,
+                "Logged",
+                Instant.parse("2026-06-26T08:00:00Z"),
+                Instant.parse("2026-06-26T08:00:00Z"),
+                List.of(new DailyDietLogResponse.MealResponse(
+                        10L,
+                        MealType.LUNCH,
+                        FoodCategory.LOW_CARB_VEGETABLES,
+                        "Avocado salad",
+                        "Lunch notes",
+                        0)),
+                List.of(),
+                List.of(new DailyDietLogResponse.PhotoReferenceResponse(
+                        3L,
+                        10L,
+                        "plate.jpg",
+                        "image/jpeg",
+                        123L,
+                        "Lunch plate",
+                        "/api/diet-log-photos/3/content",
+                        0)),
+                List.of());
     }
 }
