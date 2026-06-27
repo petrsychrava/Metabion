@@ -4,6 +4,8 @@ import com.metabion.dto.DailyTrendResponse;
 import com.metabion.service.DailyTrendService;
 import com.metabion.service.DietLogService;
 import com.metabion.service.UserPreferenceService;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -11,7 +13,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.time.Clock;
+import java.time.DateTimeException;
 import java.time.LocalDate;
+import java.time.ZoneId;
 
 @Controller
 public class WebTrendController {
@@ -25,6 +29,7 @@ public class WebTrendController {
     private final TrendSvgRenderer trendSvgRenderer;
     private final AppMenuCatalog appMenuCatalog;
     private final UserPreferenceService userPreferenceService;
+    private final MessageSource messages;
     private final Clock clock;
 
     public WebTrendController(DailyTrendService dailyTrendService,
@@ -32,12 +37,14 @@ public class WebTrendController {
                               TrendSvgRenderer trendSvgRenderer,
                               AppMenuCatalog appMenuCatalog,
                               UserPreferenceService userPreferenceService,
+                              MessageSource messages,
                               Clock clock) {
         this.dailyTrendService = dailyTrendService;
         this.dietLogService = dietLogService;
         this.trendSvgRenderer = trendSvgRenderer;
         this.appMenuCatalog = appMenuCatalog;
         this.userPreferenceService = userPreferenceService;
+        this.messages = messages;
         this.clock = clock;
     }
 
@@ -46,7 +53,7 @@ public class WebTrendController {
                                 @RequestParam(required = false) LocalDate to,
                                 Model model,
                                 Authentication authentication) {
-        var range = selectedRange(from, to);
+        var range = selectedRange(from, to, authentication, true);
         var trend = dailyTrendService.currentPatientTrend(authentication, range.from(), range.to());
         addTrendModel(model, trend, range);
         addAppShell(model, authentication, PATIENT_ACTIVE_PATH);
@@ -59,7 +66,7 @@ public class WebTrendController {
                                  @RequestParam(required = false) LocalDate to,
                                  Model model,
                                  Authentication authentication) {
-        var range = selectedRange(from, to);
+        var range = selectedRange(from, to, authentication, false);
         var trend = patientProfileId == null
                 ? null
                 : dailyTrendService.clinicalTrend(authentication, patientProfileId, range.from(), range.to());
@@ -70,8 +77,13 @@ public class WebTrendController {
         return "clinical-trends";
     }
 
-    private DateRange selectedRange(LocalDate from, LocalDate to) {
-        var selectedTo = to == null ? LocalDate.now(clock) : to;
+    private DateRange selectedRange(LocalDate from,
+                                    LocalDate to,
+                                    Authentication authentication,
+                                    boolean patientTimezoneAware) {
+        var selectedTo = to == null
+                ? (patientTimezoneAware ? currentDate(currentPatientTimezone(authentication)) : LocalDate.now(clock))
+                : to;
         var selectedFrom = from == null ? selectedTo.minusDays(DEFAULT_RANGE_DAYS - 1L) : from;
         return new DateRange(selectedFrom, selectedTo);
     }
@@ -80,13 +92,37 @@ public class WebTrendController {
         model.addAttribute("from", range.from());
         model.addAttribute("to", range.to());
         model.addAttribute("trend", trend);
-        model.addAttribute("trendSvg", trendSvgRenderer.render(trend));
+        model.addAttribute("trendSvg", trendSvgRenderer.render(trend, message("trends.noData")));
     }
 
     private void addAppShell(Model model, Authentication authentication, String activePath) {
         model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
         model.addAttribute("activePath", activePath);
         model.addAttribute("themePreference", userPreferenceService.currentThemePreference(authentication));
+    }
+
+    private LocalDate currentDate(String timezone) {
+        return LocalDate.ofInstant(clock.instant(), zoneOrSystemDefault(timezone));
+    }
+
+    private String currentPatientTimezone(Authentication authentication) {
+        var timezone = dietLogService.currentPatientTimezone(authentication);
+        return timezone == null || timezone.isBlank() ? ZoneId.systemDefault().getId() : timezone;
+    }
+
+    private ZoneId zoneOrSystemDefault(String zoneId) {
+        if (zoneId == null || zoneId.isBlank()) {
+            return ZoneId.systemDefault();
+        }
+        try {
+            return ZoneId.of(zoneId);
+        } catch (DateTimeException exception) {
+            return ZoneId.systemDefault();
+        }
+    }
+
+    private String message(String key) {
+        return messages.getMessage(key, null, LocaleContextHolder.getLocale());
     }
 
     private record DateRange(LocalDate from, LocalDate to) {

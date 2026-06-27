@@ -16,15 +16,21 @@ public class TrendSvgRenderer {
     private static final int MAX_Y = 180;
     private static final int GLUCOSE_Y = 196;
     private static final int KETONE_Y = 208;
+    private static final int MEASUREMENT_MARKER_SPACING = 8;
     private static final BigDecimal MAX_SCORE = new BigDecimal("30");
 
     public String render(DailyTrendResponse trend) {
+        return render(trend, "No trend data");
+    }
+
+    public String render(DailyTrendResponse trend, String noDataLabel) {
         if (trend == null || trend.days() == null || trend.days().isEmpty()) {
+            var escapedLabel = escape(noDataLabel == null || noDataLabel.isBlank() ? "No trend data" : noDataLabel);
             return """
-                    <svg class="trend-chart" viewBox="0 0 640 220" role="img" aria-label="No trend data">
-                      <text x="320" y="110" text-anchor="middle">No trend data</text>
+                    <svg class="trend-chart" viewBox="0 0 640 220" role="img" aria-label="%s">
+                      <text x="320" y="110" text-anchor="middle">%s</text>
                     </svg>
-                    """;
+                    """.formatted(escapedLabel, escapedLabel);
         }
 
         var days = trend.days();
@@ -82,11 +88,12 @@ public class TrendSvgRenderer {
             if (points == null || points.isEmpty()) {
                 continue;
             }
-            for (var point : points) {
+            for (int pointIndex = 0; pointIndex < points.size(); pointIndex++) {
+                var point = points.get(pointIndex);
                 markers.append("  <circle class=\"trend-marker trend-marker-measurement ")
                         .append(glucose ? "glucose" : "ketone")
                         .append("\" cx=\"")
-                        .append(x(index, days.size()))
+                        .append(measurementX(index, days.size(), pointIndex, points.size()))
                         .append("\" cy=\"")
                         .append(glucose ? GLUCOSE_Y : KETONE_Y)
                         .append("\" r=\"4\" data-measurement-type=\"")
@@ -115,6 +122,15 @@ public class TrendSvgRenderer {
             return MIN_X;
         }
         return (int) Math.round(MIN_X + (MAX_X - MIN_X) * (index / (double) (dayCount - 1)));
+    }
+
+    private int measurementX(int dayIndex, int dayCount, int pointIndex, int pointCount) {
+        var dayX = x(dayIndex, dayCount);
+        if (pointCount <= 1) {
+            return dayX;
+        }
+        var centeredIndex = pointIndex - ((pointCount - 1) / 2.0);
+        return (int) Math.round(dayX + centeredIndex * MEASUREMENT_MARKER_SPACING);
     }
 
     private int y(BigDecimal score) {

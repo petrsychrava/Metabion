@@ -36,8 +36,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -79,6 +81,8 @@ class WebTrendControllerTest {
         when(clock.instant()).thenReturn(Instant.parse("2026-06-27T10:00:00Z"));
         when(clock.getZone()).thenReturn(ZoneId.of("UTC"));
         when(trendSvgRenderer.render(any())).thenReturn("<svg role=\"img\"></svg>");
+        when(trendSvgRenderer.render(any(), any())).thenReturn("<svg role=\"img\"></svg>");
+        when(dietLogService.currentPatientTimezone(any())).thenReturn("UTC");
     }
 
     @Test
@@ -101,7 +105,7 @@ class WebTrendControllerTest {
                 .andExpect(content().string(containsString("<svg role=\"img\"></svg>")));
 
         verify(dailyTrendService).currentPatientTrend(any(), eq(LocalDate.of(2026, 6, 1)), eq(LocalDate.of(2026, 6, 26)));
-        verify(trendSvgRenderer).render(trendResponse());
+        verify(trendSvgRenderer).render(trendResponse(), "No trend data");
     }
 
     @Test
@@ -118,6 +122,23 @@ class WebTrendControllerTest {
         verify(dailyTrendService).currentPatientTrend(any(), from.capture(), to.capture());
         assertThat(from.getValue()).isEqualTo(LocalDate.of(2026, 5, 29));
         assertThat(to.getValue()).isEqualTo(LocalDate.of(2026, 6, 27));
+    }
+
+    @Test
+    void patientTrendPageDefaultsUsePatientLocalDate() throws Exception {
+        when(dailyTrendService.currentPatientTrend(any(), any(), any())).thenReturn(trendResponse());
+        when(dietLogService.currentPatientTimezone(any())).thenReturn("Pacific/Kiritimati");
+
+        mvc.perform(get("/app/trends")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("trends"));
+
+        var from = ArgumentCaptor.forClass(LocalDate.class);
+        var to = ArgumentCaptor.forClass(LocalDate.class);
+        verify(dailyTrendService).currentPatientTrend(any(), from.capture(), to.capture());
+        assertThat(from.getValue()).isEqualTo(LocalDate.of(2026, 5, 30));
+        assertThat(to.getValue()).isEqualTo(LocalDate.of(2026, 6, 28));
     }
 
     @Test
@@ -143,7 +164,25 @@ class WebTrendControllerTest {
 
         verify(dietLogService).listClinicalPatientOptions(any(Authentication.class));
         verify(dailyTrendService).clinicalTrend(any(), eq(10L), eq(LocalDate.of(2026, 6, 1)), eq(LocalDate.of(2026, 6, 26)));
-        verify(trendSvgRenderer).render(trendResponse());
+        verify(trendSvgRenderer).render(trendResponse(), "No trend data");
+    }
+
+    @Test
+    void clinicalTrendPageWithoutPatientSelectionRendersOptionsAndHintWithoutLoadingTrend() throws Exception {
+        when(dietLogService.listClinicalPatientOptions(any()))
+                .thenReturn(List.of(new PatientOptionResponse(10L, "patient@example.com")));
+
+        mvc.perform(get("/app/clinical/trends")
+                        .with(user("staff@example.com").roles(RoleName.PHYSICIAN.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("clinical-trends"))
+                .andExpect(model().attribute("activePath", "/app/clinical/trends"))
+                .andExpect(model().attribute("patientProfileId", nullValue()))
+                .andExpect(content().string(containsString("patient@example.com")))
+                .andExpect(content().string(containsString("Select a patient to review trends.")));
+
+        verify(dietLogService).listClinicalPatientOptions(any(Authentication.class));
+        verify(dailyTrendService, never()).clinicalTrend(any(), any(), any(), any());
     }
 
     @Test

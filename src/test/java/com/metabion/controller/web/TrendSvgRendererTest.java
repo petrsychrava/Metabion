@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -73,6 +74,26 @@ class TrendSvgRendererTest {
     }
 
     @Test
+    void offsetsSameDayMeasurementMarkersWithinTypeBand() {
+        var firstGlucose = measurement(300L, MeasurementType.GLUCOSE, "5.80", MeasurementUnit.MMOL_L,
+                Instant.parse("2026-06-25T07:30:00Z"));
+        var secondGlucose = measurement(302L, MeasurementType.GLUCOSE, "6.20", MeasurementUnit.MMOL_L,
+                Instant.parse("2026-06-25T12:30:00Z"));
+        var response = new DailyTrendResponse(10L, LocalDate.of(2026, 6, 25), LocalDate.of(2026, 6, 25),
+                List.of(day(LocalDate.of(2026, 6, 25), new BigDecimal("2.00"), FlareState.NO_FLARE,
+                        List.of(firstGlucose, secondGlucose), List.of())));
+
+        var svg = renderer.render(response);
+
+        var matcher = Pattern.compile("class=\\\"trend-marker trend-marker-measurement glucose\\\" cx=\\\"(\\d+)\\\"")
+                .matcher(svg);
+        assertThat(matcher.find()).isTrue();
+        var firstX = matcher.group(1);
+        assertThat(matcher.find()).isTrue();
+        assertThat(matcher.group(1)).isNotEqualTo(firstX);
+    }
+
+    @Test
     void rendersNonblankNoDataSvgForNullOrEmptyTrend() {
         assertThat(renderer.render(null))
                 .contains("<svg")
@@ -82,6 +103,13 @@ class TrendSvgRendererTest {
                 .contains("<svg")
                 .contains("role=\"img\"")
                 .contains("No trend data");
+    }
+
+    @Test
+    void rendersLocalizedNoDataSvgLabel() {
+        assertThat(renderer.render(null, "Nejsou dostupná žádná trendová data"))
+                .contains("aria-label=\"Nejsou dostupná žádná trendová data\"")
+                .contains(">Nejsou dostupná žádná trendová data</text>");
     }
 
     private DailyTrendResponse.DayTrend day(LocalDate date,
