@@ -197,8 +197,9 @@
                 <div class="meal-list">
                     <section class="measurement-card" th:each="question, row : ${questionnaire.questions}">
                         <input type="hidden" th:field="*{symptomAnswers[__${row.index}__].questionId}">
-                        <h3 th:text="${question.label}">Stool frequency</h3>
-                        <p class="hint" th:if="${question.helpText != null}" th:text="${question.helpText}">Help text</p>
+                        <h3 th:text="${#messages.msgOrNull('symptomQuestion.' + question.stableKey) ?: question.label}">Stool frequency</h3>
+                        <p class="hint" th:if="${question.helpText != null}"
+                           th:text="${#messages.msgOrNull('symptomQuestion.' + question.stableKey + '.help') ?: question.helpText}">Help text</p>
 
                         <label class="field" th:if="${question.answerType.name() == 'NUMERIC'}">
                             <span th:text="#{dailyCheckIn.symptomNumericAnswer}">Answer</span>
@@ -217,7 +218,8 @@
                             <span th:text="#{dailyCheckIn.symptomChoiceAnswer}">Answer</span>
                             <select th:field="*{symptomAnswers[__${row.index}__].optionId}">
                                 <option value="" th:text="#{onboarding.select}">Select</option>
-                                <option th:each="option : ${question.options}" th:value="${option.id}" th:text="${option.label}">Mild</option>
+                                <option th:each="option : ${question.options}" th:value="${option.id}"
+                                        th:text="${#messages.msgOrNull('symptomQuestion.' + question.stableKey + '.option.' + option.stableKey) ?: option.label}">Mild</option>
                             </select>
                         </label>
                     </section>

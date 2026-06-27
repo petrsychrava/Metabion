@@ -3,6 +3,7 @@ package com.metabion.controller.web;
 import com.metabion.domain.AppetiteLevel;
 import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.FlareState;
+import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.MeasurementContext;
 import com.metabion.domain.MeasurementType;
 import com.metabion.domain.MeasurementUnit;
@@ -38,12 +39,13 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -115,6 +117,26 @@ class WebDailyCheckInControllerTest {
                 .andExpect(content().string(containsString("name=\"questionnaireVersionId\" value=\"30\"")))
                 .andExpect(content().string(containsString("name=\"symptomAnswers[0].questionId\" value=\"1\"")))
                 .andExpect(content().string(containsString("name=\"symptomAnswers[1].optionId\"")));
+    }
+
+    @Test
+    void dailyCheckInPageLocalizesSymptomQuestionnaireLabels() throws Exception {
+        when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
+
+        mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .locale(Locale.forLanguageTag("cs"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Bolest břicha")))
+                .andExpect(content().string(containsString("Krev ve stolici")))
+                .andExpect(content().string(containsString("Naléhavost")))
+                .andExpect(content().string(containsString("Celková pohoda")))
+                .andExpect(content().string(containsString("Mírná")))
+                .andExpect(content().string(not(containsString(">Abdominal pain</h3>"))))
+                .andExpect(content().string(not(containsString(">Blood in stool</h3>"))))
+                .andExpect(content().string(not(containsString(">Urgency</h3>"))))
+                .andExpect(content().string(not(containsString(">General wellbeing</h3>"))));
     }
 
     @Test
@@ -258,6 +280,48 @@ class WebDailyCheckInControllerTest {
                                         new SymptomQuestionnaireResponse.OptionResponse(
                                                 10L, "none", "None", BigDecimal.ZERO),
                                         new SymptomQuestionnaireResponse.OptionResponse(
-                                                11L, "mild", "Mild", BigDecimal.ONE)))));
+                                                11L, "mild", "Mild", BigDecimal.ONE))),
+                        new SymptomQuestionnaireResponse.QuestionResponse(
+                                3L,
+                                "blood-in-stool",
+                                "Blood in stool",
+                                "Blood observed in stool",
+                                SymptomAnswerType.SINGLE_CHOICE,
+                                true,
+                                null,
+                                null,
+                                List.of(
+                                        new SymptomQuestionnaireResponse.OptionResponse(
+                                                12L, "none", "None", BigDecimal.ZERO),
+                                        new SymptomQuestionnaireResponse.OptionResponse(
+                                                13L, "trace", "Trace", BigDecimal.ONE))),
+                        new SymptomQuestionnaireResponse.QuestionResponse(
+                                4L,
+                                "urgency",
+                                "Urgency",
+                                "Urgency severity in the last 24 hours",
+                                SymptomAnswerType.SINGLE_CHOICE,
+                                true,
+                                null,
+                                null,
+                                List.of(
+                                        new SymptomQuestionnaireResponse.OptionResponse(
+                                                14L, "none", "None", BigDecimal.ZERO),
+                                        new SymptomQuestionnaireResponse.OptionResponse(
+                                                15L, "mild", "Mild", BigDecimal.ONE))),
+                        new SymptomQuestionnaireResponse.QuestionResponse(
+                                5L,
+                                "general-wellbeing",
+                                "General wellbeing",
+                                "Overall wellbeing today",
+                                SymptomAnswerType.SINGLE_CHOICE,
+                                true,
+                                null,
+                                null,
+                                List.of(
+                                        new SymptomQuestionnaireResponse.OptionResponse(
+                                                16L, "well", "Well", BigDecimal.ZERO),
+                                        new SymptomQuestionnaireResponse.OptionResponse(
+                                                17L, "slightly-unwell", "Slightly unwell", BigDecimal.ONE)))));
     }
 }
