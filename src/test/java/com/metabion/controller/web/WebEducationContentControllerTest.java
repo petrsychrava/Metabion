@@ -100,7 +100,10 @@ class WebEducationContentControllerTest {
                 .andExpect(view().name("content-education-edit"))
                 .andExpect(model().attributeExists("contentForm"))
                 .andExpect(content().string(containsString("New education module")))
-                .andExpect(content().string(containsString("name=\"lessons[2].slug\"")));
+                .andExpect(content().string(containsString("name=\"lessons[0].slug\"")))
+                .andExpect(content().string(containsString("data-add-lesson")))
+                .andExpect(content().string(containsString("data-remove-lesson")))
+                .andExpect(content().string(not(containsString("name=\"lessons[1].slug\""))));
     }
 
     @Test

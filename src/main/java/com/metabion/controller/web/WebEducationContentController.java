@@ -21,7 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class WebEducationContentController {
 
     public static final String ACTIVE_PATH = "/app/content/education";
-    private static final int MIN_LESSON_ROWS = 3;
+    private static final int MIN_LESSON_ROWS = 1;
 
     private final EducationContentService educationContentService;
     private final AppMenuCatalog appMenuCatalog;

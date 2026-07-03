@@ -69,51 +69,124 @@
         </section>
 
         <section class="panel app-panel">
-            <h2 th:text="#{contentEducation.lessons}">Lessons</h2>
+            <div class="diet-log-section-header">
+                <h2 th:text="#{contentEducation.lessons}">Lessons</h2>
+                <button type="button" class="secondary" data-add-lesson th:text="#{contentEducation.addLesson}">Add lesson</button>
+            </div>
             <p class="error" th:if="${#fields.hasErrors('lessonSlugsUnique')}"
                th:errors="*{lessonSlugsUnique}">Lesson slugs must be unique</p>
             <p class="error" th:if="${#fields.hasErrors('lessonSortOrdersUnique')}"
                th:errors="*{lessonSortOrdersUnique}">Lesson sort orders must be unique</p>
-            <article class="lesson-editor" th:each="lesson, stat : *{lessons}">
-                <h3 th:text="#{contentEducation.lessonNumber(${stat.index + 1})}">Lesson 1</h3>
-                <div class="form-grid">
-                    <div class="field">
-                        <label th:for="${'lessons' + stat.index + '.slug'}" th:text="#{contentEducation.slug}">Slug</label>
-                        <input th:id="${'lessons' + stat.index + '.slug'}" th:field="*{lessons[__${stat.index}__].slug}">
+            <div data-lesson-list th:attr="data-lesson-label=#{contentEducation.lesson}">
+                <article class="lesson-editor" th:each="lesson, stat : *{lessons}" data-lesson-row th:attr="data-lesson-index=${stat.index}">
+                    <div class="diet-log-section-header">
+                        <h3>
+                            <span data-lesson-label th:text="#{contentEducation.lesson}">Lesson</span>
+                            <span data-lesson-number th:text="${stat.index + 1}">1</span>
+                        </h3>
+                        <button type="button" class="secondary" data-remove-lesson th:text="#{contentEducation.removeLesson}">Remove lesson</button>
                     </div>
-                    <div class="field">
-                        <label th:for="${'lessons' + stat.index + '.sortOrder'}" th:text="#{contentEducation.sortOrder}">Sort order</label>
-                        <input th:id="${'lessons' + stat.index + '.sortOrder'}" type="number" min="1" th:field="*{lessons[__${stat.index}__].sortOrder}">
+                    <div class="form-grid">
+                        <div class="field">
+                            <label th:for="${'lessons' + stat.index + '.slug'}" th:text="#{contentEducation.slug}">Slug</label>
+                            <input th:id="${'lessons' + stat.index + '.slug'}" th:field="*{lessons[__${stat.index}__].slug}">
+                        </div>
+                        <div class="field">
+                            <label th:for="${'lessons' + stat.index + '.sortOrder'}" th:text="#{contentEducation.sortOrder}">Sort order</label>
+                            <input th:id="${'lessons' + stat.index + '.sortOrder'}" type="number" min="1" th:field="*{lessons[__${stat.index}__].sortOrder}">
+                        </div>
+                        <div class="field">
+                            <label th:for="${'lessons' + stat.index + '.englishTitle'}" th:text="#{contentEducation.englishTitle}">English title</label>
+                            <input th:id="${'lessons' + stat.index + '.englishTitle'}" th:field="*{lessons[__${stat.index}__].englishTitle}">
+                        </div>
+                        <div class="field">
+                            <label th:for="${'lessons' + stat.index + '.englishSummary'}" th:text="#{contentEducation.englishSummary}">English summary</label>
+                            <textarea th:id="${'lessons' + stat.index + '.englishSummary'}" th:field="*{lessons[__${stat.index}__].englishSummary}"></textarea>
+                        </div>
+                        <div class="field full-width">
+                            <label th:for="${'lessons' + stat.index + '.englishBodyMarkdown'}" th:text="#{contentEducation.englishBody}">English body</label>
+                            <textarea class="markdown-input" th:id="${'lessons' + stat.index + '.englishBodyMarkdown'}" th:field="*{lessons[__${stat.index}__].englishBodyMarkdown}"></textarea>
+                        </div>
+                        <div class="field">
+                            <label th:for="${'lessons' + stat.index + '.czechTitle'}" th:text="#{contentEducation.czechTitle}">Czech title</label>
+                            <input th:id="${'lessons' + stat.index + '.czechTitle'}" th:field="*{lessons[__${stat.index}__].czechTitle}">
+                        </div>
+                        <div class="field">
+                            <label th:for="${'lessons' + stat.index + '.czechSummary'}" th:text="#{contentEducation.czechSummary}">Czech summary</label>
+                            <textarea th:id="${'lessons' + stat.index + '.czechSummary'}" th:field="*{lessons[__${stat.index}__].czechSummary}"></textarea>
+                        </div>
+                        <div class="field full-width">
+                            <label th:for="${'lessons' + stat.index + '.czechBodyMarkdown'}" th:text="#{contentEducation.czechBody}">Czech body</label>
+                            <textarea class="markdown-input" th:id="${'lessons' + stat.index + '.czechBodyMarkdown'}" th:field="*{lessons[__${stat.index}__].czechBodyMarkdown}"></textarea>
+                        </div>
                     </div>
-                    <div class="field">
-                        <label th:for="${'lessons' + stat.index + '.englishTitle'}" th:text="#{contentEducation.englishTitle}">English title</label>
-                        <input th:id="${'lessons' + stat.index + '.englishTitle'}" th:field="*{lessons[__${stat.index}__].englishTitle}">
-                    </div>
-                    <div class="field">
-                        <label th:for="${'lessons' + stat.index + '.englishSummary'}" th:text="#{contentEducation.englishSummary}">English summary</label>
-                        <textarea th:id="${'lessons' + stat.index + '.englishSummary'}" th:field="*{lessons[__${stat.index}__].englishSummary}"></textarea>
-                    </div>
-                    <div class="field full-width">
-                        <label th:for="${'lessons' + stat.index + '.englishBodyMarkdown'}" th:text="#{contentEducation.englishBody}">English body</label>
-                        <textarea class="markdown-input" th:id="${'lessons' + stat.index + '.englishBodyMarkdown'}" th:field="*{lessons[__${stat.index}__].englishBodyMarkdown}"></textarea>
-                    </div>
-                    <div class="field">
-                        <label th:for="${'lessons' + stat.index + '.czechTitle'}" th:text="#{contentEducation.czechTitle}">Czech title</label>
-                        <input th:id="${'lessons' + stat.index + '.czechTitle'}" th:field="*{lessons[__${stat.index}__].czechTitle}">
-                    </div>
-                    <div class="field">
-                        <label th:for="${'lessons' + stat.index + '.czechSummary'}" th:text="#{contentEducation.czechSummary}">Czech summary</label>
-                        <textarea th:id="${'lessons' + stat.index + '.czechSummary'}" th:field="*{lessons[__${stat.index}__].czechSummary}"></textarea>
-                    </div>
-                    <div class="field full-width">
-                        <label th:for="${'lessons' + stat.index + '.czechBodyMarkdown'}" th:text="#{contentEducation.czechBody}">Czech body</label>
-                        <textarea class="markdown-input" th:id="${'lessons' + stat.index + '.czechBodyMarkdown'}" th:field="*{lessons[__${stat.index}__].czechBodyMarkdown}"></textarea>
-                    </div>
-                </div>
-                <p class="error" th:if="${#fields.hasErrors('lessons[__${stat.index}__].completeOrBlank')}"
-                   th:errors="*{lessons[__${stat.index}__].completeOrBlank}">Lesson row error</p>
-            </article>
+                    <p class="error" th:if="${#fields.hasErrors('lessons[__${stat.index}__].completeOrBlank')}"
+                       th:errors="*{lessons[__${stat.index}__].completeOrBlank}">Lesson row error</p>
+                </article>
+            </div>
         </section>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                const lessonList = document.querySelector('[data-lesson-list]');
+                const addLessonButton = document.querySelector('[data-add-lesson]');
+                if (!lessonList) return;
+
+                const lessonRows = () => Array.from(lessonList.querySelectorAll('[data-lesson-row]'));
+
+                const updateLessonAttributes = (row, lessonIndex) => {
+                    row.dataset.lessonIndex = lessonIndex;
+                    const number = row.querySelector('[data-lesson-number]');
+                    if (number) number.textContent = String(lessonIndex + 1);
+                    const label = row.querySelector('[data-lesson-label]');
+                    if (label && lessonList.dataset.lessonLabel) label.textContent = lessonList.dataset.lessonLabel;
+
+                    row.querySelectorAll('[name]').forEach((element) => {
+                        element.name = element.name.replace(/lessons\[\d+]/g, `lessons[${lessonIndex}]`);
+                    });
+                    row.querySelectorAll('[id]').forEach((element) => {
+                        element.id = element.id.replace(/lessons\d+/g, `lessons${lessonIndex}`);
+                    });
+                    row.querySelectorAll('[for]').forEach((element) => {
+                        element.htmlFor = element.htmlFor.replace(/lessons\d+/g, `lessons${lessonIndex}`);
+                    });
+                };
+
+                const reindexLessons = () => lessonRows().forEach(updateLessonAttributes);
+
+                const resetLessonRow = (row) => {
+                    row.querySelectorAll('input, textarea').forEach((element) => {
+                        element.value = '';
+                    });
+                    row.querySelectorAll('.error').forEach((error) => error.remove());
+                };
+
+                addLessonButton?.addEventListener('click', () => {
+                    const source = lessonRows().at(-1);
+                    if (!source) return;
+                    const clone = source.cloneNode(true);
+                    resetLessonRow(clone);
+                    lessonList.appendChild(clone);
+                    reindexLessons();
+                });
+
+                lessonList.addEventListener('click', (event) => {
+                    const button = event.target.closest('[data-remove-lesson]');
+                    if (!button) return;
+                    const rows = lessonRows();
+                    const row = button.closest('[data-lesson-row]');
+                    if (!row) return;
+                    if (rows.length === 1) {
+                        resetLessonRow(row);
+                    } else {
+                        row.remove();
+                    }
+                    reindexLessons();
+                });
+
+                reindexLessons();
+            });
+        </script>
 
         <div class="links">
             <button type="submit" th:text="${mode == 'new'} ? #{contentEducation.create} : #{contentEducation.saveLessons}">Save</button>
