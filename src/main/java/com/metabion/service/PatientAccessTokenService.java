@@ -82,6 +82,9 @@ public class PatientAccessTokenService {
 
     public void revokeForCurrentPatient(Authentication authentication, Long tokenId) {
         var user = currentSessionPatient(authentication);
+        if (tokenId == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "token not found");
+        }
         var token = tokens.findById(tokenId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "token not found"));
         if (!token.getUser().getId().equals(user.getId())) {
@@ -141,6 +144,7 @@ public class PatientAccessTokenService {
                 || request.clientType() == null
                 || request.displayLabel() == null
                 || request.displayLabel().isBlank()
+                || request.displayLabel().trim().length() > 120
                 || request.expiresInDays() < 1
                 || request.expiresInDays() > 90
                 || request.scopes() == null

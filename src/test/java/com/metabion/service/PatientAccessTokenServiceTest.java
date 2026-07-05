@@ -31,6 +31,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -200,6 +201,7 @@ class PatientAccessTokenServiceTest {
                 new IssuePatientAccessTokenRequest(null, "Codex local", 30, validScopes),
                 new IssuePatientAccessTokenRequest(PatientAccessClientType.MCP_CODEX, null, 30, validScopes),
                 new IssuePatientAccessTokenRequest(PatientAccessClientType.MCP_CODEX, " ", 30, validScopes),
+                new IssuePatientAccessTokenRequest(PatientAccessClientType.MCP_CODEX, "x".repeat(121), 30, validScopes),
                 new IssuePatientAccessTokenRequest(PatientAccessClientType.MCP_CODEX, "Codex local", 0, validScopes),
                 new IssuePatientAccessTokenRequest(PatientAccessClientType.MCP_CODEX, "Codex local", 91, validScopes),
                 new IssuePatientAccessTokenRequest(PatientAccessClientType.MCP_CODEX, "Codex local", 30, null),
@@ -265,6 +267,18 @@ class PatientAccessTokenServiceTest {
 
         assertThat(token.getRevokedAt()).isEqualTo(Instant.parse("2026-07-04T10:00:00Z"));
         assertThat(token.getRevocationReason()).isEqualTo("patient_request");
+    }
+
+    @Test
+    void revokeForCurrentPatientRejectsNullTokenIdAsNotFoundWithoutLookup() {
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", RoleName.PATIENT.authority());
+        auth.setAuthenticated(true);
+
+        assertThatThrownBy(() -> service.revokeForCurrentPatient(auth, null))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        verify(tokens, never()).findById(any());
     }
 
     @Test
