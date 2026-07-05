@@ -8,6 +8,7 @@ import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.dto.PatientProfileForm;
+import com.metabion.service.PatientAccessAuditService;
 import com.metabion.service.PatientAppFacade;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,11 +41,14 @@ class PatientMcpToolsTest {
     @Mock
     PatientAppFacade patientApp;
 
+    @Mock
+    PatientAccessAuditService audit;
+
     PatientMcpTools tools;
 
     @BeforeEach
     void setUp() {
-        tools = new PatientMcpTools(patientApp);
+        tools = new PatientMcpTools(patientApp, audit);
         SecurityContextHolder.clearContext();
     }
 
@@ -84,6 +88,8 @@ class PatientMcpToolsTest {
         assertThatThrownBy(() -> tools.metabionSaveDietLog(mock(DailyDietLogRequest.class)))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+        verify(audit).recordToolFailure(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_save_diet_log"),
+                org.mockito.ArgumentMatchers.eq("missing_scope"));
     }
 
     @Test
@@ -93,6 +99,7 @@ class PatientMcpToolsTest {
         when(patientApp.getProfile(org.mockito.ArgumentMatchers.any())).thenReturn(form);
 
         assertThat(tools.metabionGetPatientProfile()).isSameAs(form);
+        verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_get_patient_profile"));
     }
 
     @Test
@@ -103,6 +110,7 @@ class PatientMcpToolsTest {
         tools.metabionSaveDietLog(request);
 
         verify(patientApp).saveDietLog(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request));
+        verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_save_diet_log"));
     }
 
     @Test
@@ -113,6 +121,7 @@ class PatientMcpToolsTest {
 
         verify(patientApp).completeLesson(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("nutrition"),
                 org.mockito.ArgumentMatchers.eq("fiber"));
+        verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_complete_education_lesson"));
     }
 
     @Test
@@ -145,6 +154,11 @@ class PatientMcpToolsTest {
         @Bean
         PatientAppFacade patientAppFacade() {
             return mock(PatientAppFacade.class);
+        }
+
+        @Bean
+        PatientAccessAuditService patientAccessAuditService() {
+            return mock(PatientAccessAuditService.class);
         }
     }
 

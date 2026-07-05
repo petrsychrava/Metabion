@@ -10,6 +10,7 @@ import com.metabion.dto.SymptomCheckInRequest;
 import com.metabion.dto.mcp.DietPhotoBase64UploadRequest;
 import com.metabion.dto.mcp.DietPhotoContentResponse;
 import com.metabion.dto.mcp.PatientMeResponse;
+import com.metabion.service.PatientAccessAuditService;
 import com.metabion.service.PatientAppFacade;
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -31,16 +32,18 @@ import java.util.stream.Collectors;
 public class PatientMcpTools {
 
     private final PatientAppFacade patientApp;
+    private final PatientAccessAuditService audit;
 
-    public PatientMcpTools(PatientAppFacade patientApp) {
+    public PatientMcpTools(PatientAppFacade patientApp, PatientAccessAuditService audit) {
         this.patientApp = patientApp;
+        this.audit = audit;
     }
 
     @McpTool(name = "metabion_patient_me", description = "Return the current token-authenticated Metabion patient identity and granted scopes.")
     public PatientMeResponse metabionPatientMe() {
         var auth = patientAuth();
         var token = auth.token();
-        return new PatientMeResponse(
+        var response = new PatientMeResponse(
                 token.getUser().getEmail(),
                 patientApp.patientProfileId(auth),
                 token.getId(),
@@ -49,48 +52,68 @@ public class PatientMcpTools {
                 token.scopes().stream()
                         .map(PatientAccessTokenScope::authority)
                         .collect(Collectors.toUnmodifiableSet()));
+        audit.recordToolSuccess(auth, "metabion_patient_me");
+        return response;
     }
 
     @McpTool(name = "metabion_get_patient_profile", description = "Get the current Metabion patient profile.")
     public PatientProfileForm metabionGetPatientProfile() {
-        require(PatientAccessTokenScope.PATIENT_PROFILE_READ);
-        return patientApp.getProfile(patientAuth());
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_PROFILE_READ, "metabion_get_patient_profile");
+        var response = patientApp.getProfile(auth);
+        audit.recordToolSuccess(auth, "metabion_get_patient_profile");
+        return response;
     }
 
     @McpTool(name = "metabion_update_patient_profile", description = "Update the current Metabion patient profile.")
     public Map<String, String> metabionUpdatePatientProfile(PatientProfileForm form) {
-        require(PatientAccessTokenScope.PATIENT_PROFILE_WRITE);
-        patientApp.updateProfile(patientAuth(), form);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_PROFILE_WRITE, "metabion_update_patient_profile");
+        patientApp.updateProfile(auth, form);
+        audit.recordToolSuccess(auth, "metabion_update_patient_profile");
         return Map.of("status", "ok");
     }
 
     @McpTool(name = "metabion_save_diet_log", description = "Save or update a Metabion daily diet log for the current patient.")
     public Object metabionSaveDietLog(DailyDietLogRequest request) {
-        require(PatientAccessTokenScope.PATIENT_DIET_LOG_WRITE);
-        return patientApp.saveDietLog(patientAuth(), request);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_DIET_LOG_WRITE, "metabion_save_diet_log");
+        var response = patientApp.saveDietLog(auth, request);
+        audit.recordToolSuccess(auth, "metabion_save_diet_log");
+        return response;
     }
 
     @McpTool(name = "metabion_get_diet_log", description = "Get a Metabion daily diet log for the current patient by date.")
     public Object metabionGetDietLog(LocalDate date) {
-        require(PatientAccessTokenScope.PATIENT_DIET_LOG_READ);
-        return patientApp.getDietLog(patientAuth(), date);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_DIET_LOG_READ, "metabion_get_diet_log");
+        var response = patientApp.getDietLog(auth, date);
+        audit.recordToolSuccess(auth, "metabion_get_diet_log");
+        return response;
     }
 
     @McpTool(name = "metabion_list_diet_logs", description = "List Metabion diet logs for the current patient in a date range.")
     public Object metabionListDietLogs(LocalDate from, LocalDate to) {
-        require(PatientAccessTokenScope.PATIENT_DIET_LOG_READ);
-        return patientApp.listDietLogs(patientAuth(), from, to);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_DIET_LOG_READ, "metabion_list_diet_logs");
+        var response = patientApp.listDietLogs(auth, from, to);
+        audit.recordToolSuccess(auth, "metabion_list_diet_logs");
+        return response;
     }
 
     @McpTool(name = "metabion_add_diet_measurement", description = "Add a measurement to a Metabion daily diet log for the current patient.")
     public Object metabionAddDietMeasurement(LocalDate date, DailyMeasurementEntryRequest request) {
-        require(PatientAccessTokenScope.PATIENT_DIET_LOG_WRITE);
-        return patientApp.addMeasurement(patientAuth(), date, request);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_DIET_LOG_WRITE, "metabion_add_diet_measurement");
+        var response = patientApp.addMeasurement(auth, date, request);
+        audit.recordToolSuccess(auth, "metabion_add_diet_measurement");
+        return response;
     }
 
     @McpTool(name = "metabion_upload_diet_photo", description = "Upload a base64-encoded diet photo for the current Metabion patient.")
     public Object metabionUploadDietPhoto(DietPhotoBase64UploadRequest request) {
-        require(PatientAccessTokenScope.PATIENT_DIET_PHOTO_WRITE);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_DIET_PHOTO_WRITE, "metabion_upload_diet_photo");
         byte[] content;
         try {
             content = Base64.getDecoder().decode(request.base64Content());
@@ -98,94 +121,133 @@ public class PatientMcpTools {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid base64 photo content");
         }
         var file = new Base64MultipartFile(request.filename(), request.contentType(), content);
-        return patientApp.uploadDietPhoto(patientAuth(), file);
+        var response = patientApp.uploadDietPhoto(auth, file);
+        audit.recordToolSuccess(auth, "metabion_upload_diet_photo");
+        return response;
     }
 
     @McpTool(name = "metabion_get_diet_photo_content", description = "Get a diet photo's base64 content for the current Metabion patient.")
     public DietPhotoContentResponse metabionGetDietPhotoContent(Long photoId) throws java.io.IOException {
-        require(PatientAccessTokenScope.PATIENT_DIET_PHOTO_READ);
-        var content = patientApp.readDietPhoto(patientAuth(), photoId);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_DIET_PHOTO_READ, "metabion_get_diet_photo_content");
+        var content = patientApp.readDietPhoto(auth, photoId);
         try (var input = content.resource().inputStream()) {
             var bytes = input.readAllBytes();
-            return new DietPhotoContentResponse(
+            var response = new DietPhotoContentResponse(
                     photoId,
                     content.contentType(),
                     content.resource().sizeBytes(),
                     Base64.getEncoder().encodeToString(bytes));
+            audit.recordToolSuccess(auth, "metabion_get_diet_photo_content");
+            return response;
         }
     }
 
     @McpTool(name = "metabion_get_active_symptom_questionnaire", description = "Get the active Metabion symptom questionnaire.")
     public Object metabionGetActiveSymptomQuestionnaire() {
-        require(PatientAccessTokenScope.PATIENT_SYMPTOM_READ);
-        return patientApp.activeQuestionnaire();
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_SYMPTOM_READ, "metabion_get_active_symptom_questionnaire");
+        var response = patientApp.activeQuestionnaire();
+        audit.recordToolSuccess(auth, "metabion_get_active_symptom_questionnaire");
+        return response;
     }
 
     @McpTool(name = "metabion_save_symptom_check_in", description = "Save or update a symptom check-in for the current Metabion patient.")
     public Object metabionSaveSymptomCheckIn(SymptomCheckInRequest request) {
-        require(PatientAccessTokenScope.PATIENT_SYMPTOM_WRITE);
-        return patientApp.saveSymptomCheckIn(patientAuth(), request);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_SYMPTOM_WRITE, "metabion_save_symptom_check_in");
+        var response = patientApp.saveSymptomCheckIn(auth, request);
+        audit.recordToolSuccess(auth, "metabion_save_symptom_check_in");
+        return response;
     }
 
     @McpTool(name = "metabion_get_symptom_check_in", description = "Get a symptom check-in for the current Metabion patient by date.")
     public Object metabionGetSymptomCheckIn(LocalDate date) {
-        require(PatientAccessTokenScope.PATIENT_SYMPTOM_READ);
-        return patientApp.getSymptomCheckIn(patientAuth(), date);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_SYMPTOM_READ, "metabion_get_symptom_check_in");
+        var response = patientApp.getSymptomCheckIn(auth, date);
+        audit.recordToolSuccess(auth, "metabion_get_symptom_check_in");
+        return response;
     }
 
     @McpTool(name = "metabion_list_symptom_check_ins", description = "List symptom check-ins for the current Metabion patient in a date range.")
     public Object metabionListSymptomCheckIns(LocalDate from, LocalDate to) {
-        require(PatientAccessTokenScope.PATIENT_SYMPTOM_READ);
-        return patientApp.listSymptomCheckIns(patientAuth(), from, to);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_SYMPTOM_READ, "metabion_list_symptom_check_ins");
+        var response = patientApp.listSymptomCheckIns(auth, from, to);
+        audit.recordToolSuccess(auth, "metabion_list_symptom_check_ins");
+        return response;
     }
 
     @McpTool(name = "metabion_get_daily_trends", description = "Get daily trends for the current Metabion patient in a date range.")
     public Object metabionGetDailyTrends(LocalDate from, LocalDate to) {
-        require(PatientAccessTokenScope.PATIENT_TREND_READ);
-        return patientApp.dailyTrends(patientAuth(), from, to);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_TREND_READ, "metabion_get_daily_trends");
+        var response = patientApp.dailyTrends(auth, from, to);
+        audit.recordToolSuccess(auth, "metabion_get_daily_trends");
+        return response;
     }
 
     @McpTool(name = "metabion_submit_onboarding", description = "Submit onboarding information for the current Metabion patient.")
     public Object metabionSubmitOnboarding(OnboardingSubmissionRequest request) {
-        require(PatientAccessTokenScope.PATIENT_ONBOARDING_WRITE);
-        return patientApp.submitOnboarding(patientAuth(), request);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_ONBOARDING_WRITE, "metabion_submit_onboarding");
+        var response = patientApp.submitOnboarding(auth, request);
+        audit.recordToolSuccess(auth, "metabion_submit_onboarding");
+        return response;
     }
 
     @McpTool(name = "metabion_get_latest_onboarding", description = "Get the latest onboarding submission for the current Metabion patient.")
     public Object metabionGetLatestOnboarding(String context) {
-        require(PatientAccessTokenScope.PATIENT_ONBOARDING_READ);
-        return patientApp.latestOnboarding(patientAuth(), context);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_ONBOARDING_READ, "metabion_get_latest_onboarding");
+        var response = patientApp.latestOnboarding(auth, context);
+        audit.recordToolSuccess(auth, "metabion_get_latest_onboarding");
+        return response;
     }
 
     @McpTool(name = "metabion_list_onboarding_history", description = "List onboarding submission history for the current Metabion patient.")
     public Object metabionListOnboardingHistory(String context) {
-        require(PatientAccessTokenScope.PATIENT_ONBOARDING_READ);
-        return patientApp.onboardingHistory(patientAuth(), context);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_ONBOARDING_READ, "metabion_list_onboarding_history");
+        var response = patientApp.onboardingHistory(auth, context);
+        audit.recordToolSuccess(auth, "metabion_list_onboarding_history");
+        return response;
     }
 
     @McpTool(name = "metabion_list_education_modules", description = "List published Metabion education modules for the current patient.")
     public Object metabionListEducationModules() {
-        require(PatientAccessTokenScope.PATIENT_EDUCATION_READ);
-        return patientApp.listEducation(patientAuth());
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_EDUCATION_READ, "metabion_list_education_modules");
+        var response = patientApp.listEducation(auth);
+        audit.recordToolSuccess(auth, "metabion_list_education_modules");
+        return response;
     }
 
     @McpTool(name = "metabion_get_education_module", description = "Get a published Metabion education module by slug for the current patient.")
     public Object metabionGetEducationModule(String moduleSlug) {
-        require(PatientAccessTokenScope.PATIENT_EDUCATION_READ);
-        return patientApp.getEducation(patientAuth(), moduleSlug);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_EDUCATION_READ, "metabion_get_education_module");
+        var response = patientApp.getEducation(auth, moduleSlug);
+        audit.recordToolSuccess(auth, "metabion_get_education_module");
+        return response;
     }
 
     @McpTool(name = "metabion_complete_education_lesson", description = "Mark a Metabion education lesson complete for the current patient.")
     public Map<String, String> metabionCompleteEducationLesson(String moduleSlug, String lessonSlug) {
-        require(PatientAccessTokenScope.PATIENT_EDUCATION_WRITE);
-        patientApp.completeLesson(patientAuth(), moduleSlug, lessonSlug);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_EDUCATION_WRITE, "metabion_complete_education_lesson");
+        patientApp.completeLesson(auth, moduleSlug, lessonSlug);
+        audit.recordToolSuccess(auth, "metabion_complete_education_lesson");
         return Map.of("status", "ok");
     }
 
     @McpTool(name = "metabion_uncomplete_education_lesson", description = "Mark a Metabion education lesson incomplete for the current patient.")
     public Map<String, String> metabionUncompleteEducationLesson(String moduleSlug, String lessonSlug) {
-        require(PatientAccessTokenScope.PATIENT_EDUCATION_WRITE);
-        patientApp.uncompleteLesson(patientAuth(), moduleSlug, lessonSlug);
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_EDUCATION_WRITE, "metabion_uncomplete_education_lesson");
+        patientApp.uncompleteLesson(auth, moduleSlug, lessonSlug);
+        audit.recordToolSuccess(auth, "metabion_uncomplete_education_lesson");
         return Map.of("status", "ok");
     }
 
@@ -197,11 +259,12 @@ public class PatientMcpTools {
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "patient token required");
     }
 
-    private void require(PatientAccessTokenScope scope) {
+    private void require(PatientAccessTokenAuthentication auth, PatientAccessTokenScope scope, String operation) {
         var authority = "SCOPE_" + scope.authority();
-        var hasScope = patientAuth().getAuthorities().stream()
+        var hasScope = auth.getAuthorities().stream()
                 .anyMatch(granted -> authority.equals(granted.getAuthority()));
         if (!hasScope) {
+            audit.recordToolFailure(auth, operation, "missing_scope");
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "missing scope");
         }
     }
