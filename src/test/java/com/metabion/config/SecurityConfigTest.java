@@ -1,24 +1,35 @@
 package com.metabion.config;
 
+import com.metabion.domain.PatientAccessClientType;
+import com.metabion.domain.PatientAccessToken;
+import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.RoleName;
+import com.metabion.domain.User;
 import com.metabion.dto.LoginResponse;
+import com.metabion.service.PatientAccessTokenService;
 import com.metabion.service.SecurityService;
 import com.metabion.service.StaffInvitationService;
 import com.metabion.service.UserPreferenceService;
 import com.metabion.service.UserService;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -38,6 +49,7 @@ import org.springframework.mail.MailAuthenticationException;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
 import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -74,6 +86,9 @@ class SecurityConfigTest {
     @MockitoBean
     UserPreferenceService userPreferenceService;
 
+    @MockitoBean
+    PatientAccessTokenService patientAccessTokenService;
+
     private MockMvc mvc;
 
     @BeforeEach
@@ -105,6 +120,36 @@ class SecurityConfigTest {
     void protected_post_with_csrf_is_allowed_but_405() throws Exception {
         mvc.perform(post("/api/whoami").with(user("alice")).with(csrf()))
                 .andExpect(status().isMethodNotAllowed());
+    }
+
+    @Test
+    void mcp_post_with_bearer_without_csrf_is_not_rejected_by_csrf() throws Exception {
+        when(patientAccessTokenService.authenticate("valid-token")).thenReturn(Optional.of(patientToken()));
+
+        mvc.perform(post("/api/mcp")
+                        .header("Authorization", "Bearer valid-token"))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
+        verify(patientAccessTokenService, atLeastOnce()).authenticate("valid-token");
+    }
+
+    @Test
+    void mcp_delete_with_bearer_without_csrf_is_not_rejected_by_csrf() throws Exception {
+        when(patientAccessTokenService.authenticate("valid-token")).thenReturn(Optional.of(patientToken()));
+
+        mvc.perform(delete("/api/mcp")
+                        .header("Authorization", "Bearer valid-token")
+                        .header("Mcp-Session-Id", "session-1"))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
+        verify(patientAccessTokenService, atLeastOnce()).authenticate("valid-token");
+    }
+
+    @Test
+    void existing_session_api_post_without_csrf_still_requires_csrf() throws Exception {
+        mvc.perform(post("/api/account/profile")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -320,5 +365,22 @@ class SecurityConfigTest {
     void static_css_is_public() throws Exception {
         mvc.perform(get("/css/app.css"))
                 .andExpect(status().isOk());
+    }
+
+    private static PatientAccessToken patientToken() {
+        var user = new User("patient@example.com", "hash");
+        ReflectionTestUtils.setField(user, "id", 10L);
+        user.setEnabled(true);
+        user.addRole(RoleName.PATIENT);
+        var token = new PatientAccessToken(
+                user,
+                "hash",
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                Instant.parse("2026-07-04T10:00:00Z"),
+                Instant.parse("2026-08-03T10:00:00Z"),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
+        ReflectionTestUtils.setField(token, "id", 50L);
+        return token;
     }
 }

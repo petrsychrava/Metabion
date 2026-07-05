@@ -33,6 +33,11 @@ public class SecurityConfig {
 
     private static final String PUBLIC_STAFF_INVITATION_ACCEPT_POST = "/api/staff-invitations/accept";
 
+    private static final String[] MCP_ENDPOINTS = {
+            "/api/mcp",
+            "/api/mcp/**"
+    };
+
     private static final String[] PUBLIC_AUTH_POSTS = {
             "/api/auth/register",
             "/api/auth/login",
@@ -96,7 +101,10 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, RateLimitingFilter rateLimitingFilter) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http,
+                                           RateLimitingFilter rateLimitingFilter,
+                                           PatientBearerTokenAuthenticationFilter patientBearerTokenAuthenticationFilter,
+                                           McpLocalhostFilter mcpLocalhostFilter) throws Exception {
         var loginEntryPoint = new LoginUrlAuthenticationEntryPoint("/login");
         var unauthorizedEntryPoint = new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED);
         var authenticationEntryPoint = DelegatingAuthenticationEntryPoint.builder()
@@ -114,6 +122,10 @@ public class SecurityConfig {
                         .ignoringRequestMatchers(PUBLIC_AUTH_POSTS)
                         .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(
                                 HttpMethod.POST, PUBLIC_STAFF_INVITATION_ACCEPT_POST))
+                        .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(HttpMethod.POST, "/api/mcp"))
+                        .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(HttpMethod.POST, "/api/mcp/**"))
+                        .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(HttpMethod.DELETE, "/api/mcp"))
+                        .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(HttpMethod.DELETE, "/api/mcp/**"))
                         .ignoringRequestMatchers(req -> "GET".equalsIgnoreCase(req.getMethod()))
                 )
                 .sessionManagement(s -> s
@@ -132,6 +144,7 @@ public class SecurityConfig {
                         .requestMatchers("/app/staff-invitations/**").hasRole("ADMIN")
                         .requestMatchers("/app", "/app/**", "/logout").authenticated()
                         .requestMatchers("/api/auth/logout").authenticated()
+                        .requestMatchers(MCP_ENDPOINTS).authenticated()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().denyAll()
                 )
@@ -148,6 +161,8 @@ public class SecurityConfig {
                 )
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(authenticationEntryPoint))
+                .addFilterBefore(mcpLocalhostFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(patientBearerTokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
