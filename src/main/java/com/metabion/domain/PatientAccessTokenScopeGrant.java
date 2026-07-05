@@ -5,6 +5,8 @@ import jakarta.persistence.Embeddable;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 
+import java.util.Objects;
+
 @Embeddable
 public class PatientAccessTokenScopeGrant {
 
@@ -24,5 +26,21 @@ public class PatientAccessTokenScopeGrant {
 
     public PatientAccessTokenScope getScope() {
         return scope;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof PatientAccessTokenScopeGrant that)) {
+            return false;
+        }
+        return scope == that.scope;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(scope);
     }
 }

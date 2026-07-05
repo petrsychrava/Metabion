@@ -47,8 +47,13 @@ class PatientAccessTokenRepositoryTest {
         entityManager.clear();
 
         var loaded = tokens.findByTokenHash("sha256hex").orElseThrow();
+        var persistenceUnitUtil = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
 
+        assertThat(persistenceUnitUtil.isLoaded(loaded, "user")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(loaded.getUser(), "roles")).isTrue();
+        assertThat(persistenceUnitUtil.isLoaded(loaded, "scopeGrants")).isTrue();
         assertThat(loaded.getUser().getEmail()).isEqualTo("patient-token@example.com");
+        assertThat(loaded.getUser().hasRole(RoleName.PATIENT)).isTrue();
         assertThat(loaded.scopes()).containsExactlyInAnyOrder(
                 PatientAccessTokenScope.PATIENT_PROFILE_READ,
                 PatientAccessTokenScope.PATIENT_DIET_LOG_WRITE);
