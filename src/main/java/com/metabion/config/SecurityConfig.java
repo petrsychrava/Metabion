@@ -124,6 +124,8 @@ public class SecurityConfig {
                                 HttpMethod.POST, PUBLIC_STAFF_INVITATION_ACCEPT_POST))
                         .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(HttpMethod.POST, "/api/mcp"))
                         .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(HttpMethod.POST, "/api/mcp/**"))
+                        .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(HttpMethod.DELETE, "/api/mcp"))
+                        .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(HttpMethod.DELETE, "/api/mcp/**"))
                         .ignoringRequestMatchers(req -> "GET".equalsIgnoreCase(req.getMethod()))
                 )
                 .sessionManagement(s -> s

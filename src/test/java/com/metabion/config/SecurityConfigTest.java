@@ -29,6 +29,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -127,6 +128,17 @@ class SecurityConfigTest {
 
         mvc.perform(post("/api/mcp")
                         .header("Authorization", "Bearer valid-token"))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
+        verify(patientAccessTokenService, atLeastOnce()).authenticate("valid-token");
+    }
+
+    @Test
+    void mcp_delete_with_bearer_without_csrf_is_not_rejected_by_csrf() throws Exception {
+        when(patientAccessTokenService.authenticate("valid-token")).thenReturn(Optional.of(patientToken()));
+
+        mvc.perform(delete("/api/mcp")
+                        .header("Authorization", "Bearer valid-token")
+                        .header("Mcp-Session-Id", "session-1"))
                 .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
         verify(patientAccessTokenService, atLeastOnce()).authenticate("valid-token");
     }
