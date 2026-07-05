@@ -16,12 +16,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -102,6 +105,27 @@ class PatientAccessTokenServiceTest {
     }
 
     @Test
+    void authenticateRejectsLockedUserUsingServiceClock() {
+        patient.setLockedUntil(Instant.parse("2026-07-04T10:05:00Z"));
+        var token = token("valid", Instant.parse("2026-08-03T10:00:00Z"));
+        when(tokens.findByTokenHash(PatientAccessTokenService.sha256Hex("plain"))).thenReturn(Optional.of(token));
+
+        assertThatThrownBy(() -> service.authenticate("plain"))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
+    @Test
+    void authenticateUpdatesLastUsedAt() {
+        var token = token("valid", Instant.parse("2026-08-03T10:00:00Z"));
+        when(tokens.findByTokenHash(PatientAccessTokenService.sha256Hex("plain"))).thenReturn(Optional.of(token));
+
+        assertThat(service.authenticate("plain")).contains(token);
+
+        assertThat(token.getLastUsedAt()).isEqualTo(Instant.parse("2026-07-04T10:00:00Z"));
+    }
+
+    @Test
     void issueRejectsNonPatientUser() {
         var staff = new User("staff@example.com", "hash");
         ReflectionTestUtils.setField(staff, "id", 20L);
@@ -109,6 +133,22 @@ class PatientAccessTokenServiceTest {
         staff.addRole(RoleName.PHYSICIAN);
         when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
         var auth = new TestingAuthenticationToken("staff@example.com", "password", RoleName.PHYSICIAN.authority());
+        auth.setAuthenticated(true);
+
+        assertThatThrownBy(() -> service.issueForCurrentPatient(auth, new IssuePatientAccessTokenRequest(
+                PatientAccessClientType.MCP_CODEX,
+                "Codex local",
+                30,
+                Set.of("patient:profile:read"))))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
+    @Test
+    void issueRejectsLockedPatientUsingServiceClock() {
+        patient.setLockedUntil(Instant.parse("2026-07-04T10:05:00Z"));
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
 
         assertThatThrownBy(() -> service.issueForCurrentPatient(auth, new IssuePatientAccessTokenRequest(
@@ -147,6 +187,124 @@ class PatientAccessTokenServiceTest {
                 Set.of("patient:profile:read", "patient:unknown"))))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    @Test
+    void issueRejectsInvalidDirectRequestsAsBadRequest() {
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", RoleName.PATIENT.authority());
+        auth.setAuthenticated(true);
+        var validScopes = Set.of("patient:profile:read");
+        var requests = Arrays.asList(
+                null,
+                new IssuePatientAccessTokenRequest(null, "Codex local", 30, validScopes),
+                new IssuePatientAccessTokenRequest(PatientAccessClientType.MCP_CODEX, null, 30, validScopes),
+                new IssuePatientAccessTokenRequest(PatientAccessClientType.MCP_CODEX, " ", 30, validScopes),
+                new IssuePatientAccessTokenRequest(PatientAccessClientType.MCP_CODEX, "Codex local", 0, validScopes),
+                new IssuePatientAccessTokenRequest(PatientAccessClientType.MCP_CODEX, "Codex local", 91, validScopes),
+                new IssuePatientAccessTokenRequest(PatientAccessClientType.MCP_CODEX, "Codex local", 30, null),
+                new IssuePatientAccessTokenRequest(PatientAccessClientType.MCP_CODEX, "Codex local", 30, Set.of()),
+                new IssuePatientAccessTokenRequest(PatientAccessClientType.MCP_CODEX, "Codex local", 30, Set.of(" ")),
+                new IssuePatientAccessTokenRequest(PatientAccessClientType.MCP_CODEX, "Codex local", 30, Set.of("patient:unknown")));
+
+        for (var request : requests) {
+            assertThatThrownBy(() -> service.issueForCurrentPatient(auth, request))
+                    .isInstanceOfSatisfying(ResponseStatusException.class,
+                            ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        }
+    }
+
+    @Test
+    void listForCurrentPatientReturnsTokenSummaries() {
+        var token = token("valid", Instant.parse("2026-08-03T10:00:00Z"));
+        token.markUsed(Instant.parse("2026-07-04T09:30:00Z"));
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+        when(tokens.findActiveByUserId(10L)).thenReturn(List.of(token));
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", RoleName.PATIENT.authority());
+        auth.setAuthenticated(true);
+
+        var summaries = service.listForCurrentPatient(auth);
+
+        assertThat(summaries).singleElement().satisfies(summary -> {
+            assertThat(summary.tokenId()).isEqualTo(50L);
+            assertThat(summary.clientType()).isEqualTo(PatientAccessClientType.MCP_CODEX);
+            assertThat(summary.displayLabel()).isEqualTo("Codex");
+            assertThat(summary.createdAt()).isEqualTo(Instant.parse("2026-07-02T09:00:00Z"));
+            assertThat(summary.expiresAt()).isEqualTo(Instant.parse("2026-08-03T10:00:00Z"));
+            assertThat(summary.lastUsedAt()).isEqualTo(Instant.parse("2026-07-04T09:30:00Z"));
+            assertThat(summary.scopes()).containsExactly("patient:profile:read");
+        });
+    }
+
+    @Test
+    void revokeForCurrentPatientRevokesOwnedToken() {
+        var token = token("valid", Instant.parse("2026-08-03T10:00:00Z"));
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+        when(tokens.findById(50L)).thenReturn(Optional.of(token));
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", RoleName.PATIENT.authority());
+        auth.setAuthenticated(true);
+
+        service.revokeForCurrentPatient(auth, 50L);
+
+        assertThat(token.getRevokedAt()).isEqualTo(Instant.parse("2026-07-04T10:00:00Z"));
+        assertThat(token.getRevocationReason()).isEqualTo("patient_request");
+    }
+
+    @Test
+    void revokeForCurrentPatientHidesAnotherPatientsToken() {
+        var otherPatient = new User("other@example.com", "hash");
+        ReflectionTestUtils.setField(otherPatient, "id", 11L);
+        otherPatient.setEnabled(true);
+        otherPatient.addRole(RoleName.PATIENT);
+        var token = new PatientAccessToken(
+                otherPatient,
+                PatientAccessTokenService.sha256Hex("other"),
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                Instant.parse("2026-07-02T09:00:00Z"),
+                Instant.parse("2026-08-03T10:00:00Z"),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
+        ReflectionTestUtils.setField(token, "id", 51L);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+        when(tokens.findById(51L)).thenReturn(Optional.of(token));
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", RoleName.PATIENT.authority());
+        auth.setAuthenticated(true);
+
+        assertThatThrownBy(() -> service.revokeForCurrentPatient(auth, 51L))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        assertThat(token.getRevokedAt()).isNull();
+    }
+
+    @Test
+    void bearerTokenAuthenticationHasRoleAndScopeAuthorities() {
+        var token = token("valid", Instant.parse("2026-08-03T10:00:00Z"));
+
+        var authentication = new com.metabion.config.PatientAccessTokenAuthentication(token);
+
+        assertThat(authentication.getAuthorities())
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactlyInAnyOrder("ROLE_PATIENT", "SCOPE_patient:profile:read");
+        assertThat(authentication.getName()).isEqualTo("patient@example.com");
+        assertThat(authentication.getPrincipal()).isEqualTo(patient);
+        assertThat(authentication.getCredentials()).isEqualTo("");
+    }
+
+    @Test
+    void bearerTokenAuthenticationRejectsNullToken() {
+        assertThatThrownBy(() -> new com.metabion.config.PatientAccessTokenAuthentication(null))
+                .isInstanceOfSatisfying(IllegalArgumentException.class,
+                        ex -> assertThat(ex).hasMessage("token is required"));
+    }
+
+    @Test
+    void bearerTokenAuthenticationRejectsNullUser() {
+        var token = token("valid", Instant.parse("2026-08-03T10:00:00Z"));
+        ReflectionTestUtils.setField(token, "user", null);
+
+        assertThatThrownBy(() -> new com.metabion.config.PatientAccessTokenAuthentication(token))
+                .isInstanceOfSatisfying(IllegalArgumentException.class,
+                        ex -> assertThat(ex).hasMessage("token user is required"));
     }
 
     private PatientAccessToken token(String hash, Instant expiresAt) {

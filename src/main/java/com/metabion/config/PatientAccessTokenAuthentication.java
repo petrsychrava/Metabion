@@ -38,6 +38,12 @@ public class PatientAccessTokenAuthentication extends AbstractAuthenticationToke
     }
 
     private static Collection<GrantedAuthority> authorities(PatientAccessToken token) {
+        if (token == null) {
+            throw new IllegalArgumentException("token is required");
+        }
+        if (token.getUser() == null) {
+            throw new IllegalArgumentException("token user is required");
+        }
         var roleAuthorities = token.getUser().roleNames().stream()
                 .map(role -> (GrantedAuthority) new SimpleGrantedAuthority("ROLE_" + role));
         var scopeAuthorities = token.scopes().stream()

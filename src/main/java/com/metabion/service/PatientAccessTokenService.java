@@ -49,6 +49,7 @@ public class PatientAccessTokenService {
     public IssuePatientAccessTokenResponse issueForCurrentPatient(Authentication authentication,
                                                                   IssuePatientAccessTokenRequest request) {
         var user = currentSessionPatient(authentication);
+        validateIssueRequest(request);
         var now = Instant.now(clock);
         var plain = generateToken();
         var scopes = parseScopes(request.scopes());
@@ -96,7 +97,7 @@ public class PatientAccessTokenService {
         if (token == null || !token.isUsable(now)) {
             return Optional.empty();
         }
-        assertUsablePatientForToken(token.getUser());
+        assertUsablePatientForToken(token.getUser(), now);
         token.markUsed(now);
         return Optional.of(token);
     }
@@ -110,23 +111,41 @@ public class PatientAccessTokenService {
         }
         var user = users.findByEmail(authentication.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "user not found"));
-        if (!isAllowedPatient(user)) {
+        if (!isAllowedPatient(user, Instant.now(clock))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "patient access required");
         }
         return user;
     }
 
-    private void assertUsablePatientForToken(User user) {
-        if (user == null || !user.isEnabled() || user.isLocked() || !user.hasRole(RoleName.PATIENT)) {
+    private void assertUsablePatientForToken(User user, Instant now) {
+        if (user == null || !user.isEnabled() || isLocked(user, now) || !user.hasRole(RoleName.PATIENT)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "patient access required");
         }
     }
 
-    private boolean isAllowedPatient(User user) {
+    private boolean isAllowedPatient(User user, Instant now) {
         return user != null
                 && user.isEnabled()
-                && !user.isLocked()
+                && !isLocked(user, now)
                 && user.hasRole(RoleName.PATIENT);
+    }
+
+    private boolean isLocked(User user, Instant now) {
+        return user.getLockedUntil() != null && user.getLockedUntil().isAfter(now);
+    }
+
+    private void validateIssueRequest(IssuePatientAccessTokenRequest request) {
+        if (request == null
+                || request.clientType() == null
+                || request.displayLabel() == null
+                || request.displayLabel().isBlank()
+                || request.expiresInDays() < 1
+                || request.expiresInDays() > 90
+                || request.scopes() == null
+                || request.scopes().isEmpty()
+                || request.scopes().stream().anyMatch(scope -> scope == null || scope.isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid token request");
+        }
     }
 
     private Set<PatientAccessTokenScope> parseScopes(Set<String> requested) {
