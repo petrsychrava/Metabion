@@ -16,6 +16,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.mcp.annotation.McpTool;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -112,9 +115,37 @@ class PatientMcpToolsTest {
                 org.mockito.ArgumentMatchers.eq("fiber"));
     }
 
+    @Test
+    void mcpToolsBeanIsAbsentWhenMcpIsDisabled() {
+        contextRunner()
+                .withPropertyValues("metabion.mcp.enabled=false")
+                .run(context -> assertThat(context).doesNotHaveBean(PatientMcpTools.class));
+    }
+
+    @Test
+    void mcpToolsBeanIsPresentWhenMcpIsEnabled() {
+        contextRunner()
+                .withPropertyValues("metabion.mcp.enabled=true")
+                .run(context -> assertThat(context).hasSingleBean(PatientMcpTools.class));
+    }
+
     private static String toolName(String methodName, Class<?>... parameterTypes) throws Exception {
         Method method = PatientMcpTools.class.getMethod(methodName, parameterTypes);
         return method.getAnnotation(McpTool.class).name();
+    }
+
+    private static ApplicationContextRunner contextRunner() {
+        return new ApplicationContextRunner()
+                .withUserConfiguration(PatientMcpTools.class, TestBeans.class);
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class TestBeans {
+
+        @Bean
+        PatientAppFacade patientAppFacade() {
+            return mock(PatientAppFacade.class);
+        }
     }
 
     private static void authenticate(PatientAccessTokenScope... scopes) {

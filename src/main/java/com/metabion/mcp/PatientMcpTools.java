@@ -12,6 +12,7 @@ import com.metabion.dto.mcp.DietPhotoContentResponse;
 import com.metabion.dto.mcp.PatientMeResponse;
 import com.metabion.service.PatientAppFacade;
 import org.springframework.ai.mcp.annotation.McpTool;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -26,6 +27,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
+@ConditionalOnProperty(prefix = "metabion.mcp", name = "enabled", havingValue = "true")
 public class PatientMcpTools {
 
     private final PatientAppFacade patientApp;
