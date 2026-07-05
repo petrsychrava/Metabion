@@ -73,7 +73,9 @@ public class PatientAccessTokenService {
     @Transactional(readOnly = true)
     public List<PatientAccessTokenSummaryResponse> listForCurrentPatient(Authentication authentication) {
         var user = currentSessionPatient(authentication);
+        var now = Instant.now(clock);
         return tokens.findActiveByUserId(user.getId()).stream()
+                .filter(token -> !token.isExpired(now))
                 .map(PatientAccessTokenSummaryResponse::from)
                 .toList();
     }

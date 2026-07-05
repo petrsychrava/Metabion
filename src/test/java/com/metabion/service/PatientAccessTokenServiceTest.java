@@ -237,6 +237,23 @@ class PatientAccessTokenServiceTest {
     }
 
     @Test
+    void listForCurrentPatientExcludesExpiredTokens() {
+        var valid = token("valid", Instant.parse("2026-08-03T10:00:00Z"));
+        var expired = token("expired", Instant.parse("2026-07-03T10:00:00Z"));
+        ReflectionTestUtils.setField(expired, "id", 51L);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+        when(tokens.findActiveByUserId(10L)).thenReturn(List.of(valid, expired));
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", RoleName.PATIENT.authority());
+        auth.setAuthenticated(true);
+
+        var summaries = service.listForCurrentPatient(auth);
+
+        assertThat(summaries)
+                .extracting(summary -> summary.tokenId())
+                .containsExactly(50L);
+    }
+
+    @Test
     void revokeForCurrentPatientRevokesOwnedToken() {
         var token = token("valid", Instant.parse("2026-08-03T10:00:00Z"));
         when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
