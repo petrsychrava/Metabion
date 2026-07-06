@@ -5,9 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.metabion.config.OAuthAuthorizationProperties;
 import com.metabion.dto.oauth.OAuthClientMetadata;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -127,6 +124,9 @@ public class HttpOAuthClientMetadataFetcher implements OAuthClientMetadataFetche
             return Optional.of(List.of());
         }
         if (node.isTextual()) {
+            if (node.asText().isBlank()) {
+                return Optional.empty();
+            }
             var values = new ArrayList<String>();
             for (var scope : node.asText().split(" ")) {
                 if (!scope.isBlank()) {
@@ -146,15 +146,5 @@ public class HttpOAuthClientMetadataFetcher implements OAuthClientMetadataFetche
             values.add(item.asText());
         }
         return Optional.of(List.copyOf(values));
-    }
-}
-
-@Configuration(proxyBeanMethods = false)
-class OAuthClientMetadataJacksonConfiguration {
-
-    @Bean
-    @ConditionalOnMissingBean(ObjectMapper.class)
-    ObjectMapper oauthClientMetadataObjectMapper() {
-        return new ObjectMapper();
     }
 }

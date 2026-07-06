@@ -82,6 +82,19 @@ class HttpOAuthClientMetadataFetcherTest {
     }
 
     @Test
+    void rejectsPresentBlankScopeString() {
+        var fetcher = fetcher(new FakeHttpClient(200, """
+                {
+                  "client_name": "Example Client",
+                  "redirect_uris": ["https://client.example/callback"],
+                  "scope": "   "
+                }
+                """));
+
+        assertThat(fetcher.fetch("https://192.0.2.1/metadata.json")).isEmpty();
+    }
+
+    @Test
     void rejectsOversizedResponse() {
         var client = new FakeHttpClient(200, "x".repeat(33));
         var fetcher = new HttpOAuthClientMetadataFetcher(props(32), client, new ObjectMapper());
