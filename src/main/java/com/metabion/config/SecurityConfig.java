@@ -45,6 +45,12 @@ public class SecurityConfig {
             "/api/auth/reset-password"
     };
 
+    private static final String[] PUBLIC_OAUTH_GETS = {
+            "/.well-known/oauth-protected-resource",
+            "/.well-known/oauth-authorization-server",
+            "/oauth/authorize"
+    };
+
     private static final String[] PUBLIC_MVC_GETS = {
             "/",
             "/login",
@@ -136,6 +142,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_STATIC).permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_MVC_GETS).permitAll()
+                        .requestMatchers(HttpMethod.GET, PUBLIC_OAUTH_GETS).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_MVC_POSTS).permitAll()
                         .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_STAFF_INVITATION_ACCEPT_POST).permitAll()
