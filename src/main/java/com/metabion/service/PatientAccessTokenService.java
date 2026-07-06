@@ -1,5 +1,7 @@
 package com.metabion.service;
 
+import com.metabion.config.OAuthAuthorizationProperties;
+import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessToken;
 import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.RoleName;
@@ -20,6 +22,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -37,13 +40,16 @@ public class PatientAccessTokenService {
     private final UserRepository users;
     private final PatientAccessTokenRepository tokens;
     private final Clock clock;
+    private final OAuthAuthorizationProperties oauthProperties;
 
     public PatientAccessTokenService(UserRepository users,
                                      PatientAccessTokenRepository tokens,
-                                     Clock clock) {
+                                     Clock clock,
+                                     OAuthAuthorizationProperties oauthProperties) {
         this.users = users;
         this.tokens = tokens;
         this.clock = clock;
+        this.oauthProperties = oauthProperties;
     }
 
     public IssuePatientAccessTokenResponse issueForCurrentPatient(Authentication authentication,
@@ -60,6 +66,33 @@ public class PatientAccessTokenService {
                 request.displayLabel(),
                 now,
                 now.plusSeconds(request.expiresInDays() * 86_400L),
+                oauthProperties.resource(),
+                scopes));
+        return new IssuePatientAccessTokenResponse(
+                token.getId(),
+                plain,
+                token.getClientType(),
+                token.getDisplayLabel(),
+                token.getExpiresAt(),
+                scopeAuthorities(scopes));
+    }
+
+    public IssuePatientAccessTokenResponse issueForPatient(User user,
+                                                           PatientAccessClientType clientType,
+                                                           String displayLabel,
+                                                           Duration ttl,
+                                                           Set<PatientAccessTokenScope> scopes,
+                                                           String resource) {
+        var now = Instant.now(clock);
+        var plain = generateToken();
+        var token = tokens.save(new PatientAccessToken(
+                user,
+                sha256Hex(plain),
+                clientType,
+                displayLabel,
+                now,
+                now.plus(ttl),
+                resource,
                 scopes));
         return new IssuePatientAccessTokenResponse(
                 token.getId(),
@@ -94,12 +127,16 @@ public class PatientAccessTokenService {
     }
 
     public Optional<PatientAccessToken> authenticate(String plainToken) {
-        if (plainToken == null || plainToken.isBlank()) {
+        return authenticateForResource(plainToken, oauthProperties.resource());
+    }
+
+    public Optional<PatientAccessToken> authenticateForResource(String plainToken, String resource) {
+        if (plainToken == null || plainToken.isBlank() || resource == null || resource.isBlank()) {
             return Optional.empty();
         }
         var now = Instant.now(clock);
         var token = tokens.findByTokenHash(sha256Hex(plainToken)).orElse(null);
-        if (token == null || !token.isUsable(now)) {
+        if (token == null || !token.isUsable(now) || !resource.equals(token.getResource())) {
             return Optional.empty();
         }
         assertUsablePatientForToken(token.getUser(), now);

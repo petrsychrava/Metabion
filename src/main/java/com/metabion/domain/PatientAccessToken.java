@@ -47,6 +47,9 @@ public class PatientAccessToken {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    @Column(name = "resource", nullable = false, length = 255)
+    private String resource;
+
     @Column(name = "last_used_at")
     private Instant lastUsedAt;
 
@@ -70,6 +73,7 @@ public class PatientAccessToken {
                               String displayLabel,
                               Instant createdAt,
                               Instant expiresAt,
+                              String resource,
                               Set<PatientAccessTokenScope> scopes) {
         if (user == null) {
             throw new IllegalArgumentException("user is required");
@@ -86,6 +90,9 @@ public class PatientAccessToken {
         if (createdAt == null || expiresAt == null || !expiresAt.isAfter(createdAt)) {
             throw new IllegalArgumentException("expiresAt must be after createdAt");
         }
+        if (resource == null || resource.isBlank()) {
+            throw new IllegalArgumentException("resource is required");
+        }
         if (scopes == null || scopes.isEmpty()) {
             throw new IllegalArgumentException("at least one scope is required");
         }
@@ -95,6 +102,7 @@ public class PatientAccessToken {
         this.displayLabel = displayLabel.trim();
         this.createdAt = createdAt;
         this.expiresAt = expiresAt;
+        this.resource = resource.trim();
         this.scopeGrants = scopes.stream()
                 .map(PatientAccessTokenScopeGrant::new)
                 .collect(Collectors.toCollection(HashSet::new));
@@ -134,6 +142,7 @@ public class PatientAccessToken {
     public String getDisplayLabel() { return displayLabel; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getExpiresAt() { return expiresAt; }
+    public String getResource() { return resource; }
     public Instant getLastUsedAt() { return lastUsedAt; }
     public Instant getRevokedAt() { return revokedAt; }
     public String getRevocationReason() { return revocationReason; }
