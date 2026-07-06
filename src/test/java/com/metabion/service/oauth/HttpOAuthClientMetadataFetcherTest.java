@@ -4,25 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.metabion.config.OAuthAuthorizationProperties;
 import org.junit.jupiter.api.Test;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLParameters;
 import java.io.IOException;
-import java.net.Authenticator;
-import java.net.CookieHandler;
-import java.net.ProxySelector;
+import java.io.InputStream;
+import java.net.InetAddress;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpHeaders;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
-import javax.net.ssl.SSLSession;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,26 +19,49 @@ class HttpOAuthClientMetadataFetcherTest {
 
     @Test
     void rejectsNonHttpsAndLoopbackMetadataUrlsBeforeNetworkFetch() {
-        var client = new FakeHttpClient(200, "{}");
-        var fetcher = fetcher(client);
+        var transport = new FakeTransport(200, "{}");
+        var fetcher = fetcher(transport);
 
         assertThat(fetcher.fetch("http://192.0.2.1/metadata.json")).isEmpty();
         assertThat(fetcher.fetch("https://127.0.0.1/metadata.json")).isEmpty();
         assertThat(fetcher.fetch("https://localhost/metadata.json")).isEmpty();
 
-        assertThat(client.sendCount()).isZero();
+        assertThat(transport.calls()).isZero();
     }
 
     @Test
-    void parsesValidMetadataWithStringAndArrayScopes() {
-        var client = new FakeHttpClient(200, """
+    void rejectsIpv6UniqueLocalBeforeNetworkFetch() {
+        var transport = new FakeTransport(200, "{}");
+        var fetcher = fetcher(transport);
+
+        assertThat(fetcher.fetch("https://[fc00::1]/metadata.json")).isEmpty();
+
+        assertThat(transport.calls()).isZero();
+    }
+
+    @Test
+    void rejectsIpv4MappedPrivateLiteralBeforeNetworkFetch() throws Exception {
+        var transport = new FakeTransport(200, "{}");
+        var fetcher = fetcher(transport);
+
+        assertThat(fetcher.fetch("https://[::ffff:192.168.1.10]/metadata.json")).isEmpty();
+        assertThat(HttpOAuthClientMetadataFetcher.isUnsafeAddress(InetAddress.getByAddress(new byte[] {
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xff, (byte) 0xff, (byte) 192, (byte) 168, 1, 10
+        }))).isTrue();
+
+        assertThat(transport.calls()).isZero();
+    }
+
+    @Test
+    void parsesValidMetadataWithArrayScope() {
+        var transport = new FakeTransport(200, """
                 {
                   "client_name": "Example Client",
                   "redirect_uris": ["https://client.example/callback", "https://client.example/other"],
                   "scope": ["patient:profile:read", "patient:trend:read"]
                 }
                 """);
-        var fetcher = fetcher(client);
+        var fetcher = fetcher(transport);
 
         var metadata = fetcher.fetch("https://192.0.2.1/metadata.json");
 
@@ -60,20 +72,22 @@ class HttpOAuthClientMetadataFetcherTest {
                 "https://client.example/callback",
                 "https://client.example/other");
         assertThat(metadata.get().scopes()).containsExactly("patient:profile:read", "patient:trend:read");
-        assertThat(client.lastRequest().headers().firstValue("Accept")).contains("application/json");
-        assertThat(client.lastRequest().timeout()).contains(Duration.ofMillis(100));
+        assertThat(transport.calls()).isOne();
+        assertThat(transport.lastUri()).isEqualTo(URI.create("https://192.0.2.1/metadata.json"));
+        assertThat(transport.lastAddress().getHostAddress()).isEqualTo("192.0.2.1");
+        assertThat(transport.lastTimeout()).isEqualTo(Duration.ofMillis(100));
     }
 
     @Test
     void parsesSpaceSeparatedScopeString() {
-        var client = new FakeHttpClient(200, """
+        var transport = new FakeTransport(200, """
                 {
                   "client_name": "Example Client",
                   "redirect_uris": ["https://client.example/callback"],
                   "scope": "patient:profile:read patient:trend:read"
                 }
                 """);
-        var fetcher = fetcher(client);
+        var fetcher = fetcher(transport);
 
         var metadata = fetcher.fetch("https://192.0.2.1/metadata.json");
 
@@ -83,7 +97,7 @@ class HttpOAuthClientMetadataFetcherTest {
 
     @Test
     void rejectsPresentBlankScopeString() {
-        var fetcher = fetcher(new FakeHttpClient(200, """
+        var fetcher = fetcher(new FakeTransport(200, """
                 {
                   "client_name": "Example Client",
                   "redirect_uris": ["https://client.example/callback"],
@@ -95,27 +109,35 @@ class HttpOAuthClientMetadataFetcherTest {
     }
 
     @Test
-    void rejectsOversizedResponse() {
-        var client = new FakeHttpClient(200, "x".repeat(33));
-        var fetcher = new HttpOAuthClientMetadataFetcher(props(32), client, new ObjectMapper());
+    void rejectsOversizedResponseViaBoundedRead() {
+        var body = new CountingInputStream("x".repeat(33));
+        var transport = new FakeTransport(200, body);
+        var fetcher = new HttpOAuthClientMetadataFetcher(props(32), transport, new ObjectMapper());
 
         assertThat(fetcher.fetch("https://192.0.2.1/metadata.json")).isEmpty();
+        assertThat(body.bytesRead()).isEqualTo(33);
     }
 
     @Test
-    void rejectsNon200WithoutFollowingRedirect() {
-        var client = new FakeHttpClient(302, "");
-        var fetcher = fetcher(client);
+    void rejectsNon200WithoutReadingBody() {
+        var body = new CountingInputStream("""
+                {
+                  "client_name": "Example Client",
+                  "redirect_uris": ["https://client.example/callback"]
+                }
+                """);
+        var transport = new FakeTransport(302, body);
+        var fetcher = fetcher(transport);
 
         assertThat(fetcher.fetch("https://192.0.2.1/metadata.json")).isEmpty();
 
-        assertThat(client.sendCount()).isOne();
-        assertThat(client.lastRequest().uri()).isEqualTo(URI.create("https://192.0.2.1/metadata.json"));
+        assertThat(transport.calls()).isOne();
+        assertThat(body.bytesRead()).isZero();
     }
 
     @Test
     void rejectsInvalidMetadata() {
-        var fetcher = fetcher(new FakeHttpClient(200, """
+        var fetcher = fetcher(new FakeTransport(200, """
                 {
                   "client_name": " ",
                   "redirect_uris": []
@@ -127,7 +149,7 @@ class HttpOAuthClientMetadataFetcherTest {
 
     @Test
     void restoresInterruptFlagWhenRequestIsInterrupted() {
-        var fetcher = fetcher(FakeHttpClient.interrupting());
+        var fetcher = fetcher(FakeTransport.interrupting());
 
         try {
             assertThat(fetcher.fetch("https://192.0.2.1/metadata.json")).isEmpty();
@@ -137,8 +159,8 @@ class HttpOAuthClientMetadataFetcherTest {
         }
     }
 
-    private static HttpOAuthClientMetadataFetcher fetcher(FakeHttpClient client) {
-        return new HttpOAuthClientMetadataFetcher(props(4096), client, new ObjectMapper());
+    private static HttpOAuthClientMetadataFetcher fetcher(FakeTransport transport) {
+        return new HttpOAuthClientMetadataFetcher(props(4096), transport, new ObjectMapper());
     }
 
     private static OAuthAuthorizationProperties props(int maxBytes) {
@@ -151,146 +173,99 @@ class HttpOAuthClientMetadataFetcherTest {
                 Map.of());
     }
 
-    private static final class FakeHttpClient extends HttpClient {
+    private static final class FakeTransport implements HttpOAuthClientMetadataFetcher.MetadataDocumentTransport {
         private final int statusCode;
-        private final byte[] body;
+        private final InputStream body;
         private final boolean interrupt;
-        private final AtomicInteger sendCount = new AtomicInteger();
-        private HttpRequest lastRequest;
+        private final AtomicInteger calls = new AtomicInteger();
+        private URI lastUri;
+        private InetAddress lastAddress;
+        private Duration lastTimeout;
 
-        private FakeHttpClient(int statusCode, String body) {
+        private FakeTransport(int statusCode, String body) {
+            this(statusCode, new CountingInputStream(body));
+        }
+
+        private FakeTransport(int statusCode, InputStream body) {
             this.statusCode = statusCode;
-            this.body = body.getBytes(StandardCharsets.UTF_8);
+            this.body = body;
             this.interrupt = false;
         }
 
-        private FakeHttpClient() {
+        private FakeTransport() {
             this.statusCode = 0;
-            this.body = new byte[0];
+            this.body = InputStream.nullInputStream();
             this.interrupt = true;
         }
 
-        private static FakeHttpClient interrupting() {
-            return new FakeHttpClient();
-        }
-
-        private int sendCount() {
-            return sendCount.get();
-        }
-
-        private HttpRequest lastRequest() {
-            return lastRequest;
+        private static FakeTransport interrupting() {
+            return new FakeTransport();
         }
 
         @Override
-        public Optional<CookieHandler> cookieHandler() {
-            return Optional.empty();
-        }
-
-        @Override
-        public Optional<Duration> connectTimeout() {
-            return Optional.empty();
-        }
-
-        @Override
-        public Redirect followRedirects() {
-            return Redirect.NEVER;
-        }
-
-        @Override
-        public Optional<ProxySelector> proxy() {
-            return Optional.empty();
-        }
-
-        @Override
-        public SSLContext sslContext() {
-            try {
-                return SSLContext.getDefault();
-            } catch (Exception ex) {
-                throw new IllegalStateException(ex);
-            }
-        }
-
-        @Override
-        public SSLParameters sslParameters() {
-            return new SSLParameters();
-        }
-
-        @Override
-        public Optional<Authenticator> authenticator() {
-            return Optional.empty();
-        }
-
-        @Override
-        public HttpClient.Version version() {
-            return HttpClient.Version.HTTP_1_1;
-        }
-
-        @Override
-        public Optional<Executor> executor() {
-            return Optional.empty();
-        }
-
-        @Override
-        public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler)
-                throws IOException, InterruptedException {
-            sendCount.incrementAndGet();
-            lastRequest = request;
+        public HttpOAuthClientMetadataFetcher.MetadataDocumentResponse fetch(
+                URI uri,
+                InetAddress address,
+                Duration timeout) throws IOException, InterruptedException {
+            calls.incrementAndGet();
+            lastUri = uri;
+            lastAddress = address;
+            lastTimeout = timeout;
             if (interrupt) {
                 throw new InterruptedException("interrupted");
             }
-            return SimpleResponse.of(request, statusCode, body);
+            return new HttpOAuthClientMetadataFetcher.MetadataDocumentResponse(statusCode, body, body);
         }
 
-        @Override
-        public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request,
-                                                                HttpResponse.BodyHandler<T> responseBodyHandler) {
-            throw new UnsupportedOperationException();
+        private int calls() {
+            return calls.get();
         }
 
-        @Override
-        public <T> CompletableFuture<HttpResponse<T>> sendAsync(
-                HttpRequest request,
-                HttpResponse.BodyHandler<T> responseBodyHandler,
-                HttpResponse.PushPromiseHandler<T> pushPromiseHandler) {
-            throw new UnsupportedOperationException();
+        private URI lastUri() {
+            return lastUri;
+        }
+
+        private InetAddress lastAddress() {
+            return lastAddress;
+        }
+
+        private Duration lastTimeout() {
+            return lastTimeout;
         }
     }
 
-    private record SimpleResponse<T>(
-            HttpRequest request,
-            int statusCode,
-            T body
-    ) implements HttpResponse<T> {
+    private static final class CountingInputStream extends InputStream {
+        private final byte[] bytes;
+        private int index;
+        private int bytesRead;
 
-        @SuppressWarnings("unchecked")
-        private static <T> SimpleResponse<T> of(HttpRequest request, int statusCode, byte[] body) {
-            return new SimpleResponse<>(request, statusCode, (T) body);
+        private CountingInputStream(String body) {
+            bytes = body.getBytes(StandardCharsets.UTF_8);
         }
 
         @Override
-        public Optional<HttpResponse<T>> previousResponse() {
-            return Optional.empty();
+        public int read() {
+            if (index >= bytes.length) {
+                return -1;
+            }
+            bytesRead++;
+            return bytes[index++] & 0xff;
         }
 
         @Override
-        public HttpHeaders headers() {
-            return HttpHeaders.of(Map.of(), (name, value) -> true);
+        public int read(byte[] buffer, int offset, int length) {
+            if (index >= bytes.length) {
+                return -1;
+            }
+            int count = Math.min(length, bytes.length - index);
+            System.arraycopy(bytes, index, buffer, offset, count);
+            index += count;
+            bytesRead += count;
+            return count;
         }
 
-        @Override
-        public Optional<SSLSession> sslSession() {
-            return Optional.empty();
-        }
-
-        @Override
-        public URI uri() {
-            return request.uri();
-        }
-
-        @Override
-        public HttpClient.Version version() {
-            return HttpClient.Version.HTTP_1_1;
+        private int bytesRead() {
+            return bytesRead;
         }
     }
 }
