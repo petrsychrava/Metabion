@@ -20,6 +20,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -78,7 +80,13 @@ class OAuthMetadataControllerTest {
         mvc.perform(get("/.well-known/oauth-protected-resource"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.resource").value("http://localhost:8080/api/mcp"))
-                .andExpect(jsonPath("$.authorization_servers[0]").value("http://localhost:8080"));
+                .andExpect(jsonPath("$.authorization_servers[0]").value("http://localhost:8080"))
+                .andExpect(jsonPath("$.bearer_methods_supported", contains("header")))
+                .andExpect(jsonPath("$.scopes_supported", hasItems(
+                        "patient:profile:read",
+                        "patient:diet-log:write",
+                        "patient:trend:read")))
+                .andExpect(jsonPath("$.scopes_supported", not(hasItem("admin"))));
     }
 
     @Test
@@ -91,7 +99,12 @@ class OAuthMetadataControllerTest {
                 .andExpect(jsonPath("$.response_types_supported", contains("code")))
                 .andExpect(jsonPath("$.grant_types_supported", contains("authorization_code")))
                 .andExpect(jsonPath("$.code_challenge_methods_supported", contains("S256")))
+                .andExpect(jsonPath("$.token_endpoint_auth_methods_supported", contains("none")))
                 .andExpect(jsonPath("$.registration_endpoint").doesNotExist())
-                .andExpect(jsonPath("$.scopes_supported", not(contains("admin"))));
+                .andExpect(jsonPath("$.scopes_supported", hasItems(
+                        "patient:profile:read",
+                        "patient:diet-log:write",
+                        "patient:trend:read")))
+                .andExpect(jsonPath("$.scopes_supported", not(hasItem("admin"))));
     }
 }
