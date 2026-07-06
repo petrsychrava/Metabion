@@ -31,6 +31,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,6 +42,7 @@ public class OAuthAuthorizationService {
     private static final String AUTHORIZATION_CODE_GRANT = "authorization_code";
     private static final String CODE_RESPONSE_TYPE = "code";
     private static final String S256 = "S256";
+    private static final Pattern CODE_CHALLENGE = Pattern.compile("^[A-Za-z0-9._~-]{43,128}$");
 
     private final OAuthAuthorizationProperties properties;
     private final OAuthClientResolver clients;
@@ -121,7 +123,7 @@ public class OAuthAuthorizationService {
         }
         validateResource(resource);
         var client = resolveClient(clientId, redirectUri);
-        var authorizationCode = codes.findByCodeHash(PatientAccessTokenService.sha256Hex(code))
+        var authorizationCode = codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex(code))
                 .orElseThrow(() -> badRequest("invalid authorization code"));
         var now = Instant.now(clock);
         if (authorizationCode.isConsumed() || authorizationCode.isExpired(now)) {
@@ -136,6 +138,7 @@ public class OAuthAuthorizationService {
             throw badRequest("invalid verifier");
         }
         var scopes = parseScopeAuthorities(authorizationCode.scopes());
+        assertAllowedPatient(authorizationCode.getUser(), now);
         authorizationCode.consume(now);
         var token = patientAccessTokens.issueForPatient(
                 authorizationCode.getUser(),
@@ -159,7 +162,7 @@ public class OAuthAuthorizationService {
         if (!CODE_RESPONSE_TYPE.equals(request.responseType())) {
             throw badRequest("unsupported response type");
         }
-        if (!S256.equals(request.codeChallengeMethod()) || isBlank(request.codeChallenge())) {
+        if (!S256.equals(request.codeChallengeMethod()) || !isValidCodeChallenge(request.codeChallenge())) {
             throw badRequest("unsupported code challenge method");
         }
         validateResource(request.resource());
@@ -206,9 +209,6 @@ public class OAuthAuthorizationService {
     }
 
     private void validateClientScopes(OAuthClientMetadata client, Set<PatientAccessTokenScope> requestedScopes) {
-        if (client.scopes().isEmpty()) {
-            return;
-        }
         var allowed = Set.copyOf(client.scopes());
         var requested = scopeAuthorities(requestedScopes);
         if (!allowed.containsAll(requested)) {
@@ -229,6 +229,12 @@ public class OAuthAuthorizationService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "patient access required");
         }
         return user;
+    }
+
+    private void assertAllowedPatient(User user, Instant now) {
+        if (!isAllowedPatient(user, now)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "patient access required");
+        }
     }
 
     private boolean isAllowedPatient(User user, Instant now) {
@@ -264,8 +270,12 @@ public class OAuthAuthorizationService {
         return switch (clientId.toLowerCase(Locale.ROOT)) {
             case "claude" -> PatientAccessClientType.MCP_CLAUDE;
             case "codex" -> PatientAccessClientType.MCP_CODEX;
-            default -> PatientAccessClientType.INTERNAL_TEST;
+            default -> PatientAccessClientType.MCP_OTHER;
         };
+    }
+
+    private boolean isValidCodeChallenge(String codeChallenge) {
+        return codeChallenge != null && CODE_CHALLENGE.matcher(codeChallenge).matches();
     }
 
     private Set<String> scopeAuthorities(Set<PatientAccessTokenScope> scopes) {
