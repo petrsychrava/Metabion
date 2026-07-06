@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.metabion.config.OAuthAuthorizationProperties;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
@@ -14,6 +15,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class HttpOAuthClientMetadataFetcherTest {
 
@@ -109,6 +111,54 @@ class HttpOAuthClientMetadataFetcherTest {
     }
 
     @Test
+    void decodesChunkedResponseBody() {
+        var fetcher = fetcher(new RawResponseTransport("""
+                HTTP/1.1 200 OK\r
+                Transfer-Encoding: chunked\r
+                \r
+                %s\r
+                %s\r
+                0\r
+                \r
+                """.formatted(Integer.toHexString(metadataJson().getBytes(StandardCharsets.UTF_8).length), metadataJson())));
+
+        var metadata = fetcher.fetch("https://192.0.2.1/metadata.json");
+
+        assertThat(metadata).isPresent();
+        assertThat(metadata.get().displayLabel()).isEqualTo("Example Client");
+    }
+
+    @Test
+    void contentLengthResponseReadsOnlyDeclaredBody() {
+        var body = metadataJson();
+        var fetcher = fetcher(new RawResponseTransport("""
+                HTTP/1.1 200 OK\r
+                Content-Length: %s\r
+                \r
+                %signored-by-content-length
+                """.formatted(body.getBytes(StandardCharsets.UTF_8).length, body)));
+
+        var metadata = fetcher.fetch("https://192.0.2.1/metadata.json");
+
+        assertThat(metadata).isPresent();
+        assertThat(metadata.get().displayLabel()).isEqualTo("Example Client");
+    }
+
+    @Test
+    void rejectsTooManyAggregateHeaders() {
+        var response = new StringBuilder("HTTP/1.1 200 OK\r\n");
+        for (int index = 0; index < 100; index++) {
+            response.append("X-Test-").append(index).append(": value\r\n");
+        }
+        response.append("\r\n").append(metadataJson());
+
+        assertThatThrownBy(() -> HttpOAuthClientMetadataFetcher.readResponse(
+                new ByteArrayInputStream(response.toString().getBytes(StandardCharsets.US_ASCII)),
+                InputStream.nullInputStream()))
+                .isInstanceOf(IOException.class);
+    }
+
+    @Test
     void rejectsOversizedResponseViaBoundedRead() {
         var body = new CountingInputStream("x".repeat(33));
         var transport = new FakeTransport(200, body);
@@ -159,7 +209,8 @@ class HttpOAuthClientMetadataFetcherTest {
         }
     }
 
-    private static HttpOAuthClientMetadataFetcher fetcher(FakeTransport transport) {
+    private static HttpOAuthClientMetadataFetcher fetcher(
+            HttpOAuthClientMetadataFetcher.MetadataDocumentTransport transport) {
         return new HttpOAuthClientMetadataFetcher(props(4096), transport, new ObjectMapper());
     }
 
@@ -171,6 +222,32 @@ class HttpOAuthClientMetadataFetcherTest {
                 Duration.ofHours(1),
                 new OAuthAuthorizationProperties.ClientMetadataProperties(true, Duration.ofMillis(100), maxBytes),
                 Map.of());
+    }
+
+    private static String metadataJson() {
+        return """
+                {
+                  "client_name": "Example Client",
+                  "redirect_uris": ["https://client.example/callback"]
+                }
+                """;
+    }
+
+    private static final class RawResponseTransport implements HttpOAuthClientMetadataFetcher.MetadataDocumentTransport {
+        private final byte[] response;
+
+        private RawResponseTransport(String response) {
+            this.response = response.getBytes(StandardCharsets.US_ASCII);
+        }
+
+        @Override
+        public HttpOAuthClientMetadataFetcher.MetadataDocumentResponse fetch(
+                URI uri,
+                InetAddress address,
+                Duration timeout) throws IOException {
+            var input = new ByteArrayInputStream(response);
+            return HttpOAuthClientMetadataFetcher.readResponse(input, input);
+        }
     }
 
     private static final class FakeTransport implements HttpOAuthClientMetadataFetcher.MetadataDocumentTransport {

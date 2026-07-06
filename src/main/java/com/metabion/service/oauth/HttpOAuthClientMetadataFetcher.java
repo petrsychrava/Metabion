@@ -27,7 +27,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -36,6 +39,9 @@ public class HttpOAuthClientMetadataFetcher implements OAuthClientMetadataFetche
     private static final int DEFAULT_HTTPS_PORT = 443;
     private static final int MAX_STATUS_LINE_BYTES = 1024;
     private static final int MAX_HEADER_LINE_BYTES = 8192;
+    private static final int MAX_HEADER_LINES = 100;
+    private static final int MAX_HEADER_BYTES = 65536;
+    private static final long MAX_CONTENT_LENGTH = 1048576L;
 
     private final OAuthAuthorizationProperties properties;
     private final MetadataDocumentTransport transport;
@@ -229,6 +235,104 @@ public class HttpOAuthClientMetadataFetcher implements OAuthClientMetadataFetche
         return host;
     }
 
+    static MetadataDocumentResponse readResponse(InputStream body, AutoCloseable closeable) throws IOException {
+        var input = body instanceof BufferedInputStream buffered ? buffered : new BufferedInputStream(body);
+        var statusLine = readAsciiLine(input, MAX_STATUS_LINE_BYTES);
+        if (statusLine == null || !statusLine.startsWith("HTTP/")) {
+            throw new IOException("Invalid HTTP response");
+        }
+        var parts = statusLine.split(" ", 3);
+        if (parts.length < 2) {
+            throw new IOException("Invalid HTTP status");
+        }
+        var statusCode = Integer.parseInt(parts[1]);
+        var headers = readHeaders(input);
+        return new MetadataDocumentResponse(statusCode, framedBody(input, headers), closeable);
+    }
+
+    private static Map<String, List<String>> readHeaders(InputStream input) throws IOException {
+        var headers = new LinkedHashMap<String, List<String>>();
+        var totalBytes = 0;
+        for (int lineCount = 0; lineCount < MAX_HEADER_LINES; lineCount++) {
+            var line = readAsciiLine(input, MAX_HEADER_LINE_BYTES);
+            if (line == null) {
+                throw new IOException("Truncated HTTP headers");
+            }
+            totalBytes += line.length() + 2;
+            if (totalBytes > MAX_HEADER_BYTES) {
+                throw new IOException("HTTP headers too large");
+            }
+            if (line.isEmpty()) {
+                return headers;
+            }
+            var separator = line.indexOf(':');
+            if (separator <= 0) {
+                throw new IOException("Malformed HTTP header");
+            }
+            var name = line.substring(0, separator).trim().toLowerCase(Locale.ROOT);
+            var value = line.substring(separator + 1).trim();
+            headers.computeIfAbsent(name, ignored -> new ArrayList<>()).add(value);
+        }
+        throw new IOException("Too many HTTP headers");
+    }
+
+    private static InputStream framedBody(InputStream input, Map<String, List<String>> headers) throws IOException {
+        if (isChunked(headers)) {
+            return new ChunkedInputStream(input);
+        }
+        var contentLength = contentLength(headers);
+        return contentLength == null ? input : new ContentLengthInputStream(input, contentLength);
+    }
+
+    private static boolean isChunked(Map<String, List<String>> headers) {
+        for (var value : headers.getOrDefault("transfer-encoding", List.of())) {
+            for (var coding : value.split(",")) {
+                if ("chunked".equalsIgnoreCase(coding.trim())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static Long contentLength(Map<String, List<String>> headers) throws IOException {
+        Long length = null;
+        for (var value : headers.getOrDefault("content-length", List.of())) {
+            long parsed;
+            try {
+                parsed = Long.parseLong(value);
+            } catch (NumberFormatException ex) {
+                throw new IOException("Malformed Content-Length", ex);
+            }
+            if (parsed < 0 || parsed > MAX_CONTENT_LENGTH) {
+                throw new IOException("Unreasonable Content-Length");
+            }
+            if (length != null && length != parsed) {
+                throw new IOException("Conflicting Content-Length");
+            }
+            length = parsed;
+        }
+        return length;
+    }
+
+    private static String readAsciiLine(InputStream input, int maxBytes) throws IOException {
+        var line = new ByteArrayOutputStream();
+        while (true) {
+            int next = input.read();
+            if (next == -1) {
+                return line.size() == 0 ? null : line.toString(StandardCharsets.US_ASCII);
+            }
+            if (next == '\n') {
+                var value = line.toString(StandardCharsets.US_ASCII);
+                return value.endsWith("\r") ? value.substring(0, value.length() - 1) : value;
+            }
+            if (line.size() >= maxBytes) {
+                throw new IOException("HTTP line too long");
+            }
+            line.write(next);
+        }
+    }
+
     private static final class HttpsSocketMetadataDocumentTransport implements MetadataDocumentTransport {
 
         @Override
@@ -246,7 +350,7 @@ public class HttpOAuthClientMetadataFetcher implements OAuthClientMetadataFetche
                 configureTls(sslSocket, host);
                 sslSocket.startHandshake();
                 writeRequest(sslSocket, uri);
-                var response = readResponse(sslSocket);
+                var response = readResponse(sslSocket.getInputStream(), sslSocket);
                 success = true;
                 return response;
             } finally {
@@ -287,42 +391,6 @@ public class HttpOAuthClientMetadataFetcher implements OAuthClientMetadataFetche
             writer.flush();
         }
 
-        private static MetadataDocumentResponse readResponse(SSLSocket socket) throws IOException {
-            var input = new BufferedInputStream(socket.getInputStream());
-            var statusLine = readAsciiLine(input, MAX_STATUS_LINE_BYTES);
-            if (statusLine == null || !statusLine.startsWith("HTTP/")) {
-                throw new IOException("Invalid HTTP response");
-            }
-            var parts = statusLine.split(" ", 3);
-            if (parts.length < 2) {
-                throw new IOException("Invalid HTTP status");
-            }
-            var statusCode = Integer.parseInt(parts[1]);
-            String line;
-            do {
-                line = readAsciiLine(input, MAX_HEADER_LINE_BYTES);
-            } while (line != null && !line.isEmpty());
-            return new MetadataDocumentResponse(statusCode, input, socket);
-        }
-
-        private static String readAsciiLine(InputStream input, int maxBytes) throws IOException {
-            var line = new ByteArrayOutputStream();
-            while (true) {
-                int next = input.read();
-                if (next == -1) {
-                    return line.size() == 0 ? null : line.toString(StandardCharsets.US_ASCII);
-                }
-                if (next == '\n') {
-                    var value = line.toString(StandardCharsets.US_ASCII);
-                    return value.endsWith("\r") ? value.substring(0, value.length() - 1) : value;
-                }
-                if (line.size() >= maxBytes) {
-                    throw new IOException("HTTP line too long");
-                }
-                line.write(next);
-            }
-        }
-
         private static String requestTarget(URI uri) {
             var path = uri.getRawPath();
             var target = path == null || path.isBlank() ? "/" : path;
@@ -349,6 +417,121 @@ public class HttpOAuthClientMetadataFetcher implements OAuthClientMetadataFetche
                 return 1;
             }
             return millis > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) millis;
+        }
+    }
+
+    private static final class ContentLengthInputStream extends InputStream {
+        private final InputStream input;
+        private long remaining;
+
+        private ContentLengthInputStream(InputStream input, long remaining) {
+            this.input = input;
+            this.remaining = remaining;
+        }
+
+        @Override
+        public int read() throws IOException {
+            if (remaining == 0) {
+                return -1;
+            }
+            int next = input.read();
+            if (next == -1) {
+                throw new IOException("Truncated HTTP body");
+            }
+            remaining--;
+            return next;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            if (remaining == 0) {
+                return -1;
+            }
+            var count = input.read(buffer, offset, (int) Math.min(length, remaining));
+            if (count == -1) {
+                throw new IOException("Truncated HTTP body");
+            }
+            remaining -= count;
+            return count;
+        }
+    }
+
+    private static final class ChunkedInputStream extends InputStream {
+        private final InputStream input;
+        private long remaining;
+        private boolean done;
+
+        private ChunkedInputStream(InputStream input) {
+            this.input = input;
+        }
+
+        @Override
+        public int read() throws IOException {
+            if (!ensureChunk()) {
+                return -1;
+            }
+            int next = input.read();
+            if (next == -1) {
+                throw new IOException("Truncated chunk");
+            }
+            remaining--;
+            if (remaining == 0) {
+                requireCrlf();
+            }
+            return next;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            if (!ensureChunk()) {
+                return -1;
+            }
+            var count = input.read(buffer, offset, (int) Math.min(length, remaining));
+            if (count == -1) {
+                throw new IOException("Truncated chunk");
+            }
+            remaining -= count;
+            if (remaining == 0) {
+                requireCrlf();
+            }
+            return count;
+        }
+
+        private boolean ensureChunk() throws IOException {
+            if (done) {
+                return false;
+            }
+            if (remaining > 0) {
+                return true;
+            }
+            var line = readAsciiLine(input, MAX_HEADER_LINE_BYTES);
+            if (line == null) {
+                throw new IOException("Missing chunk size");
+            }
+            var separator = line.indexOf(';');
+            var sizeText = separator == -1 ? line : line.substring(0, separator);
+            try {
+                remaining = Long.parseLong(sizeText.trim(), 16);
+            } catch (NumberFormatException ex) {
+                throw new IOException("Malformed chunk size", ex);
+            }
+            if (remaining < 0 || remaining > MAX_CONTENT_LENGTH) {
+                throw new IOException("Unreasonable chunk size");
+            }
+            if (remaining == 0) {
+                readHeaders(input);
+                done = true;
+                return false;
+            }
+            return true;
+        }
+
+        private void requireCrlf() throws IOException {
+            int carriageReturn = input.read();
+            int lineFeed = input.read();
+            if (carriageReturn != '\r' || lineFeed != '\n') {
+                throw new IOException("Malformed chunk delimiter");
+            }
         }
     }
 
