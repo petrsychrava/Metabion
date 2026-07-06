@@ -89,9 +89,15 @@ public class OAuthAuthorizationCode {
         if (scopes == null || scopes.isEmpty()) {
             throw new IllegalArgumentException("scopes are required");
         }
+        if (scopes.stream().anyMatch(scope -> scope == null || scope.isBlank())) {
+            throw new IllegalArgumentException("scopes are required");
+        }
         this.scopes = new HashSet<>(scopes);
         this.createdAt = java.util.Objects.requireNonNull(createdAt, "createdAt is required");
         this.expiresAt = java.util.Objects.requireNonNull(expiresAt, "expiresAt is required");
+        if (!this.expiresAt.isAfter(this.createdAt)) {
+            throw new IllegalArgumentException("expiresAt must be after createdAt");
+        }
     }
 
     public boolean isExpired(Instant now) {
@@ -103,7 +109,10 @@ public class OAuthAuthorizationCode {
     }
 
     public void consume(Instant now) {
-        this.consumedAt = now;
+        if (isConsumed()) {
+            throw new IllegalStateException("authorization code is already consumed");
+        }
+        this.consumedAt = java.util.Objects.requireNonNull(now, "consumedAt is required");
     }
 
     public Set<String> scopes() {
