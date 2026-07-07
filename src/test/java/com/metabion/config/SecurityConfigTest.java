@@ -201,6 +201,30 @@ class SecurityConfigTest {
     }
 
     @Test
+    void oauthMetadataIsPublic() throws Exception {
+        mvc.perform(get("/.well-known/oauth-protected-resource"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/.well-known/oauth-authorization-server"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void oauthAuthorizePostRequiresCsrfForAuthenticatedPatient() throws Exception {
+        mvc.perform(post("/oauth/authorize")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .param("decision", "approve"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void oauthTokenPostWithoutCsrfIsNotForbiddenByCsrf() throws Exception {
+        mvc.perform(post("/oauth/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("grant_type=authorization_code"))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
+    }
+
+    @Test
     void mvc_register_page_renders_real_csrf_field() throws Exception {
         mvc.perform(get("/register"))
                 .andExpect(status().isOk())
