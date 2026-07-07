@@ -1,11 +1,14 @@
 package com.metabion.exception;
 
-public class InsufficientScopeException extends RuntimeException {
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+
+public class InsufficientScopeException extends ResponseStatusException {
 
     private final String scope;
 
     public InsufficientScopeException(String scope) {
-        super("Insufficient scope");
+        super(HttpStatus.FORBIDDEN, "missing scope");
         this.scope = scope;
     }
 

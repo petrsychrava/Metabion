@@ -21,8 +21,10 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.lang.reflect.Method;
 import java.time.Instant;
@@ -86,7 +88,11 @@ class PatientMcpToolsTest {
 
         assertThatThrownBy(() -> tools.metabionSaveDietLog(mock(DailyDietLogRequest.class)))
                 .isInstanceOfSatisfying(InsufficientScopeException.class,
-                        ex -> assertThat(ex.scope()).isEqualTo("patient:diet-log:write"));
+                        ex -> {
+                            assertThat(ex.scope()).isEqualTo("patient:diet-log:write");
+                            assertThat(ex).isInstanceOfSatisfying(ResponseStatusException.class,
+                                    status -> assertThat(status.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+                        });
         verify(audit).recordToolFailure(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_save_diet_log"),
                 org.mockito.ArgumentMatchers.eq("missing_scope"));
     }
