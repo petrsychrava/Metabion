@@ -21,7 +21,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -43,7 +45,7 @@ class PatientBearerTokenAuthenticationFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new PatientBearerTokenAuthenticationFilter(patientTokens, audit);
+        filter = new PatientBearerTokenAuthenticationFilter(patientTokens, audit, oauthProperties());
         SecurityContextHolder.clearContext();
     }
 
@@ -97,6 +99,10 @@ class PatientBearerTokenAuthenticationFilterTest {
         });
 
         assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(response.getHeader("WWW-Authenticate"))
+                .contains("Bearer")
+                .contains("resource_metadata=\"http://localhost:8080/.well-known/oauth-protected-resource\"")
+                .contains("error=\"invalid_token\"");
         assertThat(response.getContentAsString()).isEqualTo("{\"error\":\"invalid_token\"}");
         verify(audit).recordAuthenticationFailure("/api/mcp", "invalid_token");
     }
@@ -113,8 +119,12 @@ class PatientBearerTokenAuthenticationFilterTest {
         });
 
         assertThat(response.getStatus()).isEqualTo(403);
-        assertThat(response.getContentAsString()).isEqualTo("{\"error\":\"forbidden\"}");
-        verify(audit).recordAuthenticationFailure("/api/mcp", "forbidden");
+        assertThat(response.getHeader("WWW-Authenticate"))
+                .contains("Bearer")
+                .contains("resource_metadata=\"http://localhost:8080/.well-known/oauth-protected-resource\"")
+                .contains("error=\"insufficient_scope\"");
+        assertThat(response.getContentAsString()).isEqualTo("{\"error\":\"insufficient_scope\"}");
+        verify(audit).recordAuthenticationFailure("/api/mcp", "insufficient_scope");
     }
 
     @Test
@@ -135,6 +145,16 @@ class PatientBearerTokenAuthenticationFilterTest {
         var request = new MockHttpServletRequest("POST", path);
         request.setRequestURI(path);
         return request;
+    }
+
+    private static OAuthAuthorizationProperties oauthProperties() {
+        return new OAuthAuthorizationProperties(
+                "http://localhost:8080",
+                "http://localhost:8080/api/mcp",
+                Duration.ofMinutes(5),
+                Duration.ofHours(1),
+                new OAuthAuthorizationProperties.ClientMetadataProperties(true, Duration.ofSeconds(2), 32768),
+                Map.of());
     }
 
     private static PatientAccessToken token() {

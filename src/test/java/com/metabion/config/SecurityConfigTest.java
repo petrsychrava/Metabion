@@ -133,6 +133,14 @@ class SecurityConfigTest {
     }
 
     @Test
+    void mcp_post_without_bearer_adds_oauth_challenge() throws Exception {
+        mvc.perform(post("/api/mcp"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("WWW-Authenticate",
+                        containsString("Bearer resource_metadata=\"http://localhost:8080/.well-known/oauth-protected-resource\"")));
+    }
+
+    @Test
     void mcp_delete_with_bearer_without_csrf_is_not_rejected_by_csrf() throws Exception {
         when(patientAccessTokenService.authenticate("valid-token")).thenReturn(Optional.of(patientToken()));
 

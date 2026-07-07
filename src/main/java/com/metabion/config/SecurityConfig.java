@@ -26,6 +26,7 @@ import org.springframework.security.web.servlet.util.matcher.PathPatternRequestM
 
 import com.metabion.domain.RoleName;
 import com.metabion.repository.UserRepository;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
 @EnableWebSecurity
@@ -111,14 +112,23 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            RateLimitingFilter rateLimitingFilter,
                                            PatientBearerTokenAuthenticationFilter patientBearerTokenAuthenticationFilter,
-                                           McpLocalhostFilter mcpLocalhostFilter) throws Exception {
+                                           McpLocalhostFilter mcpLocalhostFilter,
+                                           OAuthAuthorizationProperties oauthProperties) throws Exception {
         var loginEntryPoint = new LoginUrlAuthenticationEntryPoint("/login");
         var unauthorizedEntryPoint = new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED);
+        var mcpUnauthorizedEntryPoint = (org.springframework.security.web.AuthenticationEntryPoint) (request, response, authException) -> {
+            response.setHeader("WWW-Authenticate", bearerChallenge(oauthProperties));
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+        };
         var authenticationEntryPoint = DelegatingAuthenticationEntryPoint.builder()
                 .addEntryPointFor(loginEntryPoint,
                         PathPatternRequestMatcher.pathPattern(HttpMethod.GET, "/app"))
                 .addEntryPointFor(loginEntryPoint,
                         PathPatternRequestMatcher.pathPattern(HttpMethod.GET, "/app/**"))
+                .addEntryPointFor(mcpUnauthorizedEntryPoint,
+                        PathPatternRequestMatcher.pathPattern("/api/mcp"))
+                .addEntryPointFor(mcpUnauthorizedEntryPoint,
+                        PathPatternRequestMatcher.pathPattern("/api/mcp/**"))
                 .defaultEntryPoint(unauthorizedEntryPoint)
                 .build();
 
@@ -185,5 +195,11 @@ public class SecurityConfig {
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration cfg) throws Exception {
         return cfg.getAuthenticationManager();
+    }
+
+    private static String bearerChallenge(OAuthAuthorizationProperties oauthProperties) {
+        return "Bearer resource_metadata=\""
+                + oauthProperties.issuer()
+                + "/.well-known/oauth-protected-resource\"";
     }
 }

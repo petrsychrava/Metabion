@@ -8,6 +8,7 @@ import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.dto.PatientProfileForm;
+import com.metabion.exception.InsufficientScopeException;
 import com.metabion.service.PatientAccessAuditService;
 import com.metabion.service.PatientAppFacade;
 import org.junit.jupiter.api.AfterEach;
@@ -20,10 +21,8 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.lang.reflect.Method;
 import java.time.Instant;
@@ -86,8 +85,8 @@ class PatientMcpToolsTest {
         authenticate(PatientAccessTokenScope.PATIENT_PROFILE_READ);
 
         assertThatThrownBy(() -> tools.metabionSaveDietLog(mock(DailyDietLogRequest.class)))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+                .isInstanceOfSatisfying(InsufficientScopeException.class,
+                        ex -> assertThat(ex.scope()).isEqualTo("patient:diet-log:write"));
         verify(audit).recordToolFailure(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_save_diet_log"),
                 org.mockito.ArgumentMatchers.eq("missing_scope"));
     }

@@ -1,6 +1,7 @@
 package com.metabion.controller.api;
 
 import com.metabion.exception.InvalidTokenException;
+import com.metabion.exception.InsufficientScopeException;
 import com.metabion.exception.StaffInvitationException;
 import com.metabion.exception.ValidationException;
 import com.metabion.service.RateLimitedException;
@@ -33,6 +34,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidTokenException.class)
     public ResponseEntity<Map<String, String>> invalidToken(InvalidTokenException e) {
         return ResponseEntity.badRequest().body(INVALID_TOKEN);
+    }
+
+    @ExceptionHandler(InsufficientScopeException.class)
+    public ResponseEntity<Map<String, String>> insufficientScope(InsufficientScopeException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .header("WWW-Authenticate",
+                        "Bearer error=\"insufficient_scope\", scope=\"" + e.scope() + "\"")
+                .body(Map.of("error", "insufficient_scope"));
     }
 
     @ExceptionHandler(StaffInvitationException.class)

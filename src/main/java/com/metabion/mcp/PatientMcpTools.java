@@ -10,6 +10,7 @@ import com.metabion.dto.SymptomCheckInRequest;
 import com.metabion.dto.mcp.DietPhotoBase64UploadRequest;
 import com.metabion.dto.mcp.DietPhotoContentResponse;
 import com.metabion.dto.mcp.PatientMeResponse;
+import com.metabion.exception.InsufficientScopeException;
 import com.metabion.service.PatientAccessAuditService;
 import com.metabion.service.PatientAppFacade;
 import org.springframework.ai.mcp.annotation.McpTool;
@@ -265,7 +266,7 @@ public class PatientMcpTools {
                 .anyMatch(granted -> authority.equals(granted.getAuthority()));
         if (!hasScope) {
             audit.recordToolFailure(auth, operation, "missing_scope");
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "missing scope");
+            throw new InsufficientScopeException(scope.authority());
         }
     }
 
