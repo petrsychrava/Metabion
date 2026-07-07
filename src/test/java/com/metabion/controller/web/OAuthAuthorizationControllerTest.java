@@ -18,6 +18,7 @@ import java.net.URI;
 import java.util.Set;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -52,17 +53,12 @@ class OAuthAuthorizationControllerTest {
 
     @Test
     void anonymousAuthorizeRedirectsToLoginWithContinueParameter() throws Exception {
-        mvc.perform(get("/oauth/authorize?response_type=code"
-                        + "&client_id=codex"
-                        + "&redirect_uri=http%3A%2F%2F127.0.0.1%3A1455%2Foauth%2Fcallback"
-                        + "&scope=patient%3Aprofile%3Aread"
-                        + "&state=state-123"
-                        + "&code_challenge=challenge"
-                        + "&code_challenge_method=S256"
-                        + "&resource=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Fmcp"))
+        mvc.perform(authorizeGet())
                 .andExpect(status().is3xxRedirection())
                 .andExpect(header().string("Location", containsString("/login?continue=/oauth/authorize")))
-                .andExpect(header().string("Location", containsString("client_id%3Dcodex")));
+                .andExpect(header().string("Location", containsString("client_id%3Dcodex")))
+                .andExpect(header().string("Location", containsString("redirect_uri%3Dhttp://127.0.0.1:1455/oauth/callback")))
+                .andExpect(header().string("Location", not(containsString("%25253A"))));
     }
 
     @Test
@@ -109,6 +105,12 @@ class OAuthAuthorizationControllerTest {
                 .andExpect(redirectedUrl(REDIRECT_URI + "?error=access_denied&state=state-123"));
 
         verify(authorizationService).deny(argThat(this::matchesRequest));
+    }
+
+    @Test
+    void invalidDecisionIsRejected() throws Exception {
+        mvc.perform(authorizePost().principal(patientAuth()).param("decision", "maybe"))
+                .andExpect(status().isBadRequest());
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder authorizeGet() {
