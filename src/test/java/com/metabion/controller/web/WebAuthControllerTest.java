@@ -124,6 +124,17 @@ class WebAuthControllerTest {
     }
 
     @Test
+    void login_renders_oauth_continue_hidden_field() throws Exception {
+        mvc.perform(get("/login")
+                        .param("continue", "/oauth/authorize?client_id=codex"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("login"))
+                .andExpect(model().attribute("continueTo", "/oauth/authorize?client_id=codex"))
+                .andExpect(content().string(containsString("name=\"continue\"")))
+                .andExpect(content().string(containsString("value=\"/oauth/authorize?client_id=codex\"")));
+    }
+
+    @Test
     void loginPageRendersInCzechWhenRequested() throws Exception {
         mvc.perform(get("/login").locale(java.util.Locale.forLanguageTag("cs")))
                 .andExpect(status().isOk())
@@ -303,6 +314,32 @@ class WebAuthControllerTest {
                 argThat(r -> "user@example.com".equals(r.email()) && "SecurePass123".equals(r.password())),
                 any(),
                 any());
+    }
+
+    @Test
+    void post_login_redirects_to_safe_oauth_continue_path() throws Exception {
+        when(securityService.login(any(), any(), any()))
+                .thenReturn(LoginResponse.authenticated("user@example.com", List.of(RoleName.PATIENT.name())));
+
+        mvc.perform(post("/login")
+                        .param("email", "user@example.com")
+                        .param("password", "SecurePass123")
+                        .param("continue", "/oauth/authorize?client_id=codex"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/oauth/authorize?client_id=codex"));
+    }
+
+    @Test
+    void post_login_ignores_unsafe_continue_path() throws Exception {
+        when(securityService.login(any(), any(), any()))
+                .thenReturn(LoginResponse.authenticated("user@example.com", List.of(RoleName.PATIENT.name())));
+
+        mvc.perform(post("/login")
+                        .param("email", "user@example.com")
+                        .param("password", "SecurePass123")
+                        .param("continue", "https://evil.example/oauth/authorize?client_id=codex"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/app"));
     }
 
     @Test

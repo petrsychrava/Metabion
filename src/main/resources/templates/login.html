@@ -12,6 +12,7 @@
 
         <form th:action="@{/login}" th:object="${loginForm}" method="post" class="form">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <input type="hidden" name="continue" th:value="${continueTo}" th:if="${continueTo != null}">
             <label for="email" th:text="#{auth.login.email}">Email</label>
             <input id="email" type="email" th:field="*{email}" autocomplete="email" required>
 

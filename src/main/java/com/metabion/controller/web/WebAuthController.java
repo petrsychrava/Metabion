@@ -60,36 +60,46 @@ public class WebAuthController {
     }
 
     @GetMapping("/login")
-    public String login(Authentication authentication, Model model) {
+    public String login(Authentication authentication,
+                        @RequestParam(name = "continue", required = false) String continueTo,
+                        Model model) {
         if (isAuthenticated(authentication)) {
             return "redirect:/app";
         }
         model.addAttribute("loginForm", new LoginForm("", ""));
+        model.addAttribute("continueTo", continueTo);
         return "login";
     }
 
     @PostMapping("/login")
     public String loginSubmit(@RequestParam String email,
                               @RequestParam String password,
+                              @RequestParam(name = "continue", required = false) String continueTo,
                               HttpServletRequest request,
                               HttpServletResponse response,
                               Model model) {
         if (isRateLimited(request, "login")) {
             model.addAttribute("loginForm", new LoginForm(email, ""));
             model.addAttribute("error", message("auth.login.invalid"));
+            model.addAttribute("continueTo", continueTo);
             return "login";
         }
         try {
             var result = securityService.login(new LoginRequest(email, password), request, response);
             if ("AUTHENTICATED".equals(result.status())) {
+                if (isSafeOAuthContinuePath(continueTo)) {
+                    return "redirect:" + continueTo;
+                }
                 return "redirect:/app";
             }
             model.addAttribute("loginForm", new LoginForm(email, ""));
             model.addAttribute("error", message("auth.login.mfaUnavailable"));
+            model.addAttribute("continueTo", continueTo);
             return "login";
         } catch (AuthenticationException ex) {
             model.addAttribute("loginForm", new LoginForm(email, ""));
             model.addAttribute("error", message("auth.login.invalid"));
+            model.addAttribute("continueTo", continueTo);
             return "login";
         }
     }
@@ -236,6 +246,10 @@ public class WebAuthController {
         return authentication != null
                 && authentication.isAuthenticated()
                 && !(authentication instanceof AnonymousAuthenticationToken);
+    }
+
+    private boolean isSafeOAuthContinuePath(String continueTo) {
+        return continueTo != null && continueTo.startsWith("/oauth/authorize?");
     }
 
     private boolean isRateLimited(HttpServletRequest request, String endpoint) {
