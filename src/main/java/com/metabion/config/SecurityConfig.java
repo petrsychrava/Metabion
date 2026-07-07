@@ -32,6 +32,7 @@ import com.metabion.repository.UserRepository;
 public class SecurityConfig {
 
     private static final String PUBLIC_STAFF_INVITATION_ACCEPT_POST = "/api/staff-invitations/accept";
+    private static final String OAUTH_TOKEN_ENDPOINT = "/oauth/token";
 
     private static final String[] MCP_ENDPOINTS = {
             "/api/mcp",
@@ -127,6 +128,8 @@ public class SecurityConfig {
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
                         .ignoringRequestMatchers(PUBLIC_AUTH_POSTS)
                         .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(
+                                HttpMethod.POST, OAUTH_TOKEN_ENDPOINT))
+                        .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(
                                 HttpMethod.POST, PUBLIC_STAFF_INVITATION_ACCEPT_POST))
                         .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(HttpMethod.POST, "/api/mcp"))
                         .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(HttpMethod.POST, "/api/mcp/**"))
@@ -145,6 +148,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, PUBLIC_OAUTH_GETS).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_MVC_POSTS).permitAll()
                         .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
+                        .requestMatchers(HttpMethod.POST, OAUTH_TOKEN_ENDPOINT).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_STAFF_INVITATION_ACCEPT_POST).permitAll()
                         .requestMatchers("/api/auth/verify").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/admin/staff-invitations").hasRole("ADMIN")
