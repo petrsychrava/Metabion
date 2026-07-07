@@ -17,7 +17,7 @@ Real desktop MCP clients showed that this is not enough. LM Studio can trigger b
 ## Non-Goals
 
 - Do not support confidential OAuth clients or client secrets.
-- Do not support arbitrary HTTPS redirect URIs in the first version.
+- Do not support non-loopback plain HTTP redirect URIs.
 - Do not build admin UI for registered clients.
 - Do not add refresh tokens.
 - Do not implement mobile-app custom URI schemes yet.
@@ -64,11 +64,12 @@ Accepted request shape:
 Validation rules:
 
 - `redirect_uris` is required, non-empty, and has at most 10 items.
-- Every redirect URI must be loopback HTTP:
+- Every redirect URI must be loopback HTTP or HTTPS:
   - `http://127.0.0.1:<port>/...`
   - `http://localhost:<port>/...`
-- Redirect URI ports must be explicit and valid.
-- HTTPS callbacks, non-loopback hosts, wildcard hosts, fragments, user-info, and blank paths are rejected.
+  - `https://client.example/oauth/callback`
+- Loopback HTTP redirect URI ports must be explicit and valid.
+- Plain HTTP callbacks to non-loopback hosts, wildcard hosts, fragments, user-info, and blank paths are rejected.
 - `token_endpoint_auth_method` must be absent or `none`.
 - `grant_types`, if present, must contain only `authorization_code`.
 - `response_types`, if present, must contain only `code`.
@@ -110,7 +111,7 @@ Classification affects labels and audit records only. It must not decide whether
 2. Metabion returns `401` with a `WWW-Authenticate` challenge pointing at protected resource metadata.
 3. Client fetches protected resource metadata and authorization server metadata.
 4. Client sees `registration_endpoint` and registers itself.
-5. Client starts `/oauth/authorize` with generated `client_id`, registered loopback redirect URI, requested resource, scopes, and PKCE S256 challenge.
+5. Client starts `/oauth/authorize` with generated `client_id`, registered redirect URI, requested resource, scopes, and PKCE S256 challenge.
 6. Patient logs in and approves consent.
 7. Client exchanges the authorization code at `/oauth/token` using the same registered client, redirect URI, resource, and PKCE verifier.
 8. Metabion issues a patient-bound access token for `metabion.oauth.resource`.
@@ -131,8 +132,8 @@ Authorization and token endpoints continue to reject unknown clients, unregister
 Add focused tests for:
 
 - Authorization server metadata includes `registration_endpoint`.
-- Registration accepts Codex/LM Studio style loopback redirect URIs.
-- Registration rejects non-loopback, HTTPS, missing-port, fragment, user-info, unsupported auth method, unsupported grant/response type, empty scope, unsupported scope, and oversized client names.
+- Registration accepts Codex/LM Studio style loopback redirect URIs and hosted HTTPS redirect URIs.
+- Registration rejects non-loopback plain HTTP, missing-port loopback HTTP, fragment, user-info, unsupported auth method, unsupported grant/response type, empty scope, unsupported scope, and oversized client names.
 - `OAuthClientResolver` resolves dynamically registered clients and validates redirect URI membership.
 - Existing config/preregistered clients still work if retained for compatibility.
 - Full OAuth flow succeeds with a dynamically registered client.

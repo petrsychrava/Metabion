@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add loopback-only OAuth Dynamic Client Registration so Codex Desktop, LM Studio, Claude, and future desktop MCP clients can authenticate through browser OAuth without manual patient token creation.
+**Goal:** Add OAuth Dynamic Client Registration so Codex Desktop, LM Studio, Claude, hosted HTTPS clients, and future MCP clients can authenticate through browser OAuth without manual patient token creation.
 
 **Architecture:** Persist dynamically registered public OAuth clients and resolve them during authorization and token exchange. Add `/oauth/register`, advertise it through authorization server metadata, keep PKCE S256 and resource-bound patient tokens unchanged, and leave existing static/config clients available during rollout.
 
@@ -12,8 +12,9 @@
 
 - Do not hardcode the Metabion server origin; use `metabion.oauth.issuer` and `metabion.oauth.resource`.
 - DCR clients are public clients only; no `client_secret` is issued or accepted.
-- DCR redirect URIs are loopback HTTP only, for example `http://127.0.0.1:49152/callback` or `http://localhost:49152/callback`.
-- DCR redirect URIs must have an explicit valid port, no user-info, no fragment, and a non-blank path.
+- DCR redirect URIs may be loopback HTTP or HTTPS, for example `http://127.0.0.1:49152/callback`, `http://localhost:49152/callback`, or `https://client.example/oauth/callback`.
+- Loopback HTTP redirect URIs must have an explicit valid port.
+- All DCR redirect URIs must have no user-info, no fragment, and a non-blank path.
 - A registration may include at most 10 redirect URIs.
 - Registration request bodies larger than 32 KB are rejected.
 - `client_name` is optional, trimmed, and limited to 120 characters.
@@ -404,9 +405,22 @@ class OAuthClientRegistrationServiceTest {
     }
 
     @Test
-    void rejectsHttpsRedirectUri() {
-        assertInvalidClientMetadata(new OAuthClientRegistrationRequest(
+    void registersHttpsClient() {
+        var response = service.register(new OAuthClientRegistrationRequest(
                 List.of("https://client.example/callback"),
+                "Codex",
+                "patient:profile:read",
+                "none",
+                List.of("authorization_code"),
+                List.of("code")));
+
+        assertThat(response.redirectUris()).containsExactly("https://client.example/callback");
+    }
+
+    @Test
+    void rejectsPlainHttpNonLoopbackRedirectUri() {
+        assertInvalidClientMetadata(new OAuthClientRegistrationRequest(
+                List.of("http://client.example/callback"),
                 "Codex",
                 "patient:profile:read",
                 "none",
@@ -704,16 +718,21 @@ public class OAuthClientRegistrationService {
         try {
             var uri = new URI(value.trim());
             var host = uri.getHost();
-            if (!"http".equalsIgnoreCase(uri.getScheme())
-                    || host == null
-                    || (!"127.0.0.1".equals(host) && !"localhost".equalsIgnoreCase(host))
-                    || uri.getPort() < 1
-                    || uri.getPort() > 65535
+            if (host == null
                     || uri.getUserInfo() != null
                     || uri.getFragment() != null
                     || uri.getPath() == null
                     || uri.getPath().isBlank()) {
-                throw invalidClientMetadata("redirect_uri must be loopback http with explicit port and path");
+                throw invalidClientMetadata("redirect_uri must have scheme, host, and path without user info or fragment");
+            }
+            var scheme = uri.getScheme();
+            var isLoopbackHost = "127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host);
+            if ("http".equalsIgnoreCase(scheme)) {
+                if (!isLoopbackHost || uri.getPort() < 1 || uri.getPort() > 65535) {
+                    throw invalidClientMetadata("plain http redirect_uri must be loopback with explicit port");
+                }
+            } else if (!"https".equalsIgnoreCase(scheme)) {
+                throw invalidClientMetadata("redirect_uri must use https or loopback http");
             }
             return uri.toString();
         } catch (URISyntaxException ex) {
