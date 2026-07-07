@@ -228,7 +228,8 @@ class HttpOAuthClientMetadataFetcherTest {
         return """
                 {
                   "client_name": "Example Client",
-                  "redirect_uris": ["https://client.example/callback"]
+                  "redirect_uris": ["https://client.example/callback"],
+                  "scope": ["patient:profile:read"]
                 }
                 """;
     }
