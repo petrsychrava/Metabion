@@ -160,6 +160,7 @@ public class SecurityConfig {
                         .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
                         .requestMatchers(HttpMethod.POST, OAUTH_TOKEN_ENDPOINT).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_STAFF_INVITATION_ACCEPT_POST).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/oauth/authorize").authenticated()
                         .requestMatchers("/api/auth/verify").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/admin/staff-invitations").hasRole("ADMIN")
                         .requestMatchers("/app/staff-invitations/**").hasRole("ADMIN")

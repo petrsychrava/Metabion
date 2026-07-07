@@ -217,6 +217,15 @@ class SecurityConfigTest {
     }
 
     @Test
+    void oauthAuthorizePostWithCsrfForAuthenticatedPatientIsNotDeniedBySecurity() throws Exception {
+        mvc.perform(post("/oauth/authorize")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("decision", "approve"))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
+    }
+
+    @Test
     void oauthTokenPostWithoutCsrfIsNotForbiddenByCsrf() throws Exception {
         mvc.perform(post("/oauth/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
