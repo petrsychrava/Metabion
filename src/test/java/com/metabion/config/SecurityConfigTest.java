@@ -133,6 +133,14 @@ class SecurityConfigTest {
     }
 
     @Test
+    void mcp_post_without_bearer_adds_oauth_challenge() throws Exception {
+        mvc.perform(post("/api/mcp"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("WWW-Authenticate",
+                        containsString("Bearer resource_metadata=\"http://localhost:8080/.well-known/oauth-protected-resource\"")));
+    }
+
+    @Test
     void mcp_delete_with_bearer_without_csrf_is_not_rejected_by_csrf() throws Exception {
         when(patientAccessTokenService.authenticate("valid-token")).thenReturn(Optional.of(patientToken()));
 
@@ -190,6 +198,39 @@ class SecurityConfigTest {
         mvc.perform(get("/register")).andExpect(status().isOk());
         mvc.perform(get("/forgot-password")).andExpect(status().isOk());
         mvc.perform(get("/reset-password").param("token", "abc")).andExpect(status().isOk());
+    }
+
+    @Test
+    void oauthMetadataIsPublic() throws Exception {
+        mvc.perform(get("/.well-known/oauth-protected-resource"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/.well-known/oauth-authorization-server"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void oauthAuthorizePostRequiresCsrfForAuthenticatedPatient() throws Exception {
+        mvc.perform(post("/oauth/authorize")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .param("decision", "approve"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void oauthAuthorizePostWithCsrfForAuthenticatedPatientIsNotDeniedBySecurity() throws Exception {
+        mvc.perform(post("/oauth/authorize")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("decision", "approve"))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
+    }
+
+    @Test
+    void oauthTokenPostWithoutCsrfIsNotForbiddenByCsrf() throws Exception {
+        mvc.perform(post("/oauth/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("grant_type=authorization_code"))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
     }
 
     @Test
@@ -379,6 +420,7 @@ class SecurityConfigTest {
                 "Codex",
                 Instant.parse("2026-07-04T10:00:00Z"),
                 Instant.parse("2026-08-03T10:00:00Z"),
+                "http://localhost:8080/api/mcp",
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
         ReflectionTestUtils.setField(token, "id", 50L);
         return token;

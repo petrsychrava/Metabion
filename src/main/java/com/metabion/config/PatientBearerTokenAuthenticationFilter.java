@@ -21,11 +21,14 @@ public class PatientBearerTokenAuthenticationFilter extends OncePerRequestFilter
 
     private final PatientAccessTokenService patientTokens;
     private final PatientAccessAuditService audit;
+    private final OAuthAuthorizationProperties oauthProperties;
 
     public PatientBearerTokenAuthenticationFilter(PatientAccessTokenService patientTokens,
-                                                  PatientAccessAuditService audit) {
+                                                  PatientAccessAuditService audit,
+                                                  OAuthAuthorizationProperties oauthProperties) {
         this.patientTokens = patientTokens;
         this.audit = audit;
+        this.oauthProperties = oauthProperties;
     }
 
     @Override
@@ -50,6 +53,7 @@ public class PatientBearerTokenAuthenticationFilter extends OncePerRequestFilter
         if (resolved.isEmpty()) {
             audit.recordAuthenticationFailure(request.getRequestURI(), "invalid_token");
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setHeader("WWW-Authenticate", challenge("invalid_token", null));
             response.setContentType("application/json");
             response.getWriter().write("{\"error\":\"invalid_token\"}");
             return;
@@ -88,14 +92,28 @@ public class PatientBearerTokenAuthenticationFilter extends OncePerRequestFilter
             return patientTokens.authenticate(token);
         } catch (ResponseStatusException ex) {
             var error = ex.getStatusCode().isSameCodeAs(HttpStatus.FORBIDDEN)
-                    ? "forbidden"
+                    ? "insufficient_scope"
                     : "invalid_token";
             audit.recordAuthenticationFailure(request.getRequestURI(), error);
             response.setStatus(ex.getStatusCode().value());
+            response.setHeader("WWW-Authenticate", challenge(error, null));
             response.setContentType("application/json");
             response.getWriter().write("{\"error\":\"" + error + "\"}");
             response.flushBuffer();
             return Optional.empty();
         }
+    }
+
+    private String challenge(String error, String scope) {
+        var value = "Bearer resource_metadata=\""
+                + oauthProperties.issuer()
+                + "/.well-known/oauth-protected-resource\"";
+        if (error != null) {
+            value += ", error=\"" + error + "\"";
+        }
+        if (scope != null && !scope.isBlank()) {
+            value += ", scope=\"" + scope + "\"";
+        }
+        return value;
     }
 }

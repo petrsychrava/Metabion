@@ -1325,48 +1325,21 @@ git commit -m "Resolve MCP OAuth clients"
 - Create: `src/main/java/com/metabion/service/oauth/HttpOAuthClientMetadataFetcher.java`
 - Create: `src/test/java/com/metabion/service/oauth/HttpOAuthClientMetadataFetcherTest.java`
 
+**Security amendment after code review:**
+The initial plan used Java `HttpClient` after pre-resolving and checking the metadata host. Code review found that this leaves a DNS-rebinding gap because `HttpClient` resolves/connects internally and does not expose per-request address pinning. The accepted Task 7 implementation should instead use an address-pinned HTTPS transport that connects to a prechecked `InetAddress`, while preserving the original host for SNI, hostname verification, and the `Host` header. The transport must read at most `maxBytes + 1` bytes from the response body before rejecting oversized metadata documents.
+
+The Spring constructor may use `ObjectProvider<ObjectMapper>` with a fetcher-local fallback. Do not add a global plain `ObjectMapper` bean for this task.
+
 - [ ] **Step 1: Write fetcher safety tests**
 
-Create `src/test/java/com/metabion/service/oauth/HttpOAuthClientMetadataFetcherTest.java`:
-
-```java
-package com.metabion.service.oauth;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.metabion.config.OAuthAuthorizationProperties;
-import org.junit.jupiter.api.Test;
-
-import java.net.http.HttpClient;
-import java.time.Duration;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-class HttpOAuthClientMetadataFetcherTest {
-
-    @Test
-    void rejectsNonHttpsAndLoopbackMetadataUrlsBeforeNetworkFetch() {
-        var fetcher = new HttpOAuthClientMetadataFetcher(
-                props(),
-                HttpClient.newHttpClient(),
-                new ObjectMapper());
-
-        assertThat(fetcher.fetch("http://client.example/metadata.json")).isEmpty();
-        assertThat(fetcher.fetch("https://127.0.0.1/metadata.json")).isEmpty();
-        assertThat(fetcher.fetch("https://localhost/metadata.json")).isEmpty();
-    }
-
-    private static OAuthAuthorizationProperties props() {
-        return new OAuthAuthorizationProperties(
-                "http://localhost:8080",
-                "http://localhost:8080/api/mcp",
-                Duration.ofMinutes(5),
-                Duration.ofHours(1),
-                new OAuthAuthorizationProperties.ClientMetadataProperties(true, Duration.ofMillis(100), 4096),
-                Map.of());
-    }
-}
-```
+Create `src/test/java/com/metabion/service/oauth/HttpOAuthClientMetadataFetcherTest.java`.
+Tests must cover:
+- rejection before network fetch for non-HTTPS, loopback, localhost, IPv6 unique-local, and IPv4-mapped private literals;
+- successful metadata parsing with array and space-separated scopes;
+- blank present `scope` is invalid metadata;
+- non-200 responses do not read the response body;
+- oversized responses are rejected by a bounded `maxBytes + 1` read path;
+- request interruption restores the interrupt flag.
 
 - [ ] **Step 2: Run fetcher tests and verify failure**
 
@@ -1380,131 +1353,20 @@ Expected: compilation fails because `HttpOAuthClientMetadataFetcher` does not ex
 
 - [ ] **Step 3: Add fetcher**
 
-Create `src/main/java/com/metabion/service/oauth/HttpOAuthClientMetadataFetcher.java`:
-
-```java
-package com.metabion.service.oauth;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.metabion.config.OAuthAuthorizationProperties;
-import com.metabion.dto.oauth.OAuthClientMetadata;
-import org.springframework.stereotype.Service;
-
-import java.io.IOException;
-import java.net.InetAddress;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-
-@Service
-public class HttpOAuthClientMetadataFetcher implements OAuthClientMetadataFetcher {
-
-    private final OAuthAuthorizationProperties properties;
-    private final HttpClient httpClient;
-    private final ObjectMapper objectMapper;
-
-    public HttpOAuthClientMetadataFetcher(OAuthAuthorizationProperties properties,
-                                          ObjectMapper objectMapper) {
-        this(properties, HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .connectTimeout(properties.clientMetadata().timeout())
-                .build(), objectMapper);
-    }
-
-    HttpOAuthClientMetadataFetcher(OAuthAuthorizationProperties properties,
-                                   HttpClient httpClient,
-                                   ObjectMapper objectMapper) {
-        this.properties = properties;
-        this.httpClient = httpClient;
-        this.objectMapper = objectMapper;
-    }
-
-    @Override
-    public Optional<OAuthClientMetadata> fetch(String clientId) {
-        try {
-            var uri = URI.create(clientId);
-            if (!isAllowedMetadataUri(uri)) {
-                return Optional.empty();
-            }
-            var request = HttpRequest.newBuilder(uri)
-                    .timeout(properties.clientMetadata().timeout())
-                    .header("Accept", "application/json")
-                    .GET()
-                    .build();
-            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            if (response.statusCode() != 200 || response.body().length > properties.clientMetadata().maxBytes()) {
-                return Optional.empty();
-            }
-            return parse(clientId, response.body());
-        } catch (IllegalArgumentException | IOException | InterruptedException ex) {
-            if (ex instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            return Optional.empty();
-        }
-    }
-
-    private boolean isAllowedMetadataUri(URI uri) throws IOException {
-        if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) {
-            return false;
-        }
-        for (var address : InetAddress.getAllByName(uri.getHost())) {
-            if (address.isAnyLocalAddress()
-                    || address.isLoopbackAddress()
-                    || address.isLinkLocalAddress()
-                    || address.isSiteLocalAddress()
-                    || address.isMulticastAddress()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private Optional<OAuthClientMetadata> parse(String clientId, byte[] body) throws IOException {
-        JsonNode json = objectMapper.readTree(body);
-        var name = text(json, "client_name");
-        var redirectUris = strings(json.get("redirect_uris"));
-        var scopes = strings(json.get("scope"));
-        if (name == null || redirectUris.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.of(new OAuthClientMetadata(clientId, name, redirectUris, scopes));
-    }
-
-    private String text(JsonNode json, String field) {
-        var value = json.get(field);
-        return value == null || !value.isTextual() || value.asText().isBlank() ? null : value.asText();
-    }
-
-    private List<String> strings(JsonNode node) {
-        var values = new ArrayList<String>();
-        if (node == null) {
-            return values;
-        }
-        if (node.isTextual()) {
-            for (var value : node.asText().split(" ")) {
-                if (!value.isBlank()) {
-                    values.add(value);
-                }
-            }
-            return values;
-        }
-        if (node.isArray()) {
-            node.forEach(item -> {
-                if (item.isTextual() && !item.asText().isBlank()) {
-                    values.add(item.asText());
-                }
-            });
-        }
-        return values;
-    }
-}
-```
+Create `src/main/java/com/metabion/service/oauth/HttpOAuthClientMetadataFetcher.java`.
+Implementation requirements:
+- Spring `@Service` implementing `OAuthClientMetadataFetcher`.
+- Uses `OAuthAuthorizationProperties` and `ObjectMapper`; constructor may inject `ObjectProvider<ObjectMapper>` and use a fetcher-local `ObjectMapper` fallback when no mapper bean exists.
+- Parses `clientId` as a URI and allows only `https` URIs with a host and without userinfo.
+- Resolves all host addresses and rejects the metadata document if any address is unsafe: any-local, loopback, link-local, site-local, multicast, IPv6 unique-local `fc00::/7`, or IPv4 private/local/multicast ranges including IPv4-mapped IPv6.
+- Fetches by connecting to one prechecked `InetAddress`, preserving the original host for SNI, HTTPS endpoint identification, and `Host`.
+- Sends `GET`, `Accept: application/json`, and `Connection: close`; never follows redirects.
+- Accepts only status `200`.
+- Reads at most `maxBytes + 1` response bytes and rejects oversized responses before JSON parsing.
+- Requires nonblank `client_name` and at least one nonblank `redirect_uris` array item.
+- Parses `scope` as either a nonblank space-separated string or an array of nonblank strings; absent `scope` is allowed.
+- Returns `OAuthClientMetadata` with the requested `clientId`.
+- Returns `Optional.empty()` on malformed URI, DNS failure, IO, timeout, interrupted request, invalid metadata, or oversize response; restores interrupt flag when interrupted.
 
 - [ ] **Step 4: Run fetcher tests**
 

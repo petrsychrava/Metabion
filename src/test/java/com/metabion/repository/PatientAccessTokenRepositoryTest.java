@@ -42,6 +42,7 @@ class PatientAccessTokenRepositoryTest {
                 "Codex local",
                 Instant.parse("2026-07-04T10:00:00Z"),
                 Instant.parse("2026-08-03T10:00:00Z"),
+                "http://localhost:8080/api/mcp",
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ, PatientAccessTokenScope.PATIENT_DIET_LOG_WRITE));
         tokens.saveAndFlush(token);
         entityManager.clear();
@@ -69,6 +70,7 @@ class PatientAccessTokenRepositoryTest {
                 "Claude",
                 Instant.parse("2026-07-04T10:00:00Z"),
                 Instant.parse("2026-08-03T10:00:00Z"),
+                "http://localhost:8080/api/mcp",
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
         var revoked = new PatientAccessToken(
                 user,
@@ -77,6 +79,7 @@ class PatientAccessTokenRepositoryTest {
                 "Codex",
                 Instant.parse("2026-07-04T10:00:00Z"),
                 Instant.parse("2026-08-03T10:00:00Z"),
+                "http://localhost:8080/api/mcp",
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
         revoked.revoke("patient_request", Instant.parse("2026-07-05T10:00:00Z"));
         tokens.save(active);

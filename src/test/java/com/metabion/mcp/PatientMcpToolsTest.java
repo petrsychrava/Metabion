@@ -8,6 +8,7 @@ import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.dto.PatientProfileForm;
+import com.metabion.exception.InsufficientScopeException;
 import com.metabion.service.PatientAccessAuditService;
 import com.metabion.service.PatientAppFacade;
 import org.junit.jupiter.api.AfterEach;
@@ -86,8 +87,12 @@ class PatientMcpToolsTest {
         authenticate(PatientAccessTokenScope.PATIENT_PROFILE_READ);
 
         assertThatThrownBy(() -> tools.metabionSaveDietLog(mock(DailyDietLogRequest.class)))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+                .isInstanceOfSatisfying(InsufficientScopeException.class,
+                        ex -> {
+                            assertThat(ex.scope()).isEqualTo("patient:diet-log:write");
+                            assertThat(ex).isInstanceOfSatisfying(ResponseStatusException.class,
+                                    status -> assertThat(status.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+                        });
         verify(audit).recordToolFailure(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_save_diet_log"),
                 org.mockito.ArgumentMatchers.eq("missing_scope"));
     }
@@ -179,6 +184,7 @@ class PatientMcpToolsTest {
                 "Codex",
                 Instant.parse("2026-07-04T10:00:00Z"),
                 Instant.parse("2026-08-03T10:00:00Z"),
+                "http://localhost:8080/api/mcp",
                 Set.of(scopes));
         ReflectionTestUtils.setField(token, "id", 50L);
         return token;

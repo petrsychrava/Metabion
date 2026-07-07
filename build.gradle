@@ -47,6 +47,8 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    systemProperty 'spring.test.context.cache.maxSize',
+            System.getProperty('spring.test.context.cache.maxSize', '4')
     finalizedBy 'jacocoTestReport'
 }
 

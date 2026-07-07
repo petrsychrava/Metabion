@@ -26,12 +26,14 @@ import org.springframework.security.web.servlet.util.matcher.PathPatternRequestM
 
 import com.metabion.domain.RoleName;
 import com.metabion.repository.UserRepository;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
     private static final String PUBLIC_STAFF_INVITATION_ACCEPT_POST = "/api/staff-invitations/accept";
+    private static final String OAUTH_TOKEN_ENDPOINT = "/oauth/token";
 
     private static final String[] MCP_ENDPOINTS = {
             "/api/mcp",
@@ -43,6 +45,12 @@ public class SecurityConfig {
             "/api/auth/login",
             "/api/auth/forgot-password",
             "/api/auth/reset-password"
+    };
+
+    private static final String[] PUBLIC_OAUTH_GETS = {
+            "/.well-known/oauth-protected-resource",
+            "/.well-known/oauth-authorization-server",
+            "/oauth/authorize"
     };
 
     private static final String[] PUBLIC_MVC_GETS = {
@@ -104,14 +112,23 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            RateLimitingFilter rateLimitingFilter,
                                            PatientBearerTokenAuthenticationFilter patientBearerTokenAuthenticationFilter,
-                                           McpLocalhostFilter mcpLocalhostFilter) throws Exception {
+                                           McpLocalhostFilter mcpLocalhostFilter,
+                                           OAuthAuthorizationProperties oauthProperties) throws Exception {
         var loginEntryPoint = new LoginUrlAuthenticationEntryPoint("/login");
         var unauthorizedEntryPoint = new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED);
+        var mcpUnauthorizedEntryPoint = (org.springframework.security.web.AuthenticationEntryPoint) (request, response, authException) -> {
+            response.setHeader("WWW-Authenticate", bearerChallenge(oauthProperties));
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+        };
         var authenticationEntryPoint = DelegatingAuthenticationEntryPoint.builder()
                 .addEntryPointFor(loginEntryPoint,
                         PathPatternRequestMatcher.pathPattern(HttpMethod.GET, "/app"))
                 .addEntryPointFor(loginEntryPoint,
                         PathPatternRequestMatcher.pathPattern(HttpMethod.GET, "/app/**"))
+                .addEntryPointFor(mcpUnauthorizedEntryPoint,
+                        PathPatternRequestMatcher.pathPattern("/api/mcp"))
+                .addEntryPointFor(mcpUnauthorizedEntryPoint,
+                        PathPatternRequestMatcher.pathPattern("/api/mcp/**"))
                 .defaultEntryPoint(unauthorizedEntryPoint)
                 .build();
 
@@ -120,6 +137,8 @@ public class SecurityConfig {
                         .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
                         .ignoringRequestMatchers(PUBLIC_AUTH_POSTS)
+                        .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(
+                                HttpMethod.POST, OAUTH_TOKEN_ENDPOINT))
                         .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(
                                 HttpMethod.POST, PUBLIC_STAFF_INVITATION_ACCEPT_POST))
                         .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(HttpMethod.POST, "/api/mcp"))
@@ -136,9 +155,12 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_STATIC).permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_MVC_GETS).permitAll()
+                        .requestMatchers(HttpMethod.GET, PUBLIC_OAUTH_GETS).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_MVC_POSTS).permitAll()
                         .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
+                        .requestMatchers(HttpMethod.POST, OAUTH_TOKEN_ENDPOINT).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_STAFF_INVITATION_ACCEPT_POST).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/oauth/authorize").authenticated()
                         .requestMatchers("/api/auth/verify").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/admin/staff-invitations").hasRole("ADMIN")
                         .requestMatchers("/app/staff-invitations/**").hasRole("ADMIN")
@@ -174,5 +196,11 @@ public class SecurityConfig {
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration cfg) throws Exception {
         return cfg.getAuthenticationManager();
+    }
+
+    private static String bearerChallenge(OAuthAuthorizationProperties oauthProperties) {
+        return "Bearer resource_metadata=\""
+                + oauthProperties.issuer()
+                + "/.well-known/oauth-protected-resource\"";
     }
 }

@@ -1,5 +1,6 @@
 package com.metabion.service;
 
+import com.metabion.config.OAuthAuthorizationProperties;
 import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessToken;
 import com.metabion.domain.PatientAccessTokenScope;
@@ -52,7 +53,14 @@ class PatientAccessTokenServiceTest {
         service = new PatientAccessTokenService(
                 users,
                 tokens,
-                Clock.fixed(Instant.parse("2026-07-04T10:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-07-04T10:00:00Z"), ZoneOffset.UTC),
+                new OAuthAuthorizationProperties(
+                        "http://localhost:8080",
+                        "http://localhost:8080/api/mcp",
+                        null,
+                        null,
+                        null,
+                        null));
         patient = new User("patient@example.com", "hash");
         ReflectionTestUtils.setField(patient, "id", 10L);
         patient.setEnabled(true);
@@ -92,6 +100,14 @@ class PatientAccessTokenServiceTest {
         when(tokens.findByTokenHash(PatientAccessTokenService.sha256Hex("plain"))).thenReturn(Optional.of(token));
 
         assertThat(service.authenticate("plain")).isEmpty();
+    }
+
+    @Test
+    void authenticateForResourceRejectsTokenIssuedForAnotherResource() {
+        var token = token("valid", Instant.parse("2026-08-03T10:00:00Z"), "http://localhost:8080/other");
+        when(tokens.findByTokenHash(PatientAccessTokenService.sha256Hex("plain"))).thenReturn(Optional.of(token));
+
+        assertThat(service.authenticateForResource("plain", "http://localhost:8080/api/mcp")).isEmpty();
     }
 
     @Test
@@ -294,6 +310,7 @@ class PatientAccessTokenServiceTest {
                 "Codex",
                 Instant.parse("2026-07-02T09:00:00Z"),
                 Instant.parse("2026-08-03T10:00:00Z"),
+                "http://localhost:8080/api/mcp",
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
         ReflectionTestUtils.setField(token, "id", 51L);
         when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
@@ -339,6 +356,10 @@ class PatientAccessTokenServiceTest {
     }
 
     private PatientAccessToken token(String hash, Instant expiresAt) {
+        return token(hash, expiresAt, "http://localhost:8080/api/mcp");
+    }
+
+    private PatientAccessToken token(String hash, Instant expiresAt, String resource) {
         var token = new PatientAccessToken(
                 patient,
                 PatientAccessTokenService.sha256Hex(hash),
@@ -346,6 +367,7 @@ class PatientAccessTokenServiceTest {
                 "Codex",
                 Instant.parse("2026-07-02T09:00:00Z"),
                 expiresAt,
+                resource,
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
         ReflectionTestUtils.setField(token, "id", 50L);
         return token;
