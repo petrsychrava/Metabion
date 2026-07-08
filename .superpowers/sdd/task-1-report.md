@@ -17,3 +17,15 @@ Updated `OAuthRegisteredClient` to validate redirect URIs against the DCR policy
 Verification:
 - `./gradlew test --tests com.metabion.repository.OAuthRegisteredClientRepositoryTest`
 - Result: `BUILD SUCCESSFUL`
+
+## Re-review Fix
+
+Addressed the reviewer notes in `OAuthRegisteredClient` and the repository test:
+- constrained `tokenEndpointAuthMethod` to `none` and added coverage rejecting `client_secret_basic`
+- allowed IPv6 loopback redirect URIs such as `http://[::1]:49152/callback` and added a focused acceptance test
+
+Verification:
+- First run: `./gradlew test --tests com.metabion.repository.OAuthRegisteredClientRepositoryTest`
+- First result: `acceptsIpv6LoopbackRedirectUriWithExplicitPort()` failed with `IllegalArgumentException` from `OAuthRegisteredClient`
+- Second run: `./gradlew test --tests com.metabion.repository.OAuthRegisteredClientRepositoryTest`
+- Second result: `BUILD SUCCESSFUL`

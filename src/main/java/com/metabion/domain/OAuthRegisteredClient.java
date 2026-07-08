@@ -15,6 +15,8 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.net.URI;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -74,7 +76,7 @@ public class OAuthRegisteredClient {
         if (this.clientName != null && this.clientName.length() > 120) {
             throw new IllegalArgumentException("client name must be 120 characters or fewer");
         }
-        this.tokenEndpointAuthMethod = require(tokenEndpointAuthMethod, "token endpoint auth method");
+        this.tokenEndpointAuthMethod = normalizeTokenEndpointAuthMethod(tokenEndpointAuthMethod);
         this.redirectUris = normalizeRedirectUris(redirectUris);
         this.scopes = normalizeScopes(scopes);
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt is required");
@@ -181,11 +183,29 @@ public class OAuthRegisteredClient {
     }
 
     private boolean isAllowedLoopbackHost(String host) {
-        return "localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host);
+        if ("localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host)) {
+            return true;
+        }
+        if (host != null && host.contains(":")) {
+            try {
+                return InetAddress.getByName(host).isLoopbackAddress();
+            } catch (UnknownHostException ex) {
+                return false;
+            }
+        }
+        return false;
     }
 
     private boolean hasExplicitValidPort(URI uri) {
         return uri.getPort() > 0 && uri.getPort() <= 65535;
+    }
+
+    private String normalizeTokenEndpointAuthMethod(String tokenEndpointAuthMethod) {
+        var value = require(tokenEndpointAuthMethod, "token endpoint auth method");
+        if (!"none".equalsIgnoreCase(value)) {
+            throw new IllegalArgumentException("token endpoint auth method must be none");
+        }
+        return "none";
     }
 
     private String require(String value, String label) {

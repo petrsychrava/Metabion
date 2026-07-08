@@ -54,6 +54,18 @@ class OAuthRegisteredClientRepositoryTest {
     }
 
     @Test
+    void acceptsIpv6LoopbackRedirectUriWithExplicitPort() {
+        clients.saveAndFlush(client(
+                List.of("http://[::1]:49152/callback"),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority())));
+
+        var found = clients.findByClientId("mcp_client_abc123");
+
+        assertThat(found).isPresent();
+        assertThat(found.orElseThrow().redirectUris()).containsExactly("http://[::1]:49152/callback");
+    }
+
+    @Test
     void rejectsNonLoopbackPlainHttpRedirectUri() {
         assertThatThrownBy(() -> client(
                 List.of("http://example.com/callback"),
@@ -69,6 +81,20 @@ class OAuthRegisteredClientRepositoryTest {
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("redirect uri must use https or loopback http with an explicit port");
+    }
+
+    @Test
+    void rejectsClientSecretBasicTokenEndpointAuthMethod() {
+        assertThatThrownBy(() -> new OAuthRegisteredClient(
+                "mcp_client_abc123",
+                "Codex",
+                "client_secret_basic",
+                List.of("https://example.com/callback"),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority()),
+                NOW,
+                NOW))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("token endpoint auth method must be none");
     }
 
     @Test
