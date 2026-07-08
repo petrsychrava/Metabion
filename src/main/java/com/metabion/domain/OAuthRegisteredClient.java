@@ -9,13 +9,19 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
+import java.net.URI;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.Locale;
 
 @Entity
 @Table(name = "oauth_registered_clients")
@@ -37,8 +43,9 @@ public class OAuthRegisteredClient {
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "oauth_registered_client_redirect_uris",
             joinColumns = @JoinColumn(name = "registered_client_id"))
+    @OrderColumn(name = "redirect_uri_order")
     @Column(name = "redirect_uri", nullable = false, length = 500)
-    private Set<String> redirectUris = new LinkedHashSet<>();
+    private List<String> redirectUris = new ArrayList<>();
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "oauth_registered_client_scopes",
@@ -72,6 +79,7 @@ public class OAuthRegisteredClient {
         this.scopes = normalizeScopes(scopes);
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt is required");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt is required");
+        validateState();
     }
 
     public List<String> redirectUris() {
@@ -82,19 +90,25 @@ public class OAuthRegisteredClient {
         return Set.copyOf(scopes);
     }
 
-    private Set<String> normalizeRedirectUris(List<String> redirectUris) {
+    @PrePersist
+    @PreUpdate
+    private void validateState() {
+        validateRedirectUris(redirectUris);
+        validateScopes(scopes);
+    }
+
+    private List<String> normalizeRedirectUris(List<String> redirectUris) {
         if (redirectUris == null || redirectUris.isEmpty()) {
             throw new IllegalArgumentException("redirect uris are required");
         }
         if (redirectUris.size() > 10) {
             throw new IllegalArgumentException("no more than 10 redirect uris are allowed");
         }
-        var values = new LinkedHashSet<String>();
+        var values = new ArrayList<String>(redirectUris.size());
         for (var redirectUri : redirectUris) {
-            if (redirectUri == null || redirectUri.isBlank()) {
-                throw new IllegalArgumentException("redirect uris are required");
-            }
-            values.add(redirectUri.trim());
+            var value = require(redirectUri, "redirect uri");
+            validateRedirectUri(value);
+            values.add(value);
         }
         return values;
     }
@@ -105,12 +119,73 @@ public class OAuthRegisteredClient {
         }
         var values = new LinkedHashSet<String>();
         for (var scope : scopes) {
-            if (scope == null || scope.isBlank()) {
-                throw new IllegalArgumentException("scopes are required");
-            }
-            values.add(scope.trim());
+            var value = require(scope, "scope");
+            PatientAccessTokenScope.fromAuthority(value);
+            values.add(value);
         }
         return values;
+    }
+
+    private void validateRedirectUris(List<String> redirectUris) {
+        if (redirectUris == null || redirectUris.isEmpty()) {
+            throw new IllegalArgumentException("redirect uris are required");
+        }
+        for (var redirectUri : redirectUris) {
+            validateRedirectUri(require(redirectUri, "redirect uri"));
+        }
+    }
+
+    private void validateScopes(Set<String> scopes) {
+        if (scopes == null || scopes.isEmpty()) {
+            throw new IllegalArgumentException("scopes are required");
+        }
+        for (var scope : scopes) {
+            PatientAccessTokenScope.fromAuthority(require(scope, "scope"));
+        }
+    }
+
+    private void validateRedirectUri(String redirectUri) {
+        URI uri;
+        try {
+            uri = URI.create(redirectUri);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("invalid redirect uri: " + redirectUri, ex);
+        }
+        if (uri.getUserInfo() != null) {
+            throw new IllegalArgumentException("redirect uri must not include user info");
+        }
+        if (uri.getFragment() != null) {
+            throw new IllegalArgumentException("redirect uri must not include fragment");
+        }
+        if (uri.getHost() == null || uri.getHost().isBlank()) {
+            throw new IllegalArgumentException("redirect uri must include a host");
+        }
+        if (uri.getPath() == null || uri.getPath().isBlank()) {
+            throw new IllegalArgumentException("redirect uri must include a path");
+        }
+        var scheme = uri.getScheme();
+        if (scheme == null) {
+            throw new IllegalArgumentException("redirect uri must include a scheme");
+        }
+        switch (scheme.toLowerCase(Locale.ROOT)) {
+            case "https" -> {
+                return;
+            }
+            case "http" -> {
+                if (!isAllowedLoopbackHost(uri.getHost()) || !hasExplicitValidPort(uri)) {
+                    throw new IllegalArgumentException("redirect uri must use https or loopback http with an explicit port");
+                }
+            }
+            default -> throw new IllegalArgumentException("redirect uri must use https or loopback http with an explicit port");
+        }
+    }
+
+    private boolean isAllowedLoopbackHost(String host) {
+        return "localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host);
+    }
+
+    private boolean hasExplicitValidPort(URI uri) {
+        return uri.getPort() > 0 && uri.getPort() <= 65535;
     }
 
     private String require(String value, String label) {

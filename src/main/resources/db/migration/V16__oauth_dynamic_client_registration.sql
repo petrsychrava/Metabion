@@ -9,8 +9,9 @@ CREATE TABLE oauth_registered_clients (
 
 CREATE TABLE oauth_registered_client_redirect_uris (
     registered_client_id BIGINT NOT NULL REFERENCES oauth_registered_clients(id) ON DELETE CASCADE,
+    redirect_uri_order INTEGER NOT NULL,
     redirect_uri VARCHAR(500) NOT NULL,
-    PRIMARY KEY (registered_client_id, redirect_uri)
+    PRIMARY KEY (registered_client_id, redirect_uri_order)
 );
 
 CREATE TABLE oauth_registered_client_scopes (
