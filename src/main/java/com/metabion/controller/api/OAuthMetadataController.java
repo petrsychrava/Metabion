@@ -34,6 +34,7 @@ public class OAuthMetadataController {
         metadata.put("issuer", properties.issuer());
         metadata.put("authorization_endpoint", properties.issuer() + "/oauth/authorize");
         metadata.put("token_endpoint", properties.issuer() + "/oauth/token");
+        metadata.put("registration_endpoint", properties.issuer() + "/oauth/register");
         metadata.put("response_types_supported", List.of("code"));
         metadata.put("grant_types_supported", List.of("authorization_code"));
         metadata.put("code_challenge_methods_supported", List.of("S256"));
