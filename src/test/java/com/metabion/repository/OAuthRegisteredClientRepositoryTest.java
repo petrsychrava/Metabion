@@ -84,6 +84,15 @@ class OAuthRegisteredClientRepositoryTest {
     }
 
     @Test
+    void rejectsRedirectUriLongerThanMappedColumn() {
+        assertThatThrownBy(() -> client(
+                List.of("https://example.com/callback/" + "a".repeat(500)),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("redirect uri must be 500 characters or fewer");
+    }
+
+    @Test
     void rejectsClientSecretBasicTokenEndpointAuthMethod() {
         assertThatThrownBy(() -> new OAuthRegisteredClient(
                 "mcp_client_abc123",

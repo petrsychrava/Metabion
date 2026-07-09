@@ -165,6 +165,18 @@ class OAuthClientRegistrationServiceTest {
     }
 
     @Test
+    void rejectsRedirectUriLongerThanMappedColumn() {
+        assertInvalidClientMetadata(new OAuthClientRegistrationRequest(
+                List.of("https://client.example/callback/" + "a".repeat(500)),
+                "Codex",
+                null,
+                "patient:profile:read",
+                "none",
+                List.of("authorization_code"),
+                List.of("code")));
+    }
+
+    @Test
     void capsConfiguredRequestSizeAtThirtyTwoKilobytes() {
         service = new OAuthClientRegistrationService(
                 clients,

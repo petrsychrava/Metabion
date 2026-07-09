@@ -29,6 +29,8 @@ import java.util.Locale;
 @Table(name = "oauth_registered_clients")
 public class OAuthRegisteredClient {
 
+    private static final int MAX_REDIRECT_URI_LENGTH = 500;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -46,7 +48,7 @@ public class OAuthRegisteredClient {
     @CollectionTable(name = "oauth_registered_client_redirect_uris",
             joinColumns = @JoinColumn(name = "registered_client_id"))
     @OrderColumn(name = "redirect_uri_order")
-    @Column(name = "redirect_uri", nullable = false, length = 500)
+    @Column(name = "redirect_uri", nullable = false, length = MAX_REDIRECT_URI_LENGTH)
     private List<String> redirectUris = new ArrayList<>();
 
     @ElementCollection(fetch = FetchType.EAGER)
@@ -155,6 +157,9 @@ public class OAuthRegisteredClient {
         }
         if (uri.getUserInfo() != null) {
             throw new IllegalArgumentException("redirect uri must not include user info");
+        }
+        if (redirectUri.length() > MAX_REDIRECT_URI_LENGTH) {
+            throw new IllegalArgumentException("redirect uri must be 500 characters or fewer");
         }
         if (uri.getFragment() != null) {
             throw new IllegalArgumentException("redirect uri must not include fragment");
