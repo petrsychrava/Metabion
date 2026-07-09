@@ -2,6 +2,7 @@ package com.metabion.service.oauth;
 
 import com.metabion.config.OAuthAuthorizationProperties;
 import com.metabion.dto.oauth.OAuthClientMetadata;
+import com.metabion.repository.OAuthRegisteredClientRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -15,22 +16,38 @@ public class OAuthClientResolver {
 
     private final OAuthAuthorizationProperties properties;
     private final OAuthClientMetadataFetcher fetcher;
+    private final OAuthRegisteredClientRepository registeredClients;
 
     @Autowired
     public OAuthClientResolver(OAuthAuthorizationProperties properties,
-                               ObjectProvider<OAuthClientMetadataFetcher> fetcherProvider) {
-        this(properties, fetcherProvider.getIfAvailable());
+                               ObjectProvider<OAuthClientMetadataFetcher> fetcherProvider,
+                               OAuthRegisteredClientRepository registeredClients) {
+        this(properties, fetcherProvider.getIfAvailable(), registeredClients);
     }
 
     OAuthClientResolver(OAuthAuthorizationProperties properties,
-                        OAuthClientMetadataFetcher fetcher) {
+                        OAuthClientMetadataFetcher fetcher,
+                        OAuthRegisteredClientRepository registeredClients) {
         this.properties = properties;
         this.fetcher = fetcher;
+        this.registeredClients = registeredClients;
     }
 
     public Optional<OAuthClientMetadata> resolve(String clientId, String redirectUri) {
         if (clientId == null || clientId.isBlank() || redirectUri == null || redirectUri.isBlank()) {
             return Optional.empty();
+        }
+        var dynamic = registeredClients.findByClientId(clientId);
+        if (dynamic.isPresent()) {
+            var client = dynamic.get();
+            if (!client.redirectUris().contains(redirectUri)) {
+                return Optional.empty();
+            }
+            return Optional.of(new OAuthClientMetadata(
+                    client.getClientId(),
+                    client.getClientName(),
+                    client.redirectUris(),
+                    client.scopes().stream().sorted().toList()));
         }
         var registered = properties.clients().get(clientId);
         if (registered != null) {
