@@ -7,6 +7,7 @@ import java.util.List;
 public record OAuthClientRegistrationRequest(
         @JsonProperty("redirect_uris") List<String> redirectUris,
         @JsonProperty("client_name") String clientName,
+        @JsonProperty("client_secret") String clientSecret,
         String scope,
         @JsonProperty("token_endpoint_auth_method") String tokenEndpointAuthMethod,
         @JsonProperty("grant_types") List<String> grantTypes,

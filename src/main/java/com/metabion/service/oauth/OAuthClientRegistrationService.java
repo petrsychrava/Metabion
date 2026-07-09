@@ -46,6 +46,7 @@ public class OAuthClientRegistrationService {
         if (request == null) {
             throw invalidClientMetadata("registration request is required");
         }
+        validateClientSecret(request.clientSecret());
         validateAuthMethod(request.tokenEndpointAuthMethod());
         validateGrantTypes(request.grantTypes());
         validateResponseTypes(request.responseTypes());
@@ -107,6 +108,12 @@ public class OAuthClientRegistrationService {
         }
     }
 
+    private void validateClientSecret(String clientSecret) {
+        if (clientSecret != null && !clientSecret.isBlank()) {
+            throw invalidClientMetadata("client_secret is not supported");
+        }
+    }
+
     private void validateGrantTypes(List<String> grantTypes) {
         if (grantTypes != null && !grantTypes.isEmpty() && !grantTypes.equals(List.of(AUTHORIZATION_CODE))) {
             throw invalidClientMetadata("grant_types must contain only authorization_code");
@@ -144,6 +151,6 @@ public class OAuthClientRegistrationService {
     }
 
     public int maxRequestBytes() {
-        return properties.clientMetadata().maxBytes();
+        return Math.min(properties.clientMetadata().maxBytes(), MAX_REQUEST_BYTES);
     }
 }

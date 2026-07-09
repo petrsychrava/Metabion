@@ -43,6 +43,7 @@ class OAuthClientRegistrationServiceTest {
         var response = service.register(new OAuthClientRegistrationRequest(
                 List.of("http://127.0.0.1:49152/callback"),
                 " Codex ",
+                null,
                 "patient:profile:read",
                 "none",
                 List.of("authorization_code"),
@@ -67,6 +68,7 @@ class OAuthClientRegistrationServiceTest {
         var response = service.register(new OAuthClientRegistrationRequest(
                 List.of("https://client.example/callback"),
                 "Codex",
+                null,
                 "patient:profile:read",
                 "none",
                 List.of("authorization_code"),
@@ -80,6 +82,7 @@ class OAuthClientRegistrationServiceTest {
         assertInvalidClientMetadata(new OAuthClientRegistrationRequest(
                 List.of("http://client.example/callback"),
                 "Codex",
+                null,
                 "patient:profile:read",
                 "none",
                 List.of("authorization_code"),
@@ -91,6 +94,7 @@ class OAuthClientRegistrationServiceTest {
         assertInvalidClientMetadata(new OAuthClientRegistrationRequest(
                 List.of("http://127.0.0.1/callback"),
                 "Codex",
+                null,
                 "patient:profile:read",
                 "none",
                 List.of("authorization_code"),
@@ -102,6 +106,7 @@ class OAuthClientRegistrationServiceTest {
         assertThatThrownBy(() -> service.register(new OAuthClientRegistrationRequest(
                 List.of("http://localhost:49152/callback"),
                 "Codex",
+                null,
                 "patient:unknown",
                 "none",
                 List.of("authorization_code"),
@@ -117,8 +122,21 @@ class OAuthClientRegistrationServiceTest {
         assertInvalidClientMetadata(new OAuthClientRegistrationRequest(
                 List.of("http://localhost:49152/callback"),
                 "Codex",
+                null,
                 "patient:profile:read",
                 "client_secret_basic",
+                List.of("authorization_code"),
+                List.of("code")));
+    }
+
+    @Test
+    void rejectsClientSecretMetadata() {
+        assertInvalidClientMetadata(new OAuthClientRegistrationRequest(
+                List.of("http://localhost:49152/callback"),
+                "Codex",
+                "secret",
+                "patient:profile:read",
+                "none",
                 List.of("authorization_code"),
                 List.of("code")));
     }
@@ -139,10 +157,21 @@ class OAuthClientRegistrationServiceTest {
                         "http://127.0.0.1:49159/callback",
                         "http://127.0.0.1:49160/callback"),
                 "Codex",
+                null,
                 "patient:profile:read",
                 "none",
                 List.of("authorization_code"),
                 List.of("code")));
+    }
+
+    @Test
+    void capsConfiguredRequestSizeAtThirtyTwoKilobytes() {
+        service = new OAuthClientRegistrationService(
+                clients,
+                propsWithMaxBytes(65_536),
+                Clock.fixed(Instant.parse("2026-07-08T10:00:00Z"), ZoneOffset.UTC));
+
+        assertThat(service.maxRequestBytes()).isEqualTo(32_768);
     }
 
     private void assertInvalidClientMetadata(OAuthClientRegistrationRequest request) {
@@ -154,12 +183,16 @@ class OAuthClientRegistrationServiceTest {
     }
 
     private OAuthAuthorizationProperties props() {
+        return propsWithMaxBytes(32_768);
+    }
+
+    private OAuthAuthorizationProperties propsWithMaxBytes(int maxBytes) {
         return new OAuthAuthorizationProperties(
                 "http://localhost:8080",
                 "http://localhost:8080/api/mcp",
                 Duration.ofMinutes(5),
                 Duration.ofHours(1),
-                new OAuthAuthorizationProperties.ClientMetadataProperties(true, Duration.ofSeconds(2), 32768),
+                new OAuthAuthorizationProperties.ClientMetadataProperties(true, Duration.ofSeconds(2), maxBytes),
                 Map.of());
     }
 }
