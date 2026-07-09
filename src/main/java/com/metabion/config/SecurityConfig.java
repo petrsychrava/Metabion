@@ -155,6 +155,8 @@ public class SecurityConfig {
                         .sessionFixation(sf -> sf.changeSessionId())
                         .maximumSessions(3)
                 )
+                .securityContext(context -> context
+                        .securityContextRepository(new McpSecurityContextRepository()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_STATIC).permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_MVC_GETS).permitAll()
