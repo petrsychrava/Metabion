@@ -234,6 +234,14 @@ class SecurityConfigTest {
     }
 
     @Test
+    void oauthRegisterIsPublicAndDoesNotRequireCsrf() throws Exception {
+        mvc.perform(post("/oauth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void mvc_register_page_renders_real_csrf_field() throws Exception {
         mvc.perform(get("/register"))
                 .andExpect(status().isOk())

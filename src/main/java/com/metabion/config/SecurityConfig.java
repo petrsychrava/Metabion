@@ -34,6 +34,7 @@ public class SecurityConfig {
 
     private static final String PUBLIC_STAFF_INVITATION_ACCEPT_POST = "/api/staff-invitations/accept";
     private static final String OAUTH_TOKEN_ENDPOINT = "/oauth/token";
+    private static final String OAUTH_REGISTER_ENDPOINT = "/oauth/register";
 
     private static final String[] MCP_ENDPOINTS = {
             "/api/mcp",
@@ -140,6 +141,8 @@ public class SecurityConfig {
                         .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(
                                 HttpMethod.POST, OAUTH_TOKEN_ENDPOINT))
                         .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(
+                                HttpMethod.POST, OAUTH_REGISTER_ENDPOINT))
+                        .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(
                                 HttpMethod.POST, PUBLIC_STAFF_INVITATION_ACCEPT_POST))
                         .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(HttpMethod.POST, "/api/mcp"))
                         .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(HttpMethod.POST, "/api/mcp/**"))
@@ -159,6 +162,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, PUBLIC_MVC_POSTS).permitAll()
                         .requestMatchers(PUBLIC_AUTH_POSTS).permitAll()
                         .requestMatchers(HttpMethod.POST, OAUTH_TOKEN_ENDPOINT).permitAll()
+                        .requestMatchers(HttpMethod.POST, OAUTH_REGISTER_ENDPOINT).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_STAFF_INVITATION_ACCEPT_POST).permitAll()
                         .requestMatchers(HttpMethod.POST, "/oauth/authorize").authenticated()
                         .requestMatchers("/api/auth/verify").permitAll()
