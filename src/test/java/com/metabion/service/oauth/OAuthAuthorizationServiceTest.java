@@ -10,6 +10,7 @@ import com.metabion.dto.IssuePatientAccessTokenResponse;
 import com.metabion.dto.oauth.OAuthAuthorizationRequest;
 import com.metabion.dto.oauth.OAuthClientMetadata;
 import com.metabion.repository.OAuthAuthorizationCodeRepository;
+import com.metabion.repository.OAuthRegisteredClientRepository;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.PatientAccessTokenService;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,7 +76,10 @@ class OAuthAuthorizationServiceTest {
                                 "Codex",
                                 List.of(REDIRECT_URI),
                                 List.of("patient:profile:read"))));
-        service = serviceWith(properties, new OAuthClientResolver(properties, clientId -> Optional.empty()));
+        service = serviceWith(properties, new OAuthClientResolver(
+                properties,
+                clientId -> Optional.empty(),
+                emptyRegisteredClients()));
         patient = new User("patient@example.com", "hash");
         ReflectionTestUtils.setField(patient, "id", 10L);
         patient.setEnabled(true);
@@ -102,7 +106,10 @@ class OAuthAuthorizationServiceTest {
                                 "Codex",
                                 List.of(REDIRECT_URI),
                                 List.of())));
-        service = serviceWith(emptyScopeProperties, new OAuthClientResolver(emptyScopeProperties, clientId -> Optional.empty()));
+        service = serviceWith(emptyScopeProperties, new OAuthClientResolver(
+                emptyScopeProperties,
+                clientId -> Optional.empty(),
+                emptyRegisteredClients()));
 
         assertThatThrownBy(() -> service.consentView(request("S256"), auth()))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
@@ -307,7 +314,8 @@ class OAuthAuthorizationServiceTest {
                         clientId,
                         "External MCP",
                         List.of(redirectUri),
-                        List.of("patient:profile:read")))));
+                        List.of("patient:profile:read"))),
+                emptyRegisteredClients()));
         var authorizationCode = new OAuthAuthorizationCode(
                 PatientAccessTokenService.sha256Hex("metadata-code"),
                 patient,
@@ -349,6 +357,56 @@ class OAuthAuthorizationServiceTest {
                 patient,
                 PatientAccessClientType.MCP_OTHER,
                 "External MCP",
+                Duration.ofHours(1),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
+                RESOURCE);
+    }
+
+    @Test
+    void exchangeMapsDynamicCodexClientByDisplayLabel() {
+        var clientId = "mcp_client_dynamic_codex";
+        var resolver = org.mockito.Mockito.mock(OAuthClientResolver.class);
+        when(resolver.resolve(clientId, REDIRECT_URI)).thenReturn(Optional.of(new OAuthClientMetadata(
+                clientId,
+                "Codex",
+                List.of(REDIRECT_URI),
+                List.of("patient:profile:read"))));
+        service = serviceWith(properties, resolver);
+        var authorizationCode = new OAuthAuthorizationCode(
+                PatientAccessTokenService.sha256Hex("dynamic-code"),
+                patient,
+                clientId,
+                "Codex",
+                REDIRECT_URI,
+                RESOURCE,
+                CHALLENGE,
+                "S256",
+                Set.of("patient:profile:read"),
+                NOW.minusSeconds(60),
+                NOW.plus(Duration.ofMinutes(5)));
+        when(codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("dynamic-code")))
+                .thenReturn(Optional.of(authorizationCode));
+        when(patientAccessTokens.issueForPatient(any(), any(), any(), any(), any(), any()))
+                .thenReturn(new IssuePatientAccessTokenResponse(
+                        100L,
+                        "access-token",
+                        PatientAccessClientType.MCP_CODEX,
+                        "Codex",
+                        NOW.plus(Duration.ofHours(1)),
+                        Set.of("patient:profile:read")));
+
+        service.exchange(
+                "authorization_code",
+                "dynamic-code",
+                REDIRECT_URI,
+                clientId,
+                VERIFIER,
+                RESOURCE);
+
+        verify(patientAccessTokens).issueForPatient(
+                patient,
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
                 Duration.ofHours(1),
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
                 RESOURCE);
@@ -404,5 +462,13 @@ class OAuthAuthorizationServiceTest {
                 Set.of("patient:profile:read"),
                 NOW.minusSeconds(60),
                 expiresAt);
+    }
+
+    private OAuthRegisteredClientRepository emptyRegisteredClients() {
+        var registeredClients = org.mockito.Mockito.mock(OAuthRegisteredClientRepository.class);
+        org.mockito.Mockito.lenient()
+                .when(registeredClients.findByClientId(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Optional.empty());
+        return registeredClients;
     }
 }

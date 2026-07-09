@@ -281,6 +281,49 @@ class RateLimitingFilterTest {
     }
 
     @Test
+    void oauthRegisterIsRateLimitedByIp() throws Exception {
+        var body = """
+                {
+                  "redirect_uris": ["http://127.0.0.1:49152/callback"],
+                  "client_name": "Codex",
+                  "scope": "patient:profile:read",
+                  "token_endpoint_auth_method": "none",
+                  "grant_types": ["authorization_code"],
+                  "response_types": ["code"]
+                }
+                """;
+
+        for (int i = 0; i < 10; i++) {
+            mvc.perform(post("/oauth/register")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body)
+                            .with(req -> {
+                                req.setRemoteAddr("203.0.113.55");
+                                return req;
+                            }))
+                    .andExpect(status().isCreated())
+                    .andExpect(content().json("{\"status\":\"registered\"}"));
+        }
+
+        mvc.perform(post("/oauth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .with(req -> {
+                            req.setRemoteAddr("203.0.113.55");
+                            return req;
+                        }))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(content().json("""
+                        {
+                          "error": "temporarily_unavailable",
+                          "error_description": "rate limit exceeded"
+                        }
+                        """));
+
+        org.assertj.core.api.Assertions.assertThat(controller.oauthRegisterAttempts()).isEqualTo(10);
+    }
+
+    @Test
     void bucketStorageIsBounded() throws Exception {
         var filter = new RateLimitingFilter();
         var mvcWithFilter = MockMvcBuilders
@@ -321,6 +364,12 @@ class RateLimitingFilterTest {
         @PostMapping("/api/auth/forgot-password")
         Map<String, String> forgotPassword(@RequestBody Map<String, String> request) {
             return Map.of("status", "ok");
+        }
+
+        @PostMapping("/oauth/register")
+        ResponseEntity<Map<String, String>> oauthRegister(@RequestBody Map<String, Object> request) {
+            oauthRegisterAttempts.incrementAndGet();
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("status", "registered"));
         }
 
         @PostMapping("/login")
@@ -372,6 +421,7 @@ class RateLimitingFilterTest {
         private final AtomicInteger mvcRegisterAttempts = new AtomicInteger();
         private final AtomicInteger mvcForgotPasswordAttempts = new AtomicInteger();
         private final AtomicInteger mvcResetPasswordAttempts = new AtomicInteger();
+        private final AtomicInteger oauthRegisterAttempts = new AtomicInteger();
 
         int mvcLoginAttempts() {
             return mvcLoginAttempts.get();
@@ -387,6 +437,10 @@ class RateLimitingFilterTest {
 
         int mvcResetPasswordAttempts() {
             return mvcResetPasswordAttempts.get();
+        }
+
+        int oauthRegisterAttempts() {
+            return oauthRegisterAttempts.get();
         }
 
         private String rateLimitedEndpoint() {

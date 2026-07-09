@@ -1,5 +1,6 @@
 package com.metabion.integration;
 
+import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.repository.PatientAccessTokenRepository;
@@ -38,10 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.autoconfigure.exclude=org.springframework.boot.session.jdbc.autoconfigure.JdbcSessionAutoConfiguration",
         "metabion.oauth.issuer=http://localhost:8080",
-        "metabion.oauth.resource=http://localhost:8080/api/mcp",
-        "metabion.oauth.clients.codex.display-label=Codex",
-        "metabion.oauth.clients.codex.redirect-uris=http://127.0.0.1:1455/oauth/callback",
-        "metabion.oauth.clients.codex.scopes=patient:profile:read"
+        "metabion.oauth.resource=http://localhost:8080/api/mcp"
 })
 class McpOAuthFlowIT {
 
@@ -84,10 +82,12 @@ class McpOAuthFlowIT {
 
     @Test
     void patientApprovesAndExchangesMcpOAuthCodeForResourceBoundToken() throws Exception {
-        mvc.perform(authorizeGet())
+        var clientId = registerClient();
+
+        mvc.perform(authorizeGet(clientId))
                 .andExpect(status().isOk());
 
-        var approval = mvc.perform(authorizePost())
+        var approval = mvc.perform(authorizePost(clientId))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern(REDIRECT_URI + "?code=*&state=state-123"))
                 .andReturn();
@@ -103,7 +103,7 @@ class McpOAuthFlowIT {
                         .param("grant_type", "authorization_code")
                         .param("code", code)
                         .param("redirect_uri", REDIRECT_URI)
-                        .param("client_id", "codex")
+                        .param("client_id", clientId)
                         .param("code_verifier", VERIFIER)
                         .param("resource", RESOURCE))
                 .andExpect(status().isOk())
@@ -118,14 +118,38 @@ class McpOAuthFlowIT {
         assertThat(stored).hasSize(1);
         assertThat(stored.getFirst().getTokenHash()).isEqualTo(PatientAccessTokenService.sha256Hex(accessToken));
         assertThat(stored.getFirst().getTokenHash()).isNotEqualTo(accessToken);
+        assertThat(stored.getFirst().getClientType()).isEqualTo(PatientAccessClientType.MCP_CODEX);
+        assertThat(stored.getFirst().getDisplayLabel()).isEqualTo("Codex");
         assertThat(stored.getFirst().getResource()).isEqualTo(RESOURCE);
     }
 
-    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder authorizeGet() {
+    private String registerClient() throws Exception {
+        var registration = mvc.perform(post("/oauth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "redirect_uris": ["http://127.0.0.1:1455/oauth/callback"],
+                                  "client_name": "Codex",
+                                  "scope": "patient:profile:read",
+                                  "token_endpoint_auth_method": "none",
+                                  "grant_types": ["authorization_code"],
+                                  "response_types": ["code"]
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.client_id").isNotEmpty())
+                .andExpect(jsonPath("$.client_secret").doesNotExist())
+                .andReturn();
+        return com.jayway.jsonpath.JsonPath
+                .read(registration.getResponse().getContentAsString(), "$.client_id")
+                .toString();
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder authorizeGet(String clientId) {
         return get("/oauth/authorize")
                 .with(user(EMAIL).roles(RoleName.PATIENT.name()))
                 .param("response_type", "code")
-                .param("client_id", "codex")
+                .param("client_id", clientId)
                 .param("redirect_uri", REDIRECT_URI)
                 .param("scope", "patient:profile:read")
                 .param("state", "state-123")
@@ -134,13 +158,13 @@ class McpOAuthFlowIT {
                 .param("resource", RESOURCE);
     }
 
-    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder authorizePost() {
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder authorizePost(String clientId) {
         return post("/oauth/authorize")
                 .with(user(EMAIL).roles(RoleName.PATIENT.name()))
                 .with(csrf())
                 .param("decision", "approve")
                 .param("response_type", "code")
-                .param("client_id", "codex")
+                .param("client_id", clientId)
                 .param("redirect_uri", REDIRECT_URI)
                 .param("scope", "patient:profile:read")
                 .param("state", "state-123")

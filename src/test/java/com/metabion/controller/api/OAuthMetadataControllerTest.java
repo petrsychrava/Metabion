@@ -90,7 +90,7 @@ class OAuthMetadataControllerTest {
     }
 
     @Test
-    void authorizationServerMetadataAdvertisesAuthorizationCodeAndPkceButNoRegistration() throws Exception {
+    void authorizationServerMetadataAdvertisesAuthorizationCodePkceAndRegistration() throws Exception {
         mvc.perform(get("/.well-known/oauth-authorization-server"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.issuer").value("http://localhost:8080"))
@@ -100,7 +100,7 @@ class OAuthMetadataControllerTest {
                 .andExpect(jsonPath("$.grant_types_supported", contains("authorization_code")))
                 .andExpect(jsonPath("$.code_challenge_methods_supported", contains("S256")))
                 .andExpect(jsonPath("$.token_endpoint_auth_methods_supported", contains("none")))
-                .andExpect(jsonPath("$.registration_endpoint").doesNotExist())
+                .andExpect(jsonPath("$.registration_endpoint").value("http://localhost:8080/oauth/register"))
                 .andExpect(jsonPath("$.scopes_supported", hasItems(
                         "patient:profile:read",
                         "patient:diet-log:write",

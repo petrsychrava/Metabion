@@ -74,7 +74,8 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     }
 
     private boolean isApiRequest(HttpServletRequest request) {
-        return request.getRequestURI().startsWith("/api/");
+        return request.getRequestURI().startsWith("/api/")
+                || request.getRequestURI().startsWith("/oauth/");
     }
 
     private String endpointFor(HttpServletRequest request) {
@@ -86,6 +87,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             case "/api/auth/register", "/register" -> "register";
             case "/api/auth/forgot-password", "/forgot-password" -> "forgot-password";
             case "/api/auth/reset-password", "/reset-password" -> "reset-password";
+            case "/oauth/register" -> "oauth-register";
             default -> null;
         };
     }
@@ -120,6 +122,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             case "login:ip" -> Bandwidth.simple(5, Duration.ofMinutes(1));
             case "login:email" -> Bandwidth.simple(10, Duration.ofMinutes(1));
             case "register:ip" -> Bandwidth.simple(10, Duration.ofMinutes(1));
+            case "oauth-register:ip" -> Bandwidth.simple(10, Duration.ofMinutes(1));
             case "forgot-password:ip" -> Bandwidth.simple(10, Duration.ofMinutes(1));
             case "forgot-password:email" -> Bandwidth.simple(5, Duration.ofHours(1));
             case "reset-password:ip" -> Bandwidth.simple(20, Duration.ofMinutes(1));
@@ -199,6 +202,12 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json");
             response.getWriter().write("{\"error\":\"invalid_credentials\"}");
+            return;
+        }
+        if ("oauth-register".equals(endpoint)) {
+            response.setStatus(429);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"error\":\"temporarily_unavailable\",\"error_description\":\"rate limit exceeded\"}");
             return;
         }
 

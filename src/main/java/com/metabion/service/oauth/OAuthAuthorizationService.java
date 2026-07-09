@@ -142,7 +142,7 @@ public class OAuthAuthorizationService {
         authorizationCode.consume(now);
         var token = patientAccessTokens.issueForPatient(
                 authorizationCode.getUser(),
-                clientType(client.clientId()),
+                clientType(client),
                 authorizationCode.getClientDisplayLabel(),
                 properties.accessTokenTtl(),
                 scopes,
@@ -266,12 +266,19 @@ public class OAuthAuthorizationService {
         return client.displayLabel().trim();
     }
 
-    private PatientAccessClientType clientType(String clientId) {
-        return switch (clientId.toLowerCase(Locale.ROOT)) {
-            case "claude" -> PatientAccessClientType.MCP_CLAUDE;
-            case "codex" -> PatientAccessClientType.MCP_CODEX;
-            default -> PatientAccessClientType.MCP_OTHER;
-        };
+    private PatientAccessClientType clientType(OAuthClientMetadata client) {
+        var identifier = (safe(client.clientId()) + " " + safe(client.displayLabel())).toLowerCase(Locale.ROOT);
+        if (identifier.contains("claude")) {
+            return PatientAccessClientType.MCP_CLAUDE;
+        }
+        if (identifier.contains("codex")) {
+            return PatientAccessClientType.MCP_CODEX;
+        }
+        return PatientAccessClientType.MCP_OTHER;
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value;
     }
 
     private boolean isValidCodeChallenge(String codeChallenge) {
