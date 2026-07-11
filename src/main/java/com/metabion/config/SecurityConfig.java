@@ -22,6 +22,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 import com.metabion.domain.RoleName;
@@ -110,11 +111,17 @@ public class SecurityConfig {
     }
 
     @Bean
+    SecurityContextRepository securityContextRepository() {
+        return new McpSecurityContextRepository();
+    }
+
+    @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            RateLimitingFilter rateLimitingFilter,
                                            PatientBearerTokenAuthenticationFilter patientBearerTokenAuthenticationFilter,
                                            McpLocalhostFilter mcpLocalhostFilter,
-                                           OAuthAuthorizationProperties oauthProperties) throws Exception {
+                                           OAuthAuthorizationProperties oauthProperties,
+                                           SecurityContextRepository securityContextRepository) throws Exception {
         var loginEntryPoint = new LoginUrlAuthenticationEntryPoint("/login");
         var unauthorizedEntryPoint = new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED);
         var mcpUnauthorizedEntryPoint = (org.springframework.security.web.AuthenticationEntryPoint) (request, response, authException) -> {
@@ -156,7 +163,7 @@ public class SecurityConfig {
                         .maximumSessions(3)
                 )
                 .securityContext(context -> context
-                        .securityContextRepository(new McpSecurityContextRepository()))
+                        .securityContextRepository(securityContextRepository))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_STATIC).permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_MVC_GETS).permitAll()

@@ -15,7 +15,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.session.web.http.SessionRepositoryFilter;
 import org.springframework.web.context.WebApplicationContext;
@@ -24,8 +26,11 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
@@ -67,14 +72,40 @@ class McpBearerSessionPersistenceIT {
     void bearerAuthenticatedMcpRequestDoesNotFailWhenJdbcSessionCommits() throws Exception {
         when(patientAccessTokenService.authenticate("valid-token")).thenReturn(Optional.of(patientToken()));
 
-        mvc.perform(post("/api/mcp")
+        var initializeResult = mvc.perform(post("/api/mcp")
                         .header("Authorization", "Bearer valid-token")
                         .accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}
                                 """))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andReturn();
+        assertNoSessionSecurityContext(initializeResult);
+
+        var result = mvc.perform(post("/api/mcp")
+                        .header("Authorization", "Bearer valid-token")
+                        .header("Mcp-Session-Id", initializeResult.getResponse().getHeader("Mcp-Session-Id"))
+                        .accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        var completedResult = mvc.perform(asyncDispatch(result))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertNoSessionSecurityContext(completedResult);
+    }
+
+    private static void assertNoSessionSecurityContext(MvcResult result) {
+        var session = result.getRequest().getSession(false);
+        if (session != null) {
+            assertThat(session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY))
+                    .isNull();
+        }
     }
 
     private static PatientAccessToken patientToken() {
