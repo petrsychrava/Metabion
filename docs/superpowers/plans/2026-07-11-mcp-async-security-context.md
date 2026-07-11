@@ -31,15 +31,26 @@
 
 - [ ] **Step 1: Write the failing async-redispatch regression test**
 
-In `McpBearerSessionPersistenceIT`, statically import `asyncDispatch` and `request`. Change the existing test to retain the first `MvcResult`, assert that asynchronous processing starts, then dispatch it:
+In `McpBearerSessionPersistenceIT`, statically import `asyncDispatch` and `request`. Spring AI 2.0.0 handles `initialize` synchronously, so first initialize the MCP session and capture its `Mcp-Session-Id`. Then send the smallest session-bound streaming request, retain that `MvcResult`, assert that asynchronous processing starts, and dispatch it:
 
 ```java
-var result = mvc.perform(post("/api/mcp")
+var initializeResult = mvc.perform(post("/api/mcp")
                 .header("Authorization", "Bearer valid-token")
                 .accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}
+                        """))
+        .andExpect(status().isOk())
+        .andReturn();
+
+var result = mvc.perform(post("/api/mcp")
+                .header("Authorization", "Bearer valid-token")
+                .header("Mcp-Session-Id", initializeResult.getResponse().getHeader("Mcp-Session-Id"))
+                .accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
                         """))
         .andExpect(request().asyncStarted())
         .andReturn();
@@ -56,7 +67,7 @@ Run:
 ./gradlew test --tests com.metabion.integration.McpBearerSessionPersistenceIT
 ```
 
-Expected: FAIL during `asyncDispatch` with `AuthorizationDeniedException: Access Denied`, demonstrating that the initial authenticated dispatch loses its context.
+Expected: FAIL during the streaming request's `asyncDispatch` with `AuthorizationDeniedException: Access Denied`, demonstrating that its initial authenticated dispatch loses context on redispatch.
 
 - [ ] **Step 3: Make the MCP repository request-scoped**
 

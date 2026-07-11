@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.server.ResponseStatusException;
@@ -22,13 +23,16 @@ public class PatientBearerTokenAuthenticationFilter extends OncePerRequestFilter
     private final PatientAccessTokenService patientTokens;
     private final PatientAccessAuditService audit;
     private final OAuthAuthorizationProperties oauthProperties;
+    private final SecurityContextRepository securityContextRepository;
 
     public PatientBearerTokenAuthenticationFilter(PatientAccessTokenService patientTokens,
                                                   PatientAccessAuditService audit,
-                                                  OAuthAuthorizationProperties oauthProperties) {
+                                                  OAuthAuthorizationProperties oauthProperties,
+                                                  SecurityContextRepository securityContextRepository) {
         this.patientTokens = patientTokens;
         this.audit = audit;
         this.oauthProperties = oauthProperties;
+        this.securityContextRepository = securityContextRepository;
     }
 
     @Override
@@ -64,6 +68,7 @@ public class PatientBearerTokenAuthenticationFilter extends OncePerRequestFilter
         var context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
+        securityContextRepository.saveContext(context, request, response);
         try {
             filterChain.doFilter(request, response);
         } finally {

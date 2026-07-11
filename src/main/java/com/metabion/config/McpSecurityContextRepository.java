@@ -7,13 +7,12 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.web.context.DelegatingSecurityContextRepository;
 import org.springframework.security.web.context.HttpRequestResponseHolder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
-import org.springframework.security.web.context.NullSecurityContextRepository;
 import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 
 final class McpSecurityContextRepository implements SecurityContextRepository {
 
-    private final SecurityContextRepository mcpContexts = new NullSecurityContextRepository();
+    private final SecurityContextRepository mcpContexts = new RequestAttributeSecurityContextRepository();
     private final SecurityContextRepository sessionContexts = new DelegatingSecurityContextRepository(
             new RequestAttributeSecurityContextRepository(),
             new HttpSessionSecurityContextRepository());
