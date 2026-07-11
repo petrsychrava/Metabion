@@ -1,5 +1,7 @@
 package com.metabion.config;
 
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.context.DeferredSecurityContext;
@@ -41,7 +43,10 @@ final class McpSecurityContextRepository implements SecurityContextRepository {
     }
 
     private SecurityContextRepository repositoryFor(HttpServletRequest request) {
-        var uri = request.getRequestURI();
+        var errorUri = request.getAttribute(RequestDispatcher.ERROR_REQUEST_URI);
+        var uri = request.getDispatcherType() == DispatcherType.ERROR && errorUri instanceof String originalUri
+                ? originalUri
+                : request.getRequestURI();
         return "/api/mcp".equals(uri) || uri.startsWith("/api/mcp/")
                 ? mcpContexts
                 : sessionContexts;

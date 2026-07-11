@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -25,6 +26,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -98,11 +100,10 @@ class McpBearerSessionPersistenceIT {
         assertNoSessionSecurityContext(completedResult);
     }
 
-    private static void assertNoSessionSecurityContext(org.springframework.test.web.servlet.MvcResult result) {
+    private static void assertNoSessionSecurityContext(MvcResult result) {
         var session = result.getRequest().getSession(false);
         if (session != null) {
-            org.assertj.core.api.Assertions.assertThat(session.getAttribute(
-                            HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY))
+            assertThat(session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY))
                     .isNull();
         }
     }

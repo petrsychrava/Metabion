@@ -68,8 +68,8 @@ public class PatientBearerTokenAuthenticationFilter extends OncePerRequestFilter
         var context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
-        securityContextRepository.saveContext(context, request, response);
         try {
+            securityContextRepository.saveContext(context, request, response);
             filterChain.doFilter(request, response);
         } finally {
             SecurityContextHolder.clearContext();

@@ -79,3 +79,54 @@ The task report is committed with the scoped implementation so the RED/GREEN and
 ## Concerns
 
 No functional concerns. The Gradle runs emitted existing JVM native-access/dynamic-agent and test-schema warnings, but all requested focused and complete tests passed.
+
+## Final review fixes
+
+Implemented the final branch-review findings together:
+
+- MCP repository selection now recognizes a servlet `ERROR` redispatch by `RequestDispatcher.ERROR_REQUEST_URI`, so an original `/api/mcp` request continues to use request-attribute-only context storage even when the redispatch URI is `/error`.
+- Added `McpSecurityContextRepositoryTest` coverage proving an MCP error redispatch reloads the request-scoped authentication and does not create an HTTP session.
+- The MCP integration test now verifies that both initialization and completed async processing leave any HTTP session without `HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY`.
+- Moved successful bearer `saveContext` inside the filter's `try/finally`, with unit coverage proving the thread-local security context is cleared when repository saving throws.
+
+### Review-fix RED evidence
+
+Command:
+
+```text
+./gradlew test --tests com.metabion.config.McpSecurityContextRepositoryTest --tests com.metabion.config.PatientBearerTokenAuthenticationFilterTest --tests com.metabion.integration.McpBearerSessionPersistenceIT
+```
+
+Result before production changes: `BUILD FAILED`; 8 tests ran and 2 failed as intended:
+
+- `errorRedispatchForMcpRequestUsesRequestAttributesWithoutCreatingSession()` found a `MockHttpSession`, proving `/error` selected the session-backed repository.
+- `clearsSecurityContextWhenSavingContextFails()` found `PatientAccessTokenAuthentication` still in `SecurityContextHolder`, proving cleanup did not cover save failures.
+- The new integration statelessness assertions passed on the existing request-only async path.
+
+### Review-fix GREEN evidence
+
+Focused command:
+
+```text
+./gradlew test --tests com.metabion.integration.McpBearerSessionPersistenceIT --tests com.metabion.config.PatientBearerTokenAuthenticationFilterTest --tests com.metabion.config.SecurityConfigTest --tests com.metabion.config.McpSecurityContextRepositoryTest
+```
+
+Result: `BUILD SUCCESSFUL` in 7s with zero failures.
+
+Complete-suite command:
+
+```text
+./gradlew test
+```
+
+Result: `BUILD SUCCESSFUL` in 1m 36s with zero failing tests; Jacoco report generation completed.
+
+### Review-fix self-review and workspace note
+
+- `git diff --check` passed.
+- ERROR classification is used only for an actual `DispatcherType.ERROR`; an arbitrary request attribute cannot reclassify a normal request.
+- MCP error redispatches remain request-only, while non-MCP error redispatches retain the existing session-backed behavior.
+- No context is saved on missing, invalid, or insufficient-scope bearer paths.
+- `.idea/.name` is an unrelated untracked workspace file and was deliberately left untouched and excluded from the commit.
+
+Concerns: none beyond the existing non-failing Gradle/JVM warnings already noted above.

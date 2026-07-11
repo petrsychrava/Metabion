@@ -1,5 +1,6 @@
 package com.metabion.config;
 
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.RequestDispatcher;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -16,6 +17,7 @@ class McpSecurityContextRepositoryTest {
         var repository = new McpSecurityContextRepository();
         var request = new MockHttpServletRequest("GET", "/error");
         request.setRequestURI("/error");
+        request.setDispatcherType(DispatcherType.ERROR);
         request.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, "/api/mcp");
         var response = new MockHttpServletResponse();
         var context = SecurityContextHolder.createEmptyContext();
