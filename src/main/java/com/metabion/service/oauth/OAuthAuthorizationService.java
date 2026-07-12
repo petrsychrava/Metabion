@@ -130,55 +130,60 @@ public class OAuthAuthorizationService {
                                                         String clientId,
                                                         String verifier,
                                                         String resource) {
-        if (isBlank(code) || isBlank(verifier)) {
-            throw badRequest("authorization code and verifier are required");
+        if (isBlank(code) || isBlank(redirectUri) || isBlank(clientId) || isBlank(verifier) || isBlank(resource)) {
+            throw OAuthTokenException.invalidRequest();
         }
-        validateResource(resource);
-        var client = resolveClient(clientId, redirectUri);
+        if (!properties.resource().equals(resource)) throw OAuthTokenException.invalidAuthorizationCodeGrant();
+        var client = clients.resolve(clientId, redirectUri)
+                .filter(candidate -> candidate.supportsGrant(AUTHORIZATION_CODE_GRANT))
+                .orElseThrow(OAuthTokenException::invalidAuthorizationCodeGrant);
         var authorizationCode = codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex(code))
-                .orElseThrow(() -> badRequest("invalid authorization code"));
+                .orElseThrow(OAuthTokenException::invalidAuthorizationCodeGrant);
         var now = Instant.now(clock);
         if (authorizationCode.isConsumed() || authorizationCode.isExpired(now)) {
-            throw badRequest("invalid authorization code");
+            throw OAuthTokenException.invalidAuthorizationCodeGrant();
         }
         if (!clientId.equals(authorizationCode.getClientId())
                 || !redirectUri.equals(authorizationCode.getRedirectUri())
                 || !resource.equals(authorizationCode.getResource())) {
-            throw badRequest("invalid authorization code");
+            throw OAuthTokenException.invalidAuthorizationCodeGrant();
         }
         if (!pkce.matches(authorizationCode.getCodeChallengeMethod(), authorizationCode.getCodeChallenge(), verifier)) {
-            throw badRequest("invalid verifier");
+            throw OAuthTokenException.invalidAuthorizationCodeGrant();
         }
         var scopes = parseScopeAuthorities(authorizationCode.scopes());
-        assertAllowedPatient(authorizationCode.getUser(), now);
+        if (!isAllowedPatient(authorizationCode.getUser(), now)) {
+            throw OAuthTokenException.invalidAuthorizationCodeGrant();
+        }
         authorizationCode.consume(now);
         var clientType = clientType(client);
-        var refresh = refreshTokens.issueInitial(
-                authorizationCode.getUser(),
-                client,
-                clientType,
-                authorizationCode.getClientDisplayLabel(),
-                scopes,
-                resource);
-        var token = patientAccessTokens.issueForPatient(
-                authorizationCode.getUser(),
-                clientType,
-                authorizationCode.getClientDisplayLabel(),
-                properties.accessTokenTtl(),
-                scopes,
-                resource,
-                refresh.token().getFamilyId());
+        var refresh = client.supportsGrant(OAuthClientMetadata.REFRESH_TOKEN)
+                ? refreshTokens.issueInitial(
+                        authorizationCode.getUser(), client, clientType,
+                        authorizationCode.getClientDisplayLabel(), scopes, resource)
+                : null;
+        var refreshFamilyId = refresh == null ? null : refresh.token().getFamilyId();
+        var token = refreshFamilyId == null
+                ? patientAccessTokens.issueForPatient(
+                        authorizationCode.getUser(), clientType, authorizationCode.getClientDisplayLabel(),
+                        properties.accessTokenTtl(), scopes, resource)
+                : patientAccessTokens.issueForPatient(
+                        authorizationCode.getUser(), clientType, authorizationCode.getClientDisplayLabel(),
+                        properties.accessTokenTtl(), scopes, resource, refreshFamilyId);
         var expiresIn = Math.max(0, Duration.between(now, token.expiresAt()).toSeconds());
         return new OAuthTokenResponse(
                 token.plainToken(),
                 "Bearer",
                 expiresIn,
                 sortedScopeString(token.scopes()),
-                refresh.plainToken());
+                refresh == null ? null : refresh.plainToken());
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public OAuthTokenResponse refresh(String refreshToken, String clientId, String resource) {
+        if (isBlank(refreshToken) || isBlank(clientId) || isBlank(resource)) {
+            throw OAuthTokenException.invalidRequest();
+        }
         var result = refreshTokens.refreshGrant(refreshToken, clientId, resource);
         if (result.isInvalid()) throw OAuthTokenException.invalidGrant();
         return result.response();
@@ -196,6 +201,9 @@ public class OAuthAuthorizationService {
         }
         validateResource(request.resource());
         var client = resolveClient(request.clientId(), request.redirectUri());
+        if (!client.supportsGrant(AUTHORIZATION_CODE_GRANT)) {
+            throw badRequest("client does not support authorization code grant");
+        }
         var scopes = parseScopeString(request.scope());
         validateClientScopes(client, scopes);
         return new ValidatedAuthorizationRequest(client, scopes);

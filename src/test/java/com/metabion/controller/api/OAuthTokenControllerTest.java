@@ -21,6 +21,8 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.hasKey;
 
 @SpringBootTest(properties = {
         "spring.profiles.active=dev",
@@ -118,6 +120,69 @@ class OAuthTokenControllerTest {
                                 + "&resource=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Fmcp"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("unsupported_grant_type"));
+    }
+
+    @Test
+    void authorizationCodeResponseOmitsAbsentRefreshToken() throws Exception {
+        when(authorizationService.exchangeAuthorizationCode(
+                "plain-code", "http://127.0.0.1/callback", "browser", "verifier",
+                "http://localhost:8080/api/mcp"))
+                .thenReturn(new OAuthTokenResponse("plain-token", "Bearer", 3600, "patient:profile:read"));
+
+        mvc().perform(post("/oauth/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("grant_type=authorization_code&code=plain-code"
+                                + "&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback"
+                                + "&client_id=browser&code_verifier=verifier"
+                                + "&resource=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Fmcp"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", not(hasKey("refresh_token"))));
+    }
+
+    @Test
+    void missingCommonTokenParameterUsesInvalidRequestOAuthError() throws Exception {
+        mvc().perform(post("/oauth/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("client_id=mobile-app&resource=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Fmcp"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_request"));
+    }
+
+    @Test
+    void missingAuthorizationCodeParameterUsesInvalidRequestOAuthError() throws Exception {
+        mvc().perform(post("/oauth/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("grant_type=authorization_code&client_id=mobile-app"
+                                + "&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&code_verifier=verifier"
+                                + "&resource=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Fmcp"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_request"));
+    }
+
+    @Test
+    void missingRefreshTokenParameterUsesInvalidRequestOAuthError() throws Exception {
+        mvc().perform(post("/oauth/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("grant_type=refresh_token&client_id=mobile-app"
+                                + "&resource=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Fmcp"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_request"));
+    }
+
+    @Test
+    void authorizationCodeCredentialFailuresUseGenericInvalidGrantOAuthError() throws Exception {
+        when(authorizationService.exchangeAuthorizationCode(
+                "bad-code", "http://127.0.0.1/callback", "wrong-client", "wrong-verifier", "wrong-resource"))
+                .thenThrow(new OAuthTokenException("invalid_grant", "authorization code is invalid"));
+
+        mvc().perform(post("/oauth/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("grant_type=authorization_code&code=bad-code"
+                                + "&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&client_id=wrong-client"
+                                + "&code_verifier=wrong-verifier&resource=wrong-resource"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_grant"))
+                .andExpect(jsonPath("$.error_description").value("authorization code is invalid"));
     }
 
     private MockMvc mvc() {

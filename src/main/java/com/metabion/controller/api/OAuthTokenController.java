@@ -17,18 +17,36 @@ public class OAuthTokenController {
     }
 
     @PostMapping("/oauth/token")
-    public OAuthTokenResponse token(@RequestParam("grant_type") String grantType,
+    public OAuthTokenResponse token(@RequestParam(value = "grant_type", required = false) String grantType,
                                     @RequestParam(value = "code", required = false) String code,
                                     @RequestParam(value = "redirect_uri", required = false) String redirectUri,
-                                    @RequestParam("client_id") String clientId,
+                                    @RequestParam(value = "client_id", required = false) String clientId,
                                     @RequestParam(value = "code_verifier", required = false) String codeVerifier,
                                     @RequestParam(value = "refresh_token", required = false) String refreshToken,
-                                    @RequestParam("resource") String resource) {
+                                    @RequestParam(value = "resource", required = false) String resource) {
+        if (isBlank(grantType) || isBlank(clientId) || isBlank(resource)) {
+            throw OAuthTokenException.invalidRequest();
+        }
         return switch (grantType) {
-            case "authorization_code" -> authorizationService.exchangeAuthorizationCode(
-                    code, redirectUri, clientId, codeVerifier, resource);
-            case "refresh_token" -> authorizationService.refresh(refreshToken, clientId, resource);
+            case "authorization_code" -> {
+                require(code, redirectUri, codeVerifier);
+                yield authorizationService.exchangeAuthorizationCode(code, redirectUri, clientId, codeVerifier, resource);
+            }
+            case "refresh_token" -> {
+                require(refreshToken);
+                yield authorizationService.refresh(refreshToken, clientId, resource);
+            }
             default -> throw OAuthTokenException.unsupportedGrantType();
         };
+    }
+
+    private void require(String... values) {
+        for (var value : values) {
+            if (isBlank(value)) throw OAuthTokenException.invalidRequest();
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

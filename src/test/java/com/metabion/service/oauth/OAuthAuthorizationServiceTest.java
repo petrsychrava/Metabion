@@ -183,6 +183,19 @@ class OAuthAuthorizationServiceTest {
     }
 
     @Test
+    void authorizationRequestRejectsClientWithoutAuthorizationCodeGrant() {
+        var resolver = org.mockito.Mockito.mock(OAuthClientResolver.class);
+        when(resolver.resolve("codex", REDIRECT_URI)).thenReturn(Optional.of(new OAuthClientMetadata(
+                "codex", "Codex", "native", com.metabion.dto.oauth.OAuthClientSource.CONFIGURED,
+                List.of(REDIRECT_URI), List.of("patient:profile:read"), List.of("refresh_token"))));
+        service = serviceWith(properties, resolver);
+
+        assertThatThrownBy(() -> service.consentView(request("S256"), auth()))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    @Test
     void exchangeRejectsWrongVerifier() {
         var authorizationCode = authorizationCode("plain-code", NOW.plus(Duration.ofMinutes(5)));
         when(codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("plain-code")))
@@ -195,33 +208,24 @@ class OAuthAuthorizationServiceTest {
                 "codex",
                 "wrong-wrong-wrong-wrong-wrong-wrong-wrong-wrong",
                 RESOURCE))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+                .isInstanceOfSatisfying(OAuthTokenException.class,
+                        ex -> assertThat(ex.error()).isEqualTo("invalid_grant"));
         assertThat(authorizationCode.getConsumedAt()).isNull();
         verify(patientAccessTokens, never()).issueForPatient(any(), any(), any(), any(), any(), any());
     }
 
     @Test
-    void exchangeConsumesCodeAndIssuesResourceBoundToken() {
+    void authorizationCodeOnlyClientReceivesAccessTokenWithoutRefreshFamily() {
         var authorizationCode = authorizationCode("plain-code", NOW.plus(Duration.ofMinutes(5)));
         when(codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("plain-code")))
                 .thenReturn(Optional.of(authorizationCode));
-        var refreshToken = new com.metabion.domain.OAuthRefreshToken(
-                PatientAccessTokenService.sha256Hex("refresh-token"), "refresh-family", patient,
-                "codex", com.metabion.dto.oauth.OAuthClientSource.CONFIGURED,
-                PatientAccessClientType.MCP_CODEX, "Codex", RESOURCE,
-                NOW, NOW.plus(Duration.ofDays(30)), Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
-        when(refreshTokens.issueInitial(
-                any(), any(), any(), any(), any(), any()))
-                .thenReturn(new IssuedOAuthRefreshToken("refresh-token", refreshToken));
         when(patientAccessTokens.issueForPatient(
                 patient,
                 PatientAccessClientType.MCP_CODEX,
                 "Codex",
                 Duration.ofHours(1),
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
-                RESOURCE,
-                "refresh-family"))
+                RESOURCE))
                 .thenReturn(new IssuePatientAccessTokenResponse(
                         99L,
                         "access-token",
@@ -243,12 +247,52 @@ class OAuthAuthorizationServiceTest {
         assertThat(response.tokenType()).isEqualTo("Bearer");
         assertThat(response.expiresIn()).isEqualTo(3600);
         assertThat(response.scope()).isEqualTo("patient:profile:read");
-        assertThat(response.refreshToken()).isEqualTo("refresh-token");
+        assertThat(response.refreshToken()).isNull();
+        verify(refreshTokens, never()).issueInitial(any(), any(), any(), any(), any(), any());
         verify(patientAccessTokens).issueForPatient(
                 patient, PatientAccessClientType.MCP_CODEX, "Codex", Duration.ofHours(1),
-                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ), RESOURCE, "refresh-family");
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ), RESOURCE);
         verify(codes).findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("plain-code"));
         verify(codes, never()).findByCodeHash(any());
+    }
+
+    @Test
+    void refreshEnabledConfiguredClientReceivesRefreshTokenAndFamilyBoundAccessToken() {
+        var resolver = org.mockito.Mockito.mock(OAuthClientResolver.class);
+        when(resolver.resolve("codex", REDIRECT_URI)).thenReturn(Optional.of(new OAuthClientMetadata(
+                "codex", "Codex Mobile", "native", com.metabion.dto.oauth.OAuthClientSource.CONFIGURED,
+                List.of(REDIRECT_URI), List.of("patient:profile:read"),
+                List.of("authorization_code", "refresh_token"))));
+        service = serviceWith(properties, resolver);
+        var authorizationCode = authorizationCode("mobile-code", NOW.plus(Duration.ofMinutes(5)));
+        when(codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("mobile-code")))
+                .thenReturn(Optional.of(authorizationCode));
+        when(refreshTokens.issueInitial(any(), any(), any(), any(), any(), any()))
+                .thenReturn(issuedRefreshToken("codex", PatientAccessClientType.MCP_CODEX, "Codex"));
+        when(patientAccessTokens.issueForPatient(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new IssuePatientAccessTokenResponse(99L, "access-token", PatientAccessClientType.MCP_CODEX,
+                        "Codex", NOW.plus(Duration.ofHours(1)), Set.of("patient:profile:read")));
+
+        var response = service.exchangeAuthorizationCode(
+                "mobile-code", REDIRECT_URI, "codex", VERIFIER, RESOURCE);
+
+        assertThat(response.refreshToken()).isEqualTo("refresh-token");
+        verify(patientAccessTokens).issueForPatient(any(), any(), any(), any(), any(), any(),
+                org.mockito.ArgumentMatchers.eq("refresh-family"));
+    }
+
+    @Test
+    void exchangeRejectsClientWithoutAuthorizationCodeGrantAsInvalidGrant() {
+        var resolver = org.mockito.Mockito.mock(OAuthClientResolver.class);
+        when(resolver.resolve("codex", REDIRECT_URI)).thenReturn(Optional.of(new OAuthClientMetadata(
+                "codex", "Codex", "native", com.metabion.dto.oauth.OAuthClientSource.CONFIGURED,
+                List.of(REDIRECT_URI), List.of("patient:profile:read"), List.of("refresh_token"))));
+        service = serviceWith(properties, resolver);
+
+        assertThatThrownBy(() -> service.exchangeAuthorizationCode(
+                "plain-code", REDIRECT_URI, "codex", VERIFIER, RESOURCE))
+                .isInstanceOfSatisfying(OAuthTokenException.class,
+                        ex -> assertThat(ex.error()).isEqualTo("invalid_grant"));
     }
 
     @Test
@@ -264,8 +308,8 @@ class OAuthAuthorizationServiceTest {
                 "codex",
                 VERIFIER,
                 RESOURCE))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+                .isInstanceOfSatisfying(OAuthTokenException.class,
+                        ex -> assertThat(ex.error()).isEqualTo("invalid_grant"));
 
         var consumed = authorizationCode("consumed-code", NOW.plus(Duration.ofMinutes(5)));
         consumed.consume(NOW.minusSeconds(10));
@@ -279,8 +323,8 @@ class OAuthAuthorizationServiceTest {
                 "codex",
                 VERIFIER,
                 RESOURCE))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+                .isInstanceOfSatisfying(OAuthTokenException.class,
+                        ex -> assertThat(ex.error()).isEqualTo("invalid_grant"));
         verify(patientAccessTokens, never()).issueForPatient(any(), any(), any(), any(), any(), any());
     }
 
@@ -298,8 +342,8 @@ class OAuthAuthorizationServiceTest {
                 "codex",
                 VERIFIER,
                 RESOURCE))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+                .isInstanceOfSatisfying(OAuthTokenException.class,
+                        ex -> assertThat(ex.error()).isEqualTo("invalid_grant"));
 
         patient.setEnabled(true);
         patient.setLockedUntil(NOW.plusSeconds(60));
@@ -314,8 +358,8 @@ class OAuthAuthorizationServiceTest {
                 "codex",
                 VERIFIER,
                 RESOURCE))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+                .isInstanceOfSatisfying(OAuthTokenException.class,
+                        ex -> assertThat(ex.error()).isEqualTo("invalid_grant"));
         verify(patientAccessTokens, never()).issueForPatient(any(), any(), any(), any(), any(), any());
     }
 
@@ -333,10 +377,9 @@ class OAuthAuthorizationServiceTest {
         service = serviceWith(metadataProperties, new OAuthClientResolver(
                 metadataProperties,
                 ignoredClientId -> Optional.of(new OAuthClientMetadata(
-                        clientId,
-                        "External MCP",
-                        List.of(redirectUri),
-                        List.of("patient:profile:read"))),
+                        clientId, "External MCP", "native", com.metabion.dto.oauth.OAuthClientSource.METADATA_DOCUMENT,
+                        List.of(redirectUri), List.of("patient:profile:read"),
+                        List.of("authorization_code", "refresh_token"))),
                 emptyRegisteredClients()));
         var authorizationCode = new OAuthAuthorizationCode(
                 PatientAccessTokenService.sha256Hex("metadata-code"),
@@ -393,10 +436,9 @@ class OAuthAuthorizationServiceTest {
         var clientId = "mcp_client_dynamic_codex";
         var resolver = org.mockito.Mockito.mock(OAuthClientResolver.class);
         when(resolver.resolve(clientId, REDIRECT_URI)).thenReturn(Optional.of(new OAuthClientMetadata(
-                clientId,
-                "Codex",
-                List.of(REDIRECT_URI),
-                List.of("patient:profile:read"))));
+                clientId, "Codex", "native", com.metabion.dto.oauth.OAuthClientSource.DYNAMIC,
+                List.of(REDIRECT_URI), List.of("patient:profile:read"),
+                List.of("authorization_code", "refresh_token"))));
         service = serviceWith(properties, resolver);
         var authorizationCode = new OAuthAuthorizationCode(
                 PatientAccessTokenService.sha256Hex("dynamic-code"),

@@ -14,6 +14,14 @@ public class OAuthTokenException extends RuntimeException {
         return new OAuthTokenException("invalid_grant", "refresh token is invalid");
     }
 
+    public static OAuthTokenException invalidAuthorizationCodeGrant() {
+        return new OAuthTokenException("invalid_grant", "authorization code is invalid");
+    }
+
+    public static OAuthTokenException invalidRequest() {
+        return new OAuthTokenException("invalid_request", "token request is invalid");
+    }
+
     public static OAuthTokenException unsupportedGrantType() {
         return new OAuthTokenException("unsupported_grant_type", "grant type is unsupported");
     }
