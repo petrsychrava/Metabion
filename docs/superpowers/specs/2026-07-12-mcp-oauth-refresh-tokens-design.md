@@ -108,6 +108,10 @@ Access tokens issued through OAuth gain an optional refresh-family identifier.
 Manually issued patient access tokens keep this field null. This association
 allows a compromised family to revoke only access tokens derived from that
 family without affecting unrelated clients or manually issued tokens.
+Deleting a family-bound OAuth access token from the patient's account revokes
+the family marker, every refresh-token member, and every active access token in
+that family with reason `patient_request`. Deleting a manually issued access
+token remains a single-row revocation.
 
 Refresh and OAuth-issued access-token family IDs reference the family table;
 the access-token reference remains nullable for manual tokens. Patient and

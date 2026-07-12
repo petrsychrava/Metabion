@@ -47,7 +47,7 @@ import static org.mockito.Mockito.when;
         "metabion.oauth.issuer=http://localhost:8080",
         "metabion.oauth.resource=http://localhost:8080/api/mcp"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({OAuthRefreshTokenService.class, PatientAccessTokenService.class,
+@Import({OAuthRefreshTokenService.class, OAuthTokenFamilyRevocationService.class, PatientAccessTokenService.class,
         OAuthRefreshTokenConcurrencyTest.Config.class})
 @Testcontainers
 class OAuthRefreshTokenConcurrencyTest {

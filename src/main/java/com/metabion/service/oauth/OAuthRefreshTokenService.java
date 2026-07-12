@@ -34,6 +34,7 @@ public class OAuthRefreshTokenService {
     private final OAuthRefreshTokenFamilyRepository families;
     private final OAuthClientResolver clients;
     private final PatientAccessTokenService accessTokens;
+    private final OAuthTokenFamilyRevocationService familyRevocations;
     private final Clock clock;
     private final OAuthAuthorizationProperties properties;
 
@@ -41,12 +42,14 @@ public class OAuthRefreshTokenService {
                                     OAuthRefreshTokenFamilyRepository families,
                                     OAuthClientResolver clients,
                                     PatientAccessTokenService accessTokens,
+                                    OAuthTokenFamilyRevocationService familyRevocations,
                                     Clock clock,
                                     OAuthAuthorizationProperties properties) {
         this.tokens = tokens;
         this.families = families;
         this.clients = clients;
         this.accessTokens = accessTokens;
+        this.familyRevocations = familyRevocations;
         this.clock = clock;
         this.properties = properties;
     }
@@ -89,7 +92,7 @@ public class OAuthRefreshTokenService {
         if (current == null) return OAuthRefreshGrantResult.invalid();
         var now = Instant.now(clock);
         if (current.isConsumed()) {
-            revokeFamily(family, "refresh_token_reuse", now);
+            familyRevocations.revoke(family.getId(), "refresh_token_reuse", now);
             return OAuthRefreshGrantResult.invalid();
         }
         if (family.isRevoked() || current.isExpired(now) || current.isRevoked()
@@ -127,14 +130,6 @@ public class OAuthRefreshTokenService {
                 .collect(java.util.stream.Collectors.joining(" "));
         return OAuthRefreshGrantResult.success(new OAuthTokenResponse(
                 access.plainToken(), "Bearer", expiresIn, scope, replacementPlain));
-    }
-
-    private void revokeFamily(OAuthRefreshTokenFamily family, String reason, Instant now) {
-        if (!family.isRevoked()) family.revoke(reason, now);
-        tokens.findByFamilyId(family.getId()).stream()
-                .filter(token -> !token.isRevoked())
-                .forEach(token -> token.revoke(reason, now));
-        accessTokens.revokeFamily(family.getId(), reason, now);
     }
 
     private boolean isBlank(String value) {

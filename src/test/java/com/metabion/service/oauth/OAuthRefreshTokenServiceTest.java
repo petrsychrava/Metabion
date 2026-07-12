@@ -44,6 +44,7 @@ class OAuthRefreshTokenServiceTest {
     @Mock OAuthRefreshTokenRepository tokens;
     @Mock OAuthClientResolver clients;
     @Mock OAuthRefreshTokenFamilyRepository families;
+    @Mock OAuthTokenFamilyRevocationService familyRevocations;
     @Mock PatientAccessTokenService accessTokens;
 
     @Test
@@ -52,7 +53,7 @@ class OAuthRefreshTokenServiceTest {
                 "http://localhost:8080", "http://localhost:8080/api/mcp",
                 Duration.ofMinutes(5), Duration.ofHours(1), Duration.ofDays(30),
                 null, null);
-        var service = new OAuthRefreshTokenService(tokens, families, clients, accessTokens,
+        var service = new OAuthRefreshTokenService(tokens, families, clients, accessTokens, familyRevocations,
                 Clock.fixed(NOW, ZoneOffset.UTC), properties);
         var user = new User("patient@example.com", "hash");
         var client = new OAuthClientMetadata(
@@ -197,7 +198,7 @@ class OAuthRefreshTokenServiceTest {
     }
 
     private OAuthRefreshTokenService service() {
-        return new OAuthRefreshTokenService(tokens, families, clients, accessTokens, Clock.fixed(NOW, ZoneOffset.UTC),
+        return new OAuthRefreshTokenService(tokens, families, clients, accessTokens, familyRevocations, Clock.fixed(NOW, ZoneOffset.UTC),
                 new OAuthAuthorizationProperties("http://localhost:8080", "http://localhost:8080/api/mcp",
                         Duration.ofMinutes(5), Duration.ofHours(1), Duration.ofDays(30), null, null));
     }

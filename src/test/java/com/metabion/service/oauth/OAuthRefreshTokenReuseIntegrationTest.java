@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
         "metabion.oauth.issuer=http://localhost:8080",
         "metabion.oauth.resource=http://localhost:8080/api/mcp"})
-@Import({OAuthRefreshTokenService.class, PatientAccessTokenService.class,
+@Import({OAuthRefreshTokenService.class, OAuthTokenFamilyRevocationService.class, PatientAccessTokenService.class,
         OAuthRefreshTokenReuseIntegrationTest.Config.class})
 class OAuthRefreshTokenReuseIntegrationTest {
     private static final Instant NOW = Instant.parse("2026-07-06T10:00:00Z");
