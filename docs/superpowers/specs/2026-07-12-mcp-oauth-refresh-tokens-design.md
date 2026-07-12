@@ -2,9 +2,9 @@
 
 ## Goal
 
-Make Metabion's MCP OAuth server interoperable with Codex dynamic client
-registration and keep Codex authenticated through secure, rotating refresh
-tokens.
+Make Metabion's OAuth server interoperable with Codex dynamic client
+registration and provide one secure, rotating refresh-token implementation
+that is reusable by MCP clients and pre-registered native mobile apps.
 
 ## Scope
 
@@ -16,10 +16,39 @@ This change covers:
 - rotating refresh tokens on every successful refresh;
 - detecting reuse of a consumed refresh token and revoking its token family;
 - revoking access tokens associated with a compromised refresh-token family;
-- returning OAuth-compatible token errors without leaking credential state.
+- returning OAuth-compatible token errors without leaking credential state;
+- resolving refresh-capable OAuth clients through a shared client abstraction
+  regardless of whether they are dynamically or statically registered.
 
-It does not add confidential OAuth clients, client secrets, offline consent
-controls, or a refresh-token management UI.
+It does not add confidential OAuth clients, client secrets, mobile application
+endpoints, offline consent controls, or a refresh-token management UI.
+
+## Shared OAuth Client Model
+
+Refresh-token issuance and rotation target a shared `OAuthClientMetadata`
+model rather than an MCP-specific registration entity. The model exposes the
+client ID, display label, application type, registration source, redirect URIs,
+allowed scopes, and allowed grant types.
+
+The resolver supports these public-client sources:
+
+- dynamically registered native clients such as Codex;
+- pre-registered native clients from `metabion.oauth.clients`, intended for
+  first-party mobile applications;
+- HTTPS client-ID metadata documents already supported by Metabion.
+
+Pre-registered mobile clients declare `application-type=native` and grant types
+including `authorization_code` and `refresh_token`. They use Authorization Code
+with PKCE and receive the same token responses, rotation behavior, reuse
+detection, scope enforcement, and revocation as Codex. No mobile app embeds a
+client secret.
+
+The refresh-token table stores the stable client ID and registration source,
+not a foreign key limited to the dynamic MCP registration table. At refresh
+time, the client is resolved again by ID and checked against the stored source,
+grant, resource, and scope constraints. Removing or disabling a pre-registered
+mobile client therefore prevents further refreshes. Dynamic-client deletion,
+if added later, has the same effect.
 
 ## Dynamic Client Registration
 
@@ -62,7 +91,7 @@ collection table. Each refresh-token row stores:
 
 - a unique SHA-256 token hash, never the plaintext token;
 - a cryptographically random family identifier shared across rotations;
-- the patient and dynamically registered OAuth client;
+- the patient, stable OAuth client ID, and client registration source;
 - the resource, client display label, and patient access client type;
 - the granted scopes;
 - creation and absolute expiry timestamps;
@@ -78,9 +107,10 @@ Manually issued patient access tokens keep this field null. This association
 allows a compromised family to revoke only access tokens derived from that
 family without affecting unrelated clients or manually issued tokens.
 
-Foreign keys use database constraints. Token hashes and family identifiers are
-indexed, and token hashes are unique. The registered-client relationship is
-retained so refresh requests can be bound to the exact client identity.
+Patient and replacement-token foreign keys use database constraints. Token
+hashes, family identifiers, and client IDs are indexed, and token hashes are
+unique. The stored client ID and source bind refresh requests to the exact
+resolved client identity without coupling the table to one registration source.
 
 ## Token Flows
 
@@ -109,7 +139,8 @@ write lock. It then validates that:
 
 - the token exists, is not expired, and is not revoked;
 - the client ID and resource match the stored values;
-- the registered client still exists and supports the refresh grant;
+- the OAuth client still resolves from the same registration source and
+  supports the refresh grant and stored scopes;
 - the patient is enabled, unlocked, and still has the patient role.
 
 For a valid unused token, the same transaction consumes it, stores its rotated
@@ -169,11 +200,18 @@ Add `metabion.oauth.refresh-token-ttl` with environment override
 `METABION_OAUTH_REFRESH_TOKEN_TTL` and default `P30D`. Existing one-hour access
 token and five-minute authorization-code defaults remain unchanged.
 
+Each entry under `metabion.oauth.clients` gains optional `application-type` and
+`grant-types` properties. Defaults preserve existing configured clients as
+public native authorization-code clients; mobile clients opt into refresh by
+including `refresh_token` explicitly.
+
 ## Testing Strategy
 
 Implementation follows red-green-refactor cycles. Coverage includes:
 
 - controller acceptance of the captured Codex registration payload;
+- client-resolution tests proving dynamic Codex and pre-registered mobile
+  clients share the refresh service while retaining distinct policies;
 - rejection of confidential, unsupported, and refresh-only registrations;
 - metadata advertising both grants;
 - initial exchange returning a refresh token while storing only its hash;
@@ -199,3 +237,6 @@ Implementation follows red-green-refactor cycles. Coverage includes:
 - No plaintext refresh token is persisted or logged.
 - Existing LM Studio MCP authentication and manually issued patient access
   tokens continue to work.
+- A pre-registered native mobile client can use the same PKCE authorization,
+  refresh rotation, reuse detection, and revocation lifecycle without a client
+  secret or a second token implementation.
