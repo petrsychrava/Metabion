@@ -121,6 +121,14 @@ public class OAuthAuthorizationService {
         if (!AUTHORIZATION_CODE_GRANT.equals(grantType)) {
             throw badRequest("unsupported grant type");
         }
+        return exchangeAuthorizationCode(code, redirectUri, clientId, verifier, resource);
+    }
+
+    public OAuthTokenResponse exchangeAuthorizationCode(String code,
+                                                        String redirectUri,
+                                                        String clientId,
+                                                        String verifier,
+                                                        String resource) {
         if (isBlank(code) || isBlank(verifier)) {
             throw badRequest("authorization code and verifier are required");
         }
@@ -166,6 +174,18 @@ public class OAuthAuthorizationService {
                 expiresIn,
                 sortedScopeString(token.scopes()),
                 refresh.plainToken());
+    }
+
+    public OAuthTokenResponse refresh(String refreshToken, String clientId, String resource) {
+        var refresh = refreshTokens.rotate(refreshToken, clientId, resource);
+        var stored = refresh.token();
+        var now = Instant.now(clock);
+        var token = patientAccessTokens.issueForPatient(
+                stored.getUser(), stored.getClientType(), stored.getDisplayLabel(),
+                properties.accessTokenTtl(), stored.scopes(), stored.getResource(), stored.getFamilyId());
+        var expiresIn = Math.max(0, Duration.between(now, token.expiresAt()).toSeconds());
+        return new OAuthTokenResponse(token.plainToken(), "Bearer", expiresIn,
+                sortedScopeString(token.scopes()), refresh.plainToken());
     }
 
     private ValidatedAuthorizationRequest validateAuthorizationRequest(OAuthAuthorizationRequest request) {

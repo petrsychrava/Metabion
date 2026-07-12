@@ -440,6 +440,23 @@ class OAuthAuthorizationServiceTest {
                 "refresh-family");
     }
 
+    @Test
+    void refreshRotatesCredentialAndIssuesFamilyBoundAccessToken() {
+        var rotated = issuedRefreshToken("codex", PatientAccessClientType.MCP_CODEX, "Codex");
+        when(refreshTokens.rotate("old-refresh", "codex", RESOURCE)).thenReturn(rotated);
+        when(patientAccessTokens.issueForPatient(patient, PatientAccessClientType.MCP_CODEX, "Codex",
+                Duration.ofHours(1), Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ), RESOURCE, "refresh-family"))
+                .thenReturn(new IssuePatientAccessTokenResponse(101L, "new-access", PatientAccessClientType.MCP_CODEX,
+                        "Codex", NOW.plus(Duration.ofHours(1)), Set.of("patient:profile:read")));
+
+        var response = service.refresh("old-refresh", "codex", RESOURCE);
+
+        assertThat(response.accessToken()).isEqualTo("new-access");
+        assertThat(response.expiresIn()).isEqualTo(3600);
+        assertThat(response.scope()).isEqualTo("patient:profile:read");
+        assertThat(response.refreshToken()).isEqualTo("refresh-token");
+    }
+
     private OAuthAuthorizationRequest request(String codeChallengeMethod) {
         return requestWithChallenge(CHALLENGE, codeChallengeMethod);
     }

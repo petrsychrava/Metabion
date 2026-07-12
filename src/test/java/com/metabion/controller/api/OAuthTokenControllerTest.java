@@ -44,14 +44,13 @@ class OAuthTokenControllerTest {
 
     @Test
     void tokenEndpointReturnsBearerTokenResponseWithoutCsrf() throws Exception {
-        when(authorizationService.exchange(
-                "authorization_code",
+        when(authorizationService.exchangeAuthorizationCode(
                 "plain-code",
                 "http://127.0.0.1:1455/oauth/callback",
                 "codex",
                 "verifier",
                 "http://localhost:8080/api/mcp"))
-                .thenReturn(new OAuthTokenResponse("plain-token", "Bearer", 3600, "patient:profile:read"));
+                .thenReturn(new OAuthTokenResponse("plain-token", "Bearer", 3600, "patient:profile:read", "plain-refresh"));
 
         mvc().perform(post("/oauth/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
@@ -65,15 +64,35 @@ class OAuthTokenControllerTest {
                 .andExpect(jsonPath("$.access_token").value("plain-token"))
                 .andExpect(jsonPath("$.token_type").value("Bearer"))
                 .andExpect(jsonPath("$.expires_in").value(3600))
-                .andExpect(jsonPath("$.scope").value("patient:profile:read"));
+                .andExpect(jsonPath("$.scope").value("patient:profile:read"))
+                .andExpect(jsonPath("$.refresh_token").value("plain-refresh"));
 
-        verify(authorizationService).exchange(
-                "authorization_code",
+        verify(authorizationService).exchangeAuthorizationCode(
                 "plain-code",
                 "http://127.0.0.1:1455/oauth/callback",
                 "codex",
                 "verifier",
                 "http://localhost:8080/api/mcp");
+    }
+
+    @Test
+    void tokenEndpointRoutesRefreshGrantWithoutAuthorizationCodeParameters() throws Exception {
+        when(authorizationService.refresh("old-refresh", "mobile-app", "http://localhost:8080/api/mcp"))
+                .thenReturn(new OAuthTokenResponse("new-access", "Bearer", 3600,
+                        "patient:profile:read", "new-refresh"));
+
+        mvc().perform(post("/oauth/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("grant_type=refresh_token"
+                                + "&refresh_token=old-refresh"
+                                + "&client_id=mobile-app"
+                                + "&resource=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Fmcp"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.access_token").value("new-access"))
+                .andExpect(jsonPath("$.refresh_token").value("new-refresh"));
+
+        verify(authorizationService).refresh(
+                "old-refresh", "mobile-app", "http://localhost:8080/api/mcp");
     }
 
     private MockMvc mvc() {
