@@ -14,9 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -41,6 +39,7 @@ class OAuthRefreshTokenServiceTest {
 
     @Mock OAuthRefreshTokenRepository tokens;
     @Mock OAuthClientResolver clients;
+    @Mock OAuthRefreshTokenRevocationService revocations;
 
     @Test
     void issueInitialPersistsOnlyHashWithIndependentFamilyAndConfiguredExpiry() {
@@ -48,7 +47,7 @@ class OAuthRefreshTokenServiceTest {
                 "http://localhost:8080", "http://localhost:8080/api/mcp",
                 Duration.ofMinutes(5), Duration.ofHours(1), Duration.ofDays(30),
                 null, null);
-        var service = new OAuthRefreshTokenService(tokens, clients, Clock.fixed(NOW, ZoneOffset.UTC), properties);
+        var service = new OAuthRefreshTokenService(tokens, clients, revocations, Clock.fixed(NOW, ZoneOffset.UTC), properties);
         var user = new User("patient@example.com", "hash");
         var client = new OAuthClientMetadata(
                 "codex", "Codex", "native", OAuthClientSource.CONFIGURED,
@@ -102,8 +101,9 @@ class OAuthRefreshTokenServiceTest {
         assertThat(old.getConsumedAt()).isEqualTo(NOW);
         assertThat(old.getReplacementTokenId()).isEqualTo(42L);
         assertThatThrownBy(() -> service.rotate("old-refresh", "mobile-app", "http://localhost:8080/api/mcp"))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+                .isInstanceOfSatisfying(OAuthTokenException.class,
+                        ex -> assertThat(ex.error()).isEqualTo("invalid_grant"));
+        verify(revocations).revokeFamily("family-1", "refresh_token_reuse");
         verify(tokens, times(1)).save(any());
     }
 
@@ -142,8 +142,7 @@ class OAuthRefreshTokenServiceTest {
 
         assertThatThrownBy(() -> service.rotate(
                 "dynamic-refresh", "mobile-app", "http://localhost:8080/api/mcp"))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+                .isInstanceOf(OAuthTokenException.class);
 
         assertThat(stored.getConsumedAt()).isNull();
         assertThat(stored.getReplacementTokenId()).isNull();
@@ -155,8 +154,11 @@ class OAuthRefreshTokenServiceTest {
         var service = service();
         when(tokens.findByTokenHashForUpdate(PatientAccessTokenService.sha256Hex(plain))).thenReturn(found);
         assertThatThrownBy(() -> service.rotate(plain, clientId, resource))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+                .isInstanceOfSatisfying(OAuthTokenException.class, ex -> {
+                    assertThat(ex.error()).isEqualTo("invalid_grant");
+                    assertThat(ex.description()).isEqualTo("refresh token is invalid");
+                });
+        verify(revocations, never()).revokeFamily(any(), any());
         verify(tokens, never()).save(any());
     }
 
@@ -167,12 +169,14 @@ class OAuthRefreshTokenServiceTest {
         if (client != null) org.mockito.Mockito.lenient().when(clients.resolve(clientId)).thenReturn(Optional.of(client));
         else org.mockito.Mockito.lenient().when(clients.resolve(clientId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.rotate(plain, clientId, resource))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        ex -> assertThat(ex.getStatusCode()).isIn(HttpStatus.BAD_REQUEST, HttpStatus.FORBIDDEN));
+                .isInstanceOfSatisfying(OAuthTokenException.class, ex -> {
+                    assertThat(ex.error()).isEqualTo("invalid_grant");
+                    assertThat(ex.description()).isEqualTo("refresh token is invalid");
+                });
     }
 
     private OAuthRefreshTokenService service() {
-        return new OAuthRefreshTokenService(tokens, clients, Clock.fixed(NOW, ZoneOffset.UTC),
+        return new OAuthRefreshTokenService(tokens, clients, revocations, Clock.fixed(NOW, ZoneOffset.UTC),
                 new OAuthAuthorizationProperties("http://localhost:8080", "http://localhost:8080/api/mcp",
                         Duration.ofMinutes(5), Duration.ofHours(1), Duration.ofDays(30), null, null));
     }

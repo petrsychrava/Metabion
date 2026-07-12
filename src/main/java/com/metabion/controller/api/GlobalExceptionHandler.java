@@ -1,10 +1,12 @@
 package com.metabion.controller.api;
 
+import com.metabion.dto.oauth.OAuthErrorResponse;
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.exception.InsufficientScopeException;
 import com.metabion.exception.StaffInvitationException;
 import com.metabion.exception.ValidationException;
 import com.metabion.service.RateLimitedException;
+import com.metabion.service.oauth.OAuthTokenException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mail.MailException;
@@ -25,6 +27,11 @@ public class GlobalExceptionHandler {
     private static final Map<String, String> INVALID_CREDENTIALS = Map.of("error", "invalid_credentials");
     private static final Map<String, String> INVALID_TOKEN = Map.of("error", "invalid_token");
     private static final Map<String, String> OK = Map.of("status", "ok");
+
+    @ExceptionHandler(OAuthTokenException.class)
+    public ResponseEntity<OAuthErrorResponse> oauthToken(OAuthTokenException e) {
+        return ResponseEntity.badRequest().body(new OAuthErrorResponse(e.error(), e.description()));
+    }
 
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<Map<String, String>> auth(AuthenticationException e) {

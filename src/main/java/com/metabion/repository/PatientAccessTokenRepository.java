@@ -32,7 +32,7 @@ public interface PatientAccessTokenRepository extends JpaRepository<PatientAcces
             set token.revokedAt = :revokedAt, token.revocationReason = :reason
             where token.refreshFamilyId = :familyId and token.revokedAt is null
             """)
-    int revokeByRefreshFamilyId(@Param("familyId") String familyId,
-                                @Param("reason") String reason,
-                                @Param("revokedAt") Instant revokedAt);
+    int revokeActiveByRefreshFamilyId(@Param("familyId") String familyId,
+                                      @Param("reason") String reason,
+                                      @Param("revokedAt") Instant revokedAt);
 }

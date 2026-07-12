@@ -2,6 +2,7 @@ package com.metabion.controller.api;
 
 import com.metabion.dto.oauth.OAuthTokenResponse;
 import com.metabion.service.oauth.OAuthAuthorizationService;
+import com.metabion.service.oauth.OAuthTokenException;
 import jakarta.servlet.Filter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -93,6 +94,30 @@ class OAuthTokenControllerTest {
 
         verify(authorizationService).refresh(
                 "old-refresh", "mobile-app", "http://localhost:8080/api/mcp");
+    }
+
+    @Test
+    void invalidRefreshGrantUsesStableOAuthErrorShape() throws Exception {
+        when(authorizationService.refresh("reused-refresh", "mobile-app", "http://localhost:8080/api/mcp"))
+                .thenThrow(OAuthTokenException.invalidGrant());
+
+        mvc().perform(post("/oauth/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("grant_type=refresh_token&refresh_token=reused-refresh&client_id=mobile-app"
+                                + "&resource=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Fmcp"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_grant"))
+                .andExpect(jsonPath("$.error_description").value("refresh token is invalid"));
+    }
+
+    @Test
+    void unknownGrantUsesOAuthUnsupportedGrantTypeError() throws Exception {
+        mvc().perform(post("/oauth/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("grant_type=password&client_id=mobile-app"
+                                + "&resource=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Fmcp"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("unsupported_grant_type"));
     }
 
     private MockMvc mvc() {

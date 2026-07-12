@@ -12,8 +12,6 @@ import com.metabion.repository.OAuthRefreshTokenRepository;
 import com.metabion.service.PatientAccessTokenService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -29,15 +27,18 @@ public class OAuthRefreshTokenService {
 
     private final OAuthRefreshTokenRepository tokens;
     private final OAuthClientResolver clients;
+    private final OAuthRefreshTokenRevocationService revocations;
     private final Clock clock;
     private final OAuthAuthorizationProperties properties;
 
     public OAuthRefreshTokenService(OAuthRefreshTokenRepository tokens,
                                     OAuthClientResolver clients,
+                                    OAuthRefreshTokenRevocationService revocations,
                                     Clock clock,
                                     OAuthAuthorizationProperties properties) {
         this.tokens = tokens;
         this.clients = clients;
+        this.revocations = revocations;
         this.clock = clock;
         this.properties = properties;
     }
@@ -73,7 +74,11 @@ public class OAuthRefreshTokenService {
         var current = tokens.findByTokenHashForUpdate(PatientAccessTokenService.sha256Hex(plainToken))
                 .orElseThrow(this::invalidRefreshToken);
         var now = Instant.now(clock);
-        if (current.isConsumed() || current.isExpired(now) || current.isRevoked()
+        if (current.isConsumed()) {
+            revocations.revokeFamily(current.getFamilyId(), "refresh_token_reuse");
+            throw invalidRefreshToken();
+        }
+        if (current.isExpired(now) || current.isRevoked()
                 || !clientId.equals(current.getClientId()) || !resource.equals(current.getResource())) {
             throw invalidRefreshToken();
         }
@@ -90,7 +95,7 @@ public class OAuthRefreshTokenService {
         if (!user.isEnabled()
                 || (user.getLockedUntil() != null && user.getLockedUntil().isAfter(now))
                 || !user.hasRole(RoleName.PATIENT)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "patient access required");
+            throw invalidRefreshToken();
         }
         var replacementPlain = generateValue();
         var replacement = tokens.save(new OAuthRefreshToken(
@@ -102,8 +107,8 @@ public class OAuthRefreshTokenService {
         return new IssuedOAuthRefreshToken(replacementPlain, replacement);
     }
 
-    private ResponseStatusException invalidRefreshToken() {
-        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid refresh token");
+    private OAuthTokenException invalidRefreshToken() {
+        return OAuthTokenException.invalidGrant();
     }
 
     private boolean isBlank(String value) {

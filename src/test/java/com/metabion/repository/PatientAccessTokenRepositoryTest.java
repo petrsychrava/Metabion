@@ -104,7 +104,7 @@ class PatientAccessTokenRepositoryTest {
         tokens.saveAllAndFlush(Set.of(familyToken, manualToken));
 
         assertThat(manualToken.getRefreshFamilyId()).isNull();
-        assertThat(tokens.revokeByRefreshFamilyId("family-1", "refresh_reuse", createdAt.plusSeconds(30)))
+        assertThat(tokens.revokeActiveByRefreshFamilyId("family-1", "refresh_reuse", createdAt.plusSeconds(30)))
                 .isEqualTo(1);
         entityManager.clear();
 

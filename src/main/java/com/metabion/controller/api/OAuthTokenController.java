@@ -2,11 +2,10 @@ package com.metabion.controller.api;
 
 import com.metabion.dto.oauth.OAuthTokenResponse;
 import com.metabion.service.oauth.OAuthAuthorizationService;
+import com.metabion.service.oauth.OAuthTokenException;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 public class OAuthTokenController {
@@ -29,7 +28,7 @@ public class OAuthTokenController {
             case "authorization_code" -> authorizationService.exchangeAuthorizationCode(
                     code, redirectUri, clientId, codeVerifier, resource);
             case "refresh_token" -> authorizationService.refresh(refreshToken, clientId, resource);
-            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unsupported grant type");
+            default -> throw OAuthTokenException.unsupportedGrantType();
         };
     }
 }
