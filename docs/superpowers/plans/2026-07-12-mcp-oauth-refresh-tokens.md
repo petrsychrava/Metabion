@@ -4,7 +4,7 @@
 
 **Goal:** Make Codex OAuth registration succeed and add one secure rotating refresh-token implementation shared by MCP and pre-registered native mobile clients.
 
-**Architecture:** Extend the shared OAuth client metadata model with source, application type, and grants. Persist hashed refresh tokens as one-time credentials grouped into families, bind OAuth access tokens to a family, and isolate reuse revocation in a transaction that commits before returning `invalid_grant`.
+**Architecture:** Extend the shared OAuth client metadata model with source, application type, and grants. Persist hashed refresh tokens as one-time credentials grouped under a first-class family row, bind OAuth access tokens to that family, serialize family operations with a pessimistic family-row lock, and map a committed invalid result to `invalid_grant` outside the transaction.
 
 **Tech Stack:** Java 25, Spring Boot 4.0.6, Spring MVC/Security/Data JPA, PostgreSQL, Flyway, H2/Testcontainers, JUnit 5, Mockito, AssertJ.
 
@@ -140,7 +140,7 @@ git commit -m "Support native OAuth refresh clients"
 
 **Interfaces:**
 - Produces: `OAuthRefreshToken` methods `consume(Long replacementId, Instant now)`, `revoke(String reason, Instant now)`, `isExpired`, `isConsumed`, and `isRevoked`.
-- Produces: locked lookup `findByTokenHashForUpdate(String)` and family lookup `findByFamilyId(String)`.
+- Produces: non-locking family discovery `findFamilyIdByTokenHash(String)`, token reread `findByTokenHash(String)`, family lookup `findByFamilyId(String)`, and locked `OAuthRefreshTokenFamilyRepository.findByIdForUpdate(String)`.
 - Produces: `PatientAccessToken.getRefreshFamilyId()` and repository family revocation query.
 
 - [ ] **Step 1: Write failing persistence tests**
@@ -171,13 +171,19 @@ INSERT INTO oauth_registered_client_grant_types
 SELECT id, 'authorization_code' FROM oauth_registered_clients;
 
 ALTER TABLE patient_access_tokens ADD COLUMN refresh_family_id VARCHAR(64);
+CREATE TABLE oauth_refresh_token_families (
+    family_id VARCHAR(64) PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    revoked_at TIMESTAMP WITH TIME ZONE,
+    revocation_reason VARCHAR(120)
+);
 CREATE INDEX idx_patient_access_tokens_refresh_family
     ON patient_access_tokens(refresh_family_id);
 
 CREATE TABLE oauth_refresh_tokens (
     id BIGSERIAL PRIMARY KEY,
     token_hash VARCHAR(64) NOT NULL UNIQUE,
-    family_id VARCHAR(64) NOT NULL,
+    family_id VARCHAR(64) NOT NULL REFERENCES oauth_refresh_token_families(family_id),
     user_id BIGINT NOT NULL REFERENCES users(id),
     client_id VARCHAR(500) NOT NULL,
     client_source VARCHAR(32) NOT NULL,
@@ -193,6 +199,8 @@ CREATE TABLE oauth_refresh_tokens (
 );
 CREATE INDEX idx_oauth_refresh_tokens_family ON oauth_refresh_tokens(family_id);
 CREATE INDEX idx_oauth_refresh_tokens_client ON oauth_refresh_tokens(client_id);
+ALTER TABLE patient_access_tokens ADD CONSTRAINT fk_patient_access_tokens_refresh_family
+    FOREIGN KEY (refresh_family_id) REFERENCES oauth_refresh_token_families(family_id);
 CREATE TABLE oauth_refresh_token_scopes (
     refresh_token_id BIGINT NOT NULL REFERENCES oauth_refresh_tokens(id) ON DELETE CASCADE,
     scope VARCHAR(80) NOT NULL,
@@ -200,7 +208,7 @@ CREATE TABLE oauth_refresh_token_scopes (
 );
 ```
 
-Use `@Lock(PESSIMISTIC_WRITE)` for token-hash lookup. Add an optional `refreshFamilyId` constructor overload to `PatientAccessToken`, preserving the existing constructor for manual issuance.
+Create `OAuthRefreshTokenFamily` before its first refresh/access members and reference it from both token tables. Use `@Lock(PESSIMISTIC_WRITE)` only for the family-row lookup. Add an optional `refreshFamilyId` constructor overload to `PatientAccessToken`, preserving the existing constructor for manual issuance.
 
 - [ ] **Step 4: Run persistence tests and verify GREEN**
 
@@ -314,7 +322,7 @@ return switch (grantType) {
 };
 ```
 
-Lock by hash, validate stored bindings and current resolved client capabilities, create/save replacement, mark the old row consumed with its replacement ID, and issue a new family-bound one-hour access token.
+Discover the immutable family ID by token hash without a lock, pessimistically lock the family row, reread the token, validate family state plus stored bindings and current resolved client capabilities, create/save replacement, mark the old row consumed with its replacement ID, and issue a new family-bound one-hour access token while the family lock is held.
 
 - [ ] **Step 4: Run rotation tests and verify GREEN**
 
@@ -333,17 +341,20 @@ git commit -m "Rotate OAuth refresh tokens"
 
 **Files:**
 - Create: `src/main/java/com/metabion/service/oauth/OAuthTokenException.java`
-- Create: `src/main/java/com/metabion/service/oauth/OAuthRefreshTokenRevocationService.java`
+- Create: `src/main/java/com/metabion/domain/OAuthRefreshTokenFamily.java`
+- Create: `src/main/java/com/metabion/repository/OAuthRefreshTokenFamilyRepository.java`
+- Create: `src/main/java/com/metabion/dto/oauth/OAuthRefreshGrantResult.java`
 - Modify: `src/main/java/com/metabion/service/oauth/OAuthRefreshTokenService.java`
 - Modify: `src/main/java/com/metabion/repository/PatientAccessTokenRepository.java`
 - Modify: `src/main/java/com/metabion/controller/api/OAuthTokenController.java`
 - Modify: `src/main/java/com/metabion/controller/api/GlobalExceptionHandler.java`
 - Test: `src/test/java/com/metabion/service/oauth/OAuthRefreshTokenServiceTest.java`
-- Test: `src/test/java/com/metabion/service/oauth/OAuthRefreshTokenRevocationServiceTest.java`
+- Test: `src/test/java/com/metabion/service/oauth/OAuthRefreshTokenReuseIntegrationTest.java`
 - Test: `src/test/java/com/metabion/controller/api/OAuthTokenControllerTest.java`
 
 **Interfaces:**
-- Produces: `OAuthRefreshTokenRevocationService.revokeFamily(String familyId, String reason)` with `REQUIRES_NEW` transaction semantics.
+- Produces: family-row serialization and same-transaction family/refresh/access revocation.
+- Produces: transactional `OAuthRefreshTokenService.refreshGrant(...)` returning a normal success-or-invalid result and non-transactional error mapping in `OAuthAuthorizationService.refresh(...)`.
 - Produces: `OAuthTokenException(error, description)` mapped to HTTP 400 OAuth JSON.
 
 - [ ] **Step 1: Write failing reuse and error-contract tests**
@@ -359,27 +370,27 @@ Assert unknown/expired/mismatched tokens return the same JSON without revoking u
 - [ ] **Step 2: Run reuse tests and verify RED**
 
 ```bash
-./gradlew test --tests '*OAuthRefreshTokenServiceTest' --tests '*OAuthRefreshTokenRevocationServiceTest' --tests '*OAuthTokenControllerTest'
+./gradlew test --tests '*OAuthRefreshTokenServiceTest' --tests '*OAuthRefreshTokenReuseIntegrationTest' --tests '*OAuthTokenControllerTest'
 ```
 
 Expected: FAIL because family revocation and OAuth token errors are absent.
 
 - [ ] **Step 3: Implement committed revocation and generic errors**
 
-Use a separate Spring bean so `REQUIRES_NEW` is applied through the proxy:
+Under the already-held pessimistic family lock, revoke all family state in the
+same transaction:
 
 ```java
-@Transactional(propagation = Propagation.REQUIRES_NEW)
-public void revokeFamily(String familyId, String reason) {
-    var now = Instant.now(clock);
-    refreshTokens.findByFamilyId(familyId).stream()
+private void revokeFamily(OAuthRefreshTokenFamily family, String reason, Instant now) {
+    family.revoke(reason, now);
+    refreshTokens.findByFamilyId(family.getId()).stream()
             .filter(token -> !token.isRevoked())
             .forEach(token -> token.revoke(reason, now));
-    accessTokens.revokeActiveByRefreshFamilyId(familyId, reason, now);
+    accessTokens.revokeActiveByRefreshFamilyId(family.getId(), reason, now);
 }
 ```
 
-When rotation observes `consumedAt != null`, invoke this service and then throw `OAuthTokenException.invalidGrant()`. Map the exception using the existing `OAuthErrorResponse` shape.
+When rotation observes `consumedAt != null`, return an invalid result after revocation. Let the transactional service return normally so it commits. `OAuthAuthorizationService.refresh`, explicitly `NOT_SUPPORTED`, maps the returned invalid result to `OAuthTokenException.invalidGrant()` using the existing `OAuthErrorResponse` shape.
 
 - [ ] **Step 4: Run reuse tests and verify GREEN**
 

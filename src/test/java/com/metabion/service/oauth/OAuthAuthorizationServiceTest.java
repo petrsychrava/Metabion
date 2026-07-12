@@ -10,6 +10,7 @@ import com.metabion.dto.IssuePatientAccessTokenResponse;
 import com.metabion.dto.oauth.OAuthAuthorizationRequest;
 import com.metabion.dto.oauth.OAuthClientMetadata;
 import com.metabion.dto.oauth.IssuedOAuthRefreshToken;
+import com.metabion.dto.oauth.OAuthTokenResponse;
 import com.metabion.repository.OAuthAuthorizationCodeRepository;
 import com.metabion.repository.OAuthRegisteredClientRepository;
 import com.metabion.repository.UserRepository;
@@ -442,19 +443,38 @@ class OAuthAuthorizationServiceTest {
 
     @Test
     void refreshRotatesCredentialAndIssuesFamilyBoundAccessToken() {
-        var rotated = issuedRefreshToken("codex", PatientAccessClientType.MCP_CODEX, "Codex");
-        when(refreshTokens.rotate("old-refresh", "codex", RESOURCE)).thenReturn(rotated);
-        when(patientAccessTokens.issueForPatient(patient, PatientAccessClientType.MCP_CODEX, "Codex",
-                Duration.ofHours(1), Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ), RESOURCE, "refresh-family"))
-                .thenReturn(new IssuePatientAccessTokenResponse(101L, "new-access", PatientAccessClientType.MCP_CODEX,
-                        "Codex", NOW.plus(Duration.ofHours(1)), Set.of("patient:profile:read")));
+        when(refreshTokens.refreshGrant("old-refresh", "codex", RESOURCE)).thenReturn(
+                com.metabion.dto.oauth.OAuthRefreshGrantResult.success(
+                        new OAuthTokenResponse("new-access", "Bearer", 3600, "patient:profile:read", "new-refresh")));
 
         var response = service.refresh("old-refresh", "codex", RESOURCE);
 
         assertThat(response.accessToken()).isEqualTo("new-access");
         assertThat(response.expiresIn()).isEqualTo(3600);
         assertThat(response.scope()).isEqualTo("patient:profile:read");
-        assertThat(response.refreshToken()).isEqualTo("refresh-token");
+        assertThat(response.refreshToken()).isEqualTo("new-refresh");
+    }
+
+    @Test
+    void refreshRaisesInvalidGrantOnlyAfterTransactionalResultReturns() {
+        when(refreshTokens.refreshGrant("invalid-refresh", "codex", RESOURCE))
+                .thenReturn(com.metabion.dto.oauth.OAuthRefreshGrantResult.invalid());
+
+        assertThatThrownBy(() -> service.refresh("invalid-refresh", "codex", RESOURCE))
+                .isInstanceOfSatisfying(OAuthTokenException.class, ex -> {
+                    assertThat(ex.error()).isEqualTo("invalid_grant");
+                    assertThat(ex.description()).isEqualTo("refresh token is invalid");
+                });
+    }
+
+    @Test
+    void refreshOrchestrationSuspendsAnyOuterTransaction() throws Exception {
+        var annotation = OAuthAuthorizationService.class
+                .getMethod("refresh", String.class, String.class, String.class)
+                .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+
+        assertThat(annotation.propagation())
+                .isEqualTo(org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED);
     }
 
     private OAuthAuthorizationRequest request(String codeChallengeMethod) {

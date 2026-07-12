@@ -103,6 +103,10 @@ public class PatientAccessTokenService {
                 scopeAuthorities(scopes));
     }
 
+    public int revokeFamily(String familyId, String reason, Instant now) {
+        return tokens.revokeActiveByRefreshFamilyId(familyId, reason, now);
+    }
+
     public IssuePatientAccessTokenResponse issueForPatient(User user,
                                                            PatientAccessClientType clientType,
                                                            String displayLabel,

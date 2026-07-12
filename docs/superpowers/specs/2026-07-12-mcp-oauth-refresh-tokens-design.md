@@ -86,8 +86,10 @@ Authorization-server metadata advertises both `authorization_code` and
 
 ## Refresh-Token Persistence
 
-A new Flyway migration creates an `oauth_refresh_tokens` table and a scope
-collection table. Each refresh-token row stores:
+A new Flyway migration creates an `oauth_refresh_token_families` table,
+`oauth_refresh_tokens`, and a scope collection table. The family row is keyed
+by the cryptographically random family identifier and records creation and
+family-wide revocation state. Each refresh-token row stores:
 
 - a unique SHA-256 token hash, never the plaintext token;
 - a cryptographically random family identifier shared across rotations;
@@ -107,7 +109,9 @@ Manually issued patient access tokens keep this field null. This association
 allows a compromised family to revoke only access tokens derived from that
 family without affecting unrelated clients or manually issued tokens.
 
-Patient and replacement-token foreign keys use database constraints. Token
+Refresh and OAuth-issued access-token family IDs reference the family table;
+the access-token reference remains nullable for manual tokens. Patient and
+replacement-token foreign keys use database constraints. Token
 hashes, family identifiers, and client IDs are indexed, and token hashes are
 unique. The stored client ID and source bind refresh requests to the exact
 resolved client identity without coupling the table to one registration source.
@@ -134,8 +138,9 @@ The token endpoint accepts `grant_type=refresh_token`, `refresh_token`,
 `client_id`, and `resource`. Authorization-code-only parameters are optional at
 the controller boundary and validated according to the selected grant.
 
-The service hashes the presented token and loads its row with a pessimistic
-write lock. It then validates that:
+The service hashes the presented token and performs a non-locking lookup of its
+immutable family ID. It pessimistically locks that family row, rereads the
+token under the family lock, and then validates that:
 
 - the token exists, is not expired, and is not revoked;
 - the client ID and resource match the stored values;
@@ -147,7 +152,8 @@ For a valid unused token, the same transaction consumes it, stores its rotated
 replacement in the same family, issues a new one-hour family-bound access
 token, and returns the new plaintext refresh token.
 
-Concurrent attempts are serialized by the database lock. Exactly one can
+All issuance, rotation, and revocation work for an existing family uses the
+same family-row lock order. Concurrent attempts are serialized by that lock. Exactly one can
 rotate successfully. A later attempt observes a consumed token and triggers
 reuse handling.
 
@@ -163,10 +169,12 @@ service:
    same reason;
 3. returns a generic OAuth token error.
 
-The family and access-token revocations must commit before the error response is
-raised. The service therefore records the revocation in a transaction that is
-not rolled back by the public OAuth error (or returns a failure result that the
-controller maps after the transaction commits).
+The family marker, refresh members, and access-token revocations must commit
+before the error response is raised. The transactional refresh service returns
+a success-or-invalid result normally. A non-transactional orchestration method
+maps an invalid result to the public OAuth error only after the service
+transaction commits. This avoids suspending a transaction while it still owns
+a row lock and prevents the error from rolling back revocation.
 
 An expired, unknown, wrong-client, wrong-resource, or already revoked token
 also returns the same public error but does not revoke unrelated credentials.

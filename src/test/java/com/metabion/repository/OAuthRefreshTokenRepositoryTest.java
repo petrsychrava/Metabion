@@ -1,6 +1,7 @@
 package com.metabion.repository;
 
 import com.metabion.domain.OAuthRefreshToken;
+import com.metabion.domain.OAuthRefreshTokenFamily;
 import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.RoleName;
@@ -27,12 +28,14 @@ class OAuthRefreshTokenRepositoryTest {
 
     @Autowired UserRepository users;
     @Autowired OAuthRefreshTokenRepository tokens;
+    @Autowired OAuthRefreshTokenFamilyRepository families;
     @Autowired EntityManager entityManager;
 
     @Test
     void roundTripsRefreshTokenAggregateAndLifecycle() {
         var user = users.saveAndFlush(patient("refresh@example.com"));
         var createdAt = Instant.parse("2026-07-04T10:00:00Z");
+        families.saveAndFlush(new OAuthRefreshTokenFamily("family-1", createdAt));
         var token = new OAuthRefreshToken(
                 "a".repeat(64), "family-1", user, "codex-client", OAuthClientSource.DYNAMIC,
                 PatientAccessClientType.MCP_CODEX, "Codex", "http://localhost:8080/api/mcp",
@@ -42,7 +45,9 @@ class OAuthRefreshTokenRepositoryTest {
         tokens.saveAndFlush(token);
         entityManager.clear();
 
-        var loaded = tokens.findByTokenHashForUpdate("a".repeat(64)).orElseThrow();
+        assertThat(tokens.findFamilyIdByTokenHash("a".repeat(64))).contains("family-1");
+        assertThat(families.findByIdForUpdate("family-1")).isPresent();
+        var loaded = tokens.findByTokenHash("a".repeat(64)).orElseThrow();
         var persistence = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
         assertThat(persistence.isLoaded(loaded, "user")).isTrue();
         assertThat(persistence.isLoaded(loaded.getUser(), "roles")).isTrue();

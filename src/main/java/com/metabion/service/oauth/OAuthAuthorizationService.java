@@ -17,6 +17,7 @@ import com.metabion.service.PatientAccessTokenService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -176,16 +177,11 @@ public class OAuthAuthorizationService {
                 refresh.plainToken());
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public OAuthTokenResponse refresh(String refreshToken, String clientId, String resource) {
-        var refresh = refreshTokens.rotate(refreshToken, clientId, resource);
-        var stored = refresh.token();
-        var now = Instant.now(clock);
-        var token = patientAccessTokens.issueForPatient(
-                stored.getUser(), stored.getClientType(), stored.getDisplayLabel(),
-                properties.accessTokenTtl(), stored.scopes(), stored.getResource(), stored.getFamilyId());
-        var expiresIn = Math.max(0, Duration.between(now, token.expiresAt()).toSeconds());
-        return new OAuthTokenResponse(token.plainToken(), "Bearer", expiresIn,
-                sortedScopeString(token.scopes()), refresh.plainToken());
+        var result = refreshTokens.refreshGrant(refreshToken, clientId, resource);
+        if (result.isInvalid()) throw OAuthTokenException.invalidGrant();
+        return result.response();
     }
 
     private ValidatedAuthorizationRequest validateAuthorizationRequest(OAuthAuthorizationRequest request) {

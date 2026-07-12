@@ -2,12 +2,16 @@ package com.metabion.service.oauth;
 
 import com.metabion.config.OAuthAuthorizationProperties;
 import com.metabion.domain.OAuthRefreshToken;
+import com.metabion.domain.OAuthRefreshTokenFamily;
 import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.User;
 import com.metabion.dto.oauth.OAuthClientMetadata;
 import com.metabion.dto.oauth.OAuthClientSource;
+import com.metabion.dto.IssuePatientAccessTokenResponse;
 import com.metabion.repository.OAuthRefreshTokenRepository;
+import com.metabion.repository.OAuthRefreshTokenFamilyRepository;
+import com.metabion.service.PatientAccessTokenService;
 import com.metabion.service.PatientAccessTokenService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,7 +43,8 @@ class OAuthRefreshTokenServiceTest {
 
     @Mock OAuthRefreshTokenRepository tokens;
     @Mock OAuthClientResolver clients;
-    @Mock OAuthRefreshTokenRevocationService revocations;
+    @Mock OAuthRefreshTokenFamilyRepository families;
+    @Mock PatientAccessTokenService accessTokens;
 
     @Test
     void issueInitialPersistsOnlyHashWithIndependentFamilyAndConfiguredExpiry() {
@@ -47,7 +52,8 @@ class OAuthRefreshTokenServiceTest {
                 "http://localhost:8080", "http://localhost:8080/api/mcp",
                 Duration.ofMinutes(5), Duration.ofHours(1), Duration.ofDays(30),
                 null, null);
-        var service = new OAuthRefreshTokenService(tokens, clients, revocations, Clock.fixed(NOW, ZoneOffset.UTC), properties);
+        var service = new OAuthRefreshTokenService(tokens, families, clients, accessTokens,
+                Clock.fixed(NOW, ZoneOffset.UTC), properties);
         var user = new User("patient@example.com", "hash");
         var client = new OAuthClientMetadata(
                 "codex", "Codex", "native", OAuthClientSource.CONFIGURED,
@@ -64,6 +70,7 @@ class OAuthRefreshTokenServiceTest {
         assertThat(issued.plainToken()).isNotBlank();
         var captor = ArgumentCaptor.forClass(OAuthRefreshToken.class);
         verify(tokens).save(captor.capture());
+        verify(families).save(any(com.metabion.domain.OAuthRefreshTokenFamily.class));
         var saved = captor.getValue();
         assertThat(saved.getTokenHash()).isEqualTo(PatientAccessTokenService.sha256Hex(issued.plainToken()));
         assertThat(saved.getTokenHash()).doesNotContain(issued.plainToken());
@@ -79,31 +86,31 @@ class OAuthRefreshTokenServiceTest {
         var service = service();
         var old = refreshToken("old-refresh", NOW.plus(Duration.ofDays(1)));
         var client = mobileClient();
-        when(tokens.findByTokenHashForUpdate(PatientAccessTokenService.sha256Hex("old-refresh")))
-                .thenReturn(Optional.of(old));
+        mockLookup("old-refresh", Optional.of(old));
         when(clients.resolve("mobile-app")).thenReturn(Optional.of(client));
         when(tokens.save(any())).thenAnswer(invocation -> {
             var saved = invocation.getArgument(0, OAuthRefreshToken.class);
             ReflectionTestUtils.setField(saved, "id", 42L);
             return saved;
         });
+        when(accessTokens.issueForPatient(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new IssuePatientAccessTokenResponse(7L, "new-access", PatientAccessClientType.MCP_OTHER,
+                        "Mobile", NOW.plus(Duration.ofHours(1)), Set.of("patient:profile:read")));
 
-        var rotated = service.rotate("old-refresh", "mobile-app", "http://localhost:8080/api/mcp");
+        var rotated = service.refreshGrant("old-refresh", "mobile-app", "http://localhost:8080/api/mcp");
 
-        assertThat(rotated.plainToken()).isNotBlank().isNotEqualTo("old-refresh");
-        assertThat(rotated.token().getTokenHash())
-                .isEqualTo(PatientAccessTokenService.sha256Hex(rotated.plainToken()))
-                .doesNotContain(rotated.plainToken());
-        assertThat(rotated.token().getFamilyId()).isEqualTo("family-1");
-        assertThat(rotated.token().getCreatedAt()).isEqualTo(NOW);
-        assertThat(rotated.token().getExpiresAt()).isEqualTo(NOW.plus(Duration.ofDays(30)));
-        assertThat(rotated.token().scopes()).containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ);
+        assertThat(rotated.response().refreshToken()).isNotBlank().isNotEqualTo("old-refresh");
+        var replacementCaptor = ArgumentCaptor.forClass(OAuthRefreshToken.class);
+        verify(tokens).save(replacementCaptor.capture());
+        var replacement = replacementCaptor.getValue();
+        assertThat(replacement.getTokenHash()).isEqualTo(PatientAccessTokenService.sha256Hex(rotated.response().refreshToken()));
+        assertThat(replacement.getFamilyId()).isEqualTo("family-1");
+        assertThat(replacement.getCreatedAt()).isEqualTo(NOW);
+        assertThat(replacement.getExpiresAt()).isEqualTo(NOW.plus(Duration.ofDays(30)));
+        assertThat(replacement.scopes()).containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ);
         assertThat(old.getConsumedAt()).isEqualTo(NOW);
         assertThat(old.getReplacementTokenId()).isEqualTo(42L);
-        assertThatThrownBy(() -> service.rotate("old-refresh", "mobile-app", "http://localhost:8080/api/mcp"))
-                .isInstanceOfSatisfying(OAuthTokenException.class,
-                        ex -> assertThat(ex.error()).isEqualTo("invalid_grant"));
-        verify(revocations).revokeFamily("family-1", "refresh_token_reuse");
+        assertThat(service.refreshGrant("old-refresh", "mobile-app", "http://localhost:8080/api/mcp").isInvalid()).isTrue();
         verify(tokens, times(1)).save(any());
     }
 
@@ -136,49 +143,73 @@ class OAuthRefreshTokenServiceTest {
                 "mobile-app", OAuthClientSource.DYNAMIC, PatientAccessClientType.MCP_OTHER, "Mobile",
                 "http://localhost:8080/api/mcp", NOW.minusSeconds(60), NOW.plus(Duration.ofDays(1)),
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
-        when(tokens.findByTokenHashForUpdate(PatientAccessTokenService.sha256Hex("dynamic-refresh")))
-                .thenReturn(Optional.of(stored));
+        mockLookup("dynamic-refresh", Optional.of(stored));
         when(clients.resolve("mobile-app")).thenReturn(Optional.of(mobileClient()));
 
-        assertThatThrownBy(() -> service.rotate(
-                "dynamic-refresh", "mobile-app", "http://localhost:8080/api/mcp"))
-                .isInstanceOf(OAuthTokenException.class);
+        assertThat(service.refreshGrant("dynamic-refresh", "mobile-app", "http://localhost:8080/api/mcp").isInvalid()).isTrue();
 
         assertThat(stored.getConsumedAt()).isNull();
         assertThat(stored.getReplacementTokenId()).isNull();
         verify(tokens, never()).save(any());
     }
 
+    @Test
+    void revokedFamilyBlocksRotationWithoutCreatingAReplacement() {
+        var token = refreshToken("revoked-family", NOW.plusSeconds(60));
+        var hash = PatientAccessTokenService.sha256Hex("revoked-family");
+        var family = new OAuthRefreshTokenFamily("family-1", NOW.minusSeconds(60));
+        family.revoke("refresh_token_reuse", NOW.minusSeconds(1));
+        when(tokens.findFamilyIdByTokenHash(hash)).thenReturn(Optional.of("family-1"));
+        when(families.findByIdForUpdate("family-1")).thenReturn(Optional.of(family));
+        when(tokens.findByTokenHash(hash)).thenReturn(Optional.of(token));
+        org.mockito.Mockito.lenient().when(clients.resolve("mobile-app")).thenReturn(Optional.of(mobileClient()));
+        org.mockito.Mockito.lenient().when(tokens.save(any())).thenAnswer(invocation -> {
+            var saved = invocation.getArgument(0, OAuthRefreshToken.class);
+            ReflectionTestUtils.setField(saved, "id", 99L);
+            return saved;
+        });
+        org.mockito.Mockito.lenient().when(accessTokens.issueForPatient(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new IssuePatientAccessTokenResponse(7L, "new-access", PatientAccessClientType.MCP_OTHER,
+                        "Mobile", NOW.plus(Duration.ofHours(1)), Set.of("patient:profile:read")));
+
+        assertThat(service().refreshGrant(
+                "revoked-family", "mobile-app", "http://localhost:8080/api/mcp").isInvalid()).isTrue();
+
+        verify(tokens, never()).save(any());
+        verify(accessTokens, never()).issueForPatient(any(), any(), any(), any(), any(), any(), any());
+    }
+
     private void assertRejected(String plain, Optional<OAuthRefreshToken> found, OAuthClientMetadata client,
                                 String clientId, String resource) {
         var service = service();
-        when(tokens.findByTokenHashForUpdate(PatientAccessTokenService.sha256Hex(plain))).thenReturn(found);
-        assertThatThrownBy(() -> service.rotate(plain, clientId, resource))
-                .isInstanceOfSatisfying(OAuthTokenException.class, ex -> {
-                    assertThat(ex.error()).isEqualTo("invalid_grant");
-                    assertThat(ex.description()).isEqualTo("refresh token is invalid");
-                });
-        verify(revocations, never()).revokeFamily(any(), any());
+        mockLookup(plain, found);
+        assertThat(service.refreshGrant(plain, clientId, resource).isInvalid()).isTrue();
         verify(tokens, never()).save(any());
     }
 
     private void assertRejectedToken(String plain, OAuthRefreshToken token, OAuthClientMetadata client,
                                      String clientId, String resource) {
         var service = service();
-        when(tokens.findByTokenHashForUpdate(PatientAccessTokenService.sha256Hex(plain))).thenReturn(Optional.of(token));
+        mockLookup(plain, Optional.of(token));
         if (client != null) org.mockito.Mockito.lenient().when(clients.resolve(clientId)).thenReturn(Optional.of(client));
         else org.mockito.Mockito.lenient().when(clients.resolve(clientId)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.rotate(plain, clientId, resource))
-                .isInstanceOfSatisfying(OAuthTokenException.class, ex -> {
-                    assertThat(ex.error()).isEqualTo("invalid_grant");
-                    assertThat(ex.description()).isEqualTo("refresh token is invalid");
-                });
+        assertThat(service.refreshGrant(plain, clientId, resource).isInvalid()).isTrue();
     }
 
     private OAuthRefreshTokenService service() {
-        return new OAuthRefreshTokenService(tokens, clients, revocations, Clock.fixed(NOW, ZoneOffset.UTC),
+        return new OAuthRefreshTokenService(tokens, families, clients, accessTokens, Clock.fixed(NOW, ZoneOffset.UTC),
                 new OAuthAuthorizationProperties("http://localhost:8080", "http://localhost:8080/api/mcp",
                         Duration.ofMinutes(5), Duration.ofHours(1), Duration.ofDays(30), null, null));
+    }
+
+    private void mockLookup(String plain, Optional<OAuthRefreshToken> found) {
+        var hash = PatientAccessTokenService.sha256Hex(plain);
+        when(tokens.findFamilyIdByTokenHash(hash)).thenReturn(found.map(OAuthRefreshToken::getFamilyId));
+        found.ifPresent(token -> {
+            when(families.findByIdForUpdate(token.getFamilyId()))
+                    .thenReturn(Optional.of(new OAuthRefreshTokenFamily(token.getFamilyId(), NOW.minusSeconds(60))));
+            when(tokens.findByTokenHash(hash)).thenReturn(Optional.of(token));
+        });
     }
 
     private OAuthClientMetadata mobileClient() {

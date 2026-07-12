@@ -15,13 +15,20 @@ FROM oauth_registered_clients;
 ALTER TABLE patient_access_tokens
     ADD COLUMN refresh_family_id VARCHAR(64);
 
+CREATE TABLE oauth_refresh_token_families (
+    family_id VARCHAR(64) PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    revoked_at TIMESTAMP WITH TIME ZONE,
+    revocation_reason VARCHAR(120)
+);
+
 CREATE INDEX idx_patient_access_tokens_refresh_family
     ON patient_access_tokens(refresh_family_id);
 
 CREATE TABLE oauth_refresh_tokens (
     id BIGSERIAL PRIMARY KEY,
     token_hash VARCHAR(64) NOT NULL UNIQUE,
-    family_id VARCHAR(64) NOT NULL,
+    family_id VARCHAR(64) NOT NULL REFERENCES oauth_refresh_token_families(family_id),
     user_id BIGINT NOT NULL REFERENCES users(id),
     client_id VARCHAR(500) NOT NULL,
     client_source VARCHAR(32) NOT NULL,
@@ -38,6 +45,10 @@ CREATE TABLE oauth_refresh_tokens (
 
 CREATE INDEX idx_oauth_refresh_tokens_family ON oauth_refresh_tokens(family_id);
 CREATE INDEX idx_oauth_refresh_tokens_client ON oauth_refresh_tokens(client_id);
+
+ALTER TABLE patient_access_tokens
+    ADD CONSTRAINT fk_patient_access_tokens_refresh_family
+    FOREIGN KEY (refresh_family_id) REFERENCES oauth_refresh_token_families(family_id);
 
 CREATE TABLE oauth_refresh_token_scopes (
     refresh_token_id BIGINT NOT NULL REFERENCES oauth_refresh_tokens(id) ON DELETE CASCADE,
