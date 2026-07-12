@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 @DataJpaTest(properties = {
         "spring.profiles.active=dev",
@@ -72,6 +73,22 @@ class OAuthRefreshTokenRepositoryTest {
         assertThat(consumed.getReplacementTokenId()).isEqualTo(replacement.getId());
         assertThat(consumed.isRevoked()).isTrue();
         assertThat(consumed.getRevocationReason()).isEqualTo("family_reuse");
+    }
+
+    @Test
+    void rejectsTokenHashesThatAreNotExactly64HexadecimalCharacters() {
+        var user = patient("invalid-refresh@example.com");
+        var createdAt = Instant.parse("2026-07-04T10:00:00Z");
+
+        assertThatIllegalArgumentException().isThrownBy(() -> refreshToken("abc123", user, createdAt));
+        assertThatIllegalArgumentException().isThrownBy(() -> refreshToken("g".repeat(64), user, createdAt));
+    }
+
+    private static OAuthRefreshToken refreshToken(String tokenHash, User user, Instant createdAt) {
+        return new OAuthRefreshToken(tokenHash, "family-1", user, "codex-client", OAuthClientSource.DYNAMIC,
+                PatientAccessClientType.MCP_CODEX, "Codex", "http://localhost:8080/api/mcp",
+                createdAt, createdAt.plusSeconds(3600),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
     }
 
     private static User patient(String email) {

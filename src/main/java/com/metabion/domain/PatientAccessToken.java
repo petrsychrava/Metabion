@@ -78,7 +78,7 @@ public class PatientAccessToken {
                               Instant expiresAt,
                               String resource,
                               Set<PatientAccessTokenScope> scopes) {
-        this(user, tokenHash, clientType, displayLabel, createdAt, expiresAt, resource, scopes, null);
+        this(user, tokenHash, clientType, displayLabel, createdAt, expiresAt, resource, scopes, null, true);
     }
 
     public PatientAccessToken(User user,
@@ -90,6 +90,20 @@ public class PatientAccessToken {
                               String resource,
                               Set<PatientAccessTokenScope> scopes,
                               String refreshFamilyId) {
+        this(user, tokenHash, clientType, displayLabel, createdAt, expiresAt, resource, scopes,
+                refreshFamilyId, false);
+    }
+
+    private PatientAccessToken(User user,
+                               String tokenHash,
+                               PatientAccessClientType clientType,
+                               String displayLabel,
+                               Instant createdAt,
+                               Instant expiresAt,
+                               String resource,
+                               Set<PatientAccessTokenScope> scopes,
+                               String refreshFamilyId,
+                               boolean manualIssuance) {
         if (user == null) {
             throw new IllegalArgumentException("user is required");
         }
@@ -118,7 +132,10 @@ public class PatientAccessToken {
         this.createdAt = createdAt;
         this.expiresAt = expiresAt;
         this.resource = resource.trim();
-        this.refreshFamilyId = refreshFamilyId == null || refreshFamilyId.isBlank() ? null : refreshFamilyId.trim();
+        if (!manualIssuance && (refreshFamilyId == null || refreshFamilyId.isBlank())) {
+            throw new IllegalArgumentException("refresh family id is required");
+        }
+        this.refreshFamilyId = manualIssuance ? null : refreshFamilyId.trim();
         this.scopeGrants = scopes.stream()
                 .map(PatientAccessTokenScopeGrant::new)
                 .collect(Collectors.toCollection(HashSet::new));

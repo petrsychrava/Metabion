@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 @DataJpaTest(properties = {
         "spring.profiles.active=dev",
@@ -109,6 +110,21 @@ class PatientAccessTokenRepositoryTest {
 
         assertThat(tokens.findByTokenHash("family-hash").orElseThrow().isRevoked()).isTrue();
         assertThat(tokens.findByTokenHash("manual-hash").orElseThrow().isRevoked()).isFalse();
+    }
+
+    @Test
+    void familyAwareConstructorRejectsMissingFamilyId() {
+        var user = patient("invalid-family@example.com");
+        var createdAt = Instant.parse("2026-07-04T10:00:00Z");
+
+        assertThatIllegalArgumentException().isThrownBy(() -> new PatientAccessToken(
+                user, "family-hash", PatientAccessClientType.MCP_CODEX, "Codex",
+                createdAt, createdAt.plusSeconds(3600), "http://localhost:8080/api/mcp",
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ), " "));
+        assertThatIllegalArgumentException().isThrownBy(() -> new PatientAccessToken(
+                user, "family-hash", PatientAccessClientType.MCP_CODEX, "Codex",
+                createdAt, createdAt.plusSeconds(3600), "http://localhost:8080/api/mcp",
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ), null));
     }
 
     private static User patient(String email) {

@@ -51,3 +51,45 @@ After the minimal entity, repository, migration, and access-token changes, the i
 ## Concerns
 
 - The repository persistence tests use Hibernate H2 schema generation, as existing repository tests do. The full suite passed, but this task does not add a dedicated PostgreSQL migration integration test.
+
+## Fix Review Findings
+
+### Summary
+
+- Tightened `OAuthRefreshToken` construction to accept only exactly 64 hexadecimal characters as the persisted token hash.
+- Made the family-aware `PatientAccessToken` constructor reject null and blank family IDs while preserving the legacy constructor as the sole null-family issuance path.
+
+### RED Evidence
+
+Command: `./gradlew test --tests '*OAuthRefreshTokenRepositoryTest' --tests '*PatientAccessTokenRepositoryTest'`
+
+Result: exit 1, `BUILD FAILED` in 5s. Six focused tests ran and two failed as intended:
+
+- `OAuthRefreshTokenRepositoryTest > rejectsTokenHashesThatAreNotExactly64HexadecimalCharacters()` failed because short and 64-character non-hex hashes were accepted.
+- `PatientAccessTokenRepositoryTest > familyAwareConstructorRejectsMissingFamilyId()` failed because a blank family ID was accepted (the first assertion stopped execution before the null case).
+
+### GREEN Evidence
+
+Focused command: `./gradlew test --tests '*OAuthRefreshTokenRepositoryTest' --tests '*PatientAccessTokenRepositoryTest'`
+
+Result: exit 0, `BUILD SUCCESSFUL` in 5s; all focused tests passed.
+
+Full command: `./gradlew test`
+
+Result: exit 0, `BUILD SUCCESSFUL` in 1m 10s; 714 tests, 0 failures, 0 errors, 0 skipped.
+
+### Files Changed
+
+- `src/main/java/com/metabion/domain/OAuthRefreshToken.java`
+- `src/main/java/com/metabion/domain/PatientAccessToken.java`
+- `src/test/java/com/metabion/repository/OAuthRefreshTokenRepositoryTest.java`
+- `src/test/java/com/metabion/repository/PatientAccessTokenRepositoryTest.java`
+- `.superpowers/sdd/task-2-refresh-report.md`
+
+### Commit
+
+- Subject: `Harden OAuth refresh token persistence`
+
+### Concerns
+
+- No new concerns beyond the existing lack of a dedicated PostgreSQL migration integration test.

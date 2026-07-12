@@ -37,7 +37,7 @@ public class OAuthRefreshToken {
                              OAuthClientSource clientSource, PatientAccessClientType clientType,
                              String displayLabel, String resource, Instant createdAt, Instant expiresAt,
                              Set<PatientAccessTokenScope> scopes) {
-        this.tokenHash = require(tokenHash, "token hash");
+        this.tokenHash = requireTokenHash(tokenHash);
         this.familyId = require(familyId, "family id");
         this.user = Objects.requireNonNull(user, "user is required");
         this.clientId = require(clientId, "client id");
@@ -67,6 +67,11 @@ public class OAuthRefreshToken {
     public boolean isRevoked() { return revokedAt != null; }
     public Set<PatientAccessTokenScope> scopes() { return scopeGrants.stream().map(OAuthRefreshTokenScopeGrant::getScope).collect(Collectors.toUnmodifiableSet()); }
     private static String require(String value, String label) { if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " is required"); return value.trim(); }
+    private static String requireTokenHash(String tokenHash) {
+        var value = require(tokenHash, "token hash");
+        if (!value.matches("[0-9a-fA-F]{64}")) throw new IllegalArgumentException("token hash must be 64 hexadecimal characters");
+        return value;
+    }
     public Long getId() { return id; } public String getTokenHash() { return tokenHash; } public String getFamilyId() { return familyId; }
     public User getUser() { return user; } public String getClientId() { return clientId; } public OAuthClientSource getClientSource() { return clientSource; }
     public PatientAccessClientType getClientType() { return clientType; } public String getDisplayLabel() { return displayLabel; } public String getResource() { return resource; }
