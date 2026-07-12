@@ -79,7 +79,8 @@ public class OAuthRefreshTokenService {
         }
         var client = clients.resolve(clientId).orElseThrow(this::invalidRefreshToken);
         var allowedScopes = Set.copyOf(client.scopes());
-        if (!client.supportsGrant(OAuthClientMetadata.REFRESH_TOKEN)
+        if (client.source() != current.getClientSource()
+                || !client.supportsGrant(OAuthClientMetadata.REFRESH_TOKEN)
                 || !properties.resource().equals(resource)
                 || !allowedScopes.containsAll(current.scopes().stream()
                         .map(PatientAccessTokenScope::authority).toList())) {

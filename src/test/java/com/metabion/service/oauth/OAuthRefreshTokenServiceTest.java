@@ -125,6 +125,31 @@ class OAuthRefreshTokenServiceTest {
         assertRejectedToken("no-grant", refreshToken("no-grant", NOW.plusSeconds(10)), noRefresh, "mobile-app", "http://localhost:8080/api/mcp");
     }
 
+    @Test
+    void rotateRejectsClientResolvedFromDifferentRegistrationSource() {
+        var service = service();
+        var user = new User("patient@example.com", "hash");
+        user.setEnabled(true);
+        user.addRole(com.metabion.domain.RoleName.PATIENT);
+        var stored = new OAuthRefreshToken(
+                PatientAccessTokenService.sha256Hex("dynamic-refresh"), "family-1", user,
+                "mobile-app", OAuthClientSource.DYNAMIC, PatientAccessClientType.MCP_OTHER, "Mobile",
+                "http://localhost:8080/api/mcp", NOW.minusSeconds(60), NOW.plus(Duration.ofDays(1)),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
+        when(tokens.findByTokenHashForUpdate(PatientAccessTokenService.sha256Hex("dynamic-refresh")))
+                .thenReturn(Optional.of(stored));
+        when(clients.resolve("mobile-app")).thenReturn(Optional.of(mobileClient()));
+
+        assertThatThrownBy(() -> service.rotate(
+                "dynamic-refresh", "mobile-app", "http://localhost:8080/api/mcp"))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+
+        assertThat(stored.getConsumedAt()).isNull();
+        assertThat(stored.getReplacementTokenId()).isNull();
+        verify(tokens, never()).save(any());
+    }
+
     private void assertRejected(String plain, Optional<OAuthRefreshToken> found, OAuthClientMetadata client,
                                 String clientId, String resource) {
         var service = service();
