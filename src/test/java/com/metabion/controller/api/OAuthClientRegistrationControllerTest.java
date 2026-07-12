@@ -65,7 +65,8 @@ class OAuthClientRegistrationControllerTest {
                         "Codex",
                         "patient:profile:read",
                         "none",
-                        List.of("authorization_code"),
+                        List.of("authorization_code", "refresh_token"),
+                        "native",
                         List.of("code")));
 
         mvc().perform(post("/oauth/register")
@@ -77,6 +78,7 @@ class OAuthClientRegistrationControllerTest {
                                   "scope": "patient:profile:read",
                                   "token_endpoint_auth_method": "none",
                                   "grant_types": ["authorization_code"],
+                                  "application_type": "native",
                                   "response_types": ["code"]
                                 }
                                 """))
@@ -86,6 +88,33 @@ class OAuthClientRegistrationControllerTest {
                 .andExpect(jsonPath("$.token_endpoint_auth_method").value("none"));
 
         verify(registrationService).register(any(OAuthClientRegistrationRequest.class));
+    }
+
+    @Test
+    void registerEndpointAcceptsCapturedCodexPayload() throws Exception {
+        when(registrationService.register(any(OAuthClientRegistrationRequest.class)))
+                .thenReturn(new OAuthClientRegistrationResponse(
+                        "mcp_client_abc", null, 1783504800L,
+                        List.of("http://127.0.0.1:63603/callback/example"), "Codex",
+                        "patient:profile:read", "none",
+                        List.of("authorization_code", "refresh_token"), "native", List.of("code")));
+
+        mvc().perform(post("/oauth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"client_name":"Codex",
+                                 "redirect_uris":["http://127.0.0.1:63603/callback/example"],
+                                 "grant_types":["authorization_code","refresh_token"],
+                                 "token_endpoint_auth_method":"none",
+                                 "response_types":["code"],
+                                 "scope":"patient:profile:read",
+                                 "application_type":"native",
+                                 "software_version":"codex-test"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.application_type").value("native"))
+                .andExpect(jsonPath("$.grant_types", org.hamcrest.Matchers.contains(
+                        "authorization_code", "refresh_token")));
     }
 
     @Test

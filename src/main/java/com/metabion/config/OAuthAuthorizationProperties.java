@@ -33,17 +33,26 @@ public record OAuthAuthorizationProperties(
 
     public record RegisteredClient(
             String displayLabel,
+            String applicationType,
             List<String> redirectUris,
-            List<String> scopes
+            List<String> scopes,
+            List<String> grantTypes
     ) {
         public RegisteredClient {
+            if (applicationType == null || applicationType.isBlank()) {
+                applicationType = "native";
+            }
             if (redirectUris == null) {
                 redirectUris = List.of();
             }
             if (scopes == null) {
                 scopes = List.of();
             }
+            if (grantTypes == null) {
+                grantTypes = List.of("authorization_code");
+            }
         }
+
     }
 
     public record ClientMetadataProperties(

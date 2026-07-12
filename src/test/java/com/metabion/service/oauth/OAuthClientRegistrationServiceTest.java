@@ -46,7 +46,8 @@ class OAuthClientRegistrationServiceTest {
                 null,
                 "patient:profile:read",
                 "none",
-                List.of("authorization_code"),
+                List.of("refresh_token", "authorization_code", "refresh_token"),
+                "native",
                 List.of("code")));
 
         assertThat(response.clientId()).startsWith("mcp_client_");
@@ -56,11 +57,15 @@ class OAuthClientRegistrationServiceTest {
         assertThat(response.redirectUris()).containsExactly("http://127.0.0.1:49152/callback");
         assertThat(response.scope()).isEqualTo("patient:profile:read");
         assertThat(response.tokenEndpointAuthMethod()).isEqualTo("none");
+        assertThat(response.applicationType()).isEqualTo("native");
+        assertThat(response.grantTypes()).containsExactly("authorization_code", "refresh_token");
 
         var captor = ArgumentCaptor.forClass(OAuthRegisteredClient.class);
         verify(clients).save(captor.capture());
         assertThat(captor.getValue().getClientName()).isEqualTo("Codex");
         assertThat(captor.getValue().scopes()).containsExactly("patient:profile:read");
+        assertThat(captor.getValue().getApplicationType()).isEqualTo("native");
+        assertThat(captor.getValue().grantTypes()).containsExactly("authorization_code", "refresh_token");
     }
 
     @Test
@@ -139,6 +144,22 @@ class OAuthClientRegistrationServiceTest {
                 "none",
                 List.of("authorization_code"),
                 List.of("code")));
+    }
+
+    @Test
+    void rejectsRefreshTokenWithoutAuthorizationCode() {
+        assertInvalidClientMetadata(request(List.of("refresh_token"), "native"));
+    }
+
+    @Test
+    void rejectsWebApplicationType() {
+        assertInvalidClientMetadata(request(List.of("authorization_code"), "web"));
+    }
+
+    private OAuthClientRegistrationRequest request(List<String> grants, String applicationType) {
+        return new OAuthClientRegistrationRequest(
+                List.of("http://localhost:49152/callback"), "Codex", null,
+                "patient:profile:read", "none", grants, applicationType, List.of("code"));
     }
 
     @Test

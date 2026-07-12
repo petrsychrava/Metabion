@@ -60,7 +60,9 @@ class HttpOAuthClientMetadataFetcherTest {
                 {
                   "client_name": "Example Client",
                   "redirect_uris": ["https://client.example/callback", "https://client.example/other"],
-                  "scope": ["patient:profile:read", "patient:trend:read"]
+                  "scope": ["patient:profile:read", "patient:trend:read"],
+                  "application_type": "native",
+                  "grant_types": ["authorization_code", "refresh_token"]
                 }
                 """);
         var fetcher = fetcher(transport);
@@ -74,10 +76,23 @@ class HttpOAuthClientMetadataFetcherTest {
                 "https://client.example/callback",
                 "https://client.example/other");
         assertThat(metadata.get().scopes()).containsExactly("patient:profile:read", "patient:trend:read");
+        assertThat(metadata.get().applicationType()).isEqualTo("native");
+        assertThat(metadata.get().grantTypes()).containsExactly("authorization_code", "refresh_token");
         assertThat(transport.calls()).isOne();
         assertThat(transport.lastUri()).isEqualTo(URI.create("https://192.0.2.1/metadata.json"));
         assertThat(transport.lastAddress().getHostAddress()).isEqualTo("192.0.2.1");
         assertThat(transport.lastTimeout()).isEqualTo(Duration.ofMillis(100));
+    }
+
+    @Test
+    void defaultsOptionalApplicationTypeAndGrantTypes() {
+        var fetcher = fetcher(new FakeTransport(200, metadataJson()));
+
+        var metadata = fetcher.fetch("https://192.0.2.1/metadata.json");
+
+        assertThat(metadata).isPresent();
+        assertThat(metadata.get().applicationType()).isNull();
+        assertThat(metadata.get().grantTypes()).containsExactly("authorization_code");
     }
 
     @Test

@@ -74,8 +74,10 @@ class OAuthAuthorizationServiceTest {
                 Map.of(
                         "codex", new OAuthAuthorizationProperties.RegisteredClient(
                                 "Codex",
+                                "native",
                                 List.of(REDIRECT_URI),
-                                List.of("patient:profile:read"))));
+                                List.of("patient:profile:read"),
+                                List.of("authorization_code"))));
         service = serviceWith(properties, new OAuthClientResolver(
                 properties,
                 clientId -> Optional.empty(),
@@ -104,8 +106,10 @@ class OAuthAuthorizationServiceTest {
                 Map.of(
                         "codex", new OAuthAuthorizationProperties.RegisteredClient(
                                 "Codex",
+                                "native",
                                 List.of(REDIRECT_URI),
-                                List.of())));
+                                List.of(),
+                                List.of("authorization_code"))));
         service = serviceWith(emptyScopeProperties, new OAuthClientResolver(
                 emptyScopeProperties,
                 clientId -> Optional.empty(),

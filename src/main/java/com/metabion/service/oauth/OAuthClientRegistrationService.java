@@ -26,7 +26,8 @@ public class OAuthClientRegistrationService {
 
     public static final int MAX_REQUEST_BYTES = 32_768;
     private static final String AUTH_METHOD_NONE = "none";
-    private static final String AUTHORIZATION_CODE = "authorization_code";
+    public static final String AUTHORIZATION_CODE = "authorization_code";
+    public static final String REFRESH_TOKEN = "refresh_token";
     private static final String CODE = "code";
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -49,6 +50,7 @@ public class OAuthClientRegistrationService {
         validateClientSecret(request.clientSecret());
         validateAuthMethod(request.tokenEndpointAuthMethod());
         validateGrantTypes(request.grantTypes());
+        validateApplicationType(request.applicationType());
         validateResponseTypes(request.responseTypes());
 
         var scopes = validateScopes(request.scope());
@@ -63,7 +65,8 @@ public class OAuthClientRegistrationService {
                 client.getClientName(),
                 sortedScopeString(client.scopes()),
                 AUTH_METHOD_NONE,
-                List.of(AUTHORIZATION_CODE),
+                normalizedGrantTypes(request.grantTypes()),
+                normalizedApplicationType(request.applicationType()),
                 List.of(CODE));
     }
 
@@ -75,6 +78,8 @@ public class OAuthClientRegistrationService {
                     AUTH_METHOD_NONE,
                     request.redirectUris(),
                     scopes,
+                    normalizedApplicationType(request.applicationType()),
+                    normalizedGrantTypes(request.grantTypes()),
                     now,
                     now));
         } catch (IllegalArgumentException ex) {
@@ -115,9 +120,33 @@ public class OAuthClientRegistrationService {
     }
 
     private void validateGrantTypes(List<String> grantTypes) {
-        if (grantTypes != null && !grantTypes.isEmpty() && !grantTypes.equals(List.of(AUTHORIZATION_CODE))) {
-            throw invalidClientMetadata("grant_types must contain only authorization_code");
+        if (grantTypes == null || grantTypes.isEmpty()) {
+            return;
         }
+        var values = new LinkedHashSet<>(grantTypes);
+        if (!values.contains(AUTHORIZATION_CODE)
+                || values.stream().anyMatch(value -> !AUTHORIZATION_CODE.equals(value) && !REFRESH_TOKEN.equals(value))) {
+            throw invalidClientMetadata("grant_types must include authorization_code and may include refresh_token");
+        }
+    }
+
+    private List<String> normalizedGrantTypes(List<String> grantTypes) {
+        if (grantTypes == null || grantTypes.isEmpty()) {
+            return List.of(AUTHORIZATION_CODE);
+        }
+        return grantTypes.contains(REFRESH_TOKEN)
+                ? List.of(AUTHORIZATION_CODE, REFRESH_TOKEN)
+                : List.of(AUTHORIZATION_CODE);
+    }
+
+    private void validateApplicationType(String applicationType) {
+        if (applicationType != null && !applicationType.isBlank() && !"native".equals(applicationType)) {
+            throw invalidClientMetadata("application_type must be native");
+        }
+    }
+
+    private String normalizedApplicationType(String applicationType) {
+        return applicationType == null || applicationType.isBlank() ? "native" : applicationType;
     }
 
     private void validateResponseTypes(List<String> responseTypes) {
