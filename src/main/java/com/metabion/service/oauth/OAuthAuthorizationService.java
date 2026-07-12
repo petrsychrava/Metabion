@@ -50,6 +50,7 @@ public class OAuthAuthorizationService {
     private final UserRepository users;
     private final OAuthAuthorizationCodeRepository codes;
     private final PatientAccessTokenService patientAccessTokens;
+    private final OAuthRefreshTokenService refreshTokens;
     private final Clock clock;
 
     public OAuthAuthorizationService(OAuthAuthorizationProperties properties,
@@ -58,6 +59,7 @@ public class OAuthAuthorizationService {
                                      UserRepository users,
                                      OAuthAuthorizationCodeRepository codes,
                                      PatientAccessTokenService patientAccessTokens,
+                                     OAuthRefreshTokenService refreshTokens,
                                      Clock clock) {
         this.properties = properties;
         this.clients = clients;
@@ -65,6 +67,7 @@ public class OAuthAuthorizationService {
         this.users = users;
         this.codes = codes;
         this.patientAccessTokens = patientAccessTokens;
+        this.refreshTokens = refreshTokens;
         this.clock = clock;
     }
 
@@ -140,19 +143,29 @@ public class OAuthAuthorizationService {
         var scopes = parseScopeAuthorities(authorizationCode.scopes());
         assertAllowedPatient(authorizationCode.getUser(), now);
         authorizationCode.consume(now);
+        var clientType = clientType(client);
+        var refresh = refreshTokens.issueInitial(
+                authorizationCode.getUser(),
+                client,
+                clientType,
+                authorizationCode.getClientDisplayLabel(),
+                scopes,
+                resource);
         var token = patientAccessTokens.issueForPatient(
                 authorizationCode.getUser(),
-                clientType(client),
+                clientType,
                 authorizationCode.getClientDisplayLabel(),
                 properties.accessTokenTtl(),
                 scopes,
-                resource);
+                resource,
+                refresh.token().getFamilyId());
         var expiresIn = Math.max(0, Duration.between(now, token.expiresAt()).toSeconds());
         return new OAuthTokenResponse(
                 token.plainToken(),
                 "Bearer",
                 expiresIn,
-                sortedScopeString(token.scopes()));
+                sortedScopeString(token.scopes()),
+                refresh.plainToken());
     }
 
     private ValidatedAuthorizationRequest validateAuthorizationRequest(OAuthAuthorizationRequest request) {

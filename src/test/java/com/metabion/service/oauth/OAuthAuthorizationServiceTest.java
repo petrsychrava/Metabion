@@ -9,6 +9,7 @@ import com.metabion.domain.User;
 import com.metabion.dto.IssuePatientAccessTokenResponse;
 import com.metabion.dto.oauth.OAuthAuthorizationRequest;
 import com.metabion.dto.oauth.OAuthClientMetadata;
+import com.metabion.dto.oauth.IssuedOAuthRefreshToken;
 import com.metabion.repository.OAuthAuthorizationCodeRepository;
 import com.metabion.repository.OAuthRegisteredClientRepository;
 import com.metabion.repository.UserRepository;
@@ -58,6 +59,9 @@ class OAuthAuthorizationServiceTest {
 
     @Mock
     PatientAccessTokenService patientAccessTokens;
+
+    @Mock
+    OAuthRefreshTokenService refreshTokens;
 
     OAuthAuthorizationService service;
     OAuthAuthorizationProperties properties;
@@ -201,13 +205,22 @@ class OAuthAuthorizationServiceTest {
         var authorizationCode = authorizationCode("plain-code", NOW.plus(Duration.ofMinutes(5)));
         when(codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("plain-code")))
                 .thenReturn(Optional.of(authorizationCode));
+        var refreshToken = new com.metabion.domain.OAuthRefreshToken(
+                PatientAccessTokenService.sha256Hex("refresh-token"), "refresh-family", patient,
+                "codex", com.metabion.dto.oauth.OAuthClientSource.CONFIGURED,
+                PatientAccessClientType.MCP_CODEX, "Codex", RESOURCE,
+                NOW, NOW.plus(Duration.ofDays(30)), Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
+        when(refreshTokens.issueInitial(
+                any(), any(), any(), any(), any(), any()))
+                .thenReturn(new IssuedOAuthRefreshToken("refresh-token", refreshToken));
         when(patientAccessTokens.issueForPatient(
                 patient,
                 PatientAccessClientType.MCP_CODEX,
                 "Codex",
                 Duration.ofHours(1),
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
-                RESOURCE))
+                RESOURCE,
+                "refresh-family"))
                 .thenReturn(new IssuePatientAccessTokenResponse(
                         99L,
                         "access-token",
@@ -229,6 +242,10 @@ class OAuthAuthorizationServiceTest {
         assertThat(response.tokenType()).isEqualTo("Bearer");
         assertThat(response.expiresIn()).isEqualTo(3600);
         assertThat(response.scope()).isEqualTo("patient:profile:read");
+        assertThat(response.refreshToken()).isEqualTo("refresh-token");
+        verify(patientAccessTokens).issueForPatient(
+                patient, PatientAccessClientType.MCP_CODEX, "Codex", Duration.ofHours(1),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ), RESOURCE, "refresh-family");
         verify(codes).findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("plain-code"));
         verify(codes, never()).findByCodeHash(any());
     }
@@ -334,13 +351,16 @@ class OAuthAuthorizationServiceTest {
                 NOW.plus(Duration.ofMinutes(5)));
         when(codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("metadata-code")))
                 .thenReturn(Optional.of(authorizationCode));
+        when(refreshTokens.issueInitial(any(), any(), any(), any(), any(), any()))
+                .thenReturn(issuedRefreshToken(clientId, PatientAccessClientType.MCP_OTHER, "External MCP"));
         when(patientAccessTokens.issueForPatient(
                 patient,
                 PatientAccessClientType.MCP_OTHER,
                 "External MCP",
                 Duration.ofHours(1),
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
-                RESOURCE))
+                RESOURCE,
+                "refresh-family"))
                 .thenReturn(new IssuePatientAccessTokenResponse(
                         99L,
                         "access-token",
@@ -363,7 +383,8 @@ class OAuthAuthorizationServiceTest {
                 "External MCP",
                 Duration.ofHours(1),
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
-                RESOURCE);
+                RESOURCE,
+                "refresh-family");
     }
 
     @Test
@@ -390,7 +411,9 @@ class OAuthAuthorizationServiceTest {
                 NOW.plus(Duration.ofMinutes(5)));
         when(codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("dynamic-code")))
                 .thenReturn(Optional.of(authorizationCode));
-        when(patientAccessTokens.issueForPatient(any(), any(), any(), any(), any(), any()))
+        when(refreshTokens.issueInitial(any(), any(), any(), any(), any(), any()))
+                .thenReturn(issuedRefreshToken(clientId, PatientAccessClientType.MCP_CODEX, "Codex"));
+        when(patientAccessTokens.issueForPatient(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new IssuePatientAccessTokenResponse(
                         100L,
                         "access-token",
@@ -413,7 +436,8 @@ class OAuthAuthorizationServiceTest {
                 "Codex",
                 Duration.ofHours(1),
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
-                RESOURCE);
+                RESOURCE,
+                "refresh-family");
     }
 
     private OAuthAuthorizationRequest request(String codeChallengeMethod) {
@@ -444,6 +468,7 @@ class OAuthAuthorizationServiceTest {
                 users,
                 codes,
                 patientAccessTokens,
+                refreshTokens,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -474,5 +499,15 @@ class OAuthAuthorizationServiceTest {
                 .when(registeredClients.findByClientId(org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(Optional.empty());
         return registeredClients;
+    }
+
+    private IssuedOAuthRefreshToken issuedRefreshToken(String clientId,
+                                                       PatientAccessClientType clientType,
+                                                       String displayLabel) {
+        return new IssuedOAuthRefreshToken("refresh-token", new com.metabion.domain.OAuthRefreshToken(
+                PatientAccessTokenService.sha256Hex("refresh-token"), "refresh-family", patient,
+                clientId, com.metabion.dto.oauth.OAuthClientSource.METADATA_DOCUMENT,
+                clientType, displayLabel, RESOURCE, NOW, NOW.plus(Duration.ofDays(30)),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ)));
     }
 }

@@ -103,6 +103,34 @@ public class PatientAccessTokenService {
                 scopeAuthorities(scopes));
     }
 
+    public IssuePatientAccessTokenResponse issueForPatient(User user,
+                                                           PatientAccessClientType clientType,
+                                                           String displayLabel,
+                                                           Duration ttl,
+                                                           Set<PatientAccessTokenScope> scopes,
+                                                           String resource,
+                                                           String refreshFamilyId) {
+        var now = Instant.now(clock);
+        var plain = generateToken();
+        var token = tokens.save(new PatientAccessToken(
+                user,
+                sha256Hex(plain),
+                clientType,
+                displayLabel,
+                now,
+                now.plus(ttl),
+                resource,
+                scopes,
+                refreshFamilyId));
+        return new IssuePatientAccessTokenResponse(
+                token.getId(),
+                plain,
+                token.getClientType(),
+                token.getDisplayLabel(),
+                token.getExpiresAt(),
+                scopeAuthorities(scopes));
+    }
+
     @Transactional(readOnly = true)
     public List<PatientAccessTokenSummaryResponse> listForCurrentPatient(Authentication authentication) {
         var user = currentSessionPatient(authentication);

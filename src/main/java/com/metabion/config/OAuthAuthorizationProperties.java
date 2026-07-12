@@ -1,6 +1,7 @@
 package com.metabion.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 import java.time.Duration;
 import java.util.List;
@@ -12,10 +13,12 @@ public record OAuthAuthorizationProperties(
         String resource,
         Duration authorizationCodeTtl,
         Duration accessTokenTtl,
+        Duration refreshTokenTtl,
         ClientMetadataProperties clientMetadata,
         Map<String, RegisteredClient> clients
 ) {
 
+    @ConstructorBinding
     public OAuthAuthorizationProperties {
         if (authorizationCodeTtl == null) {
             authorizationCodeTtl = Duration.ofMinutes(5);
@@ -23,12 +26,24 @@ public record OAuthAuthorizationProperties(
         if (accessTokenTtl == null) {
             accessTokenTtl = Duration.ofHours(1);
         }
+        if (refreshTokenTtl == null) {
+            refreshTokenTtl = Duration.ofDays(30);
+        }
         if (clientMetadata == null) {
             clientMetadata = new ClientMetadataProperties(false, Duration.ofSeconds(2), 32768);
         }
         if (clients == null) {
             clients = Map.of();
         }
+    }
+
+    public OAuthAuthorizationProperties(String issuer,
+                                        String resource,
+                                        Duration authorizationCodeTtl,
+                                        Duration accessTokenTtl,
+                                        ClientMetadataProperties clientMetadata,
+                                        Map<String, RegisteredClient> clients) {
+        this(issuer, resource, authorizationCodeTtl, accessTokenTtl, Duration.ofDays(30), clientMetadata, clients);
     }
 
     public record RegisteredClient(
