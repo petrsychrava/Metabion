@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 @DataJpaTest(properties = {
         "spring.profiles.active=dev",
@@ -88,6 +89,42 @@ class PatientAccessTokenRepositoryTest {
         assertThat(tokens.findActiveByUserId(user.getId()))
                 .extracting(PatientAccessToken::getTokenHash)
                 .containsExactly("active-hash");
+    }
+
+    @Test
+    void familyRevocationOnlyRevokesMatchingFamilyAndManualTokensRemainUnbound() {
+        var user = users.saveAndFlush(patient("patient-family@example.com"));
+        var createdAt = Instant.parse("2026-07-04T10:00:00Z");
+        var familyToken = new PatientAccessToken(user, "family-hash", PatientAccessClientType.MCP_CODEX,
+                "Codex", createdAt, createdAt.plusSeconds(3600), "http://localhost:8080/api/mcp",
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ), "family-1");
+        var manualToken = new PatientAccessToken(user, "manual-hash", PatientAccessClientType.MCP_CLAUDE,
+                "Manual", createdAt, createdAt.plusSeconds(3600), "http://localhost:8080/api/mcp",
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
+        tokens.saveAllAndFlush(Set.of(familyToken, manualToken));
+
+        assertThat(manualToken.getRefreshFamilyId()).isNull();
+        assertThat(tokens.revokeActiveByRefreshFamilyId("family-1", "refresh_reuse", createdAt.plusSeconds(30)))
+                .isEqualTo(1);
+        entityManager.clear();
+
+        assertThat(tokens.findByTokenHash("family-hash").orElseThrow().isRevoked()).isTrue();
+        assertThat(tokens.findByTokenHash("manual-hash").orElseThrow().isRevoked()).isFalse();
+    }
+
+    @Test
+    void familyAwareConstructorRejectsMissingFamilyId() {
+        var user = patient("invalid-family@example.com");
+        var createdAt = Instant.parse("2026-07-04T10:00:00Z");
+
+        assertThatIllegalArgumentException().isThrownBy(() -> new PatientAccessToken(
+                user, "family-hash", PatientAccessClientType.MCP_CODEX, "Codex",
+                createdAt, createdAt.plusSeconds(3600), "http://localhost:8080/api/mcp",
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ), " "));
+        assertThatIllegalArgumentException().isThrownBy(() -> new PatientAccessToken(
+                user, "family-hash", PatientAccessClientType.MCP_CODEX, "Codex",
+                createdAt, createdAt.plusSeconds(3600), "http://localhost:8080/api/mcp",
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ), null));
     }
 
     private static User patient(String email) {

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.metabion.config.OAuthAuthorizationProperties;
 import com.metabion.dto.oauth.OAuthClientMetadata;
+import com.metabion.dto.oauth.OAuthClientSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -171,10 +172,34 @@ public class HttpOAuthClientMetadataFetcher implements OAuthClientMetadataFetche
         var displayName = clientName(json);
         var redirectUris = requiredTextArray(json.get("redirect_uris"));
         var scopes = scopes(json.get("scope"));
+        var applicationType = optionalText(json.get("application_type"));
+        var grantTypes = optionalTextArray(json.get("grant_types"));
         if (displayName.isEmpty() || redirectUris.isEmpty() || scopes.isEmpty()) {
             return Optional.empty();
         }
-        return Optional.of(new OAuthClientMetadata(clientId, displayName.get(), redirectUris.get(), scopes.get()));
+        if (applicationType.isEmpty() || grantTypes.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new OAuthClientMetadata(clientId, displayName.get(),
+                applicationType.get().isEmpty() ? null : applicationType.get(),
+                OAuthClientSource.METADATA_DOCUMENT, redirectUris.get(), scopes.get(), grantTypes.get()));
+    }
+
+    private Optional<String> optionalText(JsonNode node) {
+        if (node == null) {
+            return Optional.of("");
+        }
+        if (!node.isTextual() || node.asText().isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(node.asText());
+    }
+
+    private Optional<List<String>> optionalTextArray(JsonNode node) {
+        if (node == null) {
+            return Optional.of(List.of(OAuthClientMetadata.AUTHORIZATION_CODE));
+        }
+        return requiredTextArray(node);
     }
 
     private Optional<String> clientName(JsonNode json) {

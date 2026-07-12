@@ -17,6 +17,7 @@ import com.metabion.service.PatientAccessTokenService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -50,6 +51,7 @@ public class OAuthAuthorizationService {
     private final UserRepository users;
     private final OAuthAuthorizationCodeRepository codes;
     private final PatientAccessTokenService patientAccessTokens;
+    private final OAuthRefreshTokenService refreshTokens;
     private final Clock clock;
 
     public OAuthAuthorizationService(OAuthAuthorizationProperties properties,
@@ -58,6 +60,7 @@ public class OAuthAuthorizationService {
                                      UserRepository users,
                                      OAuthAuthorizationCodeRepository codes,
                                      PatientAccessTokenService patientAccessTokens,
+                                     OAuthRefreshTokenService refreshTokens,
                                      Clock clock) {
         this.properties = properties;
         this.clients = clients;
@@ -65,6 +68,7 @@ public class OAuthAuthorizationService {
         this.users = users;
         this.codes = codes;
         this.patientAccessTokens = patientAccessTokens;
+        this.refreshTokens = refreshTokens;
         this.clock = clock;
     }
 
@@ -118,41 +122,71 @@ public class OAuthAuthorizationService {
         if (!AUTHORIZATION_CODE_GRANT.equals(grantType)) {
             throw badRequest("unsupported grant type");
         }
-        if (isBlank(code) || isBlank(verifier)) {
-            throw badRequest("authorization code and verifier are required");
+        return exchangeAuthorizationCode(code, redirectUri, clientId, verifier, resource);
+    }
+
+    public OAuthTokenResponse exchangeAuthorizationCode(String code,
+                                                        String redirectUri,
+                                                        String clientId,
+                                                        String verifier,
+                                                        String resource) {
+        if (isBlank(code) || isBlank(redirectUri) || isBlank(clientId) || isBlank(verifier) || isBlank(resource)) {
+            throw OAuthTokenException.invalidRequest();
         }
-        validateResource(resource);
-        var client = resolveClient(clientId, redirectUri);
+        if (!properties.resource().equals(resource)) throw OAuthTokenException.invalidAuthorizationCodeGrant();
+        var client = clients.resolve(clientId, redirectUri)
+                .filter(candidate -> candidate.supportsGrant(AUTHORIZATION_CODE_GRANT))
+                .orElseThrow(OAuthTokenException::invalidAuthorizationCodeGrant);
         var authorizationCode = codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex(code))
-                .orElseThrow(() -> badRequest("invalid authorization code"));
+                .orElseThrow(OAuthTokenException::invalidAuthorizationCodeGrant);
         var now = Instant.now(clock);
         if (authorizationCode.isConsumed() || authorizationCode.isExpired(now)) {
-            throw badRequest("invalid authorization code");
+            throw OAuthTokenException.invalidAuthorizationCodeGrant();
         }
         if (!clientId.equals(authorizationCode.getClientId())
                 || !redirectUri.equals(authorizationCode.getRedirectUri())
                 || !resource.equals(authorizationCode.getResource())) {
-            throw badRequest("invalid authorization code");
+            throw OAuthTokenException.invalidAuthorizationCodeGrant();
         }
         if (!pkce.matches(authorizationCode.getCodeChallengeMethod(), authorizationCode.getCodeChallenge(), verifier)) {
-            throw badRequest("invalid verifier");
+            throw OAuthTokenException.invalidAuthorizationCodeGrant();
         }
         var scopes = parseScopeAuthorities(authorizationCode.scopes());
-        assertAllowedPatient(authorizationCode.getUser(), now);
+        if (!isAllowedPatient(authorizationCode.getUser(), now)) {
+            throw OAuthTokenException.invalidAuthorizationCodeGrant();
+        }
         authorizationCode.consume(now);
-        var token = patientAccessTokens.issueForPatient(
-                authorizationCode.getUser(),
-                clientType(client),
-                authorizationCode.getClientDisplayLabel(),
-                properties.accessTokenTtl(),
-                scopes,
-                resource);
+        var clientType = clientType(client);
+        var refresh = client.supportsGrant(OAuthClientMetadata.REFRESH_TOKEN)
+                ? refreshTokens.issueInitial(
+                        authorizationCode.getUser(), client, clientType,
+                        authorizationCode.getClientDisplayLabel(), scopes, resource)
+                : null;
+        var refreshFamilyId = refresh == null ? null : refresh.token().getFamilyId();
+        var token = refreshFamilyId == null
+                ? patientAccessTokens.issueForPatient(
+                        authorizationCode.getUser(), clientType, authorizationCode.getClientDisplayLabel(),
+                        properties.accessTokenTtl(), scopes, resource)
+                : patientAccessTokens.issueForPatient(
+                        authorizationCode.getUser(), clientType, authorizationCode.getClientDisplayLabel(),
+                        properties.accessTokenTtl(), scopes, resource, refreshFamilyId);
         var expiresIn = Math.max(0, Duration.between(now, token.expiresAt()).toSeconds());
         return new OAuthTokenResponse(
                 token.plainToken(),
                 "Bearer",
                 expiresIn,
-                sortedScopeString(token.scopes()));
+                sortedScopeString(token.scopes()),
+                refresh == null ? null : refresh.plainToken());
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public OAuthTokenResponse refresh(String refreshToken, String clientId, String resource) {
+        if (isBlank(refreshToken) || isBlank(clientId) || isBlank(resource)) {
+            throw OAuthTokenException.invalidRequest();
+        }
+        var result = refreshTokens.refreshGrant(refreshToken, clientId, resource);
+        if (result.isInvalid()) throw OAuthTokenException.invalidGrant();
+        return result.response();
     }
 
     private ValidatedAuthorizationRequest validateAuthorizationRequest(OAuthAuthorizationRequest request) {
@@ -167,6 +201,9 @@ public class OAuthAuthorizationService {
         }
         validateResource(request.resource());
         var client = resolveClient(request.clientId(), request.redirectUri());
+        if (!client.supportsGrant(AUTHORIZATION_CODE_GRANT)) {
+            throw badRequest("client does not support authorization code grant");
+        }
         var scopes = parseScopeString(request.scope());
         validateClientScopes(client, scopes);
         return new ValidatedAuthorizationRequest(client, scopes);

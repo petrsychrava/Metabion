@@ -9,6 +9,7 @@ import com.metabion.domain.User;
 import com.metabion.dto.IssuePatientAccessTokenRequest;
 import com.metabion.repository.PatientAccessTokenRepository;
 import com.metabion.repository.UserRepository;
+import com.metabion.service.oauth.OAuthTokenFamilyRevocationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,6 +46,9 @@ class PatientAccessTokenServiceTest {
     @Mock
     PatientAccessTokenRepository tokens;
 
+    @Mock
+    OAuthTokenFamilyRevocationService familyRevocations;
+
     PatientAccessTokenService service;
     User patient;
 
@@ -53,6 +57,7 @@ class PatientAccessTokenServiceTest {
         service = new PatientAccessTokenService(
                 users,
                 tokens,
+                familyRevocations,
                 Clock.fixed(Instant.parse("2026-07-04T10:00:00Z"), ZoneOffset.UTC),
                 new OAuthAuthorizationProperties(
                         "http://localhost:8080",
@@ -283,6 +288,31 @@ class PatientAccessTokenServiceTest {
 
         assertThat(token.getRevokedAt()).isEqualTo(Instant.parse("2026-07-04T10:00:00Z"));
         assertThat(token.getRevocationReason()).isEqualTo("patient_request");
+        verify(familyRevocations, never()).revoke(any(), any(), any());
+    }
+
+    @Test
+    void revokeForCurrentPatientRevokesOwnedOAuthTokenFamily() {
+        var token = new PatientAccessToken(
+                patient,
+                PatientAccessTokenService.sha256Hex("oauth-access"),
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                Instant.parse("2026-07-02T09:00:00Z"),
+                Instant.parse("2026-08-03T10:00:00Z"),
+                "http://localhost:8080/api/mcp",
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
+                "family-1");
+        ReflectionTestUtils.setField(token, "id", 50L);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+        when(tokens.findById(50L)).thenReturn(Optional.of(token));
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", RoleName.PATIENT.authority());
+        auth.setAuthenticated(true);
+
+        service.revokeForCurrentPatient(auth, 50L);
+
+        verify(familyRevocations).revoke("family-1", "patient_request", Instant.parse("2026-07-04T10:00:00Z"));
+        assertThat(token.getRevokedAt()).isNull();
     }
 
     @Test
@@ -322,6 +352,7 @@ class PatientAccessTokenServiceTest {
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
         assertThat(token.getRevokedAt()).isNull();
+        verify(familyRevocations, never()).revoke(any(), any(), any());
     }
 
     @Test

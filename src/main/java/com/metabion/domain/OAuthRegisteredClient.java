@@ -44,6 +44,16 @@ public class OAuthRegisteredClient {
     @Column(name = "token_endpoint_auth_method", nullable = false, length = 32)
     private String tokenEndpointAuthMethod;
 
+    @Column(name = "application_type", nullable = false, length = 16)
+    private String applicationType;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "oauth_registered_client_grant_types",
+            joinColumns = @JoinColumn(name = "registered_client_id"))
+    @OrderColumn(name = "grant_type_order")
+    @Column(name = "grant_type", nullable = false, length = 32)
+    private List<String> grantTypes = new ArrayList<>();
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "oauth_registered_client_redirect_uris",
             joinColumns = @JoinColumn(name = "registered_client_id"))
@@ -71,6 +81,8 @@ public class OAuthRegisteredClient {
                                  String tokenEndpointAuthMethod,
                                  List<String> redirectUris,
                                  Set<String> scopes,
+                                 String applicationType,
+                                 List<String> grantTypes,
                                  Instant createdAt,
                                  Instant updatedAt) {
         this.clientId = require(clientId, "client id");
@@ -81,9 +93,18 @@ public class OAuthRegisteredClient {
         this.tokenEndpointAuthMethod = normalizeTokenEndpointAuthMethod(tokenEndpointAuthMethod);
         this.redirectUris = normalizeRedirectUris(redirectUris);
         this.scopes = normalizeScopes(scopes);
+        this.applicationType = normalizeApplicationType(applicationType);
+        this.grantTypes = normalizeGrantTypes(grantTypes);
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt is required");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt is required");
         validateState();
+    }
+
+    public OAuthRegisteredClient(String clientId, String clientName, String tokenEndpointAuthMethod,
+                                 List<String> redirectUris, Set<String> scopes,
+                                 Instant createdAt, Instant updatedAt) {
+        this(clientId, clientName, tokenEndpointAuthMethod, redirectUris, scopes,
+                "native", List.of("authorization_code"), createdAt, updatedAt);
     }
 
     public List<String> redirectUris() {
@@ -92,6 +113,41 @@ public class OAuthRegisteredClient {
 
     public Set<String> scopes() {
         return Set.copyOf(scopes);
+    }
+
+    public List<String> grantTypes() {
+        return List.copyOf(grantTypes);
+    }
+
+    private String normalizeApplicationType(String applicationType) {
+        var value = require(applicationType, "application type");
+        if (!"native".equals(value)) {
+            throw new IllegalArgumentException("application type must be native");
+        }
+        return value;
+    }
+
+    private List<String> normalizeGrantTypes(List<String> grantTypes) {
+        if (grantTypes == null || grantTypes.isEmpty()) {
+            return List.of("authorization_code");
+        }
+        var values = new LinkedHashSet<String>();
+        for (var grantType : grantTypes) {
+            var value = require(grantType, "grant type");
+            if (!"authorization_code".equals(value) && !"refresh_token".equals(value)) {
+                throw new IllegalArgumentException("unsupported grant type");
+            }
+            values.add(value);
+        }
+        if (!values.contains("authorization_code")) {
+            throw new IllegalArgumentException("grant types must include authorization_code");
+        }
+        var normalized = new ArrayList<String>();
+        normalized.add("authorization_code");
+        if (values.contains("refresh_token")) {
+            normalized.add("refresh_token");
+        }
+        return normalized;
     }
 
     @PrePersist
@@ -241,6 +297,10 @@ public class OAuthRegisteredClient {
 
     public String getTokenEndpointAuthMethod() {
         return tokenEndpointAuthMethod;
+    }
+
+    public String getApplicationType() {
+        return applicationType;
     }
 
     public Instant getCreatedAt() {

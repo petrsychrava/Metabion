@@ -3,6 +3,7 @@ package com.metabion.service.oauth;
 import com.metabion.config.OAuthAuthorizationProperties;
 import com.metabion.domain.OAuthRegisteredClient;
 import com.metabion.dto.oauth.OAuthClientMetadata;
+import com.metabion.dto.oauth.OAuthClientSource;
 import com.metabion.repository.OAuthRegisteredClientRepository;
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +29,9 @@ class OAuthClientResolverTest {
 
         assertThat(resolved).isPresent();
         assertThat(resolved.get().displayLabel()).isEqualTo("Codex");
+        assertThat(resolved.get().applicationType()).isEqualTo("native");
+        assertThat(resolved.get().source()).isEqualTo(OAuthClientSource.CONFIGURED);
+        assertThat(resolved.get().grantTypes()).containsExactly("authorization_code");
     }
 
     @Test
@@ -53,6 +57,9 @@ class OAuthClientResolverTest {
         assertThat(resolved.get().displayLabel()).isEqualTo("Dynamic Codex");
         assertThat(resolved.get().redirectUris()).containsExactly("https://codex.example/oauth/callback");
         assertThat(resolved.get().scopes()).containsExactly("patient:profile:read");
+        assertThat(resolved.get().source()).isEqualTo(OAuthClientSource.DYNAMIC);
+        assertThat(resolved.get().supportsGrant("refresh_token")).isTrue();
+        assertThat(resolver.resolve("codex")).isPresent();
     }
 
     @Test
@@ -163,12 +170,16 @@ class OAuthClientResolverTest {
                 Map.of(
                         "codex", new OAuthAuthorizationProperties.RegisteredClient(
                                 "Codex",
+                                "native",
                                 List.of("http://127.0.0.1:1455/oauth/callback"),
-                                List.of("patient:profile:read")),
+                                List.of("patient:profile:read"),
+                                List.of("authorization_code")),
                         "claude", new OAuthAuthorizationProperties.RegisteredClient(
                                 "Claude",
+                                "native",
                                 List.of("http://127.0.0.1:1456/oauth/callback"),
-                                List.of("patient:profile:read"))));
+                                List.of("patient:profile:read"),
+                                List.of("authorization_code"))));
     }
 
     private static OAuthRegisteredClient registeredClient(String clientId, String name, List<String> redirectUris) {
@@ -178,6 +189,8 @@ class OAuthClientResolverTest {
                 "none",
                 redirectUris,
                 Set.of("patient:profile:read"),
+                "native",
+                List.of("authorization_code", "refresh_token"),
                 Instant.parse("2026-07-07T10:00:00Z"),
                 Instant.parse("2026-07-07T10:00:00Z"));
     }

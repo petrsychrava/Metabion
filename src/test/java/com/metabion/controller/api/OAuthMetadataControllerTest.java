@@ -97,7 +97,7 @@ class OAuthMetadataControllerTest {
                 .andExpect(jsonPath("$.authorization_endpoint").value("http://localhost:8080/oauth/authorize"))
                 .andExpect(jsonPath("$.token_endpoint").value("http://localhost:8080/oauth/token"))
                 .andExpect(jsonPath("$.response_types_supported", contains("code")))
-                .andExpect(jsonPath("$.grant_types_supported", contains("authorization_code")))
+                .andExpect(jsonPath("$.grant_types_supported", contains("authorization_code", "refresh_token")))
                 .andExpect(jsonPath("$.code_challenge_methods_supported", contains("S256")))
                 .andExpect(jsonPath("$.token_endpoint_auth_methods_supported", contains("none")))
                 .andExpect(jsonPath("$.registration_endpoint").value("http://localhost:8080/oauth/register"))

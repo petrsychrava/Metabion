@@ -15,6 +15,14 @@ public record OAuthClientRegistrationResponse(
         String scope,
         @JsonProperty("token_endpoint_auth_method") String tokenEndpointAuthMethod,
         @JsonProperty("grant_types") List<String> grantTypes,
+        @JsonProperty("application_type") String applicationType,
         @JsonProperty("response_types") List<String> responseTypes
 ) {
+    public OAuthClientRegistrationResponse(String clientId, String clientSecret, long clientIdIssuedAt,
+                                           List<String> redirectUris, String clientName, String scope,
+                                           String tokenEndpointAuthMethod, List<String> grantTypes,
+                                           List<String> responseTypes) {
+        this(clientId, clientSecret, clientIdIssuedAt, redirectUris, clientName, scope,
+                tokenEndpointAuthMethod, grantTypes, null, responseTypes);
+    }
 }

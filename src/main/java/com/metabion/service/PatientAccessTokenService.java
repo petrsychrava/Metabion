@@ -11,6 +11,7 @@ import com.metabion.dto.IssuePatientAccessTokenResponse;
 import com.metabion.dto.PatientAccessTokenSummaryResponse;
 import com.metabion.repository.PatientAccessTokenRepository;
 import com.metabion.repository.UserRepository;
+import com.metabion.service.oauth.OAuthTokenFamilyRevocationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -39,15 +40,18 @@ public class PatientAccessTokenService {
 
     private final UserRepository users;
     private final PatientAccessTokenRepository tokens;
+    private final OAuthTokenFamilyRevocationService familyRevocations;
     private final Clock clock;
     private final OAuthAuthorizationProperties oauthProperties;
 
     public PatientAccessTokenService(UserRepository users,
                                      PatientAccessTokenRepository tokens,
+                                     OAuthTokenFamilyRevocationService familyRevocations,
                                      Clock clock,
                                      OAuthAuthorizationProperties oauthProperties) {
         this.users = users;
         this.tokens = tokens;
+        this.familyRevocations = familyRevocations;
         this.clock = clock;
         this.oauthProperties = oauthProperties;
     }
@@ -103,6 +107,34 @@ public class PatientAccessTokenService {
                 scopeAuthorities(scopes));
     }
 
+    public IssuePatientAccessTokenResponse issueForPatient(User user,
+                                                           PatientAccessClientType clientType,
+                                                           String displayLabel,
+                                                           Duration ttl,
+                                                           Set<PatientAccessTokenScope> scopes,
+                                                           String resource,
+                                                           String refreshFamilyId) {
+        var now = Instant.now(clock);
+        var plain = generateToken();
+        var token = tokens.save(new PatientAccessToken(
+                user,
+                sha256Hex(plain),
+                clientType,
+                displayLabel,
+                now,
+                now.plus(ttl),
+                resource,
+                scopes,
+                refreshFamilyId));
+        return new IssuePatientAccessTokenResponse(
+                token.getId(),
+                plain,
+                token.getClientType(),
+                token.getDisplayLabel(),
+                token.getExpiresAt(),
+                scopeAuthorities(scopes));
+    }
+
     @Transactional(readOnly = true)
     public List<PatientAccessTokenSummaryResponse> listForCurrentPatient(Authentication authentication) {
         var user = currentSessionPatient(authentication);
@@ -123,7 +155,12 @@ public class PatientAccessTokenService {
         if (!token.getUser().getId().equals(user.getId())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "token not found");
         }
-        token.revoke("patient_request", Instant.now(clock));
+        var now = Instant.now(clock);
+        if (token.getRefreshFamilyId() == null) {
+            token.revoke("patient_request", now);
+        } else {
+            familyRevocations.revoke(token.getRefreshFamilyId(), "patient_request", now);
+        }
     }
 
     public Optional<PatientAccessToken> authenticate(String plainToken) {
