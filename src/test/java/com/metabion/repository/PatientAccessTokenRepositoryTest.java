@@ -90,6 +90,27 @@ class PatientAccessTokenRepositoryTest {
                 .containsExactly("active-hash");
     }
 
+    @Test
+    void familyRevocationOnlyRevokesMatchingFamilyAndManualTokensRemainUnbound() {
+        var user = users.saveAndFlush(patient("patient-family@example.com"));
+        var createdAt = Instant.parse("2026-07-04T10:00:00Z");
+        var familyToken = new PatientAccessToken(user, "family-hash", PatientAccessClientType.MCP_CODEX,
+                "Codex", createdAt, createdAt.plusSeconds(3600), "http://localhost:8080/api/mcp",
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ), "family-1");
+        var manualToken = new PatientAccessToken(user, "manual-hash", PatientAccessClientType.MCP_CLAUDE,
+                "Manual", createdAt, createdAt.plusSeconds(3600), "http://localhost:8080/api/mcp",
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
+        tokens.saveAllAndFlush(Set.of(familyToken, manualToken));
+
+        assertThat(manualToken.getRefreshFamilyId()).isNull();
+        assertThat(tokens.revokeByRefreshFamilyId("family-1", "refresh_reuse", createdAt.plusSeconds(30)))
+                .isEqualTo(1);
+        entityManager.clear();
+
+        assertThat(tokens.findByTokenHash("family-hash").orElseThrow().isRevoked()).isTrue();
+        assertThat(tokens.findByTokenHash("manual-hash").orElseThrow().isRevoked()).isFalse();
+    }
+
     private static User patient(String email) {
         var user = new User(email, "hash");
         user.setEnabled(true);

@@ -59,6 +59,9 @@ public class PatientAccessToken {
     @Column(name = "revocation_reason", length = 120)
     private String revocationReason;
 
+    @Column(name = "refresh_family_id", length = 64)
+    private String refreshFamilyId;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "patient_access_token_scopes",
             joinColumns = @JoinColumn(name = "token_id"))
@@ -75,6 +78,18 @@ public class PatientAccessToken {
                               Instant expiresAt,
                               String resource,
                               Set<PatientAccessTokenScope> scopes) {
+        this(user, tokenHash, clientType, displayLabel, createdAt, expiresAt, resource, scopes, null);
+    }
+
+    public PatientAccessToken(User user,
+                              String tokenHash,
+                              PatientAccessClientType clientType,
+                              String displayLabel,
+                              Instant createdAt,
+                              Instant expiresAt,
+                              String resource,
+                              Set<PatientAccessTokenScope> scopes,
+                              String refreshFamilyId) {
         if (user == null) {
             throw new IllegalArgumentException("user is required");
         }
@@ -103,6 +118,7 @@ public class PatientAccessToken {
         this.createdAt = createdAt;
         this.expiresAt = expiresAt;
         this.resource = resource.trim();
+        this.refreshFamilyId = refreshFamilyId == null || refreshFamilyId.isBlank() ? null : refreshFamilyId.trim();
         this.scopeGrants = scopes.stream()
                 .map(PatientAccessTokenScopeGrant::new)
                 .collect(Collectors.toCollection(HashSet::new));
@@ -146,4 +162,5 @@ public class PatientAccessToken {
     public Instant getLastUsedAt() { return lastUsedAt; }
     public Instant getRevokedAt() { return revokedAt; }
     public String getRevocationReason() { return revocationReason; }
+    public String getRefreshFamilyId() { return refreshFamilyId; }
 }
