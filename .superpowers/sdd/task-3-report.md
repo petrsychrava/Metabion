@@ -100,3 +100,40 @@ Gradle emitted its existing Java native-access and class-data-sharing warnings; 
 ## Concerns
 
 No functional concerns. The two IntelliJ Math.clamp suggestions and Gradle/JDK runtime warnings are non-blocking; the explicit expressions were retained to match the specified numeric policy exactly.
+
+## Review Fix: DST Fall-Back Overlap
+
+### Root Cause and Implementation
+
+The original builder converted each measurement Instant to a local LocalDateTime before sorting and x-coordinate mapping. During a fall-back overlap, two distinct instants can share the same local wall-clock time. Sorting then treated them as equal, and converting the ambiguous local time back with atZone selected the same offset for both x positions.
+
+RawMeasurementPoint now retains the source Instant alongside the patient-local date and LocalDateTime. Glucose and ketone points sort by the absolute Instant, and measurement x coordinates use that Instant directly against the patient-zone range boundaries. TrendChartModel.MeasurementPoint still exposes the patient-local LocalDateTime, and segmentation still derives its calendar date from that localized value.
+
+### RED
+
+Command:
+
+    ./gradlew test --tests 'com.metabion.controller.web.TrendChartModelBuilderTest'
+
+Result: exit code 1, BUILD FAILED in 1s. Five tests ran and only preservesChronologyAndDistinctXCoordinatesDuringDstOverlap failed at the chronological value-order assertion. The reversed input used America/New_York instants 2026-11-01T05:30:00Z and 2026-11-01T06:30:00Z, both of which expose local time 01:30 during the overlap.
+
+### GREEN
+
+Command:
+
+    ./gradlew test --tests 'com.metabion.controller.web.TrendGlucoseConverterTest' --tests 'com.metabion.controller.web.TrendChartModelBuilderTest'
+
+Result: exit code 0, BUILD SUCCESSFUL in 1s. Generated JUnit results recorded 7 tests, 0 failures, 0 errors, and 0 skipped. IntelliJ's focused build also reported isSuccess=true with no problems.
+
+### Review-Fix Self-Review
+
+- Confirmed both glucose and ketone extraction paths preserve and sort by the original Instant.
+- Confirmed only measurement x coordinates use the absolute Instant; date ticks and symptom points retain their intended local-noon mapping.
+- Confirmed the regression identifies chronological order through distinct measurement values while also demonstrating that both public measuredAt values remain the same patient-local 01:30.
+- Confirmed the later overlap instant receives a strictly greater x coordinate across the 25-hour local day.
+- Confirmed local-date segmentation behavior and all pre-existing scaling, filtering, conversion, and geometry policies remain unchanged.
+- Re-ran IntelliJ diagnostics; no errors were reported. The pre-existing Math.clamp suggestions remain intentionally unchanged.
+
+### Deferred Observation
+
+The reviewer noted at low priority that broader policy coverage could be added later. This fix intentionally does not expand scope beyond the DST overlap regression.

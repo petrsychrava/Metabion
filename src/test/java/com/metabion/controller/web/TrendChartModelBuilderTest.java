@@ -77,6 +77,24 @@ class TrendChartModelBuilderTest {
     }
 
     @Test
+    void preservesChronologyAndDistinctXCoordinatesDuringDstOverlap() {
+        var response = trend("America/New_York", MeasurementUnit.MMOL_L,
+                day(LocalDate.of(2026, 11, 1), null, null,
+                        List.of(glucose("6.2", MeasurementUnit.MMOL_L, "2026-11-01T06:30:00Z"),
+                                glucose("5.8", MeasurementUnit.MMOL_L, "2026-11-01T05:30:00Z")),
+                        List.of()));
+
+        var points = flatten(builder.build(response).glucoseSegments());
+
+        assertThat(points).extracting(TrendChartModel.MeasurementPoint::value)
+                .containsExactly(new BigDecimal("5.8"), new BigDecimal("6.2"));
+        assertThat(points).extracting(TrendChartModel.MeasurementPoint::measuredAt)
+                .containsExactly(LocalDateTime.parse("2026-11-01T01:30:00"),
+                        LocalDateTime.parse("2026-11-01T01:30:00"));
+        assertThat(points.get(1).x()).isGreaterThan(points.get(0).x());
+    }
+
+    @Test
     void splitsSeriesAcrossMissingDaysButConnectsSameAndConsecutiveDates() {
         var model = builder.build(responseWithMeasurementsOnJune1June2AndJune4());
 

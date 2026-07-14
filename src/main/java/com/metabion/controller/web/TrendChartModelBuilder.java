@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DateTimeException;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -59,6 +60,7 @@ final class TrendChartModelBuilder {
 
     private record RawMeasurementPoint(
             LocalDate date,
+            Instant instant,
             LocalDateTime measuredAt,
             BigDecimal value,
             MeasurementUnit unit,
@@ -90,13 +92,14 @@ final class TrendChartModelBuilder {
                     var converted = glucoseConverter.convert(point.value(), point.unit(), target);
                     return converted == null ? null : new RawMeasurementPoint(
                             point.measuredAt().atZone(zone).toLocalDate(),
+                            point.measuredAt(),
                             point.measuredAt().atZone(zone).toLocalDateTime(),
                             converted,
                             target,
                             MeasurementType.GLUCOSE);
                 })
                 .filter(Objects::nonNull)
-                .sorted(Comparator.comparing(RawMeasurementPoint::measuredAt))
+                .sorted(Comparator.comparing(RawMeasurementPoint::instant))
                 .toList();
     }
 
@@ -110,11 +113,12 @@ final class TrendChartModelBuilder {
                 .filter(point -> point.value() != null && point.measuredAt() != null)
                 .map(point -> new RawMeasurementPoint(
                         point.measuredAt().atZone(zone).toLocalDate(),
+                        point.measuredAt(),
                         point.measuredAt().atZone(zone).toLocalDateTime(),
                         point.value(),
                         MeasurementUnit.MMOL_L,
                         MeasurementType.KETONE))
-                .sorted(Comparator.comparing(RawMeasurementPoint::measuredAt))
+                .sorted(Comparator.comparing(RawMeasurementPoint::instant))
                 .toList();
     }
 
@@ -172,11 +176,14 @@ final class TrendChartModelBuilder {
     }
 
     private int x(LocalDateTime value, LocalDate from, LocalDate to, ZoneId zone) {
+        return x(value.atZone(zone).toInstant(), from, to, zone);
+    }
+
+    private int x(Instant value, LocalDate from, LocalDate to, ZoneId zone) {
         var rangeStart = from.atStartOfDay(zone).toInstant();
         var rangeEnd = to.plusDays(1).atStartOfDay(zone).toInstant();
-        var instant = value.atZone(zone).toInstant();
         var total = Duration.between(rangeStart, rangeEnd).toMillis();
-        var offset = Duration.between(rangeStart, instant).toMillis();
+        var offset = Duration.between(rangeStart, value).toMillis();
         var ratio = total <= 0 ? 0.5 : Math.max(0, Math.min(1, offset / (double) total));
         return (int) Math.round(GEOMETRY.left() + ratio * (GEOMETRY.right() - GEOMETRY.left()));
     }
@@ -189,7 +196,7 @@ final class TrendChartModelBuilder {
             ZoneId zone) {
         var points = raw.stream()
                 .map(point -> new TrendChartModel.MeasurementPoint(
-                        x(point.measuredAt(), from, to, zone),
+                        x(point.instant(), from, to, zone),
                         y(point.value(), axis.min(), axis.max()),
                         point.measuredAt(),
                         point.value(),
