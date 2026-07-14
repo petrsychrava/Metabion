@@ -1,77 +1,79 @@
-# Task 2 Report: Validate And Save DCR Metadata
+# Task 2 Report: Centralize Glucose Display Conversion
 
 ## Status
 
-Implemented.
+Implemented the requested pure presentation conversion component.
 
-## Summary
+## Implementation
 
-- Added DCR request, response, and OAuth error DTO records under `com.metabion.dto.oauth`.
-- Added `OAuthClientRegistrationException` for controller-layer OAuth error serialization in a later task.
-- Added `OAuthClientRegistrationService.register(...)` to validate public-client DCR metadata, generate an `mcp_client_` client id, save an `OAuthRegisteredClient`, and return a public-client registration response with no client secret.
-- Added focused service tests for loopback HTTP, HTTPS, invalid redirect metadata, unsupported scopes, confidential auth methods, and redirect URI count limits.
+- Added package-private Spring component `TrendGlucoseConverter` in the web presentation package.
+- Added `convert(BigDecimal value, MeasurementUnit source, MeasurementUnit target)` with the required factor of 18.
+- Preserved same-unit values without changing their scale.
+- Converted `MMOL_L` to `MG_DL` at scale 2 with `RoundingMode.HALF_UP`.
+- Converted `MG_DL` to `MMOL_L` at scale 2 with `RoundingMode.HALF_UP`.
+- Returned `null` when the value, source unit, or target unit is missing, and for conversion pairs outside the supported branches.
+- Added two focused unit tests covering both conversion directions, same-unit preservation, and every nullable input position.
 
-## Implementation Notes
+Task 1 interfaces and all unrelated production code were left unchanged.
 
-- Scope validation is performed in the service so unsupported scopes return `invalid_scope`.
-- Redirect URI policy, client name trimming/length, token endpoint auth persistence, supported scope persistence, maximum redirect count, and ordered redirect persistence are delegated to `OAuthRegisteredClient` from Task 1 where possible.
-- Entity `IllegalArgumentException`s from metadata validation are translated to `OAuthClientRegistrationException` with `invalid_client_metadata`.
-- No `/oauth/register` controller, security, metadata, or resolver integration was added.
-- No client secret is issued or accepted.
-- `MAX_REQUEST_BYTES` is exposed as `32_768` for the later controller request-size enforcement task.
+## TDD Evidence
 
-## Verification
+### RED
 
-Red run:
+Command:
 
-```text
-./gradlew test --tests com.metabion.service.oauth.OAuthClientRegistrationServiceTest
+```bash
+./gradlew test --tests 'com.metabion.controller.web.TrendGlucoseConverterTest'
 ```
 
-Failed at `:compileTestJava` because `OAuthClientRegistrationRequest`, `OAuthClientRegistrationService`, and `OAuthClientRegistrationException` did not exist.
-
-Green run:
+Result: exit code 1, `BUILD FAILED` during `:compileTestJava` in 989ms. The only two compiler errors were the expected missing-type failures at the converter fixture declaration and construction:
 
 ```text
-./gradlew test --tests com.metabion.service.oauth.OAuthClientRegistrationServiceTest
+cannot find symbol: class TrendGlucoseConverter
+2 errors
 ```
 
-Passed with `BUILD SUCCESSFUL`.
+No production converter existed during this run.
+
+### GREEN: Focused Test
+
+Command:
+
+```bash
+./gradlew test --tests 'com.metabion.controller.web.TrendGlucoseConverterTest'
+```
+
+Result: exit code 0, `BUILD SUCCESSFUL in 1s`. The generated JUnit result records 2 tests, 0 failures, 0 errors, and 0 skipped.
+
+### GREEN: Full Suite
+
+Command:
+
+```bash
+./gradlew test
+```
+
+Result: exit code 0, `BUILD SUCCESSFUL in 1m 22s`; Jacoco report generation completed. Aggregating the generated JUnit XML results recorded 741 tests, 0 failures, 0 errors, and 0 skipped.
+
+Gradle emitted its existing Java native-access and class-data-sharing warnings; they did not affect either successful run.
+
+## Files Changed
+
+- `src/main/java/com/metabion/controller/web/TrendGlucoseConverter.java`
+- `src/test/java/com/metabion/controller/web/TrendGlucoseConverterTest.java`
+- `.superpowers/sdd/task-2-report.md`
+
+## Self-Review
+
+- Compared the final implementation line by line with the task brief's exact factor, branches, scale, and rounding mode.
+- Confirmed the produced method signature and package-private visibility match the interface required by the later chart-model builder.
+- Confirmed `@Component` is present with the required Spring import, so later consumers can use constructor injection.
+- Confirmed the implementation remains a pure conversion component with no persistence, locale, timezone, controller, DTO, security, migration, configuration, or dependency changes.
+- Confirmed `MeasurementUnit` currently contains only `MMOL_L` and `MG_DL`; the final fallback still returns `null` for any future unsupported cross-unit pair.
+- Confirmed the focused result contains both required tests and the complete suite contains no failures.
+- Ran `git diff --cached --check`; it completed with exit code 0 and no output across every staged file.
+- Confirmed only the two requested source files and this report are included in the scoped change.
 
 ## Concerns
 
-- IDEA MCP could read indexed project files but resolved new linked-worktree files against the main checkout during build validation, so final validation used the exact Gradle command from the task brief.
-
-## Review Fix: 2026-07-09
-
-### Status
-
-Implemented review fixes.
-
-### Summary
-
-- Added explicit `client_secret` request metadata support and rejected nonblank values with `invalid_client_metadata`.
-- Hard-capped `OAuthClientRegistrationService.maxRequestBytes()` at `32_768` even when configuration is higher.
-- Added focused service tests for both reviewed behaviors.
-
-### Verification
-
-Red run:
-
-```text
-./gradlew test --tests com.metabion.service.oauth.OAuthClientRegistrationServiceTest
-```
-
-Failed at `:compileTestJava` because `OAuthClientRegistrationRequest` did not yet accept the added `client_secret` constructor argument.
-
-Green run:
-
-```text
-./gradlew test --tests com.metabion.service.oauth.OAuthClientRegistrationServiceTest
-```
-
-Passed with `BUILD SUCCESSFUL`.
-
-### Concerns
-
-- Gradle emitted existing Java native-access and class-data-sharing warnings during the focused test run.
+No functional concerns.
