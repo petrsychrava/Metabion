@@ -97,7 +97,7 @@ Null measurements and unsupported type/unit combinations are omitted from plotte
 ## Components and Data Flow
 
 1. `DailyTrendService` continues loading and grouping check-ins, diet logs, and measurements for the requested date range.
-2. `DailyTrendResponse` identifies the subject patient's preferred glucose display unit in addition to retaining raw measurement values and units.
+2. `DailyTrendResponse` identifies the subject patient's preferred glucose display unit and timezone in addition to retaining raw measurement values and units.
 3. A focused chart-model builder converts glucose values, orders observations, splits sparse series into segments, calculates scales, and produces plot coordinates and accessible display text.
 4. `TrendSvgRenderer` renders the prepared model as two SVG graphs. It owns SVG markup and escaping, not measurement conversion or scaling policy.
 5. `WebTrendController` continues placing the rendered chart markup and the unmodified trend response in the patient and clinical view models.
