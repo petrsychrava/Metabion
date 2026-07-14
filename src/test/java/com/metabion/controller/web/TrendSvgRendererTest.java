@@ -110,7 +110,10 @@ class TrendSvgRendererTest {
 
         var svg = renderer.render(response);
 
-        assertThat(svg).contains("<g class=\"trend-point symptom\" tabindex=\"0\" role=\"img\"")
+        assertThat(svg)
+                .containsPattern("<svg class=\"trend-chart trend-chart-symptoms\"[^>]*role=\"group\"")
+                .containsPattern("<svg class=\"trend-chart trend-chart-measurements\"[^>]*role=\"group\"")
+                .contains("<g class=\"trend-point symptom\" tabindex=\"0\" role=\"img\"")
                 .contains("<g class=\"trend-point glucose\" tabindex=\"0\" role=\"img\"")
                 .contains("<g class=\"trend-point ketone\" tabindex=\"0\" role=\"img\"")
                 .contains("aria-label=\"2026-07-09T08:30, Glucose 5.20 mmol/L\"")

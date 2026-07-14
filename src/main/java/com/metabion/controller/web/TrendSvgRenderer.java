@@ -49,7 +49,7 @@ public class TrendSvgRenderer {
         var content = new StringBuilder();
         content.append("""
                 <svg class="trend-chart trend-chart-symptoms" viewBox="0 0 640 220"
-                     role="img" aria-labelledby="trend-symptoms-title trend-symptoms-desc">
+                     role="group" aria-labelledby="trend-symptoms-title trend-symptoms-desc">
                   <title id="trend-symptoms-title">%s</title>
                   <desc id="trend-symptoms-desc">%s</desc>
                 """.formatted(escape(chartLabel), escape(scoreLabel)));
@@ -83,7 +83,7 @@ public class TrendSvgRenderer {
         var content = new StringBuilder();
         content.append("""
                 <svg class="trend-chart trend-chart-measurements" viewBox="0 0 640 220"
-                     role="img" aria-labelledby="trend-measurements-title trend-measurements-desc">
+                     role="group" aria-labelledby="trend-measurements-title trend-measurements-desc">
                   <title id="trend-measurements-title">%s</title>
                   <desc id="trend-measurements-desc">%s, %s</desc>
                 """.formatted(escape(chartLabel), escape(glucoseLabel), escape(ketoneLabel)));

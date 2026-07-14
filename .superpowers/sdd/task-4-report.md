@@ -93,3 +93,39 @@ native platform library; there were no test failures.
   is rendered through the running application.
 - The compatibility overload can be removed once `WebTrendController` switches
   to `render(DailyTrendResponse)` in the integration task.
+
+## Accessibility Follow-up
+
+Review identified that `role="img"` on each non-empty outer SVG could flatten
+the accessibility semantics of its focusable point descendants. The symptom
+and measurement SVG containers now use `role="group"` with their existing
+localized `<title>`, `<desc>`, and `aria-labelledby` references. Every point
+group remains independently focusable with `tabindex="0"`, `role="img"`, an
+accessible label, and a `<title>` fallback. The empty-state SVG remains a single
+`role="img"` because it has no interactive descendants.
+
+### Follow-up TDD evidence
+
+RED command:
+
+```text
+./gradlew test --tests 'com.metabion.controller.web.TrendSvgRendererTest'
+```
+
+Result: expected `BUILD FAILED` in 1s; 7 tests ran and exactly 1 failed,
+`rendersFocusableSemanticPointGroupsAndTitleFallbacks`, because the two outer
+SVGs did not yet have `role="group"`.
+
+GREEN command:
+
+```text
+./gradlew test --tests 'com.metabion.controller.web.TrendSvgRendererTest'
+```
+
+Result: `BUILD SUCCESSFUL` in 1s; all 7 focused renderer tests passed after the
+two outer roles changed. The assertions also confirm that symptom, glucose, and
+ketone point groups retain `tabindex="0"` and `role="img"`.
+
+The review's chart color, tooltip visibility, and tooltip styling findings are
+explicitly owned by Task 5 and remain a cross-task completion gate; no CSS was
+changed in this follow-up.
