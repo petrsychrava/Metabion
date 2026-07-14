@@ -22,6 +22,7 @@ class TrendSvgRendererTest {
     @Test
     void rendersSymptomPolylineWithScaledCoordinatesAndOmitsNullScores() {
         var response = new DailyTrendResponse(10L, LocalDate.of(2026, 6, 24), LocalDate.of(2026, 6, 26),
+                MeasurementUnit.MMOL_L, "UTC",
                 List.of(
                         day(LocalDate.of(2026, 6, 24), new BigDecimal("0.00"), FlareState.NO_FLARE, List.of(), List.of()),
                         day(LocalDate.of(2026, 6, 25), null, FlareState.NO_FLARE, List.of(), List.of()),
@@ -38,6 +39,7 @@ class TrendSvgRendererTest {
     @Test
     void rendersFlareMarkersWithStateAttributesAndDistinctShapes() {
         var response = new DailyTrendResponse(10L, LocalDate.of(2026, 6, 25), LocalDate.of(2026, 6, 26),
+                MeasurementUnit.MMOL_L, "UTC",
                 List.of(
                         day(LocalDate.of(2026, 6, 25), new BigDecimal("2.00"), FlareState.SUSPECTED_FLARE, List.of(), List.of()),
                         day(LocalDate.of(2026, 6, 26), new BigDecimal("5.00"), FlareState.ACTIVE_FLARE, List.of(), List.of())));
@@ -57,6 +59,7 @@ class TrendSvgRendererTest {
         var ketone = measurement(301L, MeasurementType.KETONE, "1.20", MeasurementUnit.MMOL_L,
                 Instant.parse("2026-06-25T20:00:00Z"));
         var response = new DailyTrendResponse(10L, LocalDate.of(2026, 6, 25), LocalDate.of(2026, 6, 25),
+                MeasurementUnit.MMOL_L, "UTC",
                 List.of(day(LocalDate.of(2026, 6, 25), new BigDecimal("2.00"), FlareState.NO_FLARE,
                         List.of(glucose), List.of(ketone))));
 
@@ -80,6 +83,7 @@ class TrendSvgRendererTest {
         var secondGlucose = measurement(302L, MeasurementType.GLUCOSE, "6.20", MeasurementUnit.MMOL_L,
                 Instant.parse("2026-06-25T12:30:00Z"));
         var response = new DailyTrendResponse(10L, LocalDate.of(2026, 6, 25), LocalDate.of(2026, 6, 25),
+                MeasurementUnit.MMOL_L, "UTC",
                 List.of(day(LocalDate.of(2026, 6, 25), new BigDecimal("2.00"), FlareState.NO_FLARE,
                         List.of(firstGlucose, secondGlucose), List.of())));
 
@@ -99,7 +103,8 @@ class TrendSvgRendererTest {
                 .contains("<svg")
                 .contains("role=\"img\"")
                 .contains("No trend data");
-        assertThat(renderer.render(new DailyTrendResponse(10L, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), List.of())))
+        assertThat(renderer.render(new DailyTrendResponse(10L, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30),
+                MeasurementUnit.MMOL_L, "UTC", List.of())))
                 .contains("<svg")
                 .contains("role=\"img\"")
                 .contains("No trend data");

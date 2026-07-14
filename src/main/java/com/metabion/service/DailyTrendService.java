@@ -3,6 +3,7 @@ package com.metabion.service;
 import com.metabion.domain.DailyDietLog;
 import com.metabion.domain.DailyMeasurementEntry;
 import com.metabion.domain.MeasurementType;
+import com.metabion.domain.MeasurementUnit;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.SymptomCheckIn;
@@ -106,7 +107,11 @@ public class DailyTrendService {
                 .map(date -> dayTrend(date, checkInsByDate.get(date), dietLogsByDate.get(date),
                         measurementsByDate.getOrDefault(date, List.of())))
                 .toList();
-        return new DailyTrendResponse(patientProfileId, from, to, dayTrends);
+        var glucoseUnit = patient.getGlucoseUnitPreference() == null
+                ? MeasurementUnit.MMOL_L
+                : patient.getGlucoseUnitPreference();
+        var timezone = measurementWindows.zoneFor(patient).getId();
+        return new DailyTrendResponse(patientProfileId, from, to, glucoseUnit, timezone, dayTrends);
     }
 
     private Map<LocalDate, List<DailyMeasurementEntry>> measurementsByDate(PatientProfile patient,

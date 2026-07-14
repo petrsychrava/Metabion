@@ -16,6 +16,8 @@ public record DailyTrendResponse(
         Long patientProfileId,
         LocalDate from,
         LocalDate to,
+        MeasurementUnit glucoseUnit,
+        String timezone,
         List<DayTrend> days
 ) {
 

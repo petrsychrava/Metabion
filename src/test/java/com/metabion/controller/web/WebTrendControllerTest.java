@@ -224,6 +224,7 @@ class WebTrendControllerTest {
 
     private DailyTrendResponse trendResponse() {
         return new DailyTrendResponse(10L, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 26),
+                MeasurementUnit.MMOL_L, "UTC",
                 List.of(new DailyTrendResponse.DayTrend(
                         LocalDate.of(2026, 6, 26),
                         100L,
@@ -250,6 +251,7 @@ class WebTrendControllerTest {
 
     private DailyTrendResponse trendResponseWithoutDietLog() {
         return new DailyTrendResponse(10L, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 26),
+                MeasurementUnit.MMOL_L, "UTC",
                 List.of(new DailyTrendResponse.DayTrend(
                         LocalDate.of(2026, 6, 26),
                         100L,
