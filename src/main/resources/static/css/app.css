@@ -369,32 +369,106 @@ a {
     height: auto;
 }
 
+.trend-chart-stack {
+    min-width: 640px;
+}
+
+.trend-chart + .trend-chart {
+    margin-top: 24px;
+}
+
 .trend-axis {
     stroke: var(--border);
     stroke-width: 1;
 }
 
-.trend-line-symptoms {
+.trend-line.symptoms {
     stroke: var(--accent);
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-width: 3;
 }
 
-.trend-marker-flare.suspected {
-    fill: #d28b22;
+.trend-line.glucose,
+.trend-axis.glucose,
+.trend-line-glucose,
+.trend-axis-glucose {
+    stroke: #2d8fcc;
 }
 
-.trend-marker-flare.active {
-    fill: var(--error);
+.trend-line.ketone,
+.trend-axis.ketone,
+.trend-line-ketone,
+.trend-axis-ketone {
+    stroke: #7a4ab8;
 }
 
-.trend-marker-measurement.glucose {
+.trend-line.glucose,
+.trend-line.ketone {
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 3;
+}
+
+.trend-axis-label.glucose {
     fill: #2d8fcc;
 }
 
-.trend-marker-measurement.ketone {
+.trend-axis-label.ketone {
     fill: #7a4ab8;
+}
+
+.trend-marker.flare-no {
+    fill: var(--accent);
+}
+
+.trend-marker.flare-suspected {
+    fill: #d28b22;
+}
+
+.trend-marker.flare-active {
+    fill: var(--error);
+}
+
+.trend-marker.measurement.glucose {
+    fill: #2d8fcc;
+}
+
+.trend-marker.measurement.ketone {
+    fill: #7a4ab8;
+}
+
+.trend-point:focus {
+    outline: none;
+}
+
+.trend-point:focus .trend-marker,
+.trend-point:hover .trend-marker {
+    stroke: var(--text);
+    stroke-width: 2;
+}
+
+.trend-tooltip {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.trend-point:focus .trend-tooltip,
+.trend-point:hover .trend-tooltip {
+    opacity: 1;
+}
+
+.trend-tooltip rect {
+    fill: var(--panel);
+    stroke: var(--border);
+}
+
+.trend-tooltip text,
+.trend-axis-label,
+.trend-tick-label,
+.trend-axis-tick,
+.trend-date-label {
+    fill: var(--text);
 }
 
 .trend-legend {

@@ -38,10 +38,6 @@ public class TrendSvgRenderer {
                 + "</div>";
     }
 
-    public String render(DailyTrendResponse trend, String ignoredNoDataLabel) {
-        return render(trend);
-    }
-
     private String symptomSvg(TrendChartModel model) {
         var geometry = model.geometry();
         var chartLabel = message("trends.symptomChart");

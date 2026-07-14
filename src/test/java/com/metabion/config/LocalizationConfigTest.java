@@ -58,6 +58,24 @@ class LocalizationConfigTest {
     }
 
     @Test
+    void resolvesTrendChartMessagesInEnglishAndCzech() {
+        assertThat(messages.getMessage("trends.symptomChart", null, Locale.ENGLISH))
+                .isEqualTo("Symptom score and flare-state trend");
+        assertThat(messages.getMessage("trends.measurementChart", null, Locale.ENGLISH))
+                .isEqualTo("Glucose and ketone trend");
+        assertThat(messages.getMessage("trends.noSeriesData", new Object[]{"glucose"}, Locale.ENGLISH))
+                .isEqualTo("No glucose data");
+
+        var czech = Locale.forLanguageTag("cs");
+        assertThat(messages.getMessage("trends.symptomChart", null, czech))
+                .isEqualTo("Trend skóre symptomů a stavu vzplanutí");
+        assertThat(messages.getMessage("trends.measurementChart", null, czech))
+                .isEqualTo("Trend glukózy a ketonů");
+        assertThat(messages.getMessage("trends.noSeriesData", new Object[]{"glukózu"}, czech))
+                .isEqualTo("Nejsou dostupná data pro glukózu");
+    }
+
+    @Test
     void fallsBackToEnglishForMissingCzechMessage() {
         assertThat(messages.getMessage("test.englishOnly", null, Locale.forLanguageTag("cs")))
                 .isEqualTo("English fallback");

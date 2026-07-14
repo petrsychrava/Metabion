@@ -80,8 +80,12 @@ class WebTrendControllerTest {
                 .build();
         when(clock.instant()).thenReturn(Instant.parse("2026-06-27T10:00:00Z"));
         when(clock.getZone()).thenReturn(ZoneId.of("UTC"));
-        when(trendSvgRenderer.render(any())).thenReturn("<svg role=\"img\"></svg>");
-        when(trendSvgRenderer.render(any(), any())).thenReturn("<svg role=\"img\"></svg>");
+        when(trendSvgRenderer.render(any())).thenReturn("""
+                <div class="trend-chart-stack">
+                  <svg class="trend-chart trend-chart-symptoms" role="img"></svg>
+                  <svg class="trend-chart trend-chart-measurements" role="img"></svg>
+                </div>
+                """);
         when(dietLogService.currentPatientTimezone(any())).thenReturn("UTC");
     }
 
@@ -103,10 +107,11 @@ class WebTrendControllerTest {
                 .andExpect(content().string(containsString("Glucose")))
                 .andExpect(content().string(containsString("Ketones")))
                 .andExpect(content().string(containsString("href=\"/app/daily-check-in?date=2026-06-26\"")))
-                .andExpect(content().string(containsString("<svg role=\"img\"></svg>")));
+                .andExpect(content().string(containsString("trend-chart-symptoms")))
+                .andExpect(content().string(containsString("trend-chart-measurements")));
 
         verify(dailyTrendService).currentPatientTrend(any(), eq(LocalDate.of(2026, 6, 1)), eq(LocalDate.of(2026, 6, 26)));
-        verify(trendSvgRenderer).render(trendResponse(), "No trend data");
+        verify(trendSvgRenderer).render(trendResponse());
     }
 
     @Test
@@ -162,11 +167,13 @@ class WebTrendControllerTest {
                 .andExpect(content().string(containsString("Symptom score")))
                 .andExpect(content().string(containsString("Glucose")))
                 .andExpect(content().string(containsString("Ketones")))
+                .andExpect(content().string(containsString("trend-chart-symptoms")))
+                .andExpect(content().string(containsString("trend-chart-measurements")))
                 .andExpect(content().string(containsString("href=\"/app/clinical/diet-logs/200\"")));
 
         verify(dietLogService).listClinicalPatientOptions(any(Authentication.class));
         verify(dailyTrendService).clinicalTrend(any(), eq(10L), eq(LocalDate.of(2026, 6, 1)), eq(LocalDate.of(2026, 6, 26)));
-        verify(trendSvgRenderer).render(trendResponse(), "No trend data");
+        verify(trendSvgRenderer).render(trendResponse());
     }
 
     @Test
