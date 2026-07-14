@@ -10,7 +10,8 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -61,6 +62,58 @@ class TrendChartModelBuilderTest {
     }
 
     @Test
+    void expandsSymptomAxisWithoutClampingValidScoreAboveDefaultRange() {
+        var response = trend(
+                "UTC",
+                MeasurementUnit.MMOL_L,
+                day(LocalDate.of(2026, 7, 8), new BigDecimal("30"), FlareState.NO_FLARE,
+                        List.of(), List.of()),
+                day(LocalDate.of(2026, 7, 9), new BigDecimal("42"), FlareState.ACTIVE_FLARE,
+                        List.of(), List.of()));
+
+        var model = builder.build(response);
+        var highPoint = flatten(model.symptomSegments()).getLast();
+
+        assertThat(model.symptomAxis().min()).isEqualByComparingTo("0");
+        assertThat(model.symptomAxis().max()).isEqualByComparingTo("45");
+        assertThat(model.symptomAxis().ticks())
+                .containsExactly(new BigDecimal("0"), new BigDecimal("15"),
+                        new BigDecimal("30"), new BigDecimal("45"));
+        assertThat(highPoint.value()).isEqualByComparingTo("42");
+        assertThat(highPoint.y()).isGreaterThan(model.geometry().top());
+    }
+
+    @Test
+    void retainsDefaultSymptomAxisForOrdinaryScores() {
+        var model = builder.build(trend(
+                "UTC",
+                MeasurementUnit.MMOL_L,
+                day(LocalDate.of(2026, 7, 9), new BigDecimal("12"), FlareState.NO_FLARE,
+                        List.of(), List.of())));
+
+        assertThat(model.symptomAxis().max()).isEqualByComparingTo("30");
+    }
+
+    @Test
+    void maintainsThirtySixMgDlMinimumSpanForIdenticalValues() {
+        var response = trend(
+                "UTC",
+                MeasurementUnit.MG_DL,
+                day(LocalDate.of(2026, 7, 8), null, null,
+                        List.of(glucose("100", MeasurementUnit.MG_DL, "2026-07-08T08:00:00Z")), List.of()),
+                day(LocalDate.of(2026, 7, 9), null, null,
+                        List.of(glucose("100", MeasurementUnit.MG_DL, "2026-07-09T08:00:00Z")), List.of()));
+
+        var model = builder.build(response);
+        var points = flatten(model.glucoseSegments());
+
+        assertThat(model.glucoseAxis().max().subtract(model.glucoseAxis().min()))
+                .isGreaterThanOrEqualTo(new BigDecimal("36"));
+        assertThat(points).extracting(TrendChartModel.MeasurementPoint::y)
+                .containsOnly(points.getFirst().y());
+    }
+
+    @Test
     void usesPatientLocalMeasurementTimeForXCoordinates() {
         var response = trend("America/New_York", MeasurementUnit.MMOL_L,
                 day(LocalDate.of(2026, 6, 10), null, null,
@@ -71,8 +124,8 @@ class TrendChartModelBuilderTest {
         var points = flatten(builder.build(response).glucoseSegments());
 
         assertThat(points).extracting(TrendChartModel.MeasurementPoint::measuredAt)
-                .containsExactly(LocalDateTime.parse("2026-06-10T07:00:00"),
-                        LocalDateTime.parse("2026-06-10T19:00:00"));
+                .containsExactly(OffsetDateTime.parse("2026-06-10T07:00:00-04:00"),
+                        OffsetDateTime.parse("2026-06-10T19:00:00-04:00"));
         assertThat(points.get(1).x()).isGreaterThan(points.get(0).x());
     }
 
@@ -89,9 +142,59 @@ class TrendChartModelBuilderTest {
         assertThat(points).extracting(TrendChartModel.MeasurementPoint::value)
                 .containsExactly(new BigDecimal("5.8"), new BigDecimal("6.2"));
         assertThat(points).extracting(TrendChartModel.MeasurementPoint::measuredAt)
-                .containsExactly(LocalDateTime.parse("2026-11-01T01:30:00"),
-                        LocalDateTime.parse("2026-11-01T01:30:00"));
+                .containsExactly(OffsetDateTime.parse("2026-11-01T01:30:00-04:00"),
+                        OffsetDateTime.parse("2026-11-01T01:30:00-05:00"));
         assertThat(points.get(1).x()).isGreaterThan(points.get(0).x());
+    }
+
+    @Test
+    void omitsNullAndUnsupportedMeasurementsWhileKeepingValidPoints() {
+        var validGlucose = glucose("5.8", MeasurementUnit.MMOL_L, "2026-07-09T08:00:00Z");
+        var validKetone = ketone("0.8", "2026-07-09T08:05:00Z");
+        var response = trend(
+                "UTC",
+                MeasurementUnit.MMOL_L,
+                day(LocalDate.of(2026, 7, 9), null, null,
+                        List.of(
+                                validGlucose,
+                                new DailyTrendResponse.MeasurementPoint(
+                                        302L, MeasurementType.GLUCOSE, null,
+                                        MeasurementUnit.MMOL_L, Instant.parse("2026-07-09T09:00:00Z"),
+                                        MeasurementContext.FASTING),
+                                new DailyTrendResponse.MeasurementPoint(
+                                        303L, MeasurementType.KETONE, BigDecimal.ONE,
+                                        MeasurementUnit.MMOL_L, Instant.parse("2026-07-09T09:05:00Z"),
+                                        MeasurementContext.FASTING)),
+                        List.of(
+                                validKetone,
+                                new DailyTrendResponse.MeasurementPoint(
+                                        304L, MeasurementType.KETONE, BigDecimal.ONE,
+                                        MeasurementUnit.MG_DL, Instant.parse("2026-07-09T09:10:00Z"),
+                                        MeasurementContext.FASTING))));
+
+        var model = builder.build(response);
+
+        assertThat(flatten(model.glucoseSegments()))
+                .extracting(TrendChartModel.MeasurementPoint::value)
+                .containsExactly(new BigDecimal("5.8"));
+        assertThat(flatten(model.ketoneSegments()))
+                .extracting(TrendChartModel.MeasurementPoint::value)
+                .containsExactly(new BigDecimal("0.8"));
+    }
+
+    @Test
+    void fallsBackToSystemTimezoneForInvalidIdentifier() {
+        var instant = Instant.parse("2026-07-09T08:00:00Z");
+        var response = trend(
+                "Not/A-Timezone",
+                MeasurementUnit.MMOL_L,
+                day(LocalDate.of(2026, 7, 9), null, null,
+                        List.of(glucose("5.8", MeasurementUnit.MMOL_L, instant.toString())), List.of()));
+
+        var point = flatten(builder.build(response).glucoseSegments()).getFirst();
+
+        assertThat(point.measuredAt().getOffset())
+                .isEqualTo(ZoneId.systemDefault().getRules().getOffset(instant));
     }
 
     @Test

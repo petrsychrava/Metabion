@@ -116,11 +116,11 @@ class TrendSvgRendererTest {
                 .contains("<g class=\"trend-point symptom\" tabindex=\"0\" role=\"img\"")
                 .contains("<g class=\"trend-point glucose\" tabindex=\"0\" role=\"img\"")
                 .contains("<g class=\"trend-point ketone\" tabindex=\"0\" role=\"img\"")
-                .contains("aria-label=\"2026-07-09T08:30, Glucose 5.20 mmol/L\"")
+                .contains("aria-label=\"2026-07-09T08:30Z, Glucose 5.20 mmol/L\"")
                 .contains("data-value=\"5.20\"")
                 .contains("data-unit=\"mmol/L\"")
-                .contains("data-measured-at=\"2026-07-09T08:30\"")
-                .contains("<title>2026-07-09T08:30, Glucose 5.20 mmol/L</title>");
+                .contains("data-measured-at=\"2026-07-09T08:30Z\"")
+                .contains("<title>2026-07-09T08:30Z, Glucose 5.20 mmol/L</title>");
     }
 
     @Test
@@ -150,6 +150,41 @@ class TrendSvgRendererTest {
     }
 
     @Test
+    void keepsBothChartsAndDescribesEveryEmptySeriesForObservationFreeRange() {
+        var response = trend(
+                day(LocalDate.of(2026, 7, 8), null, null, List.of(), List.of()),
+                day(LocalDate.of(2026, 7, 9), null, null, List.of(), List.of()));
+
+        var svg = renderer.render(response);
+
+        assertThat(svg).contains("class=\"trend-chart trend-chart-symptoms\"")
+                .contains("class=\"trend-chart trend-chart-measurements\"")
+                .contains("class=\"trend-empty-state symptom\"")
+                .contains(">No symptom observations</text>")
+                .contains("class=\"trend-empty-state glucose\"")
+                .contains(">No glucose measurements</text>")
+                .contains("class=\"trend-empty-state ketone\"")
+                .contains(">No ketone measurements</text>")
+                .contains("<desc id=\"trend-symptoms-desc\">Symptom score. No symptom observations</desc>")
+                .contains("No glucose measurements. No ketone measurements</desc>");
+    }
+
+    @Test
+    void showsOnlyMissingMeasurementSeriesStateWithoutHidingPresentSeries() {
+        var response = trend(day(LocalDate.of(2026, 7, 9), null, null,
+                List.of(glucose("5.20", "2026-07-09T08:30:00Z")), List.of()));
+
+        var svg = renderer.render(response);
+
+        assertThat(svg).contains("class=\"trend-point glucose\"")
+                .contains("class=\"trend-empty-state symptom\"")
+                .contains(">No symptom observations</text>")
+                .contains("class=\"trend-empty-state ketone\"")
+                .contains(">No ketone measurements</text>")
+                .doesNotContain("class=\"trend-empty-state glucose\"");
+    }
+
+    @Test
     void rendersExactValuesAndStatesInVisibleTooltipText() {
         var response = trend(day(LocalDate.of(2026, 7, 9), new BigDecimal("7.50"),
                 FlareState.ACTIVE_FLARE,
@@ -160,8 +195,53 @@ class TrendSvgRendererTest {
         assertThat(svg).contains("class=\"trend-tooltip\"")
                 .contains(">2026-07-09</text>")
                 .contains(">Symptom score: 7.50 — Active flare</text>")
-                .contains(">2026-07-09T08:30</text>")
+                .contains(">2026-07-09T08:30Z</text>")
                 .contains(">Glucose: 5.20 mmol/L</text>");
+    }
+
+    @Test
+    void preservesDistinctOffsetsInDisplayedDstOverlapTimestamps() {
+        var response = trend(
+                "America/New_York",
+                day(LocalDate.of(2026, 11, 1), null, null,
+                        List.of(glucose("5.8", "2026-11-01T05:30:00Z"),
+                                glucose("6.2", "2026-11-01T06:30:00Z")), List.of()));
+
+        var svg = renderer.render(response);
+
+        assertThat(svg).contains("2026-11-01T01:30-04:00")
+                .contains("2026-11-01T01:30-05:00");
+    }
+
+    @Test
+    void keepsWiderCzechTooltipsInsidePlotAtBothBoundaries() {
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("cs"));
+        messages.addMessage("trends.glucose", Locale.forLanguageTag("cs"),
+                "Velmi dlouhý lokalizovaný název měření glukózy");
+        var response = trend(
+                day(LocalDate.of(2026, 7, 9), null, null,
+                        List.of(glucose("5.20", "2026-07-09T00:00:00Z"),
+                                glucose("5.40", "2026-07-09T23:59:59Z")), List.of()));
+
+        var svg = renderer.render(response);
+
+        assertThat(svg).contains("<rect width=\"320\" height=\"54\"")
+                .contains("class=\"trend-tooltip\" transform=\"translate(64,")
+                .contains("class=\"trend-tooltip\" transform=\"translate(256,")
+                .contains(">Velmi dlouhý lokalizovaný název</text>")
+                .contains(">měření glukózy: 5.20 mmol/L</text>");
+    }
+
+    @Test
+    void rendersExpandedSymptomTicksFromModelAxis() {
+        var response = trend(day(LocalDate.of(2026, 7, 9), new BigDecimal("42"),
+                FlareState.ACTIVE_FLARE, List.of(), List.of()));
+
+        var svg = renderer.render(response);
+
+        assertThat(svg).contains("class=\"trend-axis-tick symptom\"")
+                .contains(">45</text>")
+                .doesNotContain("class=\"trend-point symptom\" tabindex=\"0\" role=\"img\" aria-label=\"2026-07-09, Symptom score 42, Active flare\" data-y=\"32\"");
     }
 
     private StaticMessageSource messages() {
@@ -172,6 +252,9 @@ class TrendSvgRendererTest {
         addEnglish(source, "trends.symptomScore", "Symptom score");
         addEnglish(source, "trends.glucose", "Glucose");
         addEnglish(source, "trends.ketones", "Ketones");
+        addEnglish(source, "trends.noSymptomData", "No symptom observations");
+        addEnglish(source, "trends.noGlucoseData", "No glucose measurements");
+        addEnglish(source, "trends.noKetoneData", "No ketone measurements");
         addEnglish(source, "enum.measurementUnit.MMOL_L", "mmol/L");
         addEnglish(source, "enum.measurementUnit.MG_DL", "mg/dL");
         addEnglish(source, "enum.flareState.NO_FLARE", "No flare");
@@ -179,6 +262,19 @@ class TrendSvgRendererTest {
         addEnglish(source, "enum.flareState.ACTIVE_FLARE", "Active flare");
         source.addMessage("trends.noData", Locale.forLanguageTag("cs"),
                 "Nejsou dostupná žádná trendová data");
+        source.addMessage("trends.symptomChart", Locale.forLanguageTag("cs"), "Trend symptomů");
+        source.addMessage("trends.measurementChart", Locale.forLanguageTag("cs"), "Trend měření");
+        source.addMessage("trends.symptomScore", Locale.forLanguageTag("cs"), "Skóre symptomů");
+        source.addMessage("trends.glucose", Locale.forLanguageTag("cs"), "Glukóza");
+        source.addMessage("trends.ketones", Locale.forLanguageTag("cs"), "Ketony");
+        source.addMessage("trends.noSymptomData", Locale.forLanguageTag("cs"),
+                "Nejsou dostupná pozorování symptomů");
+        source.addMessage("trends.noGlucoseData", Locale.forLanguageTag("cs"),
+                "Nejsou dostupná měření glukózy");
+        source.addMessage("trends.noKetoneData", Locale.forLanguageTag("cs"),
+                "Nejsou dostupná měření ketonů");
+        source.addMessage("enum.measurementUnit.MMOL_L", Locale.forLanguageTag("cs"), "mmol/L");
+        source.addMessage("enum.measurementUnit.MG_DL", Locale.forLanguageTag("cs"), "mg/dL");
         return source;
     }
 
@@ -187,13 +283,17 @@ class TrendSvgRendererTest {
     }
 
     private DailyTrendResponse trend(DailyTrendResponse.DayTrend... days) {
+        return trend("UTC", days);
+    }
+
+    private DailyTrendResponse trend(String timezone, DailyTrendResponse.DayTrend... days) {
         var values = List.of(days);
         return new DailyTrendResponse(
                 10L,
                 values.getFirst().date(),
                 values.getLast().date(),
                 MeasurementUnit.MMOL_L,
-                "UTC",
+                timezone,
                 values);
     }
 

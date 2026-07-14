@@ -63,16 +63,24 @@ class LocalizationConfigTest {
                 .isEqualTo("Symptom score and flare-state trend");
         assertThat(messages.getMessage("trends.measurementChart", null, Locale.ENGLISH))
                 .isEqualTo("Glucose and ketone trend");
-        assertThat(messages.getMessage("trends.noSeriesData", new Object[]{"glucose"}, Locale.ENGLISH))
-                .isEqualTo("No glucose data");
+        assertThat(messages.getMessage("trends.noSymptomData", null, Locale.ENGLISH))
+                .isEqualTo("No symptom observations");
+        assertThat(messages.getMessage("trends.noGlucoseData", null, Locale.ENGLISH))
+                .isEqualTo("No glucose measurements");
+        assertThat(messages.getMessage("trends.noKetoneData", null, Locale.ENGLISH))
+                .isEqualTo("No ketone measurements");
 
         var czech = Locale.forLanguageTag("cs");
         assertThat(messages.getMessage("trends.symptomChart", null, czech))
                 .isEqualTo("Trend skóre symptomů a stavu vzplanutí");
         assertThat(messages.getMessage("trends.measurementChart", null, czech))
                 .isEqualTo("Trend glukózy a ketonů");
-        assertThat(messages.getMessage("trends.noSeriesData", new Object[]{"glukózu"}, czech))
-                .isEqualTo("Nejsou dostupná data pro glukózu");
+        assertThat(messages.getMessage("trends.noSymptomData", null, czech))
+                .isEqualTo("Nejsou dostupná pozorování symptomů");
+        assertThat(messages.getMessage("trends.noGlucoseData", null, czech))
+                .isEqualTo("Nejsou dostupná měření glukózy");
+        assertThat(messages.getMessage("trends.noKetoneData", null, czech))
+                .isEqualTo("Nejsou dostupná měření ketonů");
     }
 
     @Test

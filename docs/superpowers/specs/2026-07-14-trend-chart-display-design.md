@@ -34,11 +34,11 @@ Use one graph for symptoms and flare state, then one dual-axis graph for glucose
 
 The graphs are vertically stacked and use the same horizontal date range, plot width, and tick positions. This allows a user to compare symptoms, flare state, glucose, and ketones on the same dates without mixing their numeric scales.
 
-Symptom observations are positioned at the center of their local date. Measurement observations use `measuredAt`, converted to the patient's timezone, so multiple readings on the same date retain their chronological order.
+Symptom observations are positioned at the center of their local date. Measurement observations use the recorded instant for ordering and horizontal position, then convert to the patient's timezone for local-date segmentation and display. The displayed timestamp retains its UTC offset so repeated local times during a daylight-saving overlap remain distinguishable.
 
 ### Symptoms and flare state
 
-The upper graph uses a fixed symptom-score y-axis from 0 to 30. Each symptom point also encodes its flare state through both shape and color:
+The upper graph uses a default symptom-score y-axis from 0 to 30. When an observed valid or historical score exceeds 30, the axis expands to the next suitable rounded bound above that score (for example, 42 expands the axis to 45). Each symptom point also encodes its flare state through both shape and color:
 
 - `NO_FLARE`: green circle.
 - `SUSPECTED_FLARE`: amber triangle.
@@ -61,7 +61,7 @@ The separate axes are visually anchored to their series to mitigate the usual am
 
 Each series is divided into segments. Points connect only when their local dates are the same or consecutive. A missing calendar day breaks the line. This prevents the graph from implying continuous observations across unmeasured periods.
 
-An isolated observation is rendered as a visible point. If a graph or one measurement series has no values, the graph remains present and displays a localized no-data message for the missing content without hiding other available series.
+An isolated observation is rendered as a visible point. If a graph or one measurement series has no values, both graphs remain present and display dedicated localized symptom, glucose, or ketone empty-state text without hiding an available series. Each missing-series message is also included in its SVG description.
 
 ### Responsive behavior
 
@@ -71,7 +71,7 @@ Both SVGs share the same responsive wrapper and minimum plot width. On narrow sc
 
 ### Symptoms
 
-The symptom axis always spans 0 through 30.
+The symptom axis spans 0 through 30 for ordinary data. Its upper bound expands in rounded increments when the observed maximum exceeds 30, and the model owns both the bound and the rendered tick values. Scores are never clamped to the default maximum.
 
 ### Glucose
 
@@ -113,13 +113,16 @@ Separating chart-model calculation from SVG markup keeps numeric behavior indepe
 - Axis meaning is communicated by visible labels and units, not color alone.
 - New user-facing strings are added to both English and Czech message bundles with aligned keys.
 - All generated text and attribute values are escaped before insertion into SVG markup.
+- Series, flare, axis, grid, and date-tick colors use explicit light, dark-system, and light/dark-preference theme variables. Text use meets at least 4.5:1 contrast and meaningful lines and markers meet at least 3:1 contrast against the chart panel.
+- Tooltips are wide enough for localized Czech labels and clamp their full box to the plot boundaries.
 
 ## Error and Edge-Case Handling
 
 - Null or empty trend responses render a localized no-data chart state.
 - One-day ranges and isolated observations render valid coordinates without division by zero.
 - Identical measurement values still produce a nonzero scale span.
-- Multiple measurements on one day are ordered by local measurement time.
+- Multiple measurements on one day are ordered by recorded instant; local timestamps retain their offsets.
+- An observation-free requested range retains both graphs and exposes each missing series independently.
 - Missing dates split line segments.
 - Measurements at the date-range boundaries remain inside the plot.
 - Unsupported measurement units are excluded from plotting and do not prevent valid series from rendering.
@@ -131,6 +134,7 @@ Separating chart-model calculation from SVG markup keeps numeric behavior indepe
 - Glucose conversion from mmol/L to mg/dL and from mg/dL to mmol/L.
 - Preferred-unit defaulting.
 - Minimum glucose scale spans and rounded bounds.
+- Default and expanded symptom axes, including a score of 42 below an upper bound of 45.
 - Zero-based ketone scale and rounded upper bound.
 - Independent glucose and ketone y-coordinates for different values.
 - Local-time x-coordinates for multiple same-day measurements.
@@ -144,6 +148,9 @@ Separating chart-model calculation from SVG markup keeps numeric behavior indepe
 - Circle, triangle, and square symptom markers for the three flare states.
 - Isolated points and multiple line segments.
 - Localized no-data states.
+- Wholly and partially empty series in visible text and SVG descriptions.
+- Offset-distinct labels for repeated local times during a daylight-saving overlap.
+- Long Czech tooltips clamped at the left and right plot boundaries.
 - Escaped labels and accessible point details.
 
 ### Web tests

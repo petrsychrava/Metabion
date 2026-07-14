@@ -6,12 +6,13 @@ import com.metabion.domain.MeasurementUnit;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 record TrendChartModel(
         Geometry geometry,
         List<DateTick> dateTicks,
+        Axis symptomAxis,
         List<Segment<SymptomPoint>> symptomSegments,
         Axis glucoseAxis,
         List<Segment<MeasurementPoint>> glucoseSegments,
@@ -34,7 +35,7 @@ record TrendChartModel(
                         FlareState flareState, MarkerShape shape) {
     }
 
-    record MeasurementPoint(int x, int y, LocalDateTime measuredAt, BigDecimal value,
+    record MeasurementPoint(int x, int y, OffsetDateTime measuredAt, BigDecimal value,
                             MeasurementUnit unit, MeasurementType type) {
     }
 

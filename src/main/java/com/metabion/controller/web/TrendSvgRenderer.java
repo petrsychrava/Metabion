@@ -9,15 +9,16 @@ import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Component
 public class TrendSvgRenderer {
 
-    private static final BigDecimal MAX_SYMPTOM_SCORE = new BigDecimal("30");
-    private static final int TOOLTIP_WIDTH = 180;
-    private static final int TOOLTIP_HEIGHT = 38;
+    private static final int TOOLTIP_WIDTH = 320;
+    private static final int TOOLTIP_LINE_LENGTH = 36;
 
     private final TrendChartModelBuilder models;
     private final MessageSource messages;
@@ -42,20 +43,28 @@ public class TrendSvgRenderer {
         var geometry = model.geometry();
         var chartLabel = message("trends.symptomChart");
         var scoreLabel = message("trends.symptomScore");
+        var noSymptoms = model.symptomSegments().isEmpty();
+        var emptyLabel = noSymptoms ? message("trends.noSymptomData") : null;
+        var description = scoreLabel + (noSymptoms ? ". " + emptyLabel : "");
         var content = new StringBuilder();
         content.append("""
                 <svg class="trend-chart trend-chart-symptoms" viewBox="0 0 640 220"
                      role="group" aria-labelledby="trend-symptoms-title trend-symptoms-desc">
                   <title id="trend-symptoms-title">%s</title>
                   <desc id="trend-symptoms-desc">%s</desc>
-                """.formatted(escape(chartLabel), escape(scoreLabel)));
+                """.formatted(escape(chartLabel), escape(description)));
         content.append(horizontalAxis(geometry));
         content.append(verticalAxis(geometry, geometry.left(), "symptom"));
         content.append("  <text class=\"trend-axis-label symptom\" x=\"")
                 .append(geometry.left()).append("\" y=\"18\">")
                 .append(escape(scoreLabel)).append("</text>\n");
-        content.append(symptomTicks(geometry));
+        content.append(axisTicks(model.symptomAxis(), geometry, geometry.left(), "symptom", "end"));
         content.append(dateTicks(model));
+        if (noSymptoms) {
+            content.append(emptyState("symptom", emptyLabel,
+                    (geometry.left() + geometry.right()) / 2,
+                    (geometry.top() + geometry.bottom()) / 2, "middle"));
+        }
         for (var segment : model.symptomSegments()) {
             content.append(polyline(segment, TrendChartModel.SymptomPoint::x,
                     TrendChartModel.SymptomPoint::y, "symptoms"));
@@ -76,13 +85,24 @@ public class TrendSvgRenderer {
         var ketoneLabel = message("trends.ketones");
         var glucoseUnit = unitLabel(model.glucoseAxis().unit());
         var ketoneUnit = unitLabel(model.ketoneAxis().unit());
+        var noGlucose = model.glucoseSegments().isEmpty();
+        var noKetones = model.ketoneSegments().isEmpty();
+        var missingSeries = new ArrayList<String>();
+        if (noGlucose) {
+            missingSeries.add(message("trends.noGlucoseData"));
+        }
+        if (noKetones) {
+            missingSeries.add(message("trends.noKetoneData"));
+        }
+        var description = glucoseLabel + ", " + ketoneLabel
+                + (missingSeries.isEmpty() ? "" : ". " + String.join(". ", missingSeries));
         var content = new StringBuilder();
         content.append("""
                 <svg class="trend-chart trend-chart-measurements" viewBox="0 0 640 220"
                      role="group" aria-labelledby="trend-measurements-title trend-measurements-desc">
                   <title id="trend-measurements-title">%s</title>
-                  <desc id="trend-measurements-desc">%s, %s</desc>
-                """.formatted(escape(chartLabel), escape(glucoseLabel), escape(ketoneLabel)));
+                  <desc id="trend-measurements-desc">%s</desc>
+                """.formatted(escape(chartLabel), escape(description)));
         content.append(horizontalAxis(geometry));
         content.append(verticalAxis(geometry, geometry.left(), "glucose"));
         content.append(verticalAxis(geometry, geometry.right(), "ketone"));
@@ -95,6 +115,14 @@ public class TrendSvgRenderer {
         content.append(axisTicks(model.glucoseAxis(), geometry, geometry.left(), "glucose", "end"));
         content.append(axisTicks(model.ketoneAxis(), geometry, geometry.right(), "ketone", "start"));
         content.append(dateTicks(model));
+        if (noGlucose) {
+            content.append(emptyState("glucose", message("trends.noGlucoseData"),
+                    geometry.left(), geometry.height() - 8, "start"));
+        }
+        if (noKetones) {
+            content.append(emptyState("ketone", message("trends.noKetoneData"),
+                    geometry.right(), geometry.height() - 8, "end"));
+        }
         for (var segment : model.glucoseSegments()) {
             content.append(polyline(segment, TrendChartModel.MeasurementPoint::x,
                     TrendChartModel.MeasurementPoint::y, "glucose"));
@@ -125,21 +153,6 @@ public class TrendSvgRenderer {
     private String verticalAxis(TrendChartModel.Geometry geometry, int x, String cssClass) {
         return "  <line class=\"trend-axis %s\" x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" />\n"
                 .formatted(cssClass, x, geometry.top(), x, geometry.bottom());
-    }
-
-    private String symptomTicks(TrendChartModel.Geometry geometry) {
-        var content = new StringBuilder();
-        for (var value : new BigDecimal[]{BigDecimal.ZERO, new BigDecimal("15"), MAX_SYMPTOM_SCORE}) {
-            var y = y(value, BigDecimal.ZERO, MAX_SYMPTOM_SCORE, geometry);
-            content.append("  <line class=\"trend-grid symptom\" x1=\"")
-                    .append(geometry.left()).append("\" y1=\"").append(y)
-                    .append("\" x2=\"").append(geometry.right()).append("\" y2=\"").append(y)
-                    .append("\" />\n")
-                    .append("  <text class=\"trend-axis-tick symptom\" x=\"")
-                    .append(geometry.left() - 8).append("\" y=\"").append(y + 4)
-                    .append("\" text-anchor=\"end\">").append(displayNumber(value)).append("</text>\n");
-        }
-        return content.toString();
     }
 
     private String axisTicks(TrendChartModel.Axis axis,
@@ -177,6 +190,11 @@ public class TrendSvgRenderer {
                     .append("\" text-anchor=\"middle\">").append(date).append("</text>\n");
         }
         return content.toString();
+    }
+
+    private String emptyState(String cssClass, String label, int x, int y, String anchor) {
+        return "  <text class=\"trend-empty-state %s\" x=\"%d\" y=\"%d\" text-anchor=\"%s\">%s</text>\n"
+                .formatted(cssClass, x, y, anchor, escape(label));
     }
 
     private <T> String polyline(TrendChartModel.Segment<T> segment,
@@ -252,15 +270,41 @@ public class TrendSvgRenderer {
                            String timeLine,
                            String valueLine,
                            TrendChartModel.Geometry geometry) {
+        var valueLines = tooltipLines(valueLine);
+        var tooltipHeight = 22 + valueLines.size() * 16;
         var x = Math.max(geometry.left(), Math.min(pointX - TOOLTIP_WIDTH / 2,
                 geometry.right() - TOOLTIP_WIDTH));
-        var above = pointY - TOOLTIP_HEIGHT - 8 >= geometry.top();
-        var y = above ? pointY - TOOLTIP_HEIGHT - 8 : pointY + 8;
-        return "    <g class=\"trend-tooltip\" transform=\"translate(" + x + "," + y + ")\">\n"
-                + "      <rect width=\"" + TOOLTIP_WIDTH + "\" height=\"" + TOOLTIP_HEIGHT + "\" rx=\"4\" />\n"
-                + "      <text x=\"8\" y=\"15\">" + escape(timeLine) + "</text>\n"
-                + "      <text x=\"8\" y=\"31\">" + escape(valueLine) + "</text>\n"
-                + "    </g>\n";
+        var above = pointY - tooltipHeight - 8 >= geometry.top();
+        var y = above ? pointY - tooltipHeight - 8 : pointY + 8;
+        var content = new StringBuilder()
+                .append("    <g class=\"trend-tooltip\" transform=\"translate(")
+                .append(x).append(",").append(y).append(")\">\n")
+                .append("      <rect width=\"").append(TOOLTIP_WIDTH)
+                .append("\" height=\"").append(tooltipHeight).append("\" rx=\"4\" />\n")
+                .append("      <text x=\"8\" y=\"15\">").append(escape(timeLine)).append("</text>\n");
+        for (var index = 0; index < valueLines.size(); index++) {
+            content.append("      <text x=\"8\" y=\"").append(31 + index * 16).append("\">")
+                    .append(escape(valueLines.get(index))).append("</text>\n");
+        }
+        return content.append("    </g>\n").toString();
+    }
+
+    private List<String> tooltipLines(String value) {
+        var remaining = value == null ? "" : value.strip();
+        var lines = new ArrayList<String>();
+        while (remaining.length() > TOOLTIP_LINE_LENGTH) {
+            var split = remaining.lastIndexOf(' ', TOOLTIP_LINE_LENGTH);
+            if (split <= 0) {
+                split = remaining.indexOf(' ', TOOLTIP_LINE_LENGTH);
+            }
+            if (split <= 0) {
+                split = TOOLTIP_LINE_LENGTH;
+            }
+            lines.add(remaining.substring(0, split));
+            remaining = remaining.substring(split).stripLeading();
+        }
+        lines.add(remaining);
+        return List.copyOf(lines);
     }
 
     private int y(BigDecimal value,

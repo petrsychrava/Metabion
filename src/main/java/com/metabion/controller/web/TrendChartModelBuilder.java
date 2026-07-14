@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -25,7 +26,8 @@ final class TrendChartModelBuilder {
 
     static final TrendChartModel.Geometry GEOMETRY =
             new TrendChartModel.Geometry(640, 220, 64, 576, 32, 176);
-    private static final BigDecimal MAX_SYMPTOM_SCORE = new BigDecimal("30");
+    private static final BigDecimal DEFAULT_MAX_SYMPTOM_SCORE = new BigDecimal("30");
+    private static final BigDecimal SYMPTOM_STEP = new BigDecimal("15");
     private static final BigDecimal MIN_GLUCOSE_MMOL_SPAN = new BigDecimal("2");
     private static final BigDecimal MIN_GLUCOSE_MG_SPAN = new BigDecimal("36");
     private static final BigDecimal GLUCOSE_MMOL_STEP = new BigDecimal("0.5");
@@ -46,12 +48,14 @@ final class TrendChartModelBuilder {
         var zone = zone(trend.timezone());
         var glucose = glucosePoints(trend, glucoseUnit, zone);
         var ketones = ketonePoints(trend, zone);
+        var symptomAxis = symptomAxis(trend);
         var glucoseAxis = glucoseAxis(glucose.stream().map(RawMeasurementPoint::value).toList(), glucoseUnit);
         var ketoneAxis = ketoneAxis(ketones.stream().map(RawMeasurementPoint::value).toList());
         return new TrendChartModel(
                 GEOMETRY,
                 dateTicks(trend.from(), trend.to(), zone),
-                symptomSegments(trend, zone),
+                symptomAxis,
+                symptomSegments(trend, symptomAxis, zone),
                 glucoseAxis,
                 measurementSegments(glucose, glucoseAxis, trend.from(), trend.to(), zone),
                 ketoneAxis,
@@ -61,7 +65,7 @@ final class TrendChartModelBuilder {
     private record RawMeasurementPoint(
             LocalDate date,
             Instant instant,
-            LocalDateTime measuredAt,
+            OffsetDateTime measuredAt,
             BigDecimal value,
             MeasurementUnit unit,
             MeasurementType type
@@ -93,7 +97,7 @@ final class TrendChartModelBuilder {
                     return converted == null ? null : new RawMeasurementPoint(
                             point.measuredAt().atZone(zone).toLocalDate(),
                             point.measuredAt(),
-                            point.measuredAt().atZone(zone).toLocalDateTime(),
+                            point.measuredAt().atZone(zone).toOffsetDateTime(),
                             converted,
                             target,
                             MeasurementType.GLUCOSE);
@@ -114,7 +118,7 @@ final class TrendChartModelBuilder {
                 .map(point -> new RawMeasurementPoint(
                         point.measuredAt().atZone(zone).toLocalDate(),
                         point.measuredAt(),
-                        point.measuredAt().atZone(zone).toLocalDateTime(),
+                        point.measuredAt().atZone(zone).toOffsetDateTime(),
                         point.value(),
                         MeasurementUnit.MMOL_L,
                         MeasurementType.KETONE))
@@ -157,6 +161,27 @@ final class TrendChartModelBuilder {
             upper = ceilTo(lower.add(minimumSpan), step);
         }
         return axis(lower, upper, unit);
+    }
+
+    private TrendChartModel.Axis symptomAxis(DailyTrendResponse trend) {
+        var observedMax = safe(trend.days()).stream()
+                .filter(Objects::nonNull)
+                .map(DailyTrendResponse.DayTrend::symptomScore)
+                .filter(Objects::nonNull)
+                .max(BigDecimal::compareTo)
+                .orElse(BigDecimal.ZERO);
+        var upper = DEFAULT_MAX_SYMPTOM_SCORE;
+        if (observedMax.compareTo(DEFAULT_MAX_SYMPTOM_SCORE) > 0) {
+            upper = ceilTo(observedMax, SYMPTOM_STEP);
+            if (upper.compareTo(observedMax) <= 0) {
+                upper = upper.add(SYMPTOM_STEP);
+            }
+        }
+        var ticks = new ArrayList<BigDecimal>();
+        for (var tick = BigDecimal.ZERO; tick.compareTo(upper) <= 0; tick = tick.add(SYMPTOM_STEP)) {
+            ticks.add(tick);
+        }
+        return new TrendChartModel.Axis(BigDecimal.ZERO, upper, List.copyOf(ticks), null);
     }
 
     private TrendChartModel.Axis ketoneAxis(List<BigDecimal> values) {
@@ -238,16 +263,16 @@ final class TrendChartModelBuilder {
     }
 
     private List<TrendChartModel.Segment<TrendChartModel.SymptomPoint>> symptomSegments(
-            DailyTrendResponse trend, ZoneId zone) {
+            DailyTrendResponse trend, TrendChartModel.Axis axis, ZoneId zone) {
         var points = safe(trend.days()).stream()
                 .filter(Objects::nonNull)
                 .filter(day -> day.date() != null && day.symptomScore() != null)
                 .sorted(Comparator.comparing(DailyTrendResponse.DayTrend::date))
                 .map(day -> {
-                    var score = day.symptomScore().max(BigDecimal.ZERO).min(MAX_SYMPTOM_SCORE);
+                    var score = day.symptomScore().max(axis.min());
                     return new TrendChartModel.SymptomPoint(
                             x(day.date().atTime(12, 0), trend.from(), trend.to(), zone),
-                            y(score, BigDecimal.ZERO, MAX_SYMPTOM_SCORE),
+                            y(score, axis.min(), axis.max()),
                             day.date(),
                             day.symptomScore(),
                             day.flareState(),

@@ -13,12 +13,15 @@
 - Preserve session-based authentication, existing patient/clinical access checks, and current REST endpoint authorization.
 - Add no dependency and no Flyway migration.
 - Keep the existing trends table and date filters unchanged.
-- Use a fixed symptom scale of 0–30.
+- Use a default symptom scale of 0–30, expanding to a rounded upper bound above the observed maximum when a valid or historical score exceeds 30 (42 → 45).
 - Use the subject patient's glucose preference, defaulting to mmol/L; ketones remain mmol/L.
 - Glucose uses the left measurement y-axis and ketones use the right measurement y-axis.
 - Missing calendar days break line segments; isolated values remain visible as points.
 - Encode flare state with shape and color: circle for no flare, triangle for suspected flare, square for active flare.
 - Add every new user-facing key to both `messages.properties` and `messages_cs.properties`.
+- Keep both charts for observation-free ranges and render dedicated localized symptom, glucose, and ketone empty states in visible SVG text and descriptions.
+- Preserve instant-based ordering/x positions and local-date segmentation while retaining the UTC offset in displayed measurement timestamps.
+- Use contrast-tested trend variables in system/light/dark theme blocks; text colors meet 4.5:1 and meaningful series lines/markers meet 3:1 against the panel.
 - Preserve unrelated worktree changes in `.idea/`, `application.properties`, and `var/`.
 
 ---
@@ -299,12 +302,13 @@ import com.metabion.domain.MeasurementUnit;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 record TrendChartModel(
         Geometry geometry,
         List<DateTick> dateTicks,
+        Axis symptomAxis,
         List<Segment<SymptomPoint>> symptomSegments,
         Axis glucoseAxis,
         List<Segment<MeasurementPoint>> glucoseSegments,
@@ -327,7 +331,7 @@ record TrendChartModel(
                         FlareState flareState, MarkerShape shape) {
     }
 
-    record MeasurementPoint(int x, int y, LocalDateTime measuredAt, BigDecimal value,
+    record MeasurementPoint(int x, int y, OffsetDateTime measuredAt, BigDecimal value,
                             MeasurementUnit unit, MeasurementType type) {
     }
 
@@ -346,7 +350,8 @@ Create `TrendChartModelBuilder` as a Spring `@Component` with constructor inject
 ```java
 static final TrendChartModel.Geometry GEOMETRY =
         new TrendChartModel.Geometry(640, 220, 64, 576, 32, 176);
-private static final BigDecimal MAX_SYMPTOM_SCORE = new BigDecimal("30");
+private static final BigDecimal DEFAULT_MAX_SYMPTOM_SCORE = new BigDecimal("30");
+private static final BigDecimal SYMPTOM_STEP = new BigDecimal("15");
 private static final BigDecimal MIN_GLUCOSE_MMOL_SPAN = new BigDecimal("2");
 private static final BigDecimal MIN_GLUCOSE_MG_SPAN = new BigDecimal("36");
 private static final BigDecimal GLUCOSE_MMOL_STEP = new BigDecimal("0.5");
@@ -371,12 +376,14 @@ TrendChartModel build(DailyTrendResponse trend) {
     var zone = zone(trend.timezone());
     var glucose = glucosePoints(trend, glucoseUnit, zone);
     var ketones = ketonePoints(trend, zone);
+    var symptomAxis = symptomAxis(trend);
     var glucoseAxis = glucoseAxis(glucose.stream().map(RawMeasurementPoint::value).toList(), glucoseUnit);
     var ketoneAxis = ketoneAxis(ketones.stream().map(RawMeasurementPoint::value).toList());
     return new TrendChartModel(
             GEOMETRY,
             dateTicks(trend.from(), trend.to(), zone),
-            symptomSegments(trend, zone),
+            symptomAxis,
+            symptomSegments(trend, symptomAxis, zone),
             glucoseAxis,
             measurementSegments(glucose, glucoseAxis, trend.from(), trend.to(), zone),
             ketoneAxis,
@@ -389,7 +396,8 @@ Define the builder's raw value before the extraction helpers:
 ```java
 private record RawMeasurementPoint(
         LocalDate date,
-        LocalDateTime measuredAt,
+        Instant instant,
+        OffsetDateTime measuredAt,
         BigDecimal value,
         MeasurementUnit unit,
         MeasurementType type
@@ -424,13 +432,14 @@ private List<RawMeasurementPoint> glucosePoints(DailyTrendResponse trend,
                 var converted = glucoseConverter.convert(point.value(), point.unit(), target);
                 return converted == null ? null : new RawMeasurementPoint(
                         point.measuredAt().atZone(zone).toLocalDate(),
-                        point.measuredAt().atZone(zone).toLocalDateTime(),
+                        point.measuredAt(),
+                        point.measuredAt().atZone(zone).toOffsetDateTime(),
                         converted,
                         target,
                         MeasurementType.GLUCOSE);
             })
             .filter(Objects::nonNull)
-            .sorted(Comparator.comparing(RawMeasurementPoint::measuredAt))
+            .sorted(Comparator.comparing(RawMeasurementPoint::instant))
             .toList();
 }
 
@@ -444,11 +453,12 @@ private List<RawMeasurementPoint> ketonePoints(DailyTrendResponse trend, ZoneId 
             .filter(point -> point.value() != null && point.measuredAt() != null)
             .map(point -> new RawMeasurementPoint(
                     point.measuredAt().atZone(zone).toLocalDate(),
-                    point.measuredAt().atZone(zone).toLocalDateTime(),
+                    point.measuredAt(),
+                    point.measuredAt().atZone(zone).toOffsetDateTime(),
                     point.value(),
                     MeasurementUnit.MMOL_L,
                     MeasurementType.KETONE))
-            .sorted(Comparator.comparing(RawMeasurementPoint::measuredAt))
+            .sorted(Comparator.comparing(RawMeasurementPoint::instant))
             .toList();
 }
 
@@ -625,11 +635,14 @@ Use the effective zone and the full local range for x coordinates:
 
 ```java
 private int x(LocalDateTime value, LocalDate from, LocalDate to, ZoneId zone) {
+    return x(value.atZone(zone).toInstant(), from, to, zone);
+}
+
+private int x(Instant value, LocalDate from, LocalDate to, ZoneId zone) {
     var rangeStart = from.atStartOfDay(zone).toInstant();
     var rangeEnd = to.plusDays(1).atStartOfDay(zone).toInstant();
-    var instant = value.atZone(zone).toInstant();
     var total = Duration.between(rangeStart, rangeEnd).toMillis();
-    var offset = Duration.between(rangeStart, instant).toMillis();
+    var offset = Duration.between(rangeStart, value).toMillis();
     var ratio = total <= 0 ? 0.5 : Math.max(0, Math.min(1, offset / (double) total));
     return (int) Math.round(GEOMETRY.left() + ratio * (GEOMETRY.right() - GEOMETRY.left()));
 }
@@ -674,16 +687,16 @@ private List<TrendChartModel.DateTick> dateTicks(LocalDate from, LocalDate to, Z
 }
 
 private List<TrendChartModel.Segment<TrendChartModel.SymptomPoint>> symptomSegments(
-        DailyTrendResponse trend, ZoneId zone) {
+        DailyTrendResponse trend, TrendChartModel.Axis symptomAxis, ZoneId zone) {
     var points = safe(trend.days()).stream()
             .filter(Objects::nonNull)
             .filter(day -> day.date() != null && day.symptomScore() != null)
             .sorted(Comparator.comparing(DailyTrendResponse.DayTrend::date))
             .map(day -> {
-                var score = day.symptomScore().max(BigDecimal.ZERO).min(MAX_SYMPTOM_SCORE);
+                var score = day.symptomScore().max(symptomAxis.min());
                 return new TrendChartModel.SymptomPoint(
                         x(day.date().atTime(12, 0), trend.from(), trend.to(), zone),
-                        y(score, BigDecimal.ZERO, MAX_SYMPTOM_SCORE),
+                        y(score, symptomAxis.min(), symptomAxis.max()),
                         day.date(),
                         day.symptomScore(),
                         day.flareState(),
@@ -701,7 +714,7 @@ private List<TrendChartModel.Segment<TrendChartModel.MeasurementPoint>> measurem
         ZoneId zone) {
     var points = raw.stream()
             .map(point -> new TrendChartModel.MeasurementPoint(
-                    x(point.measuredAt(), from, to, zone),
+                    x(point.instant(), from, to, zone),
                     y(point.value(), axis.min(), axis.max()),
                     point.measuredAt(),
                     point.value(),
@@ -968,13 +981,17 @@ Add localization assertions for these keys in English and Czech:
 ```properties
 trends.symptomChart=Symptom score and flare-state trend
 trends.measurementChart=Glucose and ketone trend
-trends.noSeriesData=No {0} data
+trends.noSymptomData=No symptom observations
+trends.noGlucoseData=No glucose measurements
+trends.noKetoneData=No ketone measurements
 ```
 
 ```properties
 trends.symptomChart=Trend skóre symptomů a stavu vzplanutí
 trends.measurementChart=Trend glukózy a ketonů
-trends.noSeriesData=Nejsou dostupná data pro {0}
+trends.noSymptomData=Nejsou dostupná pozorování symptomů
+trends.noGlucoseData=Nejsou dostupná měření glukózy
+trends.noKetoneData=Nejsou dostupná měření ketonů
 ```
 
 - [ ] **Step 2: Run web and localization tests and verify RED**
@@ -1017,32 +1034,32 @@ Keep `.trend-chart-wrap` and `.trend-chart` responsive behavior. Add:
 
 .trend-line-glucose,
 .trend-axis-glucose {
-    stroke: #2d8fcc;
+    stroke: var(--trend-glucose);
 }
 
 .trend-line-ketone,
 .trend-axis-ketone {
-    stroke: #7a4ab8;
+    stroke: var(--trend-ketone);
 }
 
 .trend-axis-label.glucose {
-    fill: #2d8fcc;
+    fill: var(--trend-glucose);
 }
 
 .trend-axis-label.ketone {
-    fill: #7a4ab8;
+    fill: var(--trend-ketone);
 }
 
 .trend-marker.flare-no {
-    fill: var(--accent);
+    fill: var(--trend-flare-no);
 }
 
 .trend-marker.flare-suspected {
-    fill: #d28b22;
+    fill: var(--trend-flare-suspected);
 }
 
 .trend-marker.flare-active {
-    fill: var(--error);
+    fill: var(--trend-flare-active);
 }
 
 .trend-point:focus {
@@ -1077,7 +1094,7 @@ Keep `.trend-chart-wrap` and `.trend-chart` responsive behavior. Add:
 }
 ```
 
-Use the existing `--panel`, `--text`, `--border`, `--accent`, and `--error` variables rather than introducing new theme tokens.
+Define dedicated `--trend-symptom`, `--trend-glucose`, `--trend-ketone`, flare, axis, and grid tokens in `:root`, system dark mode, and explicit `LIGHT`/`DARK` preference blocks. Use them consistently for axes, tick labels, lines, markers, legends, grid lines, and date ticks. Verify at least 4.5:1 contrast where a series color is used for text and at least 3:1 for meaningful lines and markers.
 
 - [ ] **Step 5: Run focused trend, web, and localization tests**
 
