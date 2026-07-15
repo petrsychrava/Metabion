@@ -4,7 +4,6 @@ import com.metabion.domain.AppetiteLevel;
 import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.DietDeviationCategory;
 import com.metabion.domain.DietDeviationSeverity;
-import com.metabion.domain.FoodCategory;
 import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.MealType;
 import com.metabion.domain.MeasurementContext;
@@ -244,7 +243,6 @@ class WebDietLogControllerTest {
                 .andExpect(content().string(containsString(">Většinou<")))
                 .andExpect(content().string(containsString(">Normální<")))
                 .andExpect(content().string(containsString(">Oběd<")))
-                .andExpect(content().string(containsString(">Nízkosacharidová zelenina<")))
                 .andExpect(content().string(containsString(">Jídlo mimo domov<")))
                 .andExpect(content().string(containsString(">Mírná<")))
                 .andExpect(content().string(containsString(">Glukóza<")))
@@ -306,7 +304,6 @@ class WebDietLogControllerTest {
                 List.of(new DailyDietLogResponse.MealResponse(
                         1L,
                         MealType.LUNCH,
-                        FoodCategory.LOW_CARB_VEGETABLES,
                         "Avocado salad",
                         "Felt fine",
                         0)),
@@ -354,14 +351,12 @@ class WebDietLogControllerTest {
                         new DailyDietLogResponse.MealResponse(
                                 1L,
                                 MealType.LUNCH,
-                                FoodCategory.LOW_CARB_VEGETABLES,
                                 "Avocado salad",
                                 "Felt fine",
                                 0),
                         new DailyDietLogResponse.MealResponse(
                                 2L,
                                 MealType.SNACK,
-                                FoodCategory.PROTEIN,
                                 "Protein shake",
                                 "Afternoon",
                                 1)),

@@ -8,7 +8,6 @@ import com.metabion.domain.DailyMeasurementEntry;
 import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.DietDeviationCategory;
 import com.metabion.domain.DietDeviationSeverity;
-import com.metabion.domain.FoodCategory;
 import com.metabion.domain.MealType;
 import com.metabion.domain.MeasurementContext;
 import com.metabion.domain.MeasurementType;
@@ -205,7 +204,7 @@ class DietLogServiceTest {
     void existingSameDateLogIsReplacedNotDuplicated() {
         var patient = givenAuthenticatedPatient();
         var existing = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
-        existing.addMeal(new DailyDietLogMeal(MealType.BREAKFAST, FoodCategory.DAIRY, "Yogurt", "old", 0));
+        existing.addMeal(new DailyDietLogMeal(MealType.BREAKFAST, "Yogurt", "old", 0));
         existing.addDeviation(new DailyDietLogDeviation(
                 DietDeviationCategory.EXCESS_CARBS,
                 DietDeviationSeverity.MAJOR,
@@ -241,12 +240,10 @@ class DietLogServiceTest {
                 List.of(
                         new DailyDietLogRequest.MealRequest(
                                 MealType.LUNCH,
-                                FoodCategory.PROTEIN,
                                 "Salmon",
                                 null),
                         new DailyDietLogRequest.MealRequest(
                                 MealType.DINNER,
-                                FoodCategory.LOW_CARB_VEGETABLES,
                                 "Greens",
                                 null)),
                 List.of(new DailyDietLogRequest.DeviationRequest(
@@ -279,7 +276,6 @@ class DietLogServiceTest {
                 "Stable",
                 List.of(new DailyDietLogRequest.MealRequest(
                         MealType.LUNCH,
-                        FoodCategory.PROTEIN,
                         "Salmon",
                         null)),
                 List.of(new DailyDietLogRequest.DeviationRequest(
@@ -309,7 +305,6 @@ class DietLogServiceTest {
                 "Stable",
                 List.of(new DailyDietLogRequest.MealRequest(
                         MealType.LUNCH,
-                        FoodCategory.PROTEIN,
                         "Salmon",
                         null)),
                 List.of(new DailyDietLogRequest.DeviationRequest(
@@ -746,7 +741,7 @@ class DietLogServiceTest {
                 DietAdherenceLevel.MOSTLY,
                 AppetiteLevel.NORMAL,
                 "Stable",
-                List.of(new DailyDietLogRequest.MealRequest(MealType.LUNCH, FoodCategory.PROTEIN, "Lunch", null)),
+                List.of(new DailyDietLogRequest.MealRequest(MealType.LUNCH, "Lunch", null)),
                 List.of(),
                 List.of(photoReference),
                 List.of());
@@ -776,7 +771,7 @@ class DietLogServiceTest {
                 DietAdherenceLevel.MOSTLY,
                 AppetiteLevel.NORMAL,
                 " Stable day ",
-                List.of(new DailyDietLogRequest.MealRequest(MealType.LUNCH, FoodCategory.PROTEIN, " Salmon ", " ok ")),
+                List.of(new DailyDietLogRequest.MealRequest(MealType.LUNCH, " Salmon ", " ok ")),
                 List.of(new DailyDietLogRequest.DeviationRequest(0, DietDeviationCategory.DINING_OUT, DietDeviationSeverity.MINOR, " small ")),
                 List.of(),
                 List.of(new DailyMeasurementEntryRequest(

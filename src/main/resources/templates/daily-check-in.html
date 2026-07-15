@@ -139,12 +139,6 @@
                                         <option th:each="option : ${mealTypes}" th:value="${option}" th:text="${#messages.msg('enum.mealType.' + option.name())}">Lunch</option>
                                     </select>
                                 </label>
-                                <label class="field"><span th:text="#{dietLogs.foodCategory}">Food category</span>
-                                    <select th:field="*{meals[__${row.index}__].foodCategory}">
-                                        <option value="" th:text="#{onboarding.select}">Select</option>
-                                        <option th:each="option : ${foodCategories}" th:value="${option}" th:text="${#messages.msg('enum.foodCategory.' + option.name())}">Low-carb vegetables</option>
-                                    </select>
-                                </label>
                             </div>
                             <label class="field"><span th:text="#{dietLogs.foodDescription}">Food description</span>
                                 <input th:field="*{meals[__${row.index}__].foodDescription}">

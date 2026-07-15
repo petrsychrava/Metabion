@@ -61,12 +61,8 @@ public class DietLogRequestMapper {
             if (meal.mealType() == null) {
                 throw badRequest("mealType is required");
             }
-            if (meal.foodCategory() == null) {
-                throw badRequest("foodCategory is required");
-            }
             meals.add(new DailyDietLogMeal(
                     meal.mealType(),
-                    meal.foodCategory(),
                     trimToNull(meal.foodDescription()),
                     trimToNull(meal.notes()),
                     i));

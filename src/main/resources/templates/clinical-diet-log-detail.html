@@ -30,7 +30,6 @@
             </h3>
             <dl class="details">
                 <dt th:text="#{dietLogs.mealType}">Meal type</dt><dd th:text="${#messages.msg('enum.mealType.' + meal.mealType().name())}">Lunch</dd>
-                <dt th:text="#{dietLogs.foodCategory}">Food category</dt><dd th:text="${#messages.msg('enum.foodCategory.' + meal.foodCategory().name())}">Low-carb vegetables</dd>
                 <dt th:text="#{dietLogs.foodDescription}">Food description</dt><dd th:text="${meal.foodDescription()} ?: #{dietLogs.notProvided}">Avocado salad</dd>
                 <dt th:text="#{dietLogs.notes}">Notes</dt><dd th:text="${meal.notes()} ?: #{dietLogs.notProvided}">Meal notes</dd>
             </dl>

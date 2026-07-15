@@ -10,7 +10,6 @@ import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.DietDeviationCategory;
 import com.metabion.domain.DietDeviationSeverity;
 import com.metabion.domain.DietLogPhotoStatus;
-import com.metabion.domain.FoodCategory;
 import com.metabion.domain.MealType;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.User;
@@ -93,7 +92,6 @@ public record DailyDietLogResponse(
     public record MealResponse(
             Long id,
             MealType mealType,
-            FoodCategory foodCategory,
             String foodDescription,
             String notes,
             int sortOrder
@@ -103,7 +101,6 @@ public record DailyDietLogResponse(
             return new MealResponse(
                     meal.getId(),
                     meal.getMealType(),
-                    meal.getFoodCategory(),
                     meal.getFoodDescription(),
                     meal.getNotes(),
                     meal.getSortOrder());

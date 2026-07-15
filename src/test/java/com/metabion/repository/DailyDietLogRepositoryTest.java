@@ -10,7 +10,6 @@ import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.DietDeviationCategory;
 import com.metabion.domain.DietDeviationSeverity;
 import com.metabion.domain.DietLogPhotoStatus;
-import com.metabion.domain.FoodCategory;
 import com.metabion.domain.MealType;
 import com.metabion.domain.MeasurementContext;
 import com.metabion.domain.MeasurementType;
@@ -106,7 +105,6 @@ class DailyDietLogRepositoryTest {
         var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
         var meal = new DailyDietLogMeal(
                 MealType.BREAKFAST,
-                FoodCategory.PROTEIN,
                 "Eggs",
                 "No issues",
                 0);
@@ -137,6 +135,13 @@ class DailyDietLogRepositoryTest {
                 .orElseThrow();
 
         assertThat(loaded.getMeals()).hasSize(1);
+        assertThat(loaded.getMeals()).singleElement()
+                .satisfies(savedMeal -> {
+                    assertThat(savedMeal.getMealType()).isEqualTo(MealType.BREAKFAST);
+                    assertThat(savedMeal.getFoodDescription()).isEqualTo("Eggs");
+                    assertThat(savedMeal.getNotes()).isEqualTo("No issues");
+                    assertThat(savedMeal.getSortOrder()).isZero();
+                });
         assertThat(loaded.getDeviations()).hasSize(1);
         assertThat(loaded.getPhotoReferences()).hasSize(1);
     }
@@ -149,7 +154,6 @@ class DailyDietLogRepositoryTest {
         log.setAppetiteLevel(AppetiteLevel.NORMAL);
         var meal = new DailyDietLogMeal(
                 MealType.LUNCH,
-                FoodCategory.PROTEIN,
                 "Salmon",
                 "Meal notes",
                 0);
@@ -378,7 +382,7 @@ class DailyDietLogRepositoryTest {
     void photoReferenceMealMustBelongToSameDailyLog() {
         var patient = createPatient("photo-meal-owner@example.com");
         var logWithMeal = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
-        var meal = new DailyDietLogMeal(MealType.BREAKFAST, FoodCategory.PROTEIN, "Eggs", null, 0);
+        var meal = new DailyDietLogMeal(MealType.BREAKFAST, "Eggs", null, 0);
         logWithMeal.addMeal(meal);
         dailyDietLogs.saveAndFlush(logWithMeal);
 
@@ -396,7 +400,7 @@ class DailyDietLogRepositoryTest {
     void deviationMealMustBelongToSameDailyLog() {
         var patient = createPatient("deviation-meal-owner@example.com");
         var logWithMeal = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
-        var meal = new DailyDietLogMeal(MealType.LUNCH, FoodCategory.PROTEIN, "Salmon", null, 0);
+        var meal = new DailyDietLogMeal(MealType.LUNCH, "Salmon", null, 0);
         logWithMeal.addMeal(meal);
         dailyDietLogs.saveAndFlush(logWithMeal);
 

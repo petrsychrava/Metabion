@@ -4,7 +4,6 @@ import com.metabion.domain.AppetiteLevel;
 import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.DietDeviationCategory;
 import com.metabion.domain.DietDeviationSeverity;
-import com.metabion.domain.FoodCategory;
 import com.metabion.domain.MealType;
 import com.metabion.domain.MeasurementContext;
 import com.metabion.domain.MeasurementType;
@@ -113,7 +112,6 @@ public class WebDietLogController {
         model.addAttribute("adherenceOptions", List.of(DietAdherenceLevel.values()));
         model.addAttribute("appetiteOptions", List.of(AppetiteLevel.values()));
         model.addAttribute("mealTypes", List.of(MealType.values()));
-        model.addAttribute("foodCategories", List.of(FoodCategory.values()));
         model.addAttribute("deviationCategories", List.of(DietDeviationCategory.values()));
         model.addAttribute("deviationSeverities", List.of(DietDeviationSeverity.values()));
         model.addAttribute("measurementTypes", List.of(MeasurementType.values()));

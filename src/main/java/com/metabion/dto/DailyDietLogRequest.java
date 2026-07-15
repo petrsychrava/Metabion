@@ -4,7 +4,6 @@ import com.metabion.domain.AppetiteLevel;
 import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.DietDeviationCategory;
 import com.metabion.domain.DietDeviationSeverity;
-import com.metabion.domain.FoodCategory;
 import com.metabion.domain.MealType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -67,7 +66,6 @@ public record DailyDietLogRequest(
 
     public record MealRequest(
             @NotNull MealType mealType,
-            @NotNull FoodCategory foodCategory,
             @Size(max = 500) String foodDescription,
             @Size(max = 1000) String notes
     ) {

@@ -9,7 +9,6 @@ import com.metabion.domain.DailyMeasurementEntry;
 import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.DietDeviationCategory;
 import com.metabion.domain.DietDeviationSeverity;
-import com.metabion.domain.FoodCategory;
 import com.metabion.domain.MealType;
 import com.metabion.domain.MeasurementContext;
 import com.metabion.domain.MeasurementType;
@@ -52,7 +51,6 @@ class DietLogFormTest {
     void withMeasurementsPreservesOtherFields() {
         var meal = new DailyDietLogRequest.MealRequest(
                 MealType.BREAKFAST,
-                FoodCategory.PROTEIN,
                 "Eggs",
                 "No issues");
         var deviation = new DailyDietLogRequest.DeviationRequest(
@@ -105,7 +103,6 @@ class DietLogFormTest {
         var blankMeal = new DietLogForm.MealRow();
         var meal = new DietLogForm.MealRow();
         meal.setMealType(MealType.DINNER);
-        meal.setFoodCategory(FoodCategory.LOW_CARB_VEGETABLES);
         meal.setFoodDescription("Steamed greens");
         meal.setNotes("Good tolerance");
         meal.getDeviation().setDeviationCategory(DietDeviationCategory.EXCESS_CARBS);
@@ -140,7 +137,6 @@ class DietLogFormTest {
         assertThat(request.mealsOrEmpty()).singleElement()
                 .satisfies(row -> {
                     assertThat(row.mealType()).isEqualTo(MealType.DINNER);
-                    assertThat(row.foodCategory()).isEqualTo(FoodCategory.LOW_CARB_VEGETABLES);
                     assertThat(row.foodDescription()).isEqualTo("Steamed greens");
                     assertThat(row.notes()).isEqualTo("Good tolerance");
                 });
@@ -219,13 +215,11 @@ class DietLogFormTest {
 
         var firstMeal = new DietLogForm.MealRow();
         firstMeal.setMealType(MealType.BREAKFAST);
-        firstMeal.setFoodCategory(FoodCategory.PROTEIN);
         firstMeal.getDeviation().setDeviationCategory(DietDeviationCategory.DINING_OUT);
         firstMeal.getDeviation().setSeverity(DietDeviationSeverity.MINOR);
 
         var secondMeal = new DietLogForm.MealRow();
         secondMeal.setMealType(MealType.DINNER);
-        secondMeal.setFoodCategory(FoodCategory.LOW_CARB_VEGETABLES);
         secondMeal.getDeviation().setDeviationCategory(DietDeviationCategory.EXCESS_CARBS);
         secondMeal.getDeviation().setSeverity(DietDeviationSeverity.MODERATE);
 
@@ -248,7 +242,6 @@ class DietLogFormTest {
 
         var meal = new DailyDietLogMeal(
                 MealType.LUNCH,
-                FoodCategory.PROTEIN,
                 "Chicken",
                 "Lunch notes",
                 1);
@@ -291,7 +284,6 @@ class DietLogFormTest {
                 .satisfies(row -> {
                     assertThat(row.id()).isEqualTo(30L);
                     assertThat(row.mealType()).isEqualTo(MealType.LUNCH);
-                    assertThat(row.foodCategory()).isEqualTo(FoodCategory.PROTEIN);
                     assertThat(row.foodDescription()).isEqualTo("Chicken");
                     assertThat(row.notes()).isEqualTo("Lunch notes");
                     assertThat(row.sortOrder()).isEqualTo(1);
