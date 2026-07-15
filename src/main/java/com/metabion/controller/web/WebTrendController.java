@@ -4,8 +4,6 @@ import com.metabion.dto.DailyTrendResponse;
 import com.metabion.service.DailyTrendService;
 import com.metabion.service.DietLogService;
 import com.metabion.service.UserPreferenceService;
-import org.springframework.context.MessageSource;
-import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -29,7 +27,6 @@ public class WebTrendController {
     private final TrendSvgRenderer trendSvgRenderer;
     private final AppMenuCatalog appMenuCatalog;
     private final UserPreferenceService userPreferenceService;
-    private final MessageSource messages;
     private final Clock clock;
 
     public WebTrendController(DailyTrendService dailyTrendService,
@@ -37,14 +34,12 @@ public class WebTrendController {
                               TrendSvgRenderer trendSvgRenderer,
                               AppMenuCatalog appMenuCatalog,
                               UserPreferenceService userPreferenceService,
-                              MessageSource messages,
                               Clock clock) {
         this.dailyTrendService = dailyTrendService;
         this.dietLogService = dietLogService;
         this.trendSvgRenderer = trendSvgRenderer;
         this.appMenuCatalog = appMenuCatalog;
         this.userPreferenceService = userPreferenceService;
-        this.messages = messages;
         this.clock = clock;
     }
 
@@ -92,7 +87,7 @@ public class WebTrendController {
         model.addAttribute("from", range.from());
         model.addAttribute("to", range.to());
         model.addAttribute("trend", trend);
-        model.addAttribute("trendSvg", trendSvgRenderer.render(trend, message("trends.noData")));
+        model.addAttribute("trendSvg", trendSvgRenderer.render(trend));
     }
 
     private void addAppShell(Model model, Authentication authentication, String activePath) {
@@ -119,10 +114,6 @@ public class WebTrendController {
         } catch (DateTimeException exception) {
             return ZoneId.systemDefault();
         }
-    }
-
-    private String message(String key) {
-        return messages.getMessage(key, null, LocaleContextHolder.getLocale());
     }
 
     private record DateRange(LocalDate from, LocalDate to) {

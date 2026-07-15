@@ -15,6 +15,14 @@
     --nav-active-bg: #e7eee9;
     --panel-shadow: 0 12px 32px rgba(23, 33, 27, 0.08);
     --card-shadow: 0 10px 24px rgba(23, 33, 27, 0.06);
+    --trend-symptom: #1f7a5a;
+    --trend-glucose: #096b95;
+    --trend-ketone: #7141a1;
+    --trend-flare-no: #1f7a5a;
+    --trend-flare-suspected: #965c00;
+    --trend-flare-active: #9f1d1d;
+    --trend-axis: #5f6f66;
+    --trend-grid: #7a8b80;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -35,6 +43,14 @@
         --nav-active-bg: #22342b;
         --panel-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
         --card-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+        --trend-symptom: #77d9ad;
+        --trend-glucose: #6fc8f5;
+        --trend-ketone: #c4a0ff;
+        --trend-flare-no: #77d9ad;
+        --trend-flare-suspected: #ffc267;
+        --trend-flare-active: #ff8a8a;
+        --trend-axis: #9dafaa;
+        --trend-grid: #60786b;
     }
 }
 
@@ -55,6 +71,14 @@
     --nav-active-bg: #e7eee9;
     --panel-shadow: 0 12px 32px rgba(23, 33, 27, 0.08);
     --card-shadow: 0 10px 24px rgba(23, 33, 27, 0.06);
+    --trend-symptom: #1f7a5a;
+    --trend-glucose: #096b95;
+    --trend-ketone: #7141a1;
+    --trend-flare-no: #1f7a5a;
+    --trend-flare-suspected: #965c00;
+    --trend-flare-active: #9f1d1d;
+    --trend-axis: #5f6f66;
+    --trend-grid: #7a8b80;
 }
 
 [data-theme-preference="DARK"] {
@@ -74,6 +98,14 @@
     --nav-active-bg: #22342b;
     --panel-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
     --card-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+    --trend-symptom: #77d9ad;
+    --trend-glucose: #6fc8f5;
+    --trend-ketone: #c4a0ff;
+    --trend-flare-no: #77d9ad;
+    --trend-flare-suspected: #ffc267;
+    --trend-flare-active: #ff8a8a;
+    --trend-axis: #9dafaa;
+    --trend-grid: #60786b;
 }
 
 * {
@@ -369,32 +401,133 @@ a {
     height: auto;
 }
 
+.trend-chart-stack {
+    min-width: 640px;
+}
+
+.trend-chart + .trend-chart {
+    margin-top: 24px;
+}
+
 .trend-axis {
-    stroke: var(--border);
+    stroke: var(--trend-axis);
     stroke-width: 1;
 }
 
-.trend-line-symptoms {
-    stroke: var(--accent);
+.trend-grid {
+    stroke: var(--trend-grid);
+    stroke-width: 1;
+}
+
+.trend-date-tick {
+    stroke: var(--trend-axis);
+    stroke-width: 1;
+}
+
+.trend-line.symptoms {
+    stroke: var(--trend-symptom);
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-width: 3;
 }
 
-.trend-marker-flare.suspected {
-    fill: #d28b22;
+.trend-line.glucose,
+.trend-axis.glucose,
+.trend-line-glucose,
+.trend-axis-glucose {
+    stroke: var(--trend-glucose);
 }
 
-.trend-marker-flare.active {
-    fill: var(--error);
+.trend-line.ketone,
+.trend-axis.ketone,
+.trend-line-ketone,
+.trend-axis-ketone {
+    stroke: var(--trend-ketone);
 }
 
-.trend-marker-measurement.glucose {
-    fill: #2d8fcc;
+.trend-line.glucose,
+.trend-line.ketone {
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 3;
 }
 
-.trend-marker-measurement.ketone {
-    fill: #7a4ab8;
+.trend-axis-label.glucose {
+    fill: var(--trend-glucose);
+}
+
+.trend-axis-label.ketone {
+    fill: var(--trend-ketone);
+}
+
+.trend-axis-tick.glucose {
+    fill: var(--trend-glucose);
+}
+
+.trend-axis-tick.ketone {
+    fill: var(--trend-ketone);
+}
+
+.trend-marker.flare-no {
+    fill: var(--trend-flare-no);
+}
+
+.trend-marker.flare-suspected {
+    fill: var(--trend-flare-suspected);
+}
+
+.trend-marker.flare-active {
+    fill: var(--trend-flare-active);
+}
+
+.trend-marker.measurement.glucose {
+    fill: var(--trend-glucose);
+}
+
+.trend-marker.measurement.ketone {
+    fill: var(--trend-ketone);
+}
+
+.trend-point:focus {
+    outline: none;
+}
+
+.trend-point:focus .trend-marker,
+.trend-point:hover .trend-marker {
+    stroke: var(--text);
+    stroke-width: 2;
+}
+
+.trend-tooltip {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.trend-point:focus .trend-tooltip,
+.trend-point:hover .trend-tooltip {
+    opacity: 1;
+}
+
+.trend-tooltip rect {
+    fill: var(--panel);
+    stroke: var(--border);
+}
+
+.trend-tooltip text,
+.trend-axis-label,
+.trend-tick-label,
+.trend-axis-tick,
+.trend-date-label,
+.trend-empty-state {
+    fill: var(--text);
+}
+
+.trend-empty-state {
+    font-size: 0.8rem;
+}
+
+.trend-date-label {
+    font-size: 0.75rem;
 }
 
 .trend-legend {
@@ -420,15 +553,15 @@ a {
 }
 
 .legend-swatch.flare {
-    background: var(--error);
+    background: var(--trend-flare-active);
 }
 
 .legend-swatch.glucose {
-    background: #2d8fcc;
+    background: var(--trend-glucose);
 }
 
 .legend-swatch.ketone {
-    background: #7a4ab8;
+    background: var(--trend-ketone);
 }
 
 .trend-measurement {

@@ -262,6 +262,8 @@ class SymptomTrackingControllerTest {
                 20L,
                 LocalDate.of(2026, 6, 1),
                 LocalDate.of(2026, 6, 2),
+                MeasurementUnit.MMOL_L,
+                "UTC",
                 List.of(
                         new DailyTrendResponse.DayTrend(
                                 LocalDate.of(2026, 6, 1),

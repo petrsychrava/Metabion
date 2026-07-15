@@ -83,6 +83,7 @@ class DailyTrendServiceTest {
     void currentPatientTrendCombinesSymptomsDietLogsGlucoseAndKetonesForEveryDay() {
         var from = LocalDate.of(2026, 6, 10);
         var to = LocalDate.of(2026, 6, 12);
+        patient.setGlucoseUnitPreference(MeasurementUnit.MG_DL);
         var checkIn = checkIn(100L, patient, from, FlareState.SUSPECTED_FLARE, "5.00");
         var dietLog = dietLog(200L, patient, from.plusDays(1), DietAdherenceLevel.PARTIAL, AppetiteLevel.LOW);
         var glucose = measurement(300L, patient, MeasurementType.GLUCOSE, "5.8", MeasurementUnit.MMOL_L,
@@ -105,6 +106,8 @@ class DailyTrendServiceTest {
         assertThat(response.patientProfileId()).isEqualTo(10L);
         assertThat(response.from()).isEqualTo(from);
         assertThat(response.to()).isEqualTo(to);
+        assertThat(response.glucoseUnit()).isEqualTo(MeasurementUnit.MG_DL);
+        assertThat(response.timezone()).isEqualTo("UTC");
         assertThat(response.days()).extracting("date")
                 .containsExactly(from, from.plusDays(1), to);
         assertThat(response.days().get(0).symptomCheckInId()).isEqualTo(100L);
