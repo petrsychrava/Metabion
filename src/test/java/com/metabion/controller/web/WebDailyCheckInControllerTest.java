@@ -201,6 +201,27 @@ class WebDailyCheckInControllerTest {
     }
 
     @Test
+    void dailyCheckInStylesHideEmptyPhotoCaptions() throws Exception {
+        mvc.perform(get("/css/app.css"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("""
+                        .daily-check-in-form [data-photo-caption][hidden] {
+                            display: none;
+                        }
+                        """)));
+    }
+
+    @Test
+    void dailyCheckInScriptClearsStalePhotoUploadErrors() throws Exception {
+        mvc.perform(get("/js/daily-check-in.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(
+                        "[data-photo-upload-status], [data-photo-preview-link], [data-photo-upload-error]")))
+                .andExpect(content().string(containsString(
+                        "mealRow.querySelector('[data-photo-upload-error]')?.remove();")));
+    }
+
+    @Test
     void dailyCheckInRendersRequiredOptionalAndContextualLabelsInCzech() throws Exception {
         when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
 

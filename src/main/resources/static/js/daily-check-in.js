@@ -78,7 +78,8 @@ document.addEventListener('DOMContentLoaded', () => {
             element.value = '';
         });
         Array.from(row.querySelectorAll('[data-photo-row]')).slice(1).forEach((photoRow) => photoRow.remove());
-        row.querySelectorAll('[data-photo-upload-status], [data-photo-preview-link]').forEach((element) => element.remove());
+        row.querySelectorAll('[data-photo-upload-status], [data-photo-preview-link], [data-photo-upload-error]')
+                .forEach((element) => element.remove());
         row.querySelectorAll('[data-photo-caption]').forEach((caption) => {
             caption.hidden = true;
         });
@@ -182,6 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!input || !csrf) return;
         const mealRow = input.closest('[data-meal-row]');
         if (!mealRow) return;
+        mealRow.querySelector('[data-photo-upload-error]')?.remove();
 
         for (const file of input.files) {
             const formData = new FormData();
