@@ -262,8 +262,8 @@ class WebDailyCheckInControllerTest {
     }
 
     @Test
-    void nestedBindingErrorsRenderLinkedSummaryEntriesForFocusableSections() throws Exception {
-        mvc.perform(post("/app/daily-check-in")
+    void nestedBindingErrorsTargetAndDescribeActualFormControls() throws Exception {
+        String response = mvc.perform(post("/app/daily-check-in")
                         .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf())
                         .param("logDate", "2026-06-26")
@@ -275,11 +275,20 @@ class WebDailyCheckInControllerTest {
                         .param("flareState", "NO_FLARE")
                         .param("questionnaireVersionId", "30"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("id=\"measurements-section\"")))
-                .andExpect(content().string(containsString("id=\"meals-section\"")))
-                .andExpect(content().string(containsString("href=\"#measurements-section\"")))
-                .andExpect(content().string(containsString("href=\"#meals-section\"")))
-                .andExpect(content().string(containsString("tabindex=\"-1\"")));
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String glucoseErrorId = describedErrorId(response, "glucoseMeasurement.value");
+        String mealNotesErrorId = describedErrorId(response, "meals0.notes");
+
+        assertThat(response)
+                .containsPattern(Pattern.compile(
+                        "<input(?=[^>]*id=\"glucoseMeasurement\\.value\")(?=[^>]*aria-invalid=\"true\")"
+                                + "(?=[^>]*aria-describedby=\"" + Pattern.quote(glucoseErrorId) + "\")[^>]*>"))
+                .containsPattern(Pattern.compile(
+                        "<textarea(?=[^>]*id=\"meals0\\.notes\")(?=[^>]*aria-invalid=\"true\")"
+                                + "(?=[^>]*aria-describedby=\"" + Pattern.quote(mealNotesErrorId) + "\")[^>]*>"));
     }
 
     @Test
@@ -330,6 +339,46 @@ class WebDailyCheckInControllerTest {
                 .contains("const stateForSymptoms")
                 .contains("beforeunload")
                 .contains("window.confirm(form.dataset.unsavedDateConfirm)");
+    }
+
+    @Test
+    void dailyCheckInScriptScopesBeforeUnloadSuppressionToIntentionalDateNavigation() throws Exception {
+        String script = new ClassPathResource("static/js/daily-check-in.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("let intentionalDateNavigation = false;")
+                .contains("intentionalDateNavigation = true;")
+                .contains("window.location.assign(target.toString());")
+                .contains("intentionalDateNavigation = false;\n            throw error;")
+                .contains("if (submitting || intentionalDateNavigation || !isDirty()) return;");
+    }
+
+    @Test
+    void dailyCheckInScriptOpensDisclosureAndFocusesFirstNativeInvalidControl() throws Exception {
+        String script = new ClassPathResource("static/js/daily-check-in.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("let invalidFocusScheduled = false;")
+                .contains("form.addEventListener('invalid', (event) => {")
+                .contains("const invalidControl = event.target;")
+                .contains("invalidControl.closest('details[data-section]')?.setAttribute('open', '');")
+                .contains("if (invalidFocusScheduled) return;")
+                .contains("invalidControl.focus();")
+                .contains("}, true);");
+    }
+
+    @Test
+    void dailyCheckInScriptResolvesErrorTargetsByIdAndFocusesTheActualControl() throws Exception {
+        String script = new ClassPathResource("static/js/daily-check-in.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("document.getElementById(link.dataset.errorTargetId)")
+                .contains("target?.closest('[data-section]')?.setAttribute('open', '');")
+                .contains("target?.focus();")
+                .doesNotContain("form.querySelector(firstErrorTarget)");
     }
 
     @Test
@@ -549,6 +598,15 @@ class WebDailyCheckInControllerTest {
                 .andExpect(view().name("daily-check-in"))
                 .andExpect(content().string(containsString("Daily check-in")))
                 .andExpect(content().string(containsString("Symptoms")));
+    }
+
+    private String describedErrorId(String response, String targetId) {
+        var matcher = Pattern.compile(
+                        "<a(?=[^>]*\\sid=\"([^\"]+)\")(?=[^>]*href=\"#" + Pattern.quote(targetId) + "\")"
+                                + "(?=[^>]*data-error-target-id=\"" + Pattern.quote(targetId) + "\")[^>]*>[^<]+</a>")
+                .matcher(response);
+        assertThat(matcher.find()).isTrue();
+        return matcher.group(1);
     }
 
     private SymptomQuestionnaireResponse questionnaireResponse() {

@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (element && element.textContent !== text) element.textContent = text;
     };
     const mealRows = () => mealList ? Array.from(mealList.querySelectorAll('[data-meal-row]')) : [];
+    const errorTargetFor = (link) => document.getElementById(link.dataset.errorTargetId);
 
     const mealUploadGeneration = (row) => mealUploadGenerations.get(row) || 0;
     const hasPendingUpload = (row) => Array.from(pendingUploads.values())
@@ -185,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
     })[state];
 
     const hasLinkedError = (section) => Array.from(errorSummary?.querySelectorAll('a[href^="#"]') || [])
-            .some((link) => form.querySelector(link.getAttribute('href'))?.closest('[data-section]') === section);
+            .some((link) => errorTargetFor(link)?.closest('[data-section]') === section);
 
     const updateSectionStatuses = () => {
         const states = {
@@ -215,6 +216,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     form.addEventListener('input', updateSectionStatuses);
     form.addEventListener('change', updateSectionStatuses);
+
+    let invalidFocusScheduled = false;
+    form.addEventListener('invalid', (event) => {
+        if (invalidFocusScheduled) return;
+        invalidFocusScheduled = true;
+        const invalidControl = event.target;
+        invalidControl.closest('details[data-section]')?.setAttribute('open', '');
+        window.requestAnimationFrame(() => {
+            invalidControl.focus();
+            invalidFocusScheduled = false;
+        });
+    }, true);
 
     addMealButton?.addEventListener('click', () => {
         const source = mealRows().at(-1);
@@ -371,6 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const logDateInput = form.querySelector('[data-log-date]');
     const loadedDate = form.dataset.loadedDate;
     let submitting = false;
+    let intentionalDateNavigation = false;
 
     const snapshot = () => {
         const entries = [];
@@ -390,10 +404,16 @@ document.addEventListener('DOMContentLoaded', () => {
             logDateInput.value = loadedDate;
             return;
         }
-        abortAllUploads();
         const target = new URL(window.location.href);
         target.searchParams.set('date', logDateInput.value);
-        window.location.assign(target.toString());
+        intentionalDateNavigation = true;
+        try {
+            window.location.assign(target.toString());
+            abortAllUploads();
+        } catch (error) {
+            intentionalDateNavigation = false;
+            throw error;
+        }
     });
 
     form.addEventListener('submit', (event) => {
@@ -406,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.addEventListener('beforeunload', (event) => {
-        if (submitting || !isDirty()) return;
+        if (submitting || intentionalDateNavigation || !isDirty()) return;
         event.preventDefault();
         event.returnValue = form.dataset.unsavedLeaveWarning;
     });
@@ -414,8 +434,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('pagehide', abortAllUploads);
 
     if (errorSummary) {
-        const firstErrorTarget = errorSummary.querySelector('a[href^="#"]')?.getAttribute('href');
-        const target = firstErrorTarget ? form.querySelector(firstErrorTarget) : null;
+        const firstErrorLink = errorSummary.querySelector('a[href^="#"]');
+        const target = firstErrorLink ? errorTargetFor(firstErrorLink) : null;
         target?.closest('[data-section]')?.setAttribute('open', '');
         target?.focus();
     }

@@ -44,6 +44,7 @@ import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -100,9 +101,9 @@ public class WebDailyCheckInController {
         refreshSymptomRows(form, questionnaire, null, false);
         ensureRows(form);
         if (binding.hasErrors()) {
-            model.addAttribute("dailyCheckInBindingErrors", binding.getAllErrors().stream()
-                    .map(this::bindingErrorView)
-                    .toList());
+            var bindingErrors = bindingErrorViews(binding);
+            model.addAttribute("dailyCheckInBindingErrors", bindingErrors);
+            model.addAttribute("dailyCheckInBindingErrorIds", bindingErrorIdsByTarget(bindingErrors));
             addFormModel(model, authentication, questionnaire, form);
             return "daily-check-in";
         }
@@ -333,45 +334,51 @@ public class WebDailyCheckInController {
         }
     }
 
-    private DailyCheckInBindingError bindingErrorView(ObjectError error) {
-        var field = error instanceof FieldError fieldError ? fieldError.getField() : null;
-        return new DailyCheckInBindingError(bindingErrorTarget(field), error.getDefaultMessage());
+    private List<DailyCheckInBindingError> bindingErrorViews(BindingResult binding) {
+        var errors = binding.getAllErrors();
+        var views = new ArrayList<DailyCheckInBindingError>(errors.size());
+        for (int index = 0; index < errors.size(); index++) {
+            views.add(bindingErrorView(errors.get(index), index));
+        }
+        return views;
     }
 
-    private String bindingErrorTarget(String field) {
+    private DailyCheckInBindingError bindingErrorView(ObjectError error, int index) {
+        var field = error instanceof FieldError fieldError ? fieldError.getField() : null;
+        return new DailyCheckInBindingError(
+                bindingErrorTargetId(field),
+                "daily-check-in-error-" + index,
+                error.getDefaultMessage());
+    }
+
+    private Map<String, String> bindingErrorIdsByTarget(List<DailyCheckInBindingError> errors) {
+        var ids = new LinkedHashMap<String, String>();
+        for (var error : errors) {
+            ids.merge(error.targetId(), error.errorId(), (existing, next) -> existing + " " + next);
+        }
+        return ids;
+    }
+
+    private String bindingErrorTargetId(String field) {
         if (field == null) {
-            return "#daily-check-in-errors";
-        }
-        if (field.equals("logDate")) {
-            return "#logDate";
-        }
-        if (field.equals("adherenceLevel")) {
-            return "#adherenceLevel";
-        }
-        if (field.equals("appetiteLevel")) {
-            return "#appetiteLevel";
+            return "daily-check-in-errors";
         }
         if (field.equals("flareState")) {
-            return "#flareStateGroup";
+            return "flareStateGroup";
         }
-        if (field.startsWith("glucoseMeasurement.") || field.startsWith("ketoneMeasurement.")) {
-            return "#measurements-section";
+        if (field.equals("questionnaireVersionId") || field.endsWith(".questionId")) {
+            return "symptoms-section";
         }
-        if (field.startsWith("meals[")) {
-            return "#meals-section";
+        if (field.endsWith(".uploadId")) {
+            return field.replaceAll("\\[(\\d+)]", "$1").replace(".uploadId", ".caption");
         }
-        if (field.startsWith("symptomAnswers[")
-                || field.equals("symptomNotes")
-                || field.equals("questionnaireVersionId")) {
-            return "#symptoms-section";
-        }
-        if (field.equals("notes")) {
-            return "#diet-section";
-        }
-        return "#daily-check-in-errors";
+        return field.replaceAll("\\[(\\d+)]", "$1");
     }
 
-    public record DailyCheckInBindingError(String target, String message) {
+    public record DailyCheckInBindingError(String targetId, String errorId, String message) {
+        public String href() {
+            return "#" + targetId;
+        }
     }
 
     private void addFormModel(Model model,
@@ -381,6 +388,12 @@ public class WebDailyCheckInController {
         addOptions(model);
         model.addAttribute("questionnaire", questionnaire);
         model.addAttribute("dailyCheckInForm", form);
+        if (!model.containsAttribute("dailyCheckInBindingErrors")) {
+            model.addAttribute("dailyCheckInBindingErrors", List.of());
+        }
+        if (!model.containsAttribute("dailyCheckInBindingErrorIds")) {
+            model.addAttribute("dailyCheckInBindingErrorIds", Map.of());
+        }
         model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
         model.addAttribute("activePath", ACTIVE_PATH);
         model.addAttribute("themePreference", userPreferenceService.currentThemePreference(authentication));

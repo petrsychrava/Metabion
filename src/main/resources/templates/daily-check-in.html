@@ -44,10 +44,12 @@
                 <h2 th:text="#{validation.summaryTitle}">Please fix the highlighted fields</h2>
                 <ul>
                     <li th:each="error : ${dailyCheckInBindingErrors}">
-                        <a th:href="${error.target}" th:text="${error.message}">Field error</a>
+                        <a th:href="${error.href}" th:id="${error.errorId}"
+                           th:attr="data-error-target-id=${error.targetId}" th:text="${error.message}">Field error</a>
                     </li>
                     <li th:if="${dailyCheckInError == true}">
-                        <a href="#daily-check-in-save-error" th:text="#{dailyCheckIn.saveError}">Daily check-in error</a>
+                        <a href="#daily-check-in-save-error" data-error-target-id="daily-check-in-save-error"
+                           th:text="#{dailyCheckIn.saveError}">Daily check-in error</a>
                     </li>
                 </ul>
             </section>
@@ -72,16 +74,21 @@
                     <label class="field"><span><span th:text="#{dietLogs.logDate}">Date</span> <span class="field-requirement" th:text="#{dailyCheckIn.required}">Required</span></span>
                         <input type="date" id="logDate" name="logDate" data-log-date
                                th:value="${dailyCheckInForm.logDate == null ? '' : #temporals.format(dailyCheckInForm.logDate, 'yyyy-MM-dd')}"
+                               th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('logDate') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('logDate')}"
                                required>
                     </label>
                     <label class="field"><span><span th:text="#{dietLogs.adherenceLevel}">Adherence</span> <span class="field-requirement" th:text="#{dailyCheckIn.required}">Required</span></span>
-                        <select th:field="*{adherenceLevel}" required>
+                        <select th:field="*{adherenceLevel}"
+                                th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('adherenceLevel') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('adherenceLevel')}"
+                                required>
                             <option value="" th:text="#{onboarding.select}">Select</option>
                             <option th:each="option : ${adherenceOptions}" th:value="${option}" th:text="${#messages.msg('enum.dietAdherenceLevel.' + option.name())}">Mostly</option>
                         </select>
                     </label>
                     <label class="field"><span><span th:text="#{dietLogs.appetiteLevel}">Appetite</span> <span class="field-requirement" th:text="#{dailyCheckIn.required}">Required</span></span>
-                        <select th:field="*{appetiteLevel}" required>
+                        <select th:field="*{appetiteLevel}"
+                                th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('appetiteLevel') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('appetiteLevel')}"
+                                required>
                             <option value="" th:text="#{onboarding.select}">Select</option>
                             <option th:each="option : ${appetiteOptions}" th:value="${option}" th:text="${#messages.msg('enum.appetiteLevel.' + option.name())}">Normal</option>
                         </select>
@@ -89,7 +96,8 @@
                 </div>
 
                 <label class="field"><span><span th:text="#{dietLogs.notes}">Notes</span> <span class="field-requirement" th:text="#{dailyCheckIn.optional}">Optional</span></span>
-                    <textarea th:field="*{notes}"></textarea>
+                    <textarea th:field="*{notes}"
+                              th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('notes') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('notes')}"></textarea>
                 </label>
                 </div>
             </details>
@@ -109,23 +117,23 @@
                         <h3 th:text="#{dietLogs.glucose}">Glucose</h3>
                         <span class="unit-pill" th:text="${dailyCheckInForm.glucoseUnitPreference == null ? '' : #messages.msg('enum.measurementUnit.' + dailyCheckInForm.glucoseUnitPreference.name())}">mg/dL</span>
                         <label class="field"><span th:text="#{dietLogs.measurementValue}">Value</span>
-                            <input type="number" step="0.01" th:field="*{glucoseMeasurement.value}"
-                                   th:attr="aria-label=#{dailyCheckIn.glucoseValueAccessible}">
+                            <input type="number" step="0.01" id="glucoseMeasurement.value" th:field="*{glucoseMeasurement.value}"
+                                   th:attr="aria-label=#{dailyCheckIn.glucoseValueAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('glucoseMeasurement.value') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('glucoseMeasurement.value')}">
                         </label>
                         <label class="field"><span th:text="#{dietLogs.measurementTime}">Time</span>
-                            <input type="time" th:field="*{glucoseMeasurement.measuredTime}"
-                                   th:attr="aria-label=#{dailyCheckIn.glucoseTimeAccessible}">
+                            <input type="time" id="glucoseMeasurement.measuredTime" th:field="*{glucoseMeasurement.measuredTime}"
+                                   th:attr="aria-label=#{dailyCheckIn.glucoseTimeAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('glucoseMeasurement.measuredTime') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('glucoseMeasurement.measuredTime')}">
                         </label>
                         <label class="field"><span th:text="#{dietLogs.measurementContext}">Context</span>
-                            <select th:field="*{glucoseMeasurement.context}"
-                                    th:attr="aria-label=#{dailyCheckIn.glucoseContextAccessible}">
+                            <select id="glucoseMeasurement.context" th:field="*{glucoseMeasurement.context}"
+                                    th:attr="aria-label=#{dailyCheckIn.glucoseContextAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('glucoseMeasurement.context') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('glucoseMeasurement.context')}">
                                 <option value="" th:text="#{onboarding.select}">Select</option>
                                 <option th:each="option : ${measurementContexts}" th:value="${option}" th:text="${#messages.msg('enum.measurementContext.' + option.name())}">Fasting</option>
                             </select>
                         </label>
                         <label class="field"><span><span th:text="#{dietLogs.measurementNotes}">Measurement notes</span> <span class="field-requirement" th:text="#{dailyCheckIn.optional}">Optional</span></span>
-                            <textarea th:field="*{glucoseMeasurement.notes}"
-                                      th:attr="aria-label=#{dailyCheckIn.glucoseNotesAccessible}"></textarea>
+                            <textarea id="glucoseMeasurement.notes" th:field="*{glucoseMeasurement.notes}"
+                                      th:attr="aria-label=#{dailyCheckIn.glucoseNotesAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('glucoseMeasurement.notes') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('glucoseMeasurement.notes')}"></textarea>
                         </label>
                     </section>
 
@@ -133,23 +141,23 @@
                         <h3 th:text="#{dietLogs.ketones}">Ketones</h3>
                         <span class="unit-pill" th:text="#{dietLogs.fixedKetoneUnit}">Ketones are recorded in mmol/L</span>
                         <label class="field"><span th:text="#{dietLogs.measurementValue}">Value</span>
-                            <input type="number" step="0.01" th:field="*{ketoneMeasurement.value}"
-                                   th:attr="aria-label=#{dailyCheckIn.ketoneValueAccessible}">
+                            <input type="number" step="0.01" id="ketoneMeasurement.value" th:field="*{ketoneMeasurement.value}"
+                                   th:attr="aria-label=#{dailyCheckIn.ketoneValueAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('ketoneMeasurement.value') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('ketoneMeasurement.value')}">
                         </label>
                         <label class="field"><span th:text="#{dietLogs.measurementTime}">Time</span>
-                            <input type="time" th:field="*{ketoneMeasurement.measuredTime}"
-                                   th:attr="aria-label=#{dailyCheckIn.ketoneTimeAccessible}">
+                            <input type="time" id="ketoneMeasurement.measuredTime" th:field="*{ketoneMeasurement.measuredTime}"
+                                   th:attr="aria-label=#{dailyCheckIn.ketoneTimeAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('ketoneMeasurement.measuredTime') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('ketoneMeasurement.measuredTime')}">
                         </label>
                         <label class="field"><span th:text="#{dietLogs.measurementContext}">Context</span>
-                            <select th:field="*{ketoneMeasurement.context}"
-                                    th:attr="aria-label=#{dailyCheckIn.ketoneContextAccessible}">
+                            <select id="ketoneMeasurement.context" th:field="*{ketoneMeasurement.context}"
+                                    th:attr="aria-label=#{dailyCheckIn.ketoneContextAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('ketoneMeasurement.context') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('ketoneMeasurement.context')}">
                                 <option value="" th:text="#{onboarding.select}">Select</option>
                                 <option th:each="option : ${measurementContexts}" th:value="${option}" th:text="${#messages.msg('enum.measurementContext.' + option.name())}">Bedtime</option>
                             </select>
                         </label>
                         <label class="field"><span><span th:text="#{dietLogs.measurementNotes}">Measurement notes</span> <span class="field-requirement" th:text="#{dailyCheckIn.optional}">Optional</span></span>
-                            <textarea th:field="*{ketoneMeasurement.notes}"
-                                      th:attr="aria-label=#{dailyCheckIn.ketoneNotesAccessible}"></textarea>
+                            <textarea id="ketoneMeasurement.notes" th:field="*{ketoneMeasurement.notes}"
+                                      th:attr="aria-label=#{dailyCheckIn.ketoneNotesAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('ketoneMeasurement.notes') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('ketoneMeasurement.notes')}"></textarea>
                         </label>
                     </section>
                 </div>
@@ -182,18 +190,23 @@
                         <div class="meal-card-fields">
                             <div class="diet-log-grid">
                                 <label class="field"><span th:text="#{dietLogs.mealType}">Meal type</span>
-                                    <select th:field="*{meals[__${row.index}__].mealType}">
+                                    <select th:field="*{meals[__${row.index}__].mealType}"
+                                            th:id="${'meals' + row.index + '.mealType'}"
+                                            th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('meals' + row.index + '.mealType') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('meals' + row.index + '.mealType')}">
                                         <option value="" th:text="#{onboarding.select}">Select</option>
                                         <option th:each="option : ${mealTypes}" th:value="${option}" th:text="${#messages.msg('enum.mealType.' + option.name())}">Lunch</option>
                                     </select>
                                 </label>
                             </div>
                             <label class="field"><span th:text="#{dietLogs.foodDescription}">Food description</span>
-                                <input th:field="*{meals[__${row.index}__].foodDescription}">
+                                <input th:field="*{meals[__${row.index}__].foodDescription}"
+                                       th:id="${'meals' + row.index + '.foodDescription'}"
+                                       th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('meals' + row.index + '.foodDescription') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('meals' + row.index + '.foodDescription')}">
                             </label>
                             <label class="field"><span><span th:text="#{dietLogs.mealNotes}">Meal notes</span> <span class="field-requirement" th:text="#{dailyCheckIn.optional}">Optional</span></span>
                                 <textarea th:field="*{meals[__${row.index}__].notes}"
-                                          th:attr="aria-label=${#messages.msg('dailyCheckIn.mealNotesAccessible', row.index + 1)}"></textarea>
+                                          th:id="${'meals' + row.index + '.notes'}"
+                                          th:attr="aria-label=${#messages.msg('dailyCheckIn.mealNotesAccessible', row.index + 1)},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('meals' + row.index + '.notes') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('meals' + row.index + '.notes')}"></textarea>
                             </label>
                         </div>
 
@@ -201,7 +214,9 @@
                             <h3 th:text="#{dietLogs.deviation}">Deviation</h3>
                             <div class="diet-log-grid">
                                 <label class="field"><span th:text="#{dietLogs.deviationCategory}">Category</span>
-                                    <select th:field="*{meals[__${row.index}__].deviation.deviationCategory}" data-deviation-category>
+                                    <select th:field="*{meals[__${row.index}__].deviation.deviationCategory}" data-deviation-category
+                                            th:id="${'meals' + row.index + '.deviation.deviationCategory'}"
+                                            th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('meals' + row.index + '.deviation.deviationCategory') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('meals' + row.index + '.deviation.deviationCategory')}">
                                         <option value="" th:text="#{dietLogs.noDeviation}">No deviation</option>
                                         <option th:each="option : ${deviationCategories}" th:value="${option}" th:text="${#messages.msg('enum.dietDeviationCategory.' + option.name())}">Dining out</option>
                                     </select>
@@ -209,14 +224,18 @@
                             </div>
                             <div data-deviation-details th:hidden="${meal.deviation.deviationCategory == null}">
                                 <label class="field"><span th:text="#{dietLogs.deviationSeverity}">Severity</span>
-                                    <select th:field="*{meals[__${row.index}__].deviation.severity}">
+                                    <select th:field="*{meals[__${row.index}__].deviation.severity}"
+                                            th:id="${'meals' + row.index + '.deviation.severity'}"
+                                            th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('meals' + row.index + '.deviation.severity') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('meals' + row.index + '.deviation.severity')}">
                                         <option value="" th:text="#{onboarding.select}">Select</option>
                                         <option th:each="option : ${deviationSeverities}" th:value="${option}"
                                                 th:text="${#messages.msg('enum.dietDeviationSeverity.' + option.name())}">Minor</option>
                                     </select>
                                 </label>
                                 <label class="field"><span th:text="#{dietLogs.deviationNotes}">Deviation notes</span>
-                                    <textarea th:field="*{meals[__${row.index}__].deviation.notes}"></textarea>
+                                    <textarea th:field="*{meals[__${row.index}__].deviation.notes}"
+                                              th:id="${'meals' + row.index + '.deviation.notes'}"
+                                              th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('meals' + row.index + '.deviation.notes') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('meals' + row.index + '.deviation.notes')}"></textarea>
                                 </label>
                             </div>
                         </section>
@@ -229,7 +248,8 @@
                             </label>
                             <div data-photo-rows>
                                 <div class="photo-reference-row" th:each="photoReference, photoRow : ${meal.photoReferences}" data-photo-row>
-                                    <input type="hidden" th:field="*{meals[__${row.index}__].photoReferences[__${photoRow.index}__].uploadId}">
+                                    <input type="hidden" th:field="*{meals[__${row.index}__].photoReferences[__${photoRow.index}__].uploadId}"
+                                           th:id="${'meals' + row.index + '.photoReferences' + photoRow.index + '.uploadId'}">
                                     <a class="photo-preview-link" data-photo-preview-link th:if="${photoReference.uploadId != null}"
                                        th:href="${photoReference.contentUrl == null || photoReference.contentUrl.isBlank() ? '/api/diet-log-photos/' + photoReference.uploadId + '/content' : photoReference.contentUrl}"
                                        target="_blank" rel="noopener">
@@ -240,7 +260,8 @@
                                     <label class="field" data-photo-caption th:hidden="${photoReference.uploadId == null}">
                                         <span th:text="#{dietLogs.caption}">Caption</span>
                                         <input th:field="*{meals[__${row.index}__].photoReferences[__${photoRow.index}__].caption}"
-                                               th:attr="aria-label=${#messages.msg('dailyCheckIn.mealCaptionAccessible', row.index + 1)}">
+                                               th:id="${'meals' + row.index + '.photoReferences' + photoRow.index + '.caption'}"
+                                               th:attr="aria-label=${#messages.msg('dailyCheckIn.mealCaptionAccessible', row.index + 1)},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('meals' + row.index + '.photoReferences' + photoRow.index + '.caption') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('meals' + row.index + '.photoReferences' + photoRow.index + '.caption')}">
                                     </label>
                                 </div>
                             </div>
@@ -259,7 +280,8 @@
                 </summary>
                 <div class="daily-check-in-section-body">
 
-                <fieldset id="flareStateGroup" tabindex="-1">
+                <fieldset id="flareStateGroup" tabindex="-1"
+                          th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('flareStateGroup') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('flareStateGroup')}">
                     <legend><span th:text="#{dailyCheckIn.flareState}">Flare state</span> <span class="field-requirement" th:text="#{dailyCheckIn.required}">Required</span></legend>
                     <label th:each="option : ${flareStateOptions}">
                         <input type="radio" th:field="*{flareState}" th:value="${option}" required>
@@ -269,7 +291,8 @@
 
                 <div class="meal-list">
                     <section class="measurement-card" th:each="question, row : ${questionnaire.questions}">
-                        <input type="hidden" th:field="*{symptomAnswers[__${row.index}__].questionId}">
+                        <input type="hidden" th:field="*{symptomAnswers[__${row.index}__].questionId}"
+                               th:id="${'symptomAnswers' + row.index + '.questionId'}">
                         <h3><span th:text="${#messages.msgOrNull('symptomQuestion.' + question.stableKey) ?: question.label}">Stool frequency</span> <span class="field-requirement" th:text="${question.required ? #messages.msg('dailyCheckIn.required') : #messages.msg('dailyCheckIn.optional')}">Required</span></h3>
                         <p class="hint" th:if="${question.helpText != null}"
                            th:text="${#messages.msgOrNull('symptomQuestion.' + question.stableKey + '.help') ?: question.helpText}">Help text</p>
@@ -279,7 +302,8 @@
                             <input type="number" step="0.01"
                                    th:min="${question.minNumericValue}"
                                    th:max="${question.maxNumericValue}"
-                                   th:attr="data-required-symptom=${question.required},aria-label=${#messages.msg('dailyCheckIn.symptomAnswerAccessible', (#messages.msgOrNull('symptomQuestion.' + question.stableKey) ?: question.label))}"
+                                   th:id="${'symptomAnswers' + row.index + '.answerNumeric'}"
+                                   th:attr="data-required-symptom=${question.required},aria-label=${#messages.msg('dailyCheckIn.symptomAnswerAccessible', (#messages.msgOrNull('symptomQuestion.' + question.stableKey) ?: question.label))},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('symptomAnswers' + row.index + '.answerNumeric') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('symptomAnswers' + row.index + '.answerNumeric')}"
                                    th:required="${question.required}"
                                    th:field="*{symptomAnswers[__${row.index}__].answerNumeric}">
                         </label>
@@ -287,15 +311,17 @@
                         <label class="field" th:if="${question.answerType.name() == 'TEXT'}">
                             <span th:text="#{dailyCheckIn.symptomTextAnswer}">Answer</span>
                             <textarea th:field="*{symptomAnswers[__${row.index}__].answerText}"
+                                      th:id="${'symptomAnswers' + row.index + '.answerText'}"
                                       th:required="${question.required}"
-                                      th:attr="data-required-symptom=${question.required},aria-label=${#messages.msg('dailyCheckIn.symptomAnswerAccessible', (#messages.msgOrNull('symptomQuestion.' + question.stableKey) ?: question.label))}"></textarea>
+                                      th:attr="data-required-symptom=${question.required},aria-label=${#messages.msg('dailyCheckIn.symptomAnswerAccessible', (#messages.msgOrNull('symptomQuestion.' + question.stableKey) ?: question.label))},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('symptomAnswers' + row.index + '.answerText') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('symptomAnswers' + row.index + '.answerText')}"></textarea>
                         </label>
 
                         <label class="field" th:if="${question.answerType.name() == 'SINGLE_CHOICE'}">
                             <span th:text="#{dailyCheckIn.symptomChoiceAnswer}">Answer</span>
                             <select th:field="*{symptomAnswers[__${row.index}__].optionId}"
+                                    th:id="${'symptomAnswers' + row.index + '.optionId'}"
                                     th:required="${question.required}"
-                                    th:attr="data-required-symptom=${question.required},aria-label=${#messages.msg('dailyCheckIn.symptomAnswerAccessible', (#messages.msgOrNull('symptomQuestion.' + question.stableKey) ?: question.label))}">
+                                    th:attr="data-required-symptom=${question.required},aria-label=${#messages.msg('dailyCheckIn.symptomAnswerAccessible', (#messages.msgOrNull('symptomQuestion.' + question.stableKey) ?: question.label))},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('symptomAnswers' + row.index + '.optionId') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('symptomAnswers' + row.index + '.optionId')}">
                                 <option value="" th:text="#{onboarding.select}">Select</option>
                                 <option th:each="option : ${question.options}" th:value="${option.id}"
                                         th:text="${#messages.msgOrNull('symptomQuestion.' + question.stableKey + '.option.' + option.stableKey) ?: option.label}">Mild</option>
@@ -305,7 +331,8 @@
                 </div>
 
                 <label class="field"><span><span th:text="#{dailyCheckIn.symptomNotes}">Symptom notes</span> <span class="field-requirement" th:text="#{dailyCheckIn.optional}">Optional</span></span>
-                    <textarea th:field="*{symptomNotes}"></textarea>
+                    <textarea th:field="*{symptomNotes}"
+                              th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('symptomNotes') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('symptomNotes')}"></textarea>
                 </label>
                 </div>
             </details>
