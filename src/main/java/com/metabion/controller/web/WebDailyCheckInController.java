@@ -29,6 +29,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -98,6 +100,9 @@ public class WebDailyCheckInController {
         refreshSymptomRows(form, questionnaire, null, false);
         ensureRows(form);
         if (binding.hasErrors()) {
+            model.addAttribute("dailyCheckInBindingErrors", binding.getAllErrors().stream()
+                    .map(this::bindingErrorView)
+                    .toList());
             addFormModel(model, authentication, questionnaire, form);
             return "daily-check-in";
         }
@@ -107,7 +112,7 @@ public class WebDailyCheckInController {
             if (ex.getStatusCode() != HttpStatus.BAD_REQUEST) {
                 throw ex;
             }
-            model.addAttribute("dailyCheckInError", errorMessage(ex));
+            model.addAttribute("dailyCheckInError", true);
             addFormModel(model, authentication, questionnaire, form);
             return "daily-check-in";
         }
@@ -328,10 +333,45 @@ public class WebDailyCheckInController {
         }
     }
 
-    private String errorMessage(ResponseStatusException ex) {
-        return ex.getReason() == null || ex.getReason().isBlank()
-                ? "Daily check-in could not be saved."
-                : ex.getReason();
+    private DailyCheckInBindingError bindingErrorView(ObjectError error) {
+        var field = error instanceof FieldError fieldError ? fieldError.getField() : null;
+        return new DailyCheckInBindingError(bindingErrorTarget(field), error.getDefaultMessage());
+    }
+
+    private String bindingErrorTarget(String field) {
+        if (field == null) {
+            return "#daily-check-in-errors";
+        }
+        if (field.equals("logDate")) {
+            return "#logDate";
+        }
+        if (field.equals("adherenceLevel")) {
+            return "#adherenceLevel";
+        }
+        if (field.equals("appetiteLevel")) {
+            return "#appetiteLevel";
+        }
+        if (field.equals("flareState")) {
+            return "#flareStateGroup";
+        }
+        if (field.startsWith("glucoseMeasurement.") || field.startsWith("ketoneMeasurement.")) {
+            return "#measurements-section";
+        }
+        if (field.startsWith("meals[")) {
+            return "#meals-section";
+        }
+        if (field.startsWith("symptomAnswers[")
+                || field.equals("symptomNotes")
+                || field.equals("questionnaireVersionId")) {
+            return "#symptoms-section";
+        }
+        if (field.equals("notes")) {
+            return "#diet-section";
+        }
+        return "#daily-check-in-errors";
+    }
+
+    public record DailyCheckInBindingError(String target, String message) {
     }
 
     private void addFormModel(Model model,

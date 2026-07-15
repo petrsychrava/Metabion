@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const liveRegion = form.querySelector('#daily-check-in-live');
     const errorSummary = form.querySelector('#daily-check-in-errors');
     const csrf = form.querySelector('input[name="_csrf"]');
+    const pendingUploads = new Map();
+    const mealUploadGenerations = new WeakMap();
 
     const format = (template, value) => template.replace('{0}', String(value));
     const announce = (message) => {
@@ -16,7 +18,33 @@ document.addEventListener('DOMContentLoaded', () => {
             liveRegion.textContent = message;
         });
     };
+    const setTextIfChanged = (element, text) => {
+        if (element && element.textContent !== text) element.textContent = text;
+    };
     const mealRows = () => mealList ? Array.from(mealList.querySelectorAll('[data-meal-row]')) : [];
+
+    const mealUploadGeneration = (row) => mealUploadGenerations.get(row) || 0;
+    const hasPendingUpload = (row) => Array.from(pendingUploads.values())
+            .some((upload) => upload.mealRow === row);
+    const isCurrentUpload = (row, generation, controller) => row.isConnected
+            && !controller.signal.aborted
+            && mealUploadGeneration(row) === generation;
+    const invalidateMealUploads = (row) => {
+        mealUploadGenerations.set(row, mealUploadGeneration(row) + 1);
+        pendingUploads.forEach((upload, controller) => {
+            if (upload.mealRow === row) {
+                controller.abort();
+                pendingUploads.delete(controller);
+            }
+        });
+        row.querySelector('[data-photo-upload-pending]')?.remove();
+    };
+    const abortAllUploads = () => {
+        pendingUploads.forEach((upload, controller) => {
+            controller.abort();
+        });
+        pendingUploads.clear();
+    };
 
     const updateMealAttributes = (row, mealIndex) => {
         row.dataset.mealIndex = String(mealIndex);
@@ -71,6 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const resetMealRow = (row) => {
+        invalidateMealUploads(row);
         row.querySelectorAll('input:not([type="file"]), select, textarea').forEach((element) => {
             element.value = '';
         });
@@ -124,9 +153,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const deviation = hasValue(row.querySelector('[data-deviation-category]'));
             const severity = hasValue(row.querySelector('[name$=".deviation.severity"]'));
             const photo = Array.from(row.querySelectorAll('[name$=".uploadId"]')).some(hasValue);
-            const rowStarted = mealType || description || notes || deviation || severity || photo;
+            const photoPending = hasPendingUpload(row);
+            const rowStarted = mealType || description || notes || deviation || severity || photo || photoPending;
             started ||= rowStarted;
-            if (rowStarted && (!mealType || (deviation && !severity) || (!deviation && severity))) complete = false;
+            if (rowStarted && (photoPending || !mealType || (deviation && !severity) || (!deviation && severity))) {
+                complete = false;
+            }
         });
         if (!started) return 'notStarted';
         return complete ? 'complete' : 'inProgress';
@@ -168,15 +200,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const state = hasErrors ? 'needsAttention' : states[section.dataset.section];
             displayStates[section.dataset.section] = state;
             const status = section.querySelector('[data-section-status]');
-            if (status) status.textContent = statusText(state);
+            setTextIfChanged(status, statusText(state));
         });
         const requiredComplete = ['diet', 'symptoms']
                 .filter((key) => displayStates[key] === 'complete').length;
         const progress = form.querySelector('[data-required-progress]');
         if (progress) {
-            progress.textContent = form.dataset.requiredProgressTemplate
+            const progressText = form.dataset.requiredProgressTemplate
                     .replace('{0}', String(requiredComplete))
                     .replace('{1}', '2');
+            setTextIfChanged(progress, progressText);
         }
     };
 
@@ -199,7 +232,6 @@ document.addEventListener('DOMContentLoaded', () => {
     mealList?.addEventListener('change', (event) => {
         const category = event.target.closest('[data-deviation-category]');
         if (category) updateDeviation(category.closest('[data-meal-row]'));
-        updateSectionStatuses();
     });
 
     mealList?.addEventListener('click', (event) => {
@@ -214,6 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
             row.querySelector('select[name$=".mealType"]')?.focus();
         } else {
             const focusTarget = row.previousElementSibling?.querySelector('[data-remove-meal]') || addMealButton;
+            invalidateMealUploads(row);
             row.remove();
             reindexMeals();
             focusTarget?.focus();
@@ -273,25 +306,48 @@ document.addEventListener('DOMContentLoaded', () => {
         announce(format(form.dataset.photoSuccessTemplate, filename));
     };
 
+    const showPendingUploadStatus = (mealRow) => {
+        let status = mealRow.querySelector('[data-photo-upload-pending]');
+        if (!status) {
+            status = document.createElement('p');
+            status.className = 'hint';
+            status.setAttribute('data-photo-upload-pending', '');
+            status.setAttribute('role', 'status');
+            status.setAttribute('aria-live', 'polite');
+            mealRow.querySelector('.diet-photo-upload')?.closest('label')?.after(status);
+        }
+        setTextIfChanged(status, form.dataset.photoUploadsPending);
+    };
+
     mealList?.addEventListener('change', async (event) => {
         const input = event.target.closest('.diet-photo-upload');
         if (!input || !csrf) return;
         const mealRow = input.closest('[data-meal-row]');
         if (!mealRow) return;
         mealRow.querySelector('[data-photo-upload-error]')?.remove();
+        const generation = mealUploadGeneration(mealRow);
 
-        for (const file of input.files) {
+        for (const file of Array.from(input.files)) {
+            if (!mealRow.isConnected || mealUploadGeneration(mealRow) !== generation) break;
             const formData = new FormData();
             formData.append('file', file);
+            const controller = new AbortController();
+            pendingUploads.set(controller, {mealRow, generation});
+            showPendingUploadStatus(mealRow);
+            updateSectionStatuses();
             try {
                 const response = await fetch('/api/diet-log-photos/uploads', {
                     method: 'POST',
                     headers: {'X-XSRF-TOKEN': csrf.value},
-                    body: formData
+                    body: formData,
+                    signal: controller.signal
                 });
                 if (!response.ok) throw new Error(`Upload returned ${response.status}`);
-                appendPhotoRow(mealRow, await response.json());
+                const upload = await response.json();
+                if (!isCurrentUpload(mealRow, generation, controller)) continue;
+                appendPhotoRow(mealRow, upload);
             } catch (error) {
+                if (error.name === 'AbortError' || !isCurrentUpload(mealRow, generation, controller)) continue;
                 let status = mealRow.querySelector('[data-photo-upload-error]');
                 if (!status) {
                     status = document.createElement('p');
@@ -301,10 +357,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 status.textContent = form.dataset.photoFailure;
                 announce(form.dataset.photoFailure);
+            } finally {
+                pendingUploads.delete(controller);
+                if (!hasPendingUpload(mealRow)) {
+                    mealRow.querySelector('[data-photo-upload-pending]')?.remove();
+                }
+                updateSectionStatuses();
             }
         }
         input.value = '';
-        updateSectionStatuses();
     });
 
     const logDateInput = form.querySelector('[data-log-date]');
@@ -321,7 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return JSON.stringify(entries.sort(([a], [b]) => a.localeCompare(b)));
     };
     const baseline = snapshot();
-    const isDirty = () => snapshot() !== baseline;
+    const isDirty = () => pendingUploads.size > 0 || snapshot() !== baseline;
 
     logDateInput?.addEventListener('change', () => {
         if (!logDateInput.value || logDateInput.value === loadedDate) return;
@@ -329,12 +390,18 @@ document.addEventListener('DOMContentLoaded', () => {
             logDateInput.value = loadedDate;
             return;
         }
+        abortAllUploads();
         const target = new URL(window.location.href);
         target.searchParams.set('date', logDateInput.value);
         window.location.assign(target.toString());
     });
 
-    form.addEventListener('submit', () => {
+    form.addEventListener('submit', (event) => {
+        if (pendingUploads.size > 0) {
+            event.preventDefault();
+            announce(form.dataset.photoUploadsPending);
+            return;
+        }
         submitting = true;
     });
 
@@ -343,6 +410,8 @@ document.addEventListener('DOMContentLoaded', () => {
         event.preventDefault();
         event.returnValue = form.dataset.unsavedLeaveWarning;
     });
+
+    window.addEventListener('pagehide', abortAllUploads);
 
     if (errorSummary) {
         const firstErrorTarget = errorSummary.querySelector('a[href^="#"]')?.getAttribute('href');
