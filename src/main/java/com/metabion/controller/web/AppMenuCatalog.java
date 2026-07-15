@@ -116,11 +116,11 @@ public class AppMenuCatalog {
                         true,
                         "menu.onboardingReview.description"),
                 item(
-                        "menu.dietLogReview",
-                        "/app/clinical/diet-logs",
+                        "menu.dailyCheckInReview",
+                        "/app/clinical/daily-check-ins",
                         false,
                         true,
-                        "menu.dietLogReview.description"),
+                        "menu.dailyCheckInReview.description"),
                 item(
                         "menu.clinicalTrends",
                         "/app/clinical/trends",
