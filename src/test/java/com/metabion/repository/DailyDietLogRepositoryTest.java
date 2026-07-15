@@ -135,6 +135,13 @@ class DailyDietLogRepositoryTest {
                 .orElseThrow();
 
         assertThat(loaded.getMeals()).hasSize(1);
+        assertThat(loaded.getMeals()).singleElement()
+                .satisfies(savedMeal -> {
+                    assertThat(savedMeal.getMealType()).isEqualTo(MealType.BREAKFAST);
+                    assertThat(savedMeal.getFoodDescription()).isEqualTo("Eggs");
+                    assertThat(savedMeal.getNotes()).isEqualTo("No issues");
+                    assertThat(savedMeal.getSortOrder()).isZero();
+                });
         assertThat(loaded.getDeviations()).hasSize(1);
         assertThat(loaded.getPhotoReferences()).hasSize(1);
     }
