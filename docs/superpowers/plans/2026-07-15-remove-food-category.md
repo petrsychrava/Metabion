@@ -12,7 +12,7 @@
 
 - `DietDeviationCategory` and all deviation behavior remain unchanged.
 - No compatibility overloads, deprecated fields, or API/schema shims for `foodCategory`.
-- Keep historical Flyway migration `V9__daily_diet_logs.sql` immutable; the next live migration version is `V10`.
+- Keep historical Flyway migration `V9__daily_diet_logs.sql` immutable; the next live migration version is `V18`.
 - Do not modify the unrelated dirty `.idea/`, `application.properties`, `.superpowers/brain/`, or `var/` paths.
 
 ---
@@ -116,7 +116,7 @@ git commit -m "Remove food category from diet log meals"
 ### Task 2: Remove the persisted column with Flyway
 
 **Files:**
-- Create: `src/main/resources/db/migration/V10__remove_food_category_from_diet_log_meals.sql`
+- Create: `src/main/resources/db/migration/V18__remove_food_category_from_diet_log_meals.sql`
 - Test: `src/test/java/com/metabion/repository/DailyDietLogRepositoryTest.java`
 
 **Interfaces:**
@@ -139,7 +139,7 @@ Expected: compilation failure until Task 1's constructor removal is in place, or
 
 - [ ] **Step 3: Add the forward schema migration**
 
-Create `V10__remove_food_category_from_diet_log_meals.sql`:
+Create `V18__remove_food_category_from_diet_log_meals.sql`:
 
 ```sql
 ALTER TABLE daily_diet_log_meals
@@ -165,7 +165,7 @@ Expected: both commands exit 0. This verifies Flyway applies the new schema and 
 Run:
 
 ```bash
-rg -n -i 'FoodCategory|foodCategory|food_category|enum\.foodCategory|dietLogs\.foodCategory' src
+rg -n -i --glob '!db/migration/**' 'FoodCategory|foodCategory|food_category|enum\.foodCategory|dietLogs\.foodCategory' src/main/java src/main/resources
 git diff --check
 git status --short
 ```
@@ -173,6 +173,6 @@ git status --short
 Expected: the `rg` command returns no matches; the diff check is silent; status contains only the intended migration and any planned test changes.
 
 ```bash
-git add src/main/resources/db/migration/V10__remove_food_category_from_diet_log_meals.sql src/test/java/com/metabion/repository/DailyDietLogRepositoryTest.java
+git add src/main/resources/db/migration/V18__remove_food_category_from_diet_log_meals.sql src/test/java/com/metabion/repository/DailyDietLogRepositoryTest.java
 git commit -m "Drop food category meal column"
 ```
