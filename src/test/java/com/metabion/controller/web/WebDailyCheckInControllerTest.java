@@ -402,6 +402,35 @@ class WebDailyCheckInControllerTest {
     }
 
     @Test
+    void removingTheLastMealErrorHidesTheEmptyErrorSummary() throws Exception {
+        String response = mvc.perform(post("/app/daily-check-in")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("logDate", "2026-06-26")
+                        .param("adherenceLevel", "FULL")
+                        .param("appetiteLevel", "NORMAL")
+                        .param("meals[0].mealType", "LUNCH")
+                        .param("meals[0].notes", "x".repeat(1001))
+                        .param("flareState", "NO_FLARE")
+                        .param("questionnaireVersionId", "30"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        int summaryStart = response.indexOf("<section id=\"daily-check-in-errors\"");
+        String summary = response.substring(summaryStart, response.indexOf("</section>", summaryStart));
+        String script = new ClassPathResource("static/js/daily-check-in.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(summary)
+                .contains("data-error-target-id=\"meals0.notes\"")
+                .containsOnlyOnce("<li>");
+        assertThat(script)
+                .contains("if (!errorSummary.querySelector('li')) {")
+                .contains("errorSummary.hidden = true;");
+    }
+
+    @Test
     void dailyCheckInScriptCoordinatesPendingUploadsWithDirtySubmitAndMealLifecycle() throws Exception {
         String script = new ClassPathResource("static/js/daily-check-in.js")
                 .getContentAsString(StandardCharsets.UTF_8);

@@ -44,6 +44,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 link.closest('li')?.remove();
             }
         });
+        if (!errorSummary.querySelector('li')) {
+            errorSummary.hidden = true;
+        }
     };
 
     const mealUploadGeneration = (row) => mealUploadGenerations.get(row) || 0;
