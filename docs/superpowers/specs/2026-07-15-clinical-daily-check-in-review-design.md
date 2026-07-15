@@ -18,6 +18,8 @@ Patient entry and history pages, REST diet-log endpoints, persistence models, an
 
 Add a focused clinical daily-check-in read service and response DTOs. The service will assemble the existing daily diet log and symptom check-in for the same patient profile and date. It will reuse the current clinical role checks, assigned-patient access rules, response assemblers, and measurement/photo access behavior rather than duplicating authorization or mapping in the web controller.
 
+This is an evolution of the existing clinical diet-log review, not a parallel implementation or rewrite. Retain and adapt its patient/date filtering, all-accessible-patients behavior, diet-log assembly, detail rendering, localization, and test fixtures. Add only the symptom-side join, unified DTO fields, daily-check-in terminology, and new route identity; delete code only when the unified replacement makes the legacy entry point or name obsolete.
+
 The daily check-in is identified in web routes by patient profile id and date because it spans two persisted records with separate database ids. The detail route will be:
 
 `/app/clinical/daily-check-ins/{patientProfileId}/{date}`
