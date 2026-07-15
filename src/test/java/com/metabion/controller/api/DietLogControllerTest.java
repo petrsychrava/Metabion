@@ -1,6 +1,11 @@
 package com.metabion.controller.api;
 
+import com.metabion.domain.AppetiteLevel;
+import com.metabion.domain.DietAdherenceLevel;
+import com.metabion.domain.MealType;
 import com.metabion.domain.RoleName;
+import com.metabion.dto.DailyDietLogRequest;
+import com.metabion.dto.DailyDietLogResponse;
 import com.metabion.service.DietLogService;
 import com.metabion.service.SecurityService;
 import com.metabion.service.UserService;
@@ -20,12 +25,14 @@ import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -73,12 +80,16 @@ class DietLogControllerTest {
 
     @Test
     void patientCanCreateDietLogWithCsrf() throws Exception {
+        var mealRequest = new DailyDietLogRequest.MealRequest(MealType.BREAKFAST, "Eggs", "No issues");
+        when(dietLogService.saveForCurrentPatient(any(), any())).thenReturn(validLogResponse());
+
         mvc.perform(post("/api/diet-logs")
                         .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validLogJson()))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meals[0].foodCategory").doesNotExist());
 
         verify(dietLogService).saveForCurrentPatient(any(), any());
     }
@@ -192,7 +203,6 @@ class DietLogControllerTest {
                   "meals": [
                     {
                       "mealType": "BREAKFAST",
-                      "foodCategory": "PROTEIN",
                       "foodDescription": "Eggs",
                       "notes": "No issues"
                     }
@@ -204,6 +214,24 @@ class DietLogControllerTest {
                   "measurements": []
                 }
                 """;
+    }
+
+    private DailyDietLogResponse validLogResponse() {
+        return new DailyDietLogResponse(
+                1L,
+                2L,
+                "patient@example.com",
+                LocalDate.of(2026, 6, 10),
+                DietAdherenceLevel.MOSTLY,
+                AppetiteLevel.NORMAL,
+                "Stable day",
+                null,
+                null,
+                null,
+                List.of(new DailyDietLogResponse.MealResponse(3L, MealType.BREAKFAST, "Eggs", "No issues", 0)),
+                List.of(),
+                List.of(),
+                List.of());
     }
 
     private String validMeasurementJson() {

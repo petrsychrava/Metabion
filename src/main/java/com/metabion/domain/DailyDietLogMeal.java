@@ -28,10 +28,6 @@ public class DailyDietLogMeal {
     @Column(name = "meal_type", nullable = false, length = 40)
     private MealType mealType;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "food_category", nullable = false, length = 60)
-    private FoodCategory foodCategory;
-
     @Column(name = "food_description", length = 500)
     private String foodDescription;
 
@@ -46,12 +42,10 @@ public class DailyDietLogMeal {
 
     public DailyDietLogMeal(
             MealType mealType,
-            FoodCategory foodCategory,
             String foodDescription,
             String notes,
             int sortOrder) {
         this.mealType = mealType;
-        this.foodCategory = foodCategory;
         this.foodDescription = foodDescription;
         this.notes = notes;
         this.sortOrder = sortOrder;
@@ -75,14 +69,6 @@ public class DailyDietLogMeal {
 
     public void setMealType(MealType mealType) {
         this.mealType = mealType;
-    }
-
-    public FoodCategory getFoodCategory() {
-        return foodCategory;
-    }
-
-    public void setFoodCategory(FoodCategory foodCategory) {
-        this.foodCategory = foodCategory;
     }
 
     public String getFoodDescription() {

@@ -3,7 +3,6 @@ package com.metabion.controller.web;
 import com.metabion.domain.AppetiteLevel;
 import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.FlareState;
-import com.metabion.domain.FoodCategory;
 import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.MeasurementContext;
 import com.metabion.domain.MeasurementType;
@@ -368,7 +367,6 @@ class WebDailyCheckInControllerTest {
                 List.of(new DailyDietLogResponse.MealResponse(
                         10L,
                         MealType.LUNCH,
-                        FoodCategory.LOW_CARB_VEGETABLES,
                         "Avocado salad",
                         "Lunch notes",
                         0)),

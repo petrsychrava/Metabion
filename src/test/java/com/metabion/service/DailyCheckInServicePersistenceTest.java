@@ -3,7 +3,6 @@ package com.metabion.service;
 import com.metabion.domain.AppetiteLevel;
 import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.FlareState;
-import com.metabion.domain.FoodCategory;
 import com.metabion.domain.MealType;
 import com.metabion.domain.MeasurementContext;
 import com.metabion.domain.MeasurementType;
@@ -140,7 +139,6 @@ class DailyCheckInServicePersistenceTest {
                 "Stable day",
                 List.of(new DailyDietLogRequest.MealRequest(
                         MealType.LUNCH,
-                        FoodCategory.PROTEIN,
                         "Salmon",
                         "ok")),
                 List.of(),

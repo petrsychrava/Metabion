@@ -4,7 +4,6 @@ import com.metabion.domain.AppetiteLevel;
 import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.DietDeviationCategory;
 import com.metabion.domain.DietDeviationSeverity;
-import com.metabion.domain.FoodCategory;
 import com.metabion.domain.MealType;
 import com.metabion.domain.MeasurementContext;
 import com.metabion.domain.MeasurementType;
@@ -218,7 +217,6 @@ public class DietLogForm {
 
     public static class MealRow {
         private MealType mealType;
-        private FoodCategory foodCategory;
 
         @Size(max = 500)
         private String foodDescription;
@@ -233,12 +231,11 @@ public class DietLogForm {
         private List<PhotoReferenceRow> photoReferences = new ArrayList<>();
 
         public DailyDietLogRequest.MealRequest toRequest() {
-            return new DailyDietLogRequest.MealRequest(mealType, foodCategory, foodDescription, notes);
+            return new DailyDietLogRequest.MealRequest(mealType, foodDescription, notes);
         }
 
         boolean isBlank() {
             return mealType == null
-                    && foodCategory == null
                     && blank(foodDescription)
                     && blank(notes)
                     && getDeviation().isBlank()
@@ -251,14 +248,6 @@ public class DietLogForm {
 
         public void setMealType(MealType mealType) {
             this.mealType = mealType;
-        }
-
-        public FoodCategory getFoodCategory() {
-            return foodCategory;
-        }
-
-        public void setFoodCategory(FoodCategory foodCategory) {
-            this.foodCategory = foodCategory;
         }
 
         public String getFoodDescription() {

@@ -4,7 +4,6 @@ import com.metabion.domain.DailyDietLog;
 import com.metabion.domain.DailyDietLogMeal;
 import com.metabion.domain.DailyDietLogPhotoReference;
 import com.metabion.domain.DietLogPhotoStatus;
-import com.metabion.domain.FoodCategory;
 import com.metabion.domain.MealType;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
@@ -133,7 +132,7 @@ class DietLogPhotoServiceTest {
         var patient = patient(10L, patientUser);
         var otherPatient = patient(20L, user(2L, "other@example.com", RoleName.PATIENT));
         var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
-        log.addMeal(new DailyDietLogMeal(MealType.LUNCH, FoodCategory.PROTEIN, "Lunch", null, 0));
+        log.addMeal(new DailyDietLogMeal(MealType.LUNCH, "Lunch", null, 0));
         var photo = DailyDietLogPhotoReference.pending(
                 otherPatient,
                 otherPatient.getUser(),
@@ -159,7 +158,7 @@ class DietLogPhotoServiceTest {
         var user = user(1L, "patient@example.com", RoleName.PATIENT);
         var patient = patient(10L, user);
         var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
-        log.addMeal(new DailyDietLogMeal(MealType.LUNCH, FoodCategory.PROTEIN, "Lunch", null, 0));
+        log.addMeal(new DailyDietLogMeal(MealType.LUNCH, "Lunch", null, 0));
         var kept = attachedPhoto(50L, patient, user, log, "old caption", 0);
         var removed = attachedPhoto(51L, patient, user, log, "remove me", 1);
         when(photos.findByIdIn(List.of(50L))).thenReturn(List.of(kept));
@@ -183,8 +182,8 @@ class DietLogPhotoServiceTest {
         var user = user(1L, "patient@example.com", RoleName.PATIENT);
         var patient = patient(10L, user);
         var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
-        var lunch = new DailyDietLogMeal(MealType.LUNCH, FoodCategory.PROTEIN, "Salmon", null, 0);
-        var dinner = new DailyDietLogMeal(MealType.DINNER, FoodCategory.LOW_CARB_VEGETABLES, "Greens", null, 1);
+        var lunch = new DailyDietLogMeal(MealType.LUNCH, "Salmon", null, 0);
+        var dinner = new DailyDietLogMeal(MealType.DINNER, "Greens", null, 1);
         log.addMeal(lunch);
         log.addMeal(dinner);
         var photo = pendingPhoto(50L, patient, user);
@@ -204,7 +203,7 @@ class DietLogPhotoServiceTest {
         var user = user(1L, "patient@example.com", RoleName.PATIENT);
         var patient = patient(10L, user);
         var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
-        log.addMeal(new DailyDietLogMeal(MealType.LUNCH, FoodCategory.PROTEIN, "Salmon", null, 0));
+        log.addMeal(new DailyDietLogMeal(MealType.LUNCH, "Salmon", null, 0));
         var photo = pendingPhoto(50L, patient, user);
         when(photos.findByIdIn(List.of(50L))).thenReturn(List.of(photo));
 
@@ -222,7 +221,7 @@ class DietLogPhotoServiceTest {
         var user = user(1L, "patient@example.com", RoleName.PATIENT);
         var patient = patient(10L, user);
         var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
-        log.addMeal(new DailyDietLogMeal(MealType.LUNCH, FoodCategory.PROTEIN, "Salmon", null, 0));
+        log.addMeal(new DailyDietLogMeal(MealType.LUNCH, "Salmon", null, 0));
         var photo = pendingPhoto(50L, patient, user);
         when(photos.findByIdIn(List.of(50L))).thenReturn(List.of(photo));
 
