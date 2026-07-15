@@ -222,7 +222,7 @@
                                     </select>
                                 </label>
                             </div>
-                            <div data-deviation-details th:hidden="${meal.deviation.deviationCategory == null}">
+                            <div data-deviation-details>
                                 <label class="field"><span th:text="#{dietLogs.deviationSeverity}">Severity</span>
                                     <select th:field="*{meals[__${row.index}__].deviation.severity}"
                                             th:id="${'meals' + row.index + '.deviation.severity'}"

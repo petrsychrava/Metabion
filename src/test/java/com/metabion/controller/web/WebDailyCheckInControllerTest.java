@@ -227,6 +227,15 @@ class WebDailyCheckInControllerTest {
     }
 
     @Test
+    void dailyCheckInKeepsDeviationDetailsAvailableWithoutJavaScript() throws Exception {
+        mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<div data-deviation-details>")));
+    }
+
+    @Test
     void dailyCheckInStylesHideEmptyPhotoCaptions() throws Exception {
         mvc.perform(get("/css/app.css"))
                 .andExpect(status().isOk())
