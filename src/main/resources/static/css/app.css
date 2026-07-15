@@ -760,3 +760,178 @@ a {
         padding: 22px 16px;
     }
 }
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.daily-check-in-success {
+    color: var(--accent-dark);
+    font-weight: 700;
+}
+
+.daily-check-in-form {
+    gap: 20px;
+}
+
+.daily-check-in-form .daily-check-in-section {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    overflow: clip;
+}
+
+.daily-check-in-form .daily-check-in-section-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px;
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.daily-check-in-form .daily-check-in-section-title {
+    font-size: 1.25rem;
+}
+
+.daily-check-in-form .requirement-badge,
+.daily-check-in-form .section-status,
+.daily-check-in-form .unit-pill {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 9px;
+    color: var(--muted);
+    background: var(--secondary-bg);
+    font-size: 0.85rem;
+}
+
+.daily-check-in-form .section-status {
+    margin-left: auto;
+}
+
+.daily-check-in-form .daily-check-in-section-body {
+    display: grid;
+    gap: 16px;
+    padding: 0 18px 18px;
+}
+
+.daily-check-in-form .diet-log-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.daily-check-in-form .meal-list,
+.daily-check-in-form .meal-card,
+.daily-check-in-form .meal-card-fields,
+.daily-check-in-form .measurement-card,
+.daily-check-in-form .meal-subsection {
+    display: grid;
+    gap: 14px;
+}
+
+.daily-check-in-form .meal-card,
+.daily-check-in-form .measurement-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    background: var(--panel);
+}
+
+.daily-check-in-form .meal-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.daily-check-in-form .meal-card-header h2,
+.daily-check-in-form .measurement-card h3 {
+    margin: 0;
+}
+
+.daily-check-in-form .meal-subsection {
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+}
+
+.daily-check-in-form .photo-reference-row {
+    display: grid;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.daily-check-in-form .diet-photo-preview {
+    width: 160px;
+    height: 120px;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.daily-check-in-form .error-summary {
+    border: 2px solid var(--error);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.daily-check-in-form .error-summary h2 {
+    margin-bottom: 8px;
+}
+
+.daily-check-in-form .field-requirement {
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.daily-check-in-form .daily-check-in-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: var(--card-shadow);
+}
+
+.daily-check-in-form .daily-check-in-actions p {
+    margin: 0;
+}
+
+@media (max-width: 520px) {
+    .daily-check-in-form .daily-check-in-section-summary,
+    .daily-check-in-form .meal-card-header,
+    .daily-check-in-form .daily-check-in-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .daily-check-in-form .section-status {
+        margin-left: 0;
+    }
+
+    .daily-check-in-form .meal-card,
+    .daily-check-in-form .measurement-card,
+    .daily-check-in-form .daily-check-in-section-summary,
+    .daily-check-in-form .daily-check-in-section-body {
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+}

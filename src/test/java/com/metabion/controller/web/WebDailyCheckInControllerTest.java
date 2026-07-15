@@ -170,6 +170,39 @@ class WebDailyCheckInControllerTest {
     }
 
     @Test
+    void dailyCheckInRendersDisclosureStatusAndAccessibilityHooks() throws Exception {
+        mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("class=\"form diet-log-form daily-check-in-form\"")))
+                .andExpect(content().string(containsString("data-section=\"diet\" open")))
+                .andExpect(content().string(containsString("data-section=\"measurements\"")))
+                .andExpect(content().string(containsString("data-section=\"meals\"")))
+                .andExpect(content().string(containsString("data-section=\"symptoms\"")))
+                .andExpect(content().string(containsString("data-section-status")))
+                .andExpect(content().string(containsString("data-required-progress")))
+                .andExpect(content().string(containsString("id=\"daily-check-in-live\"")))
+                .andExpect(content().string(containsString("aria-live=\"polite\"")))
+                .andExpect(content().string(containsString("src=\"/js/daily-check-in.js\"")));
+    }
+
+    @Test
+    void dailyCheckInRendersRequiredOptionalAndContextualLabelsInCzech() throws Exception {
+        when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
+
+        mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .locale(Locale.forLanguageTag("cs"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Povinné")))
+                .andExpect(content().string(containsString("Volitelné")))
+                .andExpect(content().string(containsString("Hodnota glukózy")))
+                .andExpect(content().string(containsString("Odebrat jídlo 1")));
+    }
+
+    @Test
     void dailyCheckInPageLocalizesSymptomQuestionnaireLabels() throws Exception {
         when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
 
@@ -198,9 +231,7 @@ class WebDailyCheckInControllerTest {
                         .param("date", "2026-06-26")
                         .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString(".diet-photo-preview")))
-                .andExpect(content().string(containsString("height: 120px")))
-                .andExpect(content().string(containsString("width: 160px")))
+                .andExpect(content().string(containsString("<img class=\"diet-photo-preview\"")))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
