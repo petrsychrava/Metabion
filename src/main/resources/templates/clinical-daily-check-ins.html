@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell(#{dailyCheckIns.clinical.pageTitle}, ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
+    <header class="app-header"><div><p class="eyebrow">Metabion</p><h1 th:text="#{dailyCheckIns.clinical.title}">Daily check-in review</h1></div></header>
+    <section class="panel app-panel">
+        <form id="clinical-diet-log-filter" class="form" th:action="@{/app/clinical/daily-check-ins}" method="get"
+              data-default-range-days="7" th:attr="data-default-range-days=${clinicalDefaultRangeDays}">
+            <label class="field"><span th:text="#{dietLogs.patient}">Patient</span><select name="patientProfileId">
+                <option value="" th:selected="${patientProfileId == null}" th:text="#{dietLogs.allAssignedPatients}">All assigned patients</option>
+                <option th:each="patient : ${patientOptions}" th:value="${patient.id()}" th:selected="${patient.id() == patientProfileId}"
+                        th:text="#{dietLogs.patientOption(${patient.email()}, ${patient.id()})}">patient@example.com (Profile #42)</option>
+            </select></label>
+            <label class="field"><span th:text="#{dietLogs.from}">From</span><input type="date" name="from" th:value="${from}"></label>
+            <label class="field"><span th:text="#{dietLogs.to}">To</span><input type="date" name="to" th:value="${to}"></label>
+            <button type="submit" th:text="#{dietLogs.filter}">Filter</button>
+            <script>
+                document.addEventListener('DOMContentLoaded', () => {
+                    const form = document.getElementById('clinical-diet-log-filter'); if (!form) return;
+                    const from = form.querySelector('input[name="from"]'); const to = form.querySelector('input[name="to"]');
+                    const defaultRangeDays = Number.parseInt(form.dataset.defaultRangeDays, 10); if (!from || !to || Number.isNaN(defaultRangeDays)) return;
+                    const formatDate = date => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+                    const today = new Date(); const defaultFrom = new Date(today); defaultFrom.setDate(today.getDate() - (defaultRangeDays - 1));
+                    if (!from.value) from.value = formatDate(defaultFrom); if (!to.value) to.value = formatDate(today);
+                });
+            </script>
+        </form>
+    </section>
+    <section class="panel app-panel"><table class="table"><thead><tr>
+        <th th:text="#{dietLogs.logDate}">Date</th><th th:text="#{dietLogs.patient}">Patient</th><th th:text="#{dietLogs.adherenceLevel}">Adherence</th>
+        <th th:text="#{dietLogs.appetiteLevel}">Appetite</th><th th:text="#{dietLogs.meals}">Meals</th><th th:text="#{dietLogs.deviations}">Deviations</th>
+        <th th:text="#{dietLogs.measurements}">Measurements</th><th th:text="#{dailyCheckIns.symptomScore}">Symptom score</th><th th:text="#{dailyCheckIn.flareState}">Flare state</th><th th:text="#{dietLogs.open}">Open</th>
+    </tr></thead><tbody><tr th:each="checkIn : ${checkIns}">
+        <td th:text="${checkIn.date()}">2026-07-15</td><td th:text="${checkIn.patientEmail()} ?: #{dailyCheckIns.notProvided}">patient@example.com</td>
+        <td th:text="${checkIn.adherenceLevel() == null ? #messages.msg('dailyCheckIns.notProvided') : #messages.msg('enum.dietAdherenceLevel.' + checkIn.adherenceLevel().name())}">Mostly</td>
+        <td th:text="${checkIn.appetiteLevel() == null ? #messages.msg('dailyCheckIns.notProvided') : #messages.msg('enum.appetiteLevel.' + checkIn.appetiteLevel().name())}">Normal</td>
+        <td th:text="${checkIn.mealCount()} ?: #{dailyCheckIns.notProvided}">1</td><td th:text="${checkIn.deviationCount()} ?: #{dailyCheckIns.notProvided}">1</td><td th:text="${checkIn.measurementCount()} ?: #{dailyCheckIns.notProvided}">1</td>
+        <td th:text="${checkIn.symptomScore()} ?: #{dailyCheckIns.notProvided}">8</td>
+        <td th:text="${checkIn.flareState() == null ? #messages.msg('dailyCheckIns.notProvided') : #messages.msg('enum.flareState.' + checkIn.flareState().name())}">Suspected flare</td>
+        <td><a th:href="@{/app/clinical/daily-check-ins/{patientProfileId}/{date}(patientProfileId=${checkIn.patientProfileId()}, date=${checkIn.date()})}" th:text="#{dietLogs.open}">Open</a></td>
+    </tr><tr th:if="${#lists.isEmpty(checkIns)}"><td colspan="10" th:text="#{dietLogs.noLogs}">No check-ins found</td></tr></tbody></table></section>
+</th:block>
+</html>

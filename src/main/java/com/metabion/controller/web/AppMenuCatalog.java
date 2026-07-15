@@ -116,8 +116,8 @@ public class AppMenuCatalog {
                         true,
                         "menu.onboardingReview.description"),
                 item(
-                        "menu.dietLogReview",
-                        "/app/clinical/diet-logs",
+                        "menu.dailyCheckIns",
+                        "/app/clinical/daily-check-ins",
                         false,
                         true,
                         "menu.dietLogReview.description"),
