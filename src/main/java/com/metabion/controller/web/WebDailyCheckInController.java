@@ -34,6 +34,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -49,7 +50,7 @@ import java.util.stream.Collectors;
 public class WebDailyCheckInController {
 
     private static final String ACTIVE_PATH = "/app/daily-check-in";
-    private static final int DEFAULT_MEAL_ROWS = 2;
+    private static final int DEFAULT_MEAL_ROWS = 1;
     private static final int DEFAULT_PHOTO_ROWS_PER_MEAL = 1;
 
     private final DailyCheckInService dailyCheckInService;
@@ -90,7 +91,8 @@ public class WebDailyCheckInController {
     public String save(@Valid @ModelAttribute("dailyCheckInForm") DailyCheckInWebForm form,
                        BindingResult binding,
                        Model model,
-                       Authentication authentication) {
+                       Authentication authentication,
+                       RedirectAttributes redirectAttributes) {
         applyPatientDefaultsForDisplay(form, authentication);
         var questionnaire = symptomTrackingService.activeQuestionnaire();
         refreshSymptomRows(form, questionnaire, null, false);
@@ -109,6 +111,7 @@ public class WebDailyCheckInController {
             addFormModel(model, authentication, questionnaire, form);
             return "daily-check-in";
         }
+        redirectAttributes.addFlashAttribute("dailyCheckInSavedDate", form.getLogDate());
         return "redirect:/app/daily-check-in?date=" + form.getLogDate();
     }
 
@@ -146,7 +149,6 @@ public class WebDailyCheckInController {
                                           String patientTimezone) {
         var form = new DailyCheckInWebForm();
         form.setLogDate(selectedDate);
-        form.setFlareState(FlareState.NO_FLARE);
         form.setGlucoseUnitPreference(glucosePreference);
         form.setPatientTimezone(patientTimezone);
         ensureRows(form);
@@ -161,7 +163,6 @@ public class WebDailyCheckInController {
         form.setAdherenceLevel(response.adherenceLevel());
         form.setAppetiteLevel(response.appetiteLevel());
         form.setNotes(response.notes());
-        form.setFlareState(FlareState.NO_FLARE);
         form.setGlucoseUnitPreference(glucosePreference);
         form.setPatientTimezone(patientTimezone);
 
@@ -211,8 +212,6 @@ public class WebDailyCheckInController {
         if (checkIn != null) {
             form.setFlareState(checkIn.flareState());
             form.setSymptomNotes(checkIn.notes());
-        } else if (form.getFlareState() == null) {
-            form.setFlareState(FlareState.NO_FLARE);
         }
 
         var submittedByQuestionId = form.getSymptomAnswers().stream()

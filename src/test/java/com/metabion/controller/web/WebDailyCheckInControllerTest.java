@@ -12,6 +12,7 @@ import com.metabion.domain.RoleName;
 import com.metabion.domain.SymptomAnswerType;
 import com.metabion.dto.DailyCheckInForm;
 import com.metabion.dto.DailyDietLogResponse;
+import com.metabion.dto.SymptomCheckInResponse;
 import com.metabion.dto.SymptomQuestionnaireResponse;
 import com.metabion.service.DailyCheckInService;
 import com.metabion.service.DietLogService;
@@ -31,6 +32,7 @@ import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.server.ResponseStatusException;
@@ -58,6 +60,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -99,6 +102,49 @@ class WebDailyCheckInControllerTest {
                 .when(dietLogService).getCurrentPatientLog(any(), any());
         when(clock.instant()).thenReturn(Instant.parse("2026-06-21T08:00:00Z"));
         when(clock.getZone()).thenReturn(ZoneId.of("UTC"));
+    }
+
+    @Test
+    void newDailyCheckInStartsWithOneMealAndRequiresExplicitFlareChoice() throws Exception {
+        MvcResult result = mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        var form = (WebDailyCheckInController.DailyCheckInWebForm)
+                result.getModelAndView().getModel().get("dailyCheckInForm");
+
+        assertThat(form.getMeals()).hasSize(1);
+        assertThat(form.getFlareState()).isNull();
+    }
+
+    @Test
+    void existingSymptomCheckInPreservesItsFlareChoice() throws Exception {
+        when(symptomTrackingService.getCurrentPatientCheckIn(any(), eq(LocalDate.of(2026, 6, 26))))
+                .thenReturn(new SymptomCheckInResponse(
+                        91L,
+                        42L,
+                        30L,
+                        LocalDate.of(2026, 6, 26),
+                        FlareState.ACTIVE_FLARE,
+                        new BigDecimal("5.00"),
+                        "Existing symptoms",
+                        List.of(),
+                        Instant.parse("2026-06-26T08:00:00Z"),
+                        Instant.parse("2026-06-26T08:00:00Z")));
+
+        MvcResult result = mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        var form = (WebDailyCheckInController.DailyCheckInWebForm)
+                result.getModelAndView().getModel().get("dailyCheckInForm");
+
+        assertThat(form.getFlareState()).isEqualTo(FlareState.ACTIVE_FLARE);
+        assertThat(form.getSymptomNotes()).isEqualTo("Existing symptoms");
     }
 
     @Test
@@ -215,7 +261,8 @@ class WebDailyCheckInControllerTest {
                         .param("symptomAnswers[1].optionId", "11")
                         .param("symptomNotes", "More fatigue"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/app/daily-check-in?date=2026-06-26"));
+                .andExpect(redirectedUrl("/app/daily-check-in?date=2026-06-26"))
+                .andExpect(flash().attribute("dailyCheckInSavedDate", LocalDate.of(2026, 6, 26)));
 
         var formCaptor = ArgumentCaptor.forClass(DailyCheckInForm.class);
         verify(dailyCheckInService).saveForCurrentPatient(any(), formCaptor.capture());
