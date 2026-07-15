@@ -150,7 +150,8 @@ class WebClinicalDailyCheckInControllerTest {
                 .andExpect(content().string(containsString("photo-1.jpg")))
                 .andExpect(content().string(containsString("/api/diet-log-photos/3/content")))
                 .andExpect(content().string(org.hamcrest.Matchers.not(containsString("Storage key"))))
-                .andExpect(content().string(containsString("choice-stable-key")))
+                .andExpect(content().string(containsString("Abdominal pain")))
+                .andExpect(content().string(containsString("Mild")))
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(response.indexOf("Avocado salad")).isLessThan(response.indexOf("Restaurant lunch"));
@@ -177,7 +178,9 @@ class WebClinicalDailyCheckInControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("lang=\"cs\"")))
                 .andExpect(content().string(containsString("Detail denního záznamu")))
-                .andExpect(content().string(containsString("Podezření na vzplanutí")));
+                .andExpect(content().string(containsString("Podezření na vzplanutí")))
+                .andExpect(content().string(containsString("Bolest břicha")))
+                .andExpect(content().string(containsString("Mírná")));
     }
 
     @Test
@@ -207,8 +210,8 @@ class WebClinicalDailyCheckInControllerTest {
                 List.of(new DailyMeasurementEntryResponse(4L, 42L, 99L, MeasurementType.GLUCOSE, new BigDecimal("5.8"), MeasurementUnit.MMOL_L,
                         Instant.parse("2026-07-15T07:30:00Z"), MeasurementContext.FASTING, "Morning", Instant.now())));
         var symptoms = new SymptomCheckInResponse(12L, 42L, 4L, LocalDate.of(2026, 7, 15), FlareState.SUSPECTED_FLARE,
-                new BigDecimal("8"), "Tired", List.of(new SymptomCheckInResponse.AnswerResponse(1L, "question-key", null,
-                com.metabion.domain.SymptomAnswerType.SINGLE_CHOICE, 2L, "choice-stable-key", null, null, null, null)), Instant.now(), Instant.now());
+                new BigDecimal("8"), "Tired", List.of(new SymptomCheckInResponse.AnswerResponse(1L, "abdominal-pain", "Abdominal pain",
+                com.metabion.domain.SymptomAnswerType.SINGLE_CHOICE, 2L, "mild", "Mild", null, null, null)), Instant.now(), Instant.now());
         return new ClinicalDailyCheckInDetailResponse(42L, "patient@example.com", LocalDate.of(2026, 7, 15), diet, symptoms);
     }
 }

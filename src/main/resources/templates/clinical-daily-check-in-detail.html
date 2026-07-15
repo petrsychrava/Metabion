@@ -81,8 +81,8 @@
                 <dt th:text="#{dailyCheckIn.symptomNotes}">Notes</dt><dd th:text="${symptoms.notes()} ?: #{dailyCheckIns.notProvided}">Notes</dd>
             </dl>
             <dl class="details" th:each="answer : ${symptoms.answers()}">
-                <dt th:text="${answer.label()} ?: (${answer.questionStableKey()} ?: #{dailyCheckIns.notProvided})">Question</dt>
-                <dd th:if="${answer.optionId() != null}" th:text="${answer.optionLabel()} ?: (${answer.optionStableKey()} ?: #{dailyCheckIns.notProvided})">Answer</dd>
+                <dt th:text="${(answer.questionStableKey() != null ? #messages.msgOrNull('symptomQuestion.' + answer.questionStableKey()) : null) ?: answer.label() ?: answer.questionStableKey() ?: #messages.msg('dailyCheckIns.notProvided')}">Question</dt>
+                <dd th:if="${answer.optionId() != null}" th:text="${(answer.questionStableKey() != null and answer.optionStableKey() != null ? #messages.msgOrNull('symptomQuestion.' + answer.questionStableKey() + '.option.' + answer.optionStableKey()) : null) ?: answer.optionLabel() ?: answer.optionStableKey() ?: #messages.msg('dailyCheckIns.notProvided')}">Answer</dd>
                 <dd th:if="${answer.optionId() == null}" th:text="${answer.answerText()} ?: (${answer.answerNumeric()} ?: #{dailyCheckIns.notProvided})">Answer</dd>
             </dl>
         </section>
