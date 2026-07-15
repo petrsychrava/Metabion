@@ -29,11 +29,14 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -41,6 +44,7 @@ import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -49,7 +53,7 @@ import java.util.stream.Collectors;
 public class WebDailyCheckInController {
 
     private static final String ACTIVE_PATH = "/app/daily-check-in";
-    private static final int DEFAULT_MEAL_ROWS = 2;
+    private static final int DEFAULT_MEAL_ROWS = 1;
     private static final int DEFAULT_PHOTO_ROWS_PER_MEAL = 1;
 
     private final DailyCheckInService dailyCheckInService;
@@ -90,12 +94,16 @@ public class WebDailyCheckInController {
     public String save(@Valid @ModelAttribute("dailyCheckInForm") DailyCheckInWebForm form,
                        BindingResult binding,
                        Model model,
-                       Authentication authentication) {
+                       Authentication authentication,
+                       RedirectAttributes redirectAttributes) {
         applyPatientDefaultsForDisplay(form, authentication);
         var questionnaire = symptomTrackingService.activeQuestionnaire();
         refreshSymptomRows(form, questionnaire, null, false);
         ensureRows(form);
         if (binding.hasErrors()) {
+            var bindingErrors = bindingErrorViews(binding);
+            model.addAttribute("dailyCheckInBindingErrors", bindingErrors);
+            model.addAttribute("dailyCheckInBindingErrorIds", bindingErrorIdsByTarget(bindingErrors));
             addFormModel(model, authentication, questionnaire, form);
             return "daily-check-in";
         }
@@ -105,10 +113,11 @@ public class WebDailyCheckInController {
             if (ex.getStatusCode() != HttpStatus.BAD_REQUEST) {
                 throw ex;
             }
-            model.addAttribute("dailyCheckInError", errorMessage(ex));
+            model.addAttribute("dailyCheckInError", true);
             addFormModel(model, authentication, questionnaire, form);
             return "daily-check-in";
         }
+        redirectAttributes.addFlashAttribute("dailyCheckInSavedDate", form.getLogDate());
         return "redirect:/app/daily-check-in?date=" + form.getLogDate();
     }
 
@@ -146,7 +155,6 @@ public class WebDailyCheckInController {
                                           String patientTimezone) {
         var form = new DailyCheckInWebForm();
         form.setLogDate(selectedDate);
-        form.setFlareState(FlareState.NO_FLARE);
         form.setGlucoseUnitPreference(glucosePreference);
         form.setPatientTimezone(patientTimezone);
         ensureRows(form);
@@ -161,7 +169,6 @@ public class WebDailyCheckInController {
         form.setAdherenceLevel(response.adherenceLevel());
         form.setAppetiteLevel(response.appetiteLevel());
         form.setNotes(response.notes());
-        form.setFlareState(FlareState.NO_FLARE);
         form.setGlucoseUnitPreference(glucosePreference);
         form.setPatientTimezone(patientTimezone);
 
@@ -211,8 +218,6 @@ public class WebDailyCheckInController {
         if (checkIn != null) {
             form.setFlareState(checkIn.flareState());
             form.setSymptomNotes(checkIn.notes());
-        } else if (form.getFlareState() == null) {
-            form.setFlareState(FlareState.NO_FLARE);
         }
 
         var submittedByQuestionId = form.getSymptomAnswers().stream()
@@ -329,10 +334,51 @@ public class WebDailyCheckInController {
         }
     }
 
-    private String errorMessage(ResponseStatusException ex) {
-        return ex.getReason() == null || ex.getReason().isBlank()
-                ? "Daily check-in could not be saved."
-                : ex.getReason();
+    private List<DailyCheckInBindingError> bindingErrorViews(BindingResult binding) {
+        var errors = binding.getAllErrors();
+        var views = new ArrayList<DailyCheckInBindingError>(errors.size());
+        for (int index = 0; index < errors.size(); index++) {
+            views.add(bindingErrorView(errors.get(index), index));
+        }
+        return views;
+    }
+
+    private DailyCheckInBindingError bindingErrorView(ObjectError error, int index) {
+        var field = error instanceof FieldError fieldError ? fieldError.getField() : null;
+        return new DailyCheckInBindingError(
+                bindingErrorTargetId(field),
+                "daily-check-in-error-" + index,
+                error.getDefaultMessage());
+    }
+
+    private Map<String, String> bindingErrorIdsByTarget(List<DailyCheckInBindingError> errors) {
+        var ids = new LinkedHashMap<String, String>();
+        for (var error : errors) {
+            ids.merge(error.targetId(), error.errorId(), (existing, next) -> existing + " " + next);
+        }
+        return ids;
+    }
+
+    private String bindingErrorTargetId(String field) {
+        if (field == null) {
+            return "daily-check-in-errors";
+        }
+        if (field.equals("flareState")) {
+            return "flareStateGroup";
+        }
+        if (field.equals("questionnaireVersionId") || field.endsWith(".questionId")) {
+            return "symptoms-section";
+        }
+        if (field.endsWith(".uploadId")) {
+            return field.replaceAll("\\[(\\d+)]", "$1").replace(".uploadId", ".caption");
+        }
+        return field.replaceAll("\\[(\\d+)]", "$1");
+    }
+
+    public record DailyCheckInBindingError(String targetId, String errorId, String message) {
+        public String href() {
+            return "#" + targetId;
+        }
     }
 
     private void addFormModel(Model model,
@@ -342,6 +388,12 @@ public class WebDailyCheckInController {
         addOptions(model);
         model.addAttribute("questionnaire", questionnaire);
         model.addAttribute("dailyCheckInForm", form);
+        if (!model.containsAttribute("dailyCheckInBindingErrors")) {
+            model.addAttribute("dailyCheckInBindingErrors", List.of());
+        }
+        if (!model.containsAttribute("dailyCheckInBindingErrorIds")) {
+            model.addAttribute("dailyCheckInBindingErrorIds", Map.of());
+        }
         model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
         model.addAttribute("activePath", ACTIVE_PATH);
         model.addAttribute("themePreference", userPreferenceService.currentThemePreference(authentication));

@@ -2,21 +2,6 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout :: appShell(#{dailyCheckIn.pageTitle}, ${activePath}, ~{::content})}">
 <th:block th:fragment="content">
-    <style>
-        .photo-preview-link {
-            display: inline-flex;
-            width: fit-content;
-        }
-
-        .diet-photo-preview {
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            height: 120px;
-            object-fit: cover;
-            width: 160px;
-        }
-    </style>
-
     <header class="app-header">
         <div>
             <p class="eyebrow">Metabion</p>
@@ -26,69 +11,129 @@
     </header>
 
     <section class="panel app-panel">
-        <form class="form diet-log-form" th:action="@{/app/daily-check-in}" th:object="${dailyCheckInForm}" method="post">
+        <p class="daily-check-in-success" role="status" th:if="${dailyCheckInSavedDate != null}"
+           th:text="#{dailyCheckIn.saved(${#temporals.format(dailyCheckInSavedDate, 'dd.MM.yyyy')})}">
+            Daily check-in saved.
+        </p>
+
+        <form class="form diet-log-form daily-check-in-form"
+              th:action="@{/app/daily-check-in}" th:object="${dailyCheckInForm}" method="post"
+              th:attr="data-loaded-date=${dailyCheckInForm.logDate},
+                       data-status-not-started=#{dailyCheckIn.status.notStarted},
+                       data-status-in-progress=#{dailyCheckIn.status.inProgress},
+                       data-status-complete=#{dailyCheckIn.status.complete},
+                       data-status-needs-attention=#{dailyCheckIn.status.needsAttention},
+                       data-required-progress-template=#{dailyCheckIn.requiredProgress},
+                       data-unsaved-date-confirm=#{dailyCheckIn.unsavedDateConfirm},
+                       data-unsaved-leave-warning=#{dailyCheckIn.unsavedLeaveWarning},
+                       data-remove-meal-template=#{dailyCheckIn.removeMealAccessible},
+                       data-meal-notes-template=#{dailyCheckIn.mealNotesAccessible},
+                       data-meal-photo-template=#{dailyCheckIn.mealPhotoAccessible},
+                       data-meal-caption-template=#{dailyCheckIn.mealCaptionAccessible},
+                       data-meal-added-template=#{dailyCheckIn.mealAdded},
+                       data-meal-removed-template=#{dailyCheckIn.mealRemoved},
+                       data-photo-success-template=#{dailyCheckIn.photoUploadSucceeded},
+                       data-photo-failure=#{dailyCheckIn.photoUploadFailed},
+                       data-photo-uploads-pending=#{dailyCheckIn.photoUploadsPending}">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
             <input type="hidden" th:field="*{patientTimezone}">
             <input type="hidden" th:field="*{questionnaireVersionId}">
-            <p class="error" th:if="${dailyCheckInError != null}" th:text="${dailyCheckInError}">Daily check-in error</p>
-            <p class="error" th:each="error : ${#fields.errors('*')}" th:text="${error}">Form error</p>
 
-            <section class="diet-log-section diet-log-card">
-                <div class="diet-log-section-header">
-                    <h2 th:text="#{dailyCheckIn.dietSection}">Diet</h2>
-                </div>
+            <section id="daily-check-in-errors" class="error-summary" role="alert" tabindex="-1"
+                     th:if="${#fields.hasAnyErrors() or dailyCheckInError != null}">
+                <h2 th:text="#{validation.summaryTitle}">Please fix the highlighted fields</h2>
+                <ul>
+                    <li th:each="error : ${dailyCheckInBindingErrors}">
+                        <a th:href="${error.href}" th:id="${error.errorId}"
+                           th:attr="data-error-target-id=${error.targetId}" th:text="${error.message}">Field error</a>
+                    </li>
+                    <li th:if="${dailyCheckInError == true}">
+                        <a href="#daily-check-in-save-error" data-error-target-id="daily-check-in-save-error"
+                           th:text="#{dailyCheckIn.saveError}">Daily check-in error</a>
+                    </li>
+                </ul>
+            </section>
+
+            <p id="daily-check-in-save-error" class="error" tabindex="-1"
+               th:if="${dailyCheckInError == true}" th:text="#{dailyCheckIn.saveError}">
+                Daily check-in could not be saved. Review the form and try again.
+            </p>
+
+            <p id="daily-check-in-live" class="visually-hidden" aria-live="polite" aria-atomic="true"></p>
+
+            <details id="diet-section" class="daily-check-in-section" data-section="diet" tabindex="-1" open>
+                <summary class="daily-check-in-section-summary">
+                    <span class="daily-check-in-section-title" th:text="#{dailyCheckIn.dietSection}">Diet</span>
+                    <span class="requirement-badge" th:text="#{dailyCheckIn.required}">Required</span>
+                    <span class="section-status" data-section-status role="status" aria-live="polite" aria-atomic="true"
+                          th:text="#{dailyCheckIn.status.notStarted}">Not started</span>
+                </summary>
+                <div class="daily-check-in-section-body">
 
                 <div class="diet-log-grid">
-                    <label class="field"><span th:text="#{dietLogs.logDate}">Date</span>
+                    <label class="field"><span><span th:text="#{dietLogs.logDate}">Date</span> <span class="field-requirement" th:text="#{dailyCheckIn.required}">Required</span></span>
                         <input type="date" id="logDate" name="logDate" data-log-date
                                th:value="${dailyCheckInForm.logDate == null ? '' : #temporals.format(dailyCheckInForm.logDate, 'yyyy-MM-dd')}"
+                               th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('logDate') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('logDate')}"
                                required>
                     </label>
-                    <label class="field"><span th:text="#{dietLogs.adherenceLevel}">Adherence</span>
-                        <select th:field="*{adherenceLevel}" required>
+                    <label class="field"><span><span th:text="#{dietLogs.adherenceLevel}">Adherence</span> <span class="field-requirement" th:text="#{dailyCheckIn.required}">Required</span></span>
+                        <select th:field="*{adherenceLevel}"
+                                th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('adherenceLevel') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('adherenceLevel')}"
+                                required>
                             <option value="" th:text="#{onboarding.select}">Select</option>
                             <option th:each="option : ${adherenceOptions}" th:value="${option}" th:text="${#messages.msg('enum.dietAdherenceLevel.' + option.name())}">Mostly</option>
                         </select>
                     </label>
-                    <label class="field"><span th:text="#{dietLogs.appetiteLevel}">Appetite</span>
-                        <select th:field="*{appetiteLevel}" required>
+                    <label class="field"><span><span th:text="#{dietLogs.appetiteLevel}">Appetite</span> <span class="field-requirement" th:text="#{dailyCheckIn.required}">Required</span></span>
+                        <select th:field="*{appetiteLevel}"
+                                th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('appetiteLevel') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('appetiteLevel')}"
+                                required>
                             <option value="" th:text="#{onboarding.select}">Select</option>
                             <option th:each="option : ${appetiteOptions}" th:value="${option}" th:text="${#messages.msg('enum.appetiteLevel.' + option.name())}">Normal</option>
                         </select>
                     </label>
                 </div>
 
-                <label class="field"><span th:text="#{dietLogs.notes}">Notes</span>
-                    <textarea th:field="*{notes}"></textarea>
+                <label class="field"><span><span th:text="#{dietLogs.notes}">Notes</span> <span class="field-requirement" th:text="#{dailyCheckIn.optional}">Optional</span></span>
+                    <textarea th:field="*{notes}"
+                              th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('notes') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('notes')}"></textarea>
                 </label>
-            </section>
-
-            <section class="diet-log-section">
-                <div class="diet-log-section-header">
-                    <div>
-                        <h2 th:text="#{dailyCheckIn.measurementsSection}">Measurements</h2>
-                        <p class="hint" th:text="#{dietLogs.unitFromProfile}">Unit from profile</p>
-                    </div>
                 </div>
+            </details>
+
+            <details id="measurements-section" class="daily-check-in-section" data-section="measurements" tabindex="-1">
+                <summary class="daily-check-in-section-summary">
+                    <span class="daily-check-in-section-title" th:text="#{dailyCheckIn.measurementsSection}">Measurements</span>
+                    <span class="requirement-badge" th:text="#{dailyCheckIn.optional}">Optional</span>
+                    <span class="section-status" data-section-status role="status" aria-live="polite" aria-atomic="true"
+                          th:text="#{dailyCheckIn.status.notStarted}">Not started</span>
+                </summary>
+                <div class="daily-check-in-section-body">
+                    <p class="hint" th:text="#{dietLogs.unitFromProfile}">Unit from profile</p>
 
                 <div class="diet-log-grid">
                     <section class="measurement-card">
                         <h3 th:text="#{dietLogs.glucose}">Glucose</h3>
                         <span class="unit-pill" th:text="${dailyCheckInForm.glucoseUnitPreference == null ? '' : #messages.msg('enum.measurementUnit.' + dailyCheckInForm.glucoseUnitPreference.name())}">mg/dL</span>
                         <label class="field"><span th:text="#{dietLogs.measurementValue}">Value</span>
-                            <input type="number" step="0.01" th:field="*{glucoseMeasurement.value}">
+                            <input type="number" step="0.01" id="glucoseMeasurement.value" th:field="*{glucoseMeasurement.value}"
+                                   th:attr="aria-label=#{dailyCheckIn.glucoseValueAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('glucoseMeasurement.value') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('glucoseMeasurement.value')}">
                         </label>
                         <label class="field"><span th:text="#{dietLogs.measurementTime}">Time</span>
-                            <input type="time" th:field="*{glucoseMeasurement.measuredTime}">
+                            <input type="time" id="glucoseMeasurement.measuredTime" th:field="*{glucoseMeasurement.measuredTime}"
+                                   th:attr="aria-label=#{dailyCheckIn.glucoseTimeAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('glucoseMeasurement.measuredTime') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('glucoseMeasurement.measuredTime')}">
                         </label>
                         <label class="field"><span th:text="#{dietLogs.measurementContext}">Context</span>
-                            <select th:field="*{glucoseMeasurement.context}">
+                            <select id="glucoseMeasurement.context" th:field="*{glucoseMeasurement.context}"
+                                    th:attr="aria-label=#{dailyCheckIn.glucoseContextAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('glucoseMeasurement.context') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('glucoseMeasurement.context')}">
                                 <option value="" th:text="#{onboarding.select}">Select</option>
                                 <option th:each="option : ${measurementContexts}" th:value="${option}" th:text="${#messages.msg('enum.measurementContext.' + option.name())}">Fasting</option>
                             </select>
                         </label>
-                        <label class="field"><span th:text="#{dietLogs.measurementNotes}">Measurement notes</span>
-                            <textarea th:field="*{glucoseMeasurement.notes}"></textarea>
+                        <label class="field"><span><span th:text="#{dietLogs.measurementNotes}">Measurement notes</span> <span class="field-requirement" th:text="#{dailyCheckIn.optional}">Optional</span></span>
+                            <textarea id="glucoseMeasurement.notes" th:field="*{glucoseMeasurement.notes}"
+                                      th:attr="aria-label=#{dailyCheckIn.glucoseNotesAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('glucoseMeasurement.notes') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('glucoseMeasurement.notes')}"></textarea>
                         </label>
                     </section>
 
@@ -96,29 +141,38 @@
                         <h3 th:text="#{dietLogs.ketones}">Ketones</h3>
                         <span class="unit-pill" th:text="#{dietLogs.fixedKetoneUnit}">Ketones are recorded in mmol/L</span>
                         <label class="field"><span th:text="#{dietLogs.measurementValue}">Value</span>
-                            <input type="number" step="0.01" th:field="*{ketoneMeasurement.value}">
+                            <input type="number" step="0.01" id="ketoneMeasurement.value" th:field="*{ketoneMeasurement.value}"
+                                   th:attr="aria-label=#{dailyCheckIn.ketoneValueAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('ketoneMeasurement.value') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('ketoneMeasurement.value')}">
                         </label>
                         <label class="field"><span th:text="#{dietLogs.measurementTime}">Time</span>
-                            <input type="time" th:field="*{ketoneMeasurement.measuredTime}">
+                            <input type="time" id="ketoneMeasurement.measuredTime" th:field="*{ketoneMeasurement.measuredTime}"
+                                   th:attr="aria-label=#{dailyCheckIn.ketoneTimeAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('ketoneMeasurement.measuredTime') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('ketoneMeasurement.measuredTime')}">
                         </label>
                         <label class="field"><span th:text="#{dietLogs.measurementContext}">Context</span>
-                            <select th:field="*{ketoneMeasurement.context}">
+                            <select id="ketoneMeasurement.context" th:field="*{ketoneMeasurement.context}"
+                                    th:attr="aria-label=#{dailyCheckIn.ketoneContextAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('ketoneMeasurement.context') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('ketoneMeasurement.context')}">
                                 <option value="" th:text="#{onboarding.select}">Select</option>
                                 <option th:each="option : ${measurementContexts}" th:value="${option}" th:text="${#messages.msg('enum.measurementContext.' + option.name())}">Bedtime</option>
                             </select>
                         </label>
-                        <label class="field"><span th:text="#{dietLogs.measurementNotes}">Measurement notes</span>
-                            <textarea th:field="*{ketoneMeasurement.notes}"></textarea>
+                        <label class="field"><span><span th:text="#{dietLogs.measurementNotes}">Measurement notes</span> <span class="field-requirement" th:text="#{dailyCheckIn.optional}">Optional</span></span>
+                            <textarea id="ketoneMeasurement.notes" th:field="*{ketoneMeasurement.notes}"
+                                      th:attr="aria-label=#{dailyCheckIn.ketoneNotesAccessible},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('ketoneMeasurement.notes') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('ketoneMeasurement.notes')}"></textarea>
                         </label>
                     </section>
                 </div>
-            </section>
-
-            <section class="diet-log-section">
-                <div class="diet-log-section-header">
-                    <h2 th:text="#{dietLogs.meals}">Meals</h2>
-                    <button type="button" class="secondary" data-add-meal th:text="#{dietLogs.addMeal}">Add meal</button>
                 </div>
+            </details>
+
+            <details id="meals-section" class="daily-check-in-section" data-section="meals" tabindex="-1">
+                <summary class="daily-check-in-section-summary">
+                    <span class="daily-check-in-section-title" th:text="#{dietLogs.meals}">Meals</span>
+                    <span class="requirement-badge" th:text="#{dailyCheckIn.optional}">Optional</span>
+                    <span class="section-status" data-section-status role="status" aria-live="polite" aria-atomic="true"
+                          th:text="#{dailyCheckIn.status.notStarted}">Not started</span>
+                </summary>
+                <div class="daily-check-in-section-body">
+                    <button type="button" class="secondary" data-add-meal th:text="#{dietLogs.addMeal}">Add meal</button>
 
                 <div class="meal-list" data-meal-list
                      th:attr="data-caption-label=#{dietLogs.caption},data-uploaded-label=#{dietLogs.photoUploaded},data-uploaded-fallback=#{dietLogs.uploadedPhoto}">
@@ -128,23 +182,31 @@
                                 <span th:text="#{dietLogs.meal}">Meal</span>
                                 <span data-meal-number th:text="${row.index + 1}">1</span>
                             </h2>
-                            <button type="button" class="secondary" data-remove-meal th:text="#{dietLogs.removeMeal}">Remove meal</button>
+                            <button type="button" class="secondary" data-remove-meal
+                                    th:attr="aria-label=${#messages.msg('dailyCheckIn.removeMealAccessible', row.index + 1)}"
+                                    th:text="#{dietLogs.removeMeal}">Remove meal</button>
                         </div>
 
                         <div class="meal-card-fields">
                             <div class="diet-log-grid">
                                 <label class="field"><span th:text="#{dietLogs.mealType}">Meal type</span>
-                                    <select th:field="*{meals[__${row.index}__].mealType}">
+                                    <select th:field="*{meals[__${row.index}__].mealType}"
+                                            th:id="${'meals' + row.index + '.mealType'}"
+                                            th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('meals' + row.index + '.mealType') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('meals' + row.index + '.mealType')}">
                                         <option value="" th:text="#{onboarding.select}">Select</option>
                                         <option th:each="option : ${mealTypes}" th:value="${option}" th:text="${#messages.msg('enum.mealType.' + option.name())}">Lunch</option>
                                     </select>
                                 </label>
                             </div>
                             <label class="field"><span th:text="#{dietLogs.foodDescription}">Food description</span>
-                                <input th:field="*{meals[__${row.index}__].foodDescription}">
+                                <input th:field="*{meals[__${row.index}__].foodDescription}"
+                                       th:id="${'meals' + row.index + '.foodDescription'}"
+                                       th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('meals' + row.index + '.foodDescription') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('meals' + row.index + '.foodDescription')}">
                             </label>
-                            <label class="field"><span th:text="#{dietLogs.mealNotes}">Meal notes</span>
-                                <textarea th:field="*{meals[__${row.index}__].notes}"></textarea>
+                            <label class="field"><span><span th:text="#{dietLogs.mealNotes}">Meal notes</span> <span class="field-requirement" th:text="#{dailyCheckIn.optional}">Optional</span></span>
+                                <textarea th:field="*{meals[__${row.index}__].notes}"
+                                          th:id="${'meals' + row.index + '.notes'}"
+                                          th:attr="aria-label=${#messages.msg('dailyCheckIn.mealNotesAccessible', row.index + 1)},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('meals' + row.index + '.notes') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('meals' + row.index + '.notes')}"></textarea>
                             </label>
                         </div>
 
@@ -152,31 +214,42 @@
                             <h3 th:text="#{dietLogs.deviation}">Deviation</h3>
                             <div class="diet-log-grid">
                                 <label class="field"><span th:text="#{dietLogs.deviationCategory}">Category</span>
-                                    <select th:field="*{meals[__${row.index}__].deviation.deviationCategory}">
+                                    <select th:field="*{meals[__${row.index}__].deviation.deviationCategory}" data-deviation-category
+                                            th:id="${'meals' + row.index + '.deviation.deviationCategory'}"
+                                            th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('meals' + row.index + '.deviation.deviationCategory') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('meals' + row.index + '.deviation.deviationCategory')}">
                                         <option value="" th:text="#{dietLogs.noDeviation}">No deviation</option>
                                         <option th:each="option : ${deviationCategories}" th:value="${option}" th:text="${#messages.msg('enum.dietDeviationCategory.' + option.name())}">Dining out</option>
                                     </select>
                                 </label>
+                            </div>
+                            <div data-deviation-details>
                                 <label class="field"><span th:text="#{dietLogs.deviationSeverity}">Severity</span>
-                                    <select th:field="*{meals[__${row.index}__].deviation.severity}">
+                                    <select th:field="*{meals[__${row.index}__].deviation.severity}"
+                                            th:id="${'meals' + row.index + '.deviation.severity'}"
+                                            th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('meals' + row.index + '.deviation.severity') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('meals' + row.index + '.deviation.severity')}">
                                         <option value="" th:text="#{onboarding.select}">Select</option>
-                                        <option th:each="option : ${deviationSeverities}" th:value="${option}" th:text="${#messages.msg('enum.dietDeviationSeverity.' + option.name())}">Minor</option>
+                                        <option th:each="option : ${deviationSeverities}" th:value="${option}"
+                                                th:text="${#messages.msg('enum.dietDeviationSeverity.' + option.name())}">Minor</option>
                                     </select>
                                 </label>
+                                <label class="field"><span th:text="#{dietLogs.deviationNotes}">Deviation notes</span>
+                                    <textarea th:field="*{meals[__${row.index}__].deviation.notes}"
+                                              th:id="${'meals' + row.index + '.deviation.notes'}"
+                                              th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('meals' + row.index + '.deviation.notes') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('meals' + row.index + '.deviation.notes')}"></textarea>
+                                </label>
                             </div>
-                            <label class="field"><span th:text="#{dietLogs.deviationNotes}">Deviation notes</span>
-                                <textarea th:field="*{meals[__${row.index}__].deviation.notes}"></textarea>
-                            </label>
                         </section>
 
                         <section class="meal-subsection">
                             <h3 th:text="#{dietLogs.mealPhotos}">Photos for this meal</h3>
                             <label class="field"><span th:text="#{dietLogs.uploadMealPhotos}">Upload photos for this meal</span>
-                                <input type="file" class="diet-photo-upload" accept="image/jpeg,image/png,image/webp" multiple>
+                                <input type="file" class="diet-photo-upload" accept="image/jpeg,image/png,image/webp" multiple
+                                       th:attr="aria-label=${#messages.msg('dailyCheckIn.mealPhotoAccessible', row.index + 1)}">
                             </label>
                             <div data-photo-rows>
                                 <div class="photo-reference-row" th:each="photoReference, photoRow : ${meal.photoReferences}" data-photo-row>
-                                    <input type="hidden" th:field="*{meals[__${row.index}__].photoReferences[__${photoRow.index}__].uploadId}">
+                                    <input type="hidden" th:field="*{meals[__${row.index}__].photoReferences[__${photoRow.index}__].uploadId}"
+                                           th:id="${'meals' + row.index + '.photoReferences' + photoRow.index + '.uploadId'}">
                                     <a class="photo-preview-link" data-photo-preview-link th:if="${photoReference.uploadId != null}"
                                        th:href="${photoReference.contentUrl == null || photoReference.contentUrl.isBlank() ? '/api/diet-log-photos/' + photoReference.uploadId + '/content' : photoReference.contentUrl}"
                                        target="_blank" rel="noopener">
@@ -184,33 +257,43 @@
                                              th:src="${photoReference.contentUrl == null || photoReference.contentUrl.isBlank() ? '/api/diet-log-photos/' + photoReference.uploadId + '/content' : photoReference.contentUrl}"
                                              th:alt="${photoReference.originalFilename == null || photoReference.originalFilename.isBlank() ? #messages.msg('dietLogs.uploadedPhoto') : photoReference.originalFilename}">
                                     </a>
-                                    <label class="field"><span th:text="#{dietLogs.caption}">Caption</span>
-                                        <input th:field="*{meals[__${row.index}__].photoReferences[__${photoRow.index}__].caption}">
+                                    <label class="field" data-photo-caption th:hidden="${photoReference.uploadId == null}">
+                                        <span th:text="#{dietLogs.caption}">Caption</span>
+                                        <input th:field="*{meals[__${row.index}__].photoReferences[__${photoRow.index}__].caption}"
+                                               th:id="${'meals' + row.index + '.photoReferences' + photoRow.index + '.caption'}"
+                                               th:attr="aria-label=${#messages.msg('dailyCheckIn.mealCaptionAccessible', row.index + 1)},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('meals' + row.index + '.photoReferences' + photoRow.index + '.caption') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('meals' + row.index + '.photoReferences' + photoRow.index + '.caption')}">
                                     </label>
                                 </div>
                             </div>
                         </section>
                     </section>
                 </div>
-            </section>
-
-            <section class="diet-log-section diet-log-card">
-                <div class="diet-log-section-header">
-                    <h2 th:text="#{dailyCheckIn.symptomsSection}">Symptoms</h2>
                 </div>
+            </details>
 
-                <fieldset>
-                    <legend th:text="#{dailyCheckIn.flareState}">Flare state</legend>
+            <details id="symptoms-section" class="daily-check-in-section" data-section="symptoms" tabindex="-1">
+                <summary class="daily-check-in-section-summary">
+                    <span class="daily-check-in-section-title" th:text="#{dailyCheckIn.symptomsSection}">Symptoms</span>
+                    <span class="requirement-badge" th:text="#{dailyCheckIn.required}">Required</span>
+                    <span class="section-status" data-section-status role="status" aria-live="polite" aria-atomic="true"
+                          th:text="#{dailyCheckIn.status.notStarted}">Not started</span>
+                </summary>
+                <div class="daily-check-in-section-body">
+
+                <fieldset id="flareStateGroup" tabindex="-1"
+                          th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('flareStateGroup') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('flareStateGroup')}">
+                    <legend><span th:text="#{dailyCheckIn.flareState}">Flare state</span> <span class="field-requirement" th:text="#{dailyCheckIn.required}">Required</span></legend>
                     <label th:each="option : ${flareStateOptions}">
-                        <input type="radio" th:field="*{flareState}" th:value="${option}">
+                        <input type="radio" th:field="*{flareState}" th:value="${option}" required>
                         <span th:text="${#messages.msg('enum.flareState.' + option.name())}">No flare</span>
                     </label>
                 </fieldset>
 
                 <div class="meal-list">
                     <section class="measurement-card" th:each="question, row : ${questionnaire.questions}">
-                        <input type="hidden" th:field="*{symptomAnswers[__${row.index}__].questionId}">
-                        <h3 th:text="${#messages.msgOrNull('symptomQuestion.' + question.stableKey) ?: question.label}">Stool frequency</h3>
+                        <input type="hidden" th:field="*{symptomAnswers[__${row.index}__].questionId}"
+                               th:id="${'symptomAnswers' + row.index + '.questionId'}">
+                        <h3><span th:text="${#messages.msgOrNull('symptomQuestion.' + question.stableKey) ?: question.label}">Stool frequency</span> <span class="field-requirement" th:text="${question.required ? #messages.msg('dailyCheckIn.required') : #messages.msg('dailyCheckIn.optional')}">Required</span></h3>
                         <p class="hint" th:if="${question.helpText != null}"
                            th:text="${#messages.msgOrNull('symptomQuestion.' + question.stableKey + '.help') ?: question.helpText}">Help text</p>
 
@@ -219,17 +302,26 @@
                             <input type="number" step="0.01"
                                    th:min="${question.minNumericValue}"
                                    th:max="${question.maxNumericValue}"
+                                   th:id="${'symptomAnswers' + row.index + '.answerNumeric'}"
+                                   th:attr="data-required-symptom=${question.required},aria-label=${#messages.msg('dailyCheckIn.symptomAnswerAccessible', (#messages.msgOrNull('symptomQuestion.' + question.stableKey) ?: question.label))},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('symptomAnswers' + row.index + '.answerNumeric') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('symptomAnswers' + row.index + '.answerNumeric')}"
+                                   th:required="${question.required}"
                                    th:field="*{symptomAnswers[__${row.index}__].answerNumeric}">
                         </label>
 
                         <label class="field" th:if="${question.answerType.name() == 'TEXT'}">
                             <span th:text="#{dailyCheckIn.symptomTextAnswer}">Answer</span>
-                            <textarea th:field="*{symptomAnswers[__${row.index}__].answerText}"></textarea>
+                            <textarea th:field="*{symptomAnswers[__${row.index}__].answerText}"
+                                      th:id="${'symptomAnswers' + row.index + '.answerText'}"
+                                      th:required="${question.required}"
+                                      th:attr="data-required-symptom=${question.required},aria-label=${#messages.msg('dailyCheckIn.symptomAnswerAccessible', (#messages.msgOrNull('symptomQuestion.' + question.stableKey) ?: question.label))},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('symptomAnswers' + row.index + '.answerText') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('symptomAnswers' + row.index + '.answerText')}"></textarea>
                         </label>
 
                         <label class="field" th:if="${question.answerType.name() == 'SINGLE_CHOICE'}">
                             <span th:text="#{dailyCheckIn.symptomChoiceAnswer}">Answer</span>
-                            <select th:field="*{symptomAnswers[__${row.index}__].optionId}">
+                            <select th:field="*{symptomAnswers[__${row.index}__].optionId}"
+                                    th:id="${'symptomAnswers' + row.index + '.optionId'}"
+                                    th:required="${question.required}"
+                                    th:attr="data-required-symptom=${question.required},aria-label=${#messages.msg('dailyCheckIn.symptomAnswerAccessible', (#messages.msgOrNull('symptomQuestion.' + question.stableKey) ?: question.label))},aria-invalid=${dailyCheckInBindingErrorIds.containsKey('symptomAnswers' + row.index + '.optionId') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('symptomAnswers' + row.index + '.optionId')}">
                                 <option value="" th:text="#{onboarding.select}">Select</option>
                                 <option th:each="option : ${question.options}" th:value="${option.id}"
                                         th:text="${#messages.msgOrNull('symptomQuestion.' + question.stableKey + '.option.' + option.stableKey) ?: option.label}">Mild</option>
@@ -238,191 +330,20 @@
                     </section>
                 </div>
 
-                <label class="field"><span th:text="#{dailyCheckIn.symptomNotes}">Symptom notes</span>
-                    <textarea th:field="*{symptomNotes}"></textarea>
+                <label class="field"><span><span th:text="#{dailyCheckIn.symptomNotes}">Symptom notes</span> <span class="field-requirement" th:text="#{dailyCheckIn.optional}">Optional</span></span>
+                    <textarea th:field="*{symptomNotes}"
+                              th:attr="aria-invalid=${dailyCheckInBindingErrorIds.containsKey('symptomNotes') ? 'true' : null},aria-describedby=${dailyCheckInBindingErrorIds.get('symptomNotes')}"></textarea>
                 </label>
-            </section>
+                </div>
+            </details>
 
-            <script>
-                document.addEventListener('DOMContentLoaded', () => {
-                    const mealList = document.querySelector('[data-meal-list]');
-                    const addMealButton = document.querySelector('[data-add-meal]');
-                    const logDateInput = document.querySelector('[data-log-date]');
-                    const csrf = document.querySelector('input[name="_csrf"]');
-                    logDateInput?.addEventListener('change', () => {
-                        if (!logDateInput.value) return;
-                        const target = new URL(window.location.href);
-                        if (target.searchParams.get('date') === logDateInput.value) return;
-                        target.searchParams.set('date', logDateInput.value);
-                        window.location.href = target.toString();
-                    });
-                    if (!mealList) return;
-
-                    const mealRows = () => Array.from(mealList.querySelectorAll('[data-meal-row]'));
-
-                    const updateMealAttributes = (row, mealIndex) => {
-                        row.dataset.mealIndex = mealIndex;
-                        const number = row.querySelector('[data-meal-number]');
-                        if (number) number.textContent = String(mealIndex + 1);
-
-                        row.querySelectorAll('[name]').forEach((element) => {
-                            element.name = element.name.replace(/meals\[\d+]/g, `meals[${mealIndex}]`);
-                        });
-                        row.querySelectorAll('[id]').forEach((element) => {
-                            element.id = element.id.replace(/meals\d+/g, `meals${mealIndex}`);
-                        });
-                        row.querySelectorAll('[for]').forEach((element) => {
-                            element.htmlFor = element.htmlFor.replace(/meals\d+/g, `meals${mealIndex}`);
-                        });
-
-                        row.querySelectorAll('[data-photo-row]').forEach((photoRow, photoIndex) => {
-                            photoRow.querySelectorAll('[name]').forEach((element) => {
-                                element.name = element.name.replace(/photoReferences\[\d+]/g, `photoReferences[${photoIndex}]`);
-                            });
-                            photoRow.querySelectorAll('[id]').forEach((element) => {
-                                element.id = element.id.replace(/photoReferences\d+/g, `photoReferences${photoIndex}`);
-                            });
-                            photoRow.querySelectorAll('[for]').forEach((element) => {
-                                element.htmlFor = element.htmlFor.replace(/photoReferences\d+/g, `photoReferences${photoIndex}`);
-                            });
-                        });
-                    };
-
-                    const reindexMeals = () => mealRows().forEach(updateMealAttributes);
-
-                    const resetMealRow = (row) => {
-                        row.querySelectorAll('input, select, textarea').forEach((element) => {
-                            element.value = '';
-                        });
-                        const photoRows = Array.from(row.querySelectorAll('[data-photo-row]'));
-                        photoRows.slice(1).forEach((photoRow) => photoRow.remove());
-                        row.querySelectorAll('[data-photo-upload-status]').forEach((status) => status.remove());
-                        row.querySelectorAll('[data-photo-preview-link], [data-photo-preview]').forEach((preview) => preview.remove());
-                    };
-
-                    addMealButton?.addEventListener('click', () => {
-                        const source = mealRows().at(-1);
-                        if (!source) return;
-                        const clone = source.cloneNode(true);
-                        resetMealRow(clone);
-                        mealList.appendChild(clone);
-                        reindexMeals();
-                    });
-
-                    mealList.addEventListener('click', (event) => {
-                        const button = event.target.closest('[data-remove-meal]');
-                        if (!button) return;
-                        const rows = mealRows();
-                        const row = button.closest('[data-meal-row]');
-                        if (!row) return;
-                        if (rows.length === 1) {
-                            resetMealRow(row);
-                        } else {
-                            row.remove();
-                        }
-                        reindexMeals();
-                    });
-
-                    const nextEmptyPhotoRow = (mealRow) => Array.from(mealRow.querySelectorAll('[data-photo-row]'))
-                        .find((row) => !row.querySelector('input[name$=".uploadId"]')?.value);
-
-                    const showPhotoPreview = (row, upload) => {
-                        if (!upload.contentUrl) return;
-                        const uploadedFallback = mealList.dataset.uploadedFallback || 'Uploaded photo';
-                        const filename = upload['originalFilename'] || uploadedFallback;
-                        let link = row.querySelector('[data-photo-preview-link]');
-                        if (!link) {
-                            link = document.createElement('a');
-                            link.className = 'photo-preview-link';
-                            link.setAttribute('data-photo-preview-link', '');
-                            link.target = '_blank';
-                            link.rel = 'noopener';
-                            row.insertBefore(link, row.querySelector('[data-photo-upload-status], label'));
-                        }
-                        link.href = upload.contentUrl;
-
-                        let preview = link.querySelector('[data-photo-preview]');
-                        if (!preview) {
-                            preview = document.createElement('img');
-                            preview.className = 'diet-photo-preview';
-                            preview.setAttribute('data-photo-preview', '');
-                            link.appendChild(preview);
-                        }
-                        preview.src = upload.contentUrl;
-                        preview.alt = filename;
-                    };
-
-                    const showPhotoUploadStatus = (row, upload) => {
-                        const uploadedLabel = mealList.dataset.uploadedLabel || 'Uploaded';
-                        const uploadedFallback = mealList.dataset.uploadedFallback || 'Uploaded photo';
-                        const filename = upload['originalFilename'] || uploadedFallback;
-                        let status = row.querySelector('[data-photo-upload-status]');
-                        if (!status) {
-                            status = document.createElement('p');
-                            status.className = 'hint photo-upload-status';
-                            status.setAttribute('data-photo-upload-status', '');
-                            row.insertBefore(status, row.querySelector('label'));
-                        }
-                        status.textContent = '';
-                        const label = document.createElement('span');
-                        label.textContent = `${uploadedLabel}: `;
-                        const name = document.createElement('span');
-                        name.setAttribute('data-photo-filename', '');
-                        name.textContent = filename;
-                        status.append(label, name);
-                    };
-
-                    const appendPhotoRow = (mealRow, upload) => {
-                        let row = nextEmptyPhotoRow(mealRow);
-                        if (!row) {
-                            const captionLabel = mealList.dataset.captionLabel || 'Caption';
-                            const mealIndex = Number(mealRow.dataset.mealIndex || '0');
-                            const photoIndex = mealRow.querySelectorAll('[data-photo-row]').length;
-                            row = document.createElement('div');
-                            row.className = 'photo-reference-row';
-                            row.setAttribute('data-photo-row', '');
-                            row.innerHTML = `
-                                <input type="hidden" name="meals[${mealIndex}].photoReferences[${photoIndex}].uploadId">
-                                <p class="hint photo-upload-status" data-photo-upload-status></p>
-                                <label class="field"><span>${captionLabel}</span>
-                                    <input name="meals[${mealIndex}].photoReferences[${photoIndex}].caption">
-                                </label>`;
-                            mealRow.querySelector('[data-photo-rows]').appendChild(row);
-                            reindexMeals();
-                        }
-                        row.querySelector('input[name$=".uploadId"]').value = upload.uploadId;
-                        showPhotoPreview(row, upload);
-                        showPhotoUploadStatus(row, upload);
-                    };
-
-                    mealList.addEventListener('change', async (event) => {
-                        const input = event.target.closest('.diet-photo-upload');
-                        if (!input || !csrf) return;
-                        const mealRow = input.closest('[data-meal-row]');
-                        if (!mealRow) return;
-                        for (const file of input.files) {
-                            const formData = new FormData();
-                            formData.append('file', file);
-                            const response = await fetch('/api/diet-log-photos/uploads', {
-                                method: 'POST',
-                                headers: {'X-XSRF-TOKEN': csrf.value},
-                                body: formData
-                            });
-                            if (response.ok) {
-                                appendPhotoRow(mealRow, await response.json());
-                            }
-                        }
-                        input.value = '';
-                    });
-
-                    reindexMeals();
-                });
-            </script>
-
-            <div class="diet-log-actions">
+            <div class="diet-log-actions daily-check-in-actions">
+                <p class="hint" data-required-progress role="status" aria-live="polite" aria-atomic="true"
+                   th:text="#{dailyCheckIn.requiredProgress(0, 2)}">0 of 2 required sections complete</p>
                 <button type="submit" th:text="#{dailyCheckIn.save}">Save check-in</button>
             </div>
         </form>
+        <script th:src="@{/js/daily-check-in.js}" defer></script>
     </section>
 </th:block>
 </html>

@@ -12,6 +12,7 @@ import com.metabion.domain.RoleName;
 import com.metabion.domain.SymptomAnswerType;
 import com.metabion.dto.DailyCheckInForm;
 import com.metabion.dto.DailyDietLogResponse;
+import com.metabion.dto.SymptomCheckInResponse;
 import com.metabion.dto.SymptomQuestionnaireResponse;
 import com.metabion.service.DailyCheckInService;
 import com.metabion.service.DietLogService;
@@ -25,23 +26,27 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
 import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -58,6 +63,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -102,6 +108,49 @@ class WebDailyCheckInControllerTest {
     }
 
     @Test
+    void newDailyCheckInStartsWithOneMealAndRequiresExplicitFlareChoice() throws Exception {
+        MvcResult result = mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        var form = (WebDailyCheckInController.DailyCheckInWebForm)
+                result.getModelAndView().getModel().get("dailyCheckInForm");
+
+        assertThat(form.getMeals()).hasSize(1);
+        assertThat(form.getFlareState()).isNull();
+    }
+
+    @Test
+    void existingSymptomCheckInPreservesItsFlareChoice() throws Exception {
+        when(symptomTrackingService.getCurrentPatientCheckIn(any(), eq(LocalDate.of(2026, 6, 26))))
+                .thenReturn(new SymptomCheckInResponse(
+                        91L,
+                        42L,
+                        30L,
+                        LocalDate.of(2026, 6, 26),
+                        FlareState.ACTIVE_FLARE,
+                        new BigDecimal("5.00"),
+                        "Existing symptoms",
+                        List.of(),
+                        Instant.parse("2026-06-26T08:00:00Z"),
+                        Instant.parse("2026-06-26T08:00:00Z")));
+
+        MvcResult result = mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        var form = (WebDailyCheckInController.DailyCheckInWebForm)
+                result.getModelAndView().getModel().get("dailyCheckInForm");
+
+        assertThat(form.getFlareState()).isEqualTo(FlareState.ACTIVE_FLARE);
+        assertThat(form.getSymptomNotes()).isEqualTo("Existing symptoms");
+    }
+
+    @Test
     void dailyCheckInPageRendersDietMeasurementsSymptomsAndFlareState() throws Exception {
         mvc.perform(get("/app/daily-check-in")
                         .param("date", "2026-06-26")
@@ -121,6 +170,314 @@ class WebDailyCheckInControllerTest {
                 .andExpect(content().string(containsString("name=\"questionnaireVersionId\" value=\"30\"")))
                 .andExpect(content().string(containsString("name=\"symptomAnswers[0].questionId\" value=\"1\"")))
                 .andExpect(content().string(containsString("name=\"symptomAnswers[1].optionId\"")));
+    }
+
+    @Test
+    void dailyCheckInRendersDisclosureStatusAndAccessibilityHooks() throws Exception {
+        mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("class=\"form diet-log-form daily-check-in-form\"")))
+                .andExpect(content().string(containsString("id=\"diet-section\"")))
+                .andExpect(content().string(containsString("tabindex=\"-1\" open")))
+                .andExpect(content().string(containsString("data-section=\"measurements\"")))
+                .andExpect(content().string(containsString("data-section=\"meals\"")))
+                .andExpect(content().string(containsString("data-section=\"symptoms\"")))
+                .andExpect(content().string(containsString("data-section-status")))
+                .andExpect(content().string(containsString("data-required-progress")))
+                .andExpect(content().string(containsString("id=\"daily-check-in-live\"")))
+                .andExpect(content().string(containsString("aria-live=\"polite\"")))
+                .andExpect(content().string(containsString("src=\"/js/daily-check-in.js\"")));
+    }
+
+    @Test
+    void completionStatusesArePoliteAndUpdatedOnlyWhenTextChanges() throws Exception {
+        String response = mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String script = new ClassPathResource("static/js/daily-check-in.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(response)
+                .contains("data-section-status role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"")
+                .contains("data-required-progress role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"");
+        assertThat(script)
+                .contains("const setTextIfChanged = (element, text) =>")
+                .contains("if (element && element.textContent !== text)")
+                .contains("setTextIfChanged(status, statusText(state));")
+                .contains("setTextIfChanged(progress, progressText);");
+    }
+
+    @Test
+    void dailyCheckInRendersProgressiveMealAndPhotoHooks() throws Exception {
+        mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-deviation-category")))
+                .andExpect(content().string(containsString("data-deviation-details")))
+                .andExpect(content().string(containsString("data-photo-caption")))
+                .andExpect(content().string(containsString("aria-label=\"Remove meal 1\"")))
+                .andExpect(content().string(containsString("aria-label=\"Upload photos for meal 1\"")));
+    }
+
+    @Test
+    void dailyCheckInKeepsDeviationDetailsAvailableWithoutJavaScript() throws Exception {
+        mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<div data-deviation-details>")));
+    }
+
+    @Test
+    void dailyCheckInStylesHideEmptyPhotoCaptions() throws Exception {
+        mvc.perform(get("/css/app.css"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("""
+                        .daily-check-in-form [data-photo-caption][hidden] {
+                            display: none;
+                        }
+                        """)));
+    }
+
+    @Test
+    void dailyCheckInScriptClearsStalePhotoUploadErrors() throws Exception {
+        mvc.perform(get("/js/daily-check-in.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(
+                        "[data-photo-upload-status], [data-photo-preview-link], [data-photo-upload-error]")))
+                .andExpect(content().string(containsString(
+                        "mealRow.querySelector('[data-photo-upload-error]')?.remove();")));
+    }
+
+    @Test
+    void missingRequiredFieldsRenderLinkedErrorSummaryAndKeepSymptomsOpenable() throws Exception {
+        mvc.perform(post("/app/daily-check-in")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("logDate", "2026-06-26")
+                        .param("questionnaireVersionId", "30"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"daily-check-in-errors\"")))
+                .andExpect(content().string(containsString("href=\"#adherenceLevel\"")))
+                .andExpect(content().string(containsString("href=\"#appetiteLevel\"")))
+                .andExpect(content().string(containsString("href=\"#flareStateGroup\"")));
+    }
+
+    @Test
+    void nestedBindingErrorsTargetAndDescribeActualFormControls() throws Exception {
+        String response = mvc.perform(post("/app/daily-check-in")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("logDate", "2026-06-26")
+                        .param("adherenceLevel", "FULL")
+                        .param("appetiteLevel", "NORMAL")
+                        .param("glucoseMeasurement.value", "not-a-number")
+                        .param("meals[0].mealType", "LUNCH")
+                        .param("meals[0].notes", "x".repeat(1001))
+                        .param("flareState", "NO_FLARE")
+                        .param("questionnaireVersionId", "30"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String glucoseErrorId = describedErrorId(response, "glucoseMeasurement.value");
+        String mealNotesErrorId = describedErrorId(response, "meals0.notes");
+
+        assertThat(response)
+                .containsPattern(Pattern.compile(
+                        "<input(?=[^>]*id=\"glucoseMeasurement\\.value\")(?=[^>]*aria-invalid=\"true\")"
+                                + "(?=[^>]*aria-describedby=\"" + Pattern.quote(glucoseErrorId) + "\")[^>]*>"))
+                .containsPattern(Pattern.compile(
+                        "<textarea(?=[^>]*id=\"meals0\\.notes\")(?=[^>]*aria-invalid=\"true\")"
+                                + "(?=[^>]*aria-describedby=\"" + Pattern.quote(mealNotesErrorId) + "\")[^>]*>"));
+    }
+
+    @Test
+    void dailyCheckInExposesStatusAndDirtyFormConfiguration() throws Exception {
+        mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-loaded-date=\"2026-06-26\"")))
+                .andExpect(content().string(containsString("data-unsaved-date-confirm")))
+                .andExpect(content().string(containsString("data-required-symptom=\"true\"")));
+    }
+
+    @Test
+    void symptomsRenderVisibleMarkersAndNativeRequiredness() throws Exception {
+        String response = mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(response)
+                .containsPattern(Pattern.compile(
+                        "<legend><span>Flare state</span> <span class=\"field-requirement\">Required</span></legend>"))
+                .containsPattern(Pattern.compile(
+                        "<input(?=[^>]*name=\"flareState\")(?=[^>]*required(?:=\"required\")?)[^>]*>"))
+                .contains("<span class=\"field-requirement\">Optional</span></h3>");
+
+        long nativeRequiredAnswers = Pattern.compile(
+                        "<(?:input|textarea|select)(?=[^>]*data-required-symptom=\"true\")(?=[^>]*required(?:=\"required\")?)[^>]*>")
+                .matcher(response)
+                .results()
+                .count();
+        assertThat(nativeRequiredAnswers).isEqualTo(5);
+    }
+
+    @Test
+    void dailyCheckInScriptProtectsDirtyFormsAndComputesSectionState() throws Exception {
+        String script = new ClassPathResource("static/js/daily-check-in.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("const stateForDiet")
+                .contains("const stateForMeasurements")
+                .contains("const stateForMeals")
+                .contains("const stateForSymptoms")
+                .contains("beforeunload")
+                .contains("window.confirm(form.dataset.unsavedDateConfirm)");
+    }
+
+    @Test
+    void dailyCheckInScriptScopesBeforeUnloadSuppressionToIntentionalDateNavigation() throws Exception {
+        String script = new ClassPathResource("static/js/daily-check-in.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("let intentionalDateNavigation = false;")
+                .contains("intentionalDateNavigation = true;")
+                .contains("window.location.assign(target.toString());")
+                .contains("intentionalDateNavigation = false;\n            throw error;")
+                .contains("if (submitting || intentionalDateNavigation || !isDirty()) return;");
+    }
+
+    @Test
+    void dailyCheckInScriptOpensDisclosureAndFocusesFirstNativeInvalidControl() throws Exception {
+        String script = new ClassPathResource("static/js/daily-check-in.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("let invalidFocusScheduled = false;")
+                .contains("form.addEventListener('invalid', (event) => {")
+                .contains("const invalidControl = event.target;")
+                .contains("invalidControl.closest('details[data-section]')?.setAttribute('open', '');")
+                .contains("if (invalidFocusScheduled) return;")
+                .contains("invalidControl.focus();")
+                .contains("}, true);");
+    }
+
+    @Test
+    void dailyCheckInScriptResolvesErrorTargetsByIdAndFocusesTheActualControl() throws Exception {
+        String script = new ClassPathResource("static/js/daily-check-in.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("document.getElementById(link.dataset.errorTargetId)")
+                .contains("target?.closest('[data-section]')?.setAttribute('open', '');")
+                .contains("target?.focus();")
+                .doesNotContain("form.querySelector(firstErrorTarget)");
+    }
+
+    @Test
+    void dailyCheckInScriptClearsClonedMealValidationAndRetargetsErrorsOnRemoval() throws Exception {
+        String script = new ClassPathResource("static/js/daily-check-in.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("const clearMealValidation = (row) => {")
+                .contains("row.querySelectorAll('[aria-invalid], [aria-describedby]')")
+                .contains("element.removeAttribute('aria-invalid');")
+                .contains("element.removeAttribute('aria-describedby');")
+                .contains("if (!row.isConnected || !errorSummary) return;")
+                .contains("validationTargetIds.has(link.dataset.errorTargetId)")
+                .contains("link.closest('li')?.remove();")
+                .contains("if (element.hasAttribute('aria-invalid') || element.hasAttribute('aria-describedby')) {")
+                .contains("link.dataset.errorTargetId = nextId;")
+                .contains("link.setAttribute('href', `#${nextId}`);")
+                .contains("invalidateMealUploads(row);\n        clearMealValidation(row);")
+                .contains("clearMealValidation(row);\n            invalidateMealUploads(row);");
+    }
+
+    @Test
+    void removingTheLastMealErrorHidesTheEmptyErrorSummary() throws Exception {
+        String response = mvc.perform(post("/app/daily-check-in")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("logDate", "2026-06-26")
+                        .param("adherenceLevel", "FULL")
+                        .param("appetiteLevel", "NORMAL")
+                        .param("meals[0].mealType", "LUNCH")
+                        .param("meals[0].notes", "x".repeat(1001))
+                        .param("flareState", "NO_FLARE")
+                        .param("questionnaireVersionId", "30"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        int summaryStart = response.indexOf("<section id=\"daily-check-in-errors\"");
+        String summary = response.substring(summaryStart, response.indexOf("</section>", summaryStart));
+        String script = new ClassPathResource("static/js/daily-check-in.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(summary)
+                .contains("data-error-target-id=\"meals0.notes\"")
+                .containsOnlyOnce("<li>");
+        assertThat(script)
+                .contains("if (!errorSummary.querySelector('li')) {")
+                .contains("errorSummary.hidden = true;");
+    }
+
+    @Test
+    void dailyCheckInScriptCoordinatesPendingUploadsWithDirtySubmitAndMealLifecycle() throws Exception {
+        String script = new ClassPathResource("static/js/daily-check-in.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("const pendingUploads = new Map();")
+                .contains("const invalidateMealUploads =")
+                .contains("controller.abort();")
+                .contains("const isCurrentUpload =")
+                .contains("signal: controller.signal")
+                .contains("const isDirty = () => pendingUploads.size > 0 ||")
+                .contains("form.addEventListener('submit', (event) => {")
+                .contains("if (pendingUploads.size > 0) {")
+                .contains("const resetMealRow = (row) => {\n        invalidateMealUploads(row);")
+                .contains("invalidateMealUploads(row);\n            row.remove();")
+                .contains("if (!isCurrentUpload(mealRow, generation, controller))")
+                .contains("window.addEventListener('pagehide', abortAllUploads);")
+                .contains("mealList?.addEventListener('change', (event) => {");
+
+        int deviationListenerStart = script.indexOf("mealList?.addEventListener('change', (event) => {");
+        int deviationListenerEnd = script.indexOf("});", deviationListenerStart) + 3;
+        assertThat(script.substring(deviationListenerStart, deviationListenerEnd))
+                .doesNotContain("updateSectionStatuses");
+    }
+
+    @Test
+    void dailyCheckInRendersRequiredOptionalAndContextualLabelsInCzech() throws Exception {
+        when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
+
+        mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .locale(Locale.forLanguageTag("cs"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Povinné")))
+                .andExpect(content().string(containsString("Volitelné")))
+                .andExpect(content().string(containsString("Hodnota glukózy")))
+                .andExpect(content().string(containsString("Odebrat jídlo 1")));
     }
 
     @Test
@@ -152,9 +509,7 @@ class WebDailyCheckInControllerTest {
                         .param("date", "2026-06-26")
                         .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString(".diet-photo-preview")))
-                .andExpect(content().string(containsString("height: 120px")))
-                .andExpect(content().string(containsString("width: 160px")))
+                .andExpect(content().string(containsString("<img class=\"diet-photo-preview\"")))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -168,7 +523,7 @@ class WebDailyCheckInControllerTest {
     }
 
     @Test
-    void invalidDailyCheckInRedisplaysWithoutSuccessRedirect() throws Exception {
+    void serviceBadRequestRendersLocalizedPageLevelErrorWithoutExposingReason() throws Exception {
         doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "required symptom answers are missing"))
                 .when(dailyCheckInService).saveForCurrentPatient(any(), any());
 
@@ -187,9 +542,34 @@ class WebDailyCheckInControllerTest {
                         .param("symptomNotes", "Submitted notes"))
                 .andExpect(status().isOk())
                 .andExpect(view().name("daily-check-in"))
-                .andExpect(model().attribute("dailyCheckInError", "required symptom answers are missing"))
-                .andExpect(content().string(containsString("required symptom answers are missing")))
+                .andExpect(model().attribute("dailyCheckInError", true))
+                .andExpect(content().string(containsString("href=\"#daily-check-in-save-error\"")))
+                .andExpect(content().string(containsString(
+                        "Daily check-in could not be saved. Review the form and try again.")))
+                .andExpect(content().string(not(containsString("required symptom answers are missing"))))
                 .andExpect(content().string(containsString("Submitted notes")));
+    }
+
+    @Test
+    void serviceBadRequestPageLevelErrorIsLocalizedInCzech() throws Exception {
+        when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
+        doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "required symptom answers are missing"))
+                .when(dailyCheckInService).saveForCurrentPatient(any(), any());
+
+        mvc.perform(post("/app/daily-check-in")
+                        .locale(Locale.forLanguageTag("cs"))
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("logDate", "2026-06-26")
+                        .param("adherenceLevel", "FULL")
+                        .param("appetiteLevel", "NORMAL")
+                        .param("flareState", "NO_FLARE")
+                        .param("questionnaireVersionId", "30"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"daily-check-in-save-error\"")))
+                .andExpect(content().string(containsString(
+                        "Denní záznam se nepodařilo uložit. Zkontrolujte formulář a zkuste to znovu.")))
+                .andExpect(content().string(not(containsString("required symptom answers are missing"))));
     }
 
     @Test
@@ -215,7 +595,8 @@ class WebDailyCheckInControllerTest {
                         .param("symptomAnswers[1].optionId", "11")
                         .param("symptomNotes", "More fatigue"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/app/daily-check-in?date=2026-06-26"));
+                .andExpect(redirectedUrl("/app/daily-check-in?date=2026-06-26"))
+                .andExpect(flash().attribute("dailyCheckInSavedDate", LocalDate.of(2026, 6, 26)));
 
         var formCaptor = ArgumentCaptor.forClass(DailyCheckInForm.class);
         verify(dailyCheckInService).saveForCurrentPatient(any(), formCaptor.capture());
@@ -275,6 +656,15 @@ class WebDailyCheckInControllerTest {
                 .andExpect(view().name("daily-check-in"))
                 .andExpect(content().string(containsString("Daily check-in")))
                 .andExpect(content().string(containsString("Symptoms")));
+    }
+
+    private String describedErrorId(String response, String targetId) {
+        var matcher = Pattern.compile(
+                        "<a(?=[^>]*\\sid=\"([^\"]+)\")(?=[^>]*href=\"#" + Pattern.quote(targetId) + "\")"
+                                + "(?=[^>]*data-error-target-id=\"" + Pattern.quote(targetId) + "\")[^>]*>[^<]+</a>")
+                .matcher(response);
+        assertThat(matcher.find()).isTrue();
+        return matcher.group(1);
     }
 
     private SymptomQuestionnaireResponse questionnaireResponse() {
@@ -350,7 +740,17 @@ class WebDailyCheckInControllerTest {
                                         new SymptomQuestionnaireResponse.OptionResponse(
                                                 16L, "well", "Well", BigDecimal.ZERO),
                                         new SymptomQuestionnaireResponse.OptionResponse(
-                                                17L, "slightly-unwell", "Slightly unwell", BigDecimal.ONE)))));
+                                                17L, "slightly-unwell", "Slightly unwell", BigDecimal.ONE))),
+                        new SymptomQuestionnaireResponse.QuestionResponse(
+                                6L,
+                                "additional-context",
+                                "Additional context",
+                                null,
+                                SymptomAnswerType.TEXT,
+                                false,
+                                null,
+                                null,
+                                List.of())));
     }
 
     private DailyDietLogResponse dailyDietLogWithPhoto() {
