@@ -188,6 +188,19 @@ class WebDailyCheckInControllerTest {
     }
 
     @Test
+    void dailyCheckInRendersProgressiveMealAndPhotoHooks() throws Exception {
+        mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-deviation-category")))
+                .andExpect(content().string(containsString("data-deviation-details")))
+                .andExpect(content().string(containsString("data-photo-caption")))
+                .andExpect(content().string(containsString("aria-label=\"Remove meal 1\"")))
+                .andExpect(content().string(containsString("aria-label=\"Upload photos for meal 1\"")));
+    }
+
+    @Test
     void dailyCheckInRendersRequiredOptionalAndContextualLabelsInCzech() throws Exception {
         when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
 

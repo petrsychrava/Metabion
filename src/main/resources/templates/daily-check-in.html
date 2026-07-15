@@ -191,21 +191,24 @@
                             <h3 th:text="#{dietLogs.deviation}">Deviation</h3>
                             <div class="diet-log-grid">
                                 <label class="field"><span th:text="#{dietLogs.deviationCategory}">Category</span>
-                                    <select th:field="*{meals[__${row.index}__].deviation.deviationCategory}">
+                                    <select th:field="*{meals[__${row.index}__].deviation.deviationCategory}" data-deviation-category>
                                         <option value="" th:text="#{dietLogs.noDeviation}">No deviation</option>
                                         <option th:each="option : ${deviationCategories}" th:value="${option}" th:text="${#messages.msg('enum.dietDeviationCategory.' + option.name())}">Dining out</option>
                                     </select>
                                 </label>
+                            </div>
+                            <div data-deviation-details th:hidden="${meal.deviation.deviationCategory == null}">
                                 <label class="field"><span th:text="#{dietLogs.deviationSeverity}">Severity</span>
                                     <select th:field="*{meals[__${row.index}__].deviation.severity}">
                                         <option value="" th:text="#{onboarding.select}">Select</option>
-                                        <option th:each="option : ${deviationSeverities}" th:value="${option}" th:text="${#messages.msg('enum.dietDeviationSeverity.' + option.name())}">Minor</option>
+                                        <option th:each="option : ${deviationSeverities}" th:value="${option}"
+                                                th:text="${#messages.msg('enum.dietDeviationSeverity.' + option.name())}">Minor</option>
                                     </select>
                                 </label>
+                                <label class="field"><span th:text="#{dietLogs.deviationNotes}">Deviation notes</span>
+                                    <textarea th:field="*{meals[__${row.index}__].deviation.notes}"></textarea>
+                                </label>
                             </div>
-                            <label class="field"><span><span th:text="#{dietLogs.deviationNotes}">Deviation notes</span> <span class="field-requirement" th:text="#{dailyCheckIn.optional}">Optional</span></span>
-                                <textarea th:field="*{meals[__${row.index}__].deviation.notes}"></textarea>
-                            </label>
                         </section>
 
                         <section class="meal-subsection">
@@ -224,7 +227,8 @@
                                              th:src="${photoReference.contentUrl == null || photoReference.contentUrl.isBlank() ? '/api/diet-log-photos/' + photoReference.uploadId + '/content' : photoReference.contentUrl}"
                                              th:alt="${photoReference.originalFilename == null || photoReference.originalFilename.isBlank() ? #messages.msg('dietLogs.uploadedPhoto') : photoReference.originalFilename}">
                                     </a>
-                                    <label class="field"><span><span th:text="#{dietLogs.caption}">Caption</span> <span class="field-requirement" th:text="#{dailyCheckIn.optional}">Optional</span></span>
+                                    <label class="field" data-photo-caption th:hidden="${photoReference.uploadId == null}">
+                                        <span th:text="#{dietLogs.caption}">Caption</span>
                                         <input th:field="*{meals[__${row.index}__].photoReferences[__${photoRow.index}__].caption}"
                                                th:attr="aria-label=${#messages.msg('dailyCheckIn.mealCaptionAccessible', row.index + 1)}">
                                     </label>
