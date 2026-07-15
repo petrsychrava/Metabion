@@ -23,6 +23,28 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const mealRows = () => mealList ? Array.from(mealList.querySelectorAll('[data-meal-row]')) : [];
     const errorTargetFor = (link) => document.getElementById(link.dataset.errorTargetId);
+    const retargetErrorSummary = (previousId, nextId) => {
+        if (!errorSummary || previousId === nextId) return;
+        errorSummary.querySelectorAll('[data-error-target-id]').forEach((link) => {
+            if (link.dataset.errorTargetId === previousId) {
+                link.dataset.errorTargetId = nextId;
+                link.setAttribute('href', `#${nextId}`);
+            }
+        });
+    };
+    const clearMealValidation = (row) => {
+        const validationTargetIds = new Set(Array.from(row.querySelectorAll('[id]'), (element) => element.id));
+        row.querySelectorAll('[aria-invalid], [aria-describedby]').forEach((element) => {
+            element.removeAttribute('aria-invalid');
+            element.removeAttribute('aria-describedby');
+        });
+        if (!row.isConnected || !errorSummary) return;
+        errorSummary.querySelectorAll('[data-error-target-id]').forEach((link) => {
+            if (validationTargetIds.has(link.dataset.errorTargetId)) {
+                link.closest('li')?.remove();
+            }
+        });
+    };
 
     const mealUploadGeneration = (row) => mealUploadGenerations.get(row) || 0;
     const hasPendingUpload = (row) => Array.from(pendingUploads.values())
@@ -57,7 +79,12 @@ document.addEventListener('DOMContentLoaded', () => {
             element.name = element.name.replace(/meals\[\d+]/g, `meals[${mealIndex}]`);
         });
         row.querySelectorAll('[id]').forEach((element) => {
-            element.id = element.id.replace(/meals\d+/g, `meals${mealIndex}`);
+            const previousId = element.id;
+            const nextId = previousId.replace(/meals\d+/g, `meals${mealIndex}`);
+            if (element.hasAttribute('aria-invalid') || element.hasAttribute('aria-describedby')) {
+                retargetErrorSummary(previousId, nextId);
+            }
+            element.id = nextId;
         });
         row.querySelectorAll('[for]').forEach((element) => {
             element.htmlFor = element.htmlFor.replace(/meals\d+/g, `meals${mealIndex}`);
@@ -101,6 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const resetMealRow = (row) => {
         invalidateMealUploads(row);
+        clearMealValidation(row);
         row.querySelectorAll('input:not([type="file"]), select, textarea').forEach((element) => {
             element.value = '';
         });
@@ -259,6 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
             row.querySelector('select[name$=".mealType"]')?.focus();
         } else {
             const focusTarget = row.previousElementSibling?.querySelector('[data-remove-meal]') || addMealButton;
+            clearMealValidation(row);
             invalidateMealUploads(row);
             row.remove();
             reindexMeals();

@@ -382,6 +382,26 @@ class WebDailyCheckInControllerTest {
     }
 
     @Test
+    void dailyCheckInScriptClearsClonedMealValidationAndRetargetsErrorsOnRemoval() throws Exception {
+        String script = new ClassPathResource("static/js/daily-check-in.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("const clearMealValidation = (row) => {")
+                .contains("row.querySelectorAll('[aria-invalid], [aria-describedby]')")
+                .contains("element.removeAttribute('aria-invalid');")
+                .contains("element.removeAttribute('aria-describedby');")
+                .contains("if (!row.isConnected || !errorSummary) return;")
+                .contains("validationTargetIds.has(link.dataset.errorTargetId)")
+                .contains("link.closest('li')?.remove();")
+                .contains("if (element.hasAttribute('aria-invalid') || element.hasAttribute('aria-describedby')) {")
+                .contains("link.dataset.errorTargetId = nextId;")
+                .contains("link.setAttribute('href', `#${nextId}`);")
+                .contains("invalidateMealUploads(row);\n        clearMealValidation(row);")
+                .contains("clearMealValidation(row);\n            invalidateMealUploads(row);");
+    }
+
+    @Test
     void dailyCheckInScriptCoordinatesPendingUploadsWithDirtySubmitAndMealLifecycle() throws Exception {
         String script = new ClassPathResource("static/js/daily-check-in.js")
                 .getContentAsString(StandardCharsets.UTF_8);
