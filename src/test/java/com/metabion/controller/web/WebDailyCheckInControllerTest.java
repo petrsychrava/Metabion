@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
 import org.springframework.session.FindByIndexNameSessionRepository;
@@ -38,6 +39,7 @@ import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -219,6 +221,45 @@ class WebDailyCheckInControllerTest {
                         "[data-photo-upload-status], [data-photo-preview-link], [data-photo-upload-error]")))
                 .andExpect(content().string(containsString(
                         "mealRow.querySelector('[data-photo-upload-error]')?.remove();")));
+    }
+
+    @Test
+    void missingRequiredFieldsRenderLinkedErrorSummaryAndKeepSymptomsOpenable() throws Exception {
+        mvc.perform(post("/app/daily-check-in")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("logDate", "2026-06-26")
+                        .param("questionnaireVersionId", "30"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"daily-check-in-errors\"")))
+                .andExpect(content().string(containsString("href=\"#adherenceLevel\"")))
+                .andExpect(content().string(containsString("href=\"#appetiteLevel\"")))
+                .andExpect(content().string(containsString("href=\"#flareStateGroup\"")));
+    }
+
+    @Test
+    void dailyCheckInExposesStatusAndDirtyFormConfiguration() throws Exception {
+        mvc.perform(get("/app/daily-check-in")
+                        .param("date", "2026-06-26")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-loaded-date=\"2026-06-26\"")))
+                .andExpect(content().string(containsString("data-unsaved-date-confirm")))
+                .andExpect(content().string(containsString("data-required-symptom=\"true\"")));
+    }
+
+    @Test
+    void dailyCheckInScriptProtectsDirtyFormsAndComputesSectionState() throws Exception {
+        String script = new ClassPathResource("static/js/daily-check-in.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("const stateForDiet")
+                .contains("const stateForMeasurements")
+                .contains("const stateForMeals")
+                .contains("const stateForSymptoms")
+                .contains("beforeunload")
+                .contains("window.confirm(form.dataset.unsavedDateConfirm)");
     }
 
     @Test

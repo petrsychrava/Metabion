@@ -86,7 +86,102 @@ document.addEventListener('DOMContentLoaded', () => {
         updateDeviation(row);
     };
 
-    let updateSectionStatuses = () => {};
+    const hasValue = (element) => Boolean(element && element.value.trim());
+    const checkedValue = (selector) => form.querySelector(`${selector}:checked`)?.value || '';
+
+    const stateForDiet = () => {
+        const date = hasValue(form.querySelector('[name="logDate"]'));
+        const adherence = hasValue(form.querySelector('[name="adherenceLevel"]'));
+        const appetite = hasValue(form.querySelector('[name="appetiteLevel"]'));
+        if (!adherence && !appetite) return 'notStarted';
+        return date && adherence && appetite ? 'complete' : 'inProgress';
+    };
+
+    const stateForMeasurements = () => {
+        const prefixes = ['glucoseMeasurement', 'ketoneMeasurement'];
+        let started = false;
+        let complete = true;
+        prefixes.forEach((prefix) => {
+            const value = hasValue(form.querySelector(`[name="${prefix}.value"]`));
+            const time = hasValue(form.querySelector(`[name="${prefix}.measuredTime"]`));
+            const context = hasValue(form.querySelector(`[name="${prefix}.context"]`));
+            const notes = hasValue(form.querySelector(`[name="${prefix}.notes"]`));
+            const rowStarted = value || time || context || notes;
+            started ||= rowStarted;
+            if (rowStarted && !(value && time && context)) complete = false;
+        });
+        if (!started) return 'notStarted';
+        return complete ? 'complete' : 'inProgress';
+    };
+
+    const stateForMeals = () => {
+        let started = false;
+        let complete = true;
+        mealRows().forEach((row) => {
+            const mealType = hasValue(row.querySelector('[name$=".mealType"]'));
+            const description = hasValue(row.querySelector('[name$=".foodDescription"]'));
+            const notes = hasValue(row.querySelector('[name$=".notes"]'));
+            const deviation = hasValue(row.querySelector('[data-deviation-category]'));
+            const severity = hasValue(row.querySelector('[name$=".deviation.severity"]'));
+            const photo = Array.from(row.querySelectorAll('[name$=".uploadId"]')).some(hasValue);
+            const rowStarted = mealType || description || notes || deviation || severity || photo;
+            started ||= rowStarted;
+            if (rowStarted && (!mealType || (deviation && !severity) || (!deviation && severity))) complete = false;
+        });
+        if (!started) return 'notStarted';
+        return complete ? 'complete' : 'inProgress';
+    };
+
+    const stateForSymptoms = () => {
+        const flare = checkedValue('[name="flareState"]');
+        const requiredAnswers = Array.from(form.querySelectorAll('[data-required-symptom="true"]'));
+        const answered = requiredAnswers.filter((element) => {
+            if (element.type === 'radio' || element.type === 'checkbox') return element.checked;
+            return hasValue(element);
+        }).length;
+        const anyAnswer = Array.from(form.querySelectorAll('[name^="symptomAnswers"]'))
+                .some((element) => !element.name.endsWith('.questionId') && hasValue(element));
+        if (!flare && !anyAnswer) return 'notStarted';
+        return flare && answered === requiredAnswers.length ? 'complete' : 'inProgress';
+    };
+
+    const statusText = (state) => ({
+        notStarted: form.dataset.statusNotStarted,
+        inProgress: form.dataset.statusInProgress,
+        complete: form.dataset.statusComplete,
+        needsAttention: form.dataset.statusNeedsAttention
+    })[state];
+
+    const hasLinkedError = (section) => Array.from(errorSummary?.querySelectorAll('a[href^="#"]') || [])
+            .some((link) => form.querySelector(link.getAttribute('href'))?.closest('[data-section]') === section);
+
+    const updateSectionStatuses = () => {
+        const states = {
+            diet: stateForDiet(),
+            measurements: stateForMeasurements(),
+            meals: stateForMeals(),
+            symptoms: stateForSymptoms()
+        };
+        const displayStates = {...states};
+        form.querySelectorAll('[data-section]').forEach((section) => {
+            const hasErrors = Boolean(section.querySelector('.error, [aria-invalid="true"]')) || hasLinkedError(section);
+            const state = hasErrors ? 'needsAttention' : states[section.dataset.section];
+            displayStates[section.dataset.section] = state;
+            const status = section.querySelector('[data-section-status]');
+            if (status) status.textContent = statusText(state);
+        });
+        const requiredComplete = ['diet', 'symptoms']
+                .filter((key) => displayStates[key] === 'complete').length;
+        const progress = form.querySelector('[data-required-progress]');
+        if (progress) {
+            progress.textContent = form.dataset.requiredProgressTemplate
+                    .replace('{0}', String(requiredComplete))
+                    .replace('{1}', '2');
+        }
+    };
+
+    form.addEventListener('input', updateSectionStatuses);
+    form.addEventListener('change', updateSectionStatuses);
 
     addMealButton?.addEventListener('click', () => {
         const source = mealRows().at(-1);
@@ -212,6 +307,51 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSectionStatuses();
     });
 
+    const logDateInput = form.querySelector('[data-log-date]');
+    const loadedDate = form.dataset.loadedDate;
+    let submitting = false;
+
+    const snapshot = () => {
+        const entries = [];
+        new FormData(form).forEach((value, key) => {
+            if (key !== '_csrf' && key !== 'logDate' && !(value instanceof File)) {
+                entries.push([key, String(value)]);
+            }
+        });
+        return JSON.stringify(entries.sort(([a], [b]) => a.localeCompare(b)));
+    };
+    const baseline = snapshot();
+    const isDirty = () => snapshot() !== baseline;
+
+    logDateInput?.addEventListener('change', () => {
+        if (!logDateInput.value || logDateInput.value === loadedDate) return;
+        if (isDirty() && !window.confirm(form.dataset.unsavedDateConfirm)) {
+            logDateInput.value = loadedDate;
+            return;
+        }
+        const target = new URL(window.location.href);
+        target.searchParams.set('date', logDateInput.value);
+        window.location.assign(target.toString());
+    });
+
+    form.addEventListener('submit', () => {
+        submitting = true;
+    });
+
+    window.addEventListener('beforeunload', (event) => {
+        if (submitting || !isDirty()) return;
+        event.preventDefault();
+        event.returnValue = form.dataset.unsavedLeaveWarning;
+    });
+
+    if (errorSummary) {
+        const firstErrorTarget = errorSummary.querySelector('a[href^="#"]')?.getAttribute('href');
+        const target = firstErrorTarget ? form.querySelector(firstErrorTarget) : null;
+        target?.closest('[data-section]')?.setAttribute('open', '');
+        target?.focus();
+    }
+
     mealRows().forEach(updateDeviation);
     reindexMeals();
+    updateSectionStatuses();
 });
