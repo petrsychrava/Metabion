@@ -691,6 +691,29 @@ private List<TrendChartModel.DateTick> dateTicks(LocalDate from, LocalDate to, Z
     throw new IllegalStateException("Unable to place trend date ticks");
 }
 
+private List<TrendChartModel.DateTick> evenlySpacedDateTicks(List<LocalDate> dates,
+                                                              int tickCount,
+                                                              LocalDate from,
+                                                              LocalDate to,
+                                                              ZoneId zone) {
+    var ticks = new ArrayList<TrendChartModel.DateTick>();
+    for (var position = 0; position < tickCount; position++) {
+        var dateIndex = (int) Math.round(position * (dates.size() - 1.0) / (tickCount - 1.0));
+        var date = dates.get(dateIndex);
+        ticks.add(new TrendChartModel.DateTick(x(date.atTime(12, 0), from, to, zone), date));
+    }
+    return List.copyOf(ticks);
+}
+
+private boolean hasMinimumDateTickSpacing(List<TrendChartModel.DateTick> ticks) {
+    for (var index = 1; index < ticks.size(); index++) {
+        if (ticks.get(index).x() - ticks.get(index - 1).x() < MIN_DATE_TICK_SPACING) {
+            return false;
+        }
+    }
+    return true;
+}
+
 private List<TrendChartModel.Segment<TrendChartModel.SymptomPoint>> symptomSegments(
         DailyTrendResponse trend, TrendChartModel.Axis symptomAxis, ZoneId zone) {
     var points = safe(trend.days()).stream()
