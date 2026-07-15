@@ -4,7 +4,7 @@
 <th:block th:fragment="content">
     <header class="app-header"><div><p class="eyebrow">Metabion</p><h1 th:text="#{dailyCheckIns.clinical.title}">Daily check-in review</h1></div></header>
     <section class="panel app-panel">
-        <form id="clinical-diet-log-filter" class="form" th:action="@{/app/clinical/daily-check-ins}" method="get"
+        <form id="clinical-daily-check-in-filter" class="form" th:action="@{/app/clinical/daily-check-ins}" method="get"
               data-default-range-days="7" th:attr="data-default-range-days=${clinicalDefaultRangeDays}">
             <label class="field"><span th:text="#{dietLogs.patient}">Patient</span><select name="patientProfileId">
                 <option value="" th:selected="${patientProfileId == null}" th:text="#{dietLogs.allAssignedPatients}">All assigned patients</option>
@@ -16,7 +16,7 @@
             <button type="submit" th:text="#{dietLogs.filter}">Filter</button>
             <script>
                 document.addEventListener('DOMContentLoaded', () => {
-                    const form = document.getElementById('clinical-diet-log-filter'); if (!form) return;
+                    const form = document.getElementById('clinical-daily-check-in-filter'); if (!form) return;
                     const from = form.querySelector('input[name="from"]'); const to = form.querySelector('input[name="to"]');
                     const defaultRangeDays = Number.parseInt(form.dataset.defaultRangeDays, 10); if (!from || !to || Number.isNaN(defaultRangeDays)) return;
                     const formatDate = date => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
