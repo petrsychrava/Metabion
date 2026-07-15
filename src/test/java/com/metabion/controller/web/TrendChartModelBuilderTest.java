@@ -205,6 +205,30 @@ class TrendChartModelBuilderTest {
                 .containsExactly(2, 1);
     }
 
+    @Test
+    void spacesDefaultThirtyDayDateTicksForIsoLabels() {
+        var from = LocalDate.of(2026, 6, 15);
+        var to = from.plusDays(29);
+
+        var ticks = builder.build(emptyTrend(from, to)).dateTicks();
+
+        assertThat(ticks.getFirst().date()).isEqualTo(from);
+        assertThat(ticks.getLast().date()).isEqualTo(to);
+        assertThat(ticks).hasSizeLessThanOrEqualTo(6);
+        assertThat(adjacentTickSpacings(ticks)).allMatch(spacing -> spacing >= 80);
+    }
+
+    @Test
+    void retainsEveryDateTickForShortRangesWhenSpacingAllows() {
+        var from = LocalDate.of(2026, 7, 7);
+        var to = from.plusDays(2);
+
+        var ticks = builder.build(emptyTrend(from, to)).dateTicks();
+
+        assertThat(ticks).extracting(TrendChartModel.DateTick::date)
+                .containsExactly(from, from.plusDays(1), to);
+    }
+
     private DailyTrendResponse trend(String timezone,
                                      MeasurementUnit glucoseUnit,
                                      DailyTrendResponse.DayTrend... days) {
@@ -268,6 +292,23 @@ class TrendChartModelBuilderTest {
                 day(LocalDate.of(2026, 6, 3), null, null, List.of(), List.of()),
                 day(LocalDate.of(2026, 6, 4), null, null,
                         List.of(glucose("5.4", MeasurementUnit.MMOL_L, "2026-06-04T08:00:00Z")), List.of()));
+    }
+
+    private DailyTrendResponse emptyTrend(LocalDate from, LocalDate to) {
+        return new DailyTrendResponse(
+                10L,
+                from,
+                to,
+                MeasurementUnit.MMOL_L,
+                "UTC",
+                List.of());
+    }
+
+    private List<Integer> adjacentTickSpacings(List<TrendChartModel.DateTick> ticks) {
+        return java.util.stream.IntStream.range(1, ticks.size())
+                .map(index -> ticks.get(index).x() - ticks.get(index - 1).x())
+                .boxed()
+                .toList();
     }
 
     private <T> List<T> flatten(List<TrendChartModel.Segment<T>> segments) {

@@ -46,6 +46,8 @@ class TrendChartStylesTest {
                 .contains("stroke: var(--trend-grid)")
                 .contains(".trend-date-tick {")
                 .contains("stroke: var(--trend-axis)")
+                .contains(".trend-date-label {")
+                .contains("font-size: 0.75rem")
                 .doesNotContain("stroke: #2d8fcc", "fill: #2d8fcc", "background: #2d8fcc",
                         "#7a4ab8", "#d28b22");
     }
@@ -60,6 +62,7 @@ class TrendChartStylesTest {
                     .isGreaterThanOrEqualTo(3.0);
         }
         assertThat(contrast(color(theme, "--trend-axis"), background)).isGreaterThanOrEqualTo(3.0);
+        assertThat(contrast(color(theme, "--trend-grid"), background)).isGreaterThanOrEqualTo(3.0);
     }
 
     private String css() throws IOException {

@@ -34,6 +34,7 @@ final class TrendChartModelBuilder {
     private static final BigDecimal GLUCOSE_MG_STEP = new BigDecimal("10");
     private static final BigDecimal KETONE_STEP = new BigDecimal("0.5");
     private static final BigDecimal MIN_KETONE_MAX = BigDecimal.ONE;
+    private static final int MIN_DATE_TICK_SPACING = 80;
 
     private final TrendGlucoseConverter glucoseConverter;
 
@@ -251,15 +252,42 @@ final class TrendChartModelBuilder {
 
     private List<TrendChartModel.DateTick> dateTicks(LocalDate from, LocalDate to, ZoneId zone) {
         var dates = from.datesUntil(to.plusDays(1)).toList();
-        var interval = Math.max(1, (int) Math.ceil(dates.size() / 6.0));
-        var ticks = new ArrayList<TrendChartModel.DateTick>();
-        for (int index = 0; index < dates.size(); index++) {
-            if (index == 0 || index == dates.size() - 1 || index % interval == 0) {
-                var date = dates.get(index);
-                ticks.add(new TrendChartModel.DateTick(x(date.atTime(12, 0), from, to, zone), date));
+        if (dates.size() == 1) {
+            var date = dates.getFirst();
+            return List.of(new TrendChartModel.DateTick(x(date.atTime(12, 0), from, to, zone), date));
+        }
+        var plotWidth = GEOMETRY.right() - GEOMETRY.left();
+        var maximumTickCount = Math.min(dates.size(), plotWidth / MIN_DATE_TICK_SPACING + 1);
+        for (var tickCount = maximumTickCount; tickCount >= 2; tickCount--) {
+            var ticks = evenlySpacedDateTicks(dates, tickCount, from, to, zone);
+            if (hasMinimumDateTickSpacing(ticks)) {
+                return ticks;
             }
         }
+        throw new IllegalStateException("Unable to place trend date ticks");
+    }
+
+    private List<TrendChartModel.DateTick> evenlySpacedDateTicks(List<LocalDate> dates,
+                                                                  int tickCount,
+                                                                  LocalDate from,
+                                                                  LocalDate to,
+                                                                  ZoneId zone) {
+        var ticks = new ArrayList<TrendChartModel.DateTick>();
+        for (var position = 0; position < tickCount; position++) {
+            var dateIndex = (int) Math.round(position * (dates.size() - 1.0) / (tickCount - 1.0));
+            var date = dates.get(dateIndex);
+            ticks.add(new TrendChartModel.DateTick(x(date.atTime(12, 0), from, to, zone), date));
+        }
         return List.copyOf(ticks);
+    }
+
+    private boolean hasMinimumDateTickSpacing(List<TrendChartModel.DateTick> ticks) {
+        for (var index = 1; index < ticks.size(); index++) {
+            if (ticks.get(index).x() - ticks.get(index - 1).x() < MIN_DATE_TICK_SPACING) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private List<TrendChartModel.Segment<TrendChartModel.SymptomPoint>> symptomSegments(

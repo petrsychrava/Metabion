@@ -1,6 +1,6 @@
 # Accurate Trend Charts Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax for tracking.
 
 **Goal:** Replace the fixed glucose and ketone marker rows with two coordinated, value-scaled SVG charts that accurately show symptoms, flare state, glucose, ketones, units, timestamps, and missing-data gaps.
 
@@ -62,7 +62,7 @@
 - Produces: `DailyTrendResponse.timezone(): String`
 - Preserves: all existing `DayTrend` and `MeasurementPoint` fields unchanged.
 
-- [ ] **Step 1: Add a failing service assertion for subject metadata**
+- [x] **Step 1: Add a failing service assertion for subject metadata**
 
 In `currentPatientTrendCombinesSymptomsDietLogsGlucoseAndKetonesForEveryDay`, set a non-default preference before invoking the service and assert both new values:
 
@@ -75,7 +75,7 @@ assertThat(response.glucoseUnit()).isEqualTo(MeasurementUnit.MG_DL);
 assertThat(response.timezone()).isEqualTo("UTC");
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -85,7 +85,7 @@ Run:
 
 Expected: test compilation fails because `DailyTrendResponse` does not yet expose `glucoseUnit()` or `timezone()`.
 
-- [ ] **Step 3: Add response metadata and populate effective defaults**
+- [x] **Step 3: Add response metadata and populate effective defaults**
 
 Change the outer record signature to:
 
@@ -112,7 +112,7 @@ return new DailyTrendResponse(patientProfileId, from, to, glucoseUnit, timezone,
 
 Add the `MeasurementUnit` import to `DailyTrendService`. Update every `new DailyTrendResponse(...)` fixture found by `rg -n "new DailyTrendResponse\\(" src/main src/test` with `MeasurementUnit.MMOL_L, "UTC"` between `to` and `days` unless the test requires another unit/timezone.
 
-- [ ] **Step 4: Verify service and boundary tests are GREEN**
+- [x] **Step 4: Verify service and boundary tests are GREEN**
 
 Run:
 
@@ -122,7 +122,7 @@ Run:
 
 Expected: `BUILD SUCCESSFUL`; existing JSON and page assertions continue to pass with the additive metadata fields.
 
-- [ ] **Step 5: Commit the metadata change**
+- [x] **Step 5: Commit the metadata change**
 
 ```bash
 git add src/main/java/com/metabion/dto/DailyTrendResponse.java src/main/java/com/metabion/service/DailyTrendService.java src/test/java/com/metabion/service/DailyTrendServiceTest.java src/test/java/com/metabion/controller/api/SymptomTrackingControllerTest.java src/test/java/com/metabion/controller/web/WebTrendControllerTest.java src/test/java/com/metabion/controller/web/TrendSvgRendererTest.java
@@ -141,7 +141,7 @@ git commit -m "Expose trend chart display metadata"
 - Produces: `BigDecimal TrendGlucoseConverter.convert(BigDecimal value, MeasurementUnit source, MeasurementUnit target)`
 - Behavior: returns `null` for null values or unsupported source/target units; converts glucose only between `MMOL_L` and `MG_DL` using factor 18.
 
-- [ ] **Step 1: Write failing conversion tests**
+- [x] **Step 1: Write failing conversion tests**
 
 ```java
 package com.metabion.controller.web;
@@ -177,7 +177,7 @@ class TrendGlucoseConverterTest {
 }
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run:
 
@@ -187,7 +187,7 @@ Run:
 
 Expected: test compilation fails because `TrendGlucoseConverter` does not exist.
 
-- [ ] **Step 3: Implement the pure converter**
+- [x] **Step 3: Implement the pure converter**
 
 ```java
 package com.metabion.controller.web;
@@ -220,7 +220,7 @@ final class TrendGlucoseConverter {
 }
 ```
 
-- [ ] **Step 4: Run the test and verify GREEN**
+- [x] **Step 4: Run the test and verify GREEN**
 
 Run:
 
@@ -230,7 +230,7 @@ Run:
 
 Expected: `BUILD SUCCESSFUL` and 2 tests pass.
 
-- [ ] **Step 5: Commit the converter**
+- [x] **Step 5: Commit the converter**
 
 ```bash
 git add src/main/java/com/metabion/controller/web/TrendGlucoseConverter.java src/test/java/com/metabion/controller/web/TrendGlucoseConverterTest.java
@@ -252,7 +252,7 @@ git commit -m "Add trend glucose unit conversion"
 - Produces: `TrendChartModel TrendChartModelBuilder.build(DailyTrendResponse trend)`.
 - Produces immutable nested records `Geometry`, `Axis`, `DateTick`, `Segment<T>`, `SymptomPoint`, and `MeasurementPoint`.
 
-- [ ] **Step 1: Write failing tests for axes, conversion, and y-coordinates**
+- [x] **Step 1: Write failing tests for axes, conversion, and y-coordinates**
 
 Create tests using a response containing glucose `5.00` and `5.20` mmol/L plus ketones `2.00` and `0.20` mmol/L. Assert:
 
@@ -281,7 +281,7 @@ assertThat(flatten(model.ketoneSegments())).extracting(TrendChartModel.Measureme
 
 Add an mg/dL-preference case asserting a stored `5.80 mmol/L` point becomes `104.40 mg/dL` in the model.
 
-- [ ] **Step 2: Run the builder test and verify RED**
+- [x] **Step 2: Run the builder test and verify RED**
 
 Run:
 
@@ -291,7 +291,7 @@ Run:
 
 Expected: test compilation fails because the chart model and builder do not exist.
 
-- [ ] **Step 3: Define the immutable chart model**
+- [x] **Step 3: Define the immutable chart model**
 
 ```java
 package com.metabion.controller.web;
@@ -343,7 +343,7 @@ record TrendChartModel(
 }
 ```
 
-- [ ] **Step 4: Implement builder geometry, supported-value filtering, and scale policies**
+- [x] **Step 4: Implement builder geometry, supported-value filtering, and scale policies**
 
 Create `TrendChartModelBuilder` as a Spring `@Component` with constructor injection of `TrendGlucoseConverter`. Use these constants and policies:
 
@@ -358,6 +358,7 @@ private static final BigDecimal GLUCOSE_MMOL_STEP = new BigDecimal("0.5");
 private static final BigDecimal GLUCOSE_MG_STEP = new BigDecimal("10");
 private static final BigDecimal KETONE_STEP = new BigDecimal("0.5");
 private static final BigDecimal MIN_KETONE_MAX = BigDecimal.ONE;
+private static final int MIN_DATE_TICK_SPACING = 80;
 
 private final TrendGlucoseConverter glucoseConverter;
 
@@ -526,13 +527,13 @@ private TrendChartModel.Axis axis(BigDecimal min, BigDecimal max, MeasurementUni
 
 For glucose, expand the observed range around its midpoint to the minimum span, then floor/ceil with the unit-specific step. For an empty series, use `4–8 mmol/L` or `72–144 mg/dL`. For ketones, use minimum `0–1 mmol/L`; otherwise set the upper bound to the next `0.5` increment strictly above the observed maximum.
 
-- [ ] **Step 5: Add failing tests for local-time x positions and sparse segments**
+- [x] **Step 5: Add failing tests for local-time x positions and sparse segments**
 
 Add these cases:
 
 ```java
 @Test
-void usesPatientLocalMeasurementTimeForXCoordinates() {
+void usesPatientLocalMeasurementTimeAndOffsetForXCoordinates() {
     var response = trend("America/New_York", MeasurementUnit.MMOL_L,
             day(LocalDate.of(2026, 6, 10), null, null,
                     List.of(glucose("5.8", MeasurementUnit.MMOL_L, "2026-06-10T11:00:00Z"),
@@ -542,8 +543,8 @@ void usesPatientLocalMeasurementTimeForXCoordinates() {
     var points = flatten(builder.build(response).glucoseSegments());
 
     assertThat(points).extracting(TrendChartModel.MeasurementPoint::measuredAt)
-            .containsExactly(LocalDateTime.parse("2026-06-10T07:00:00"),
-                    LocalDateTime.parse("2026-06-10T19:00:00"));
+            .containsExactly(OffsetDateTime.parse("2026-06-10T07:00:00-04:00"),
+                    OffsetDateTime.parse("2026-06-10T19:00:00-04:00"));
     assertThat(points.get(1).x()).isGreaterThan(points.get(0).x());
 }
 
@@ -629,7 +630,7 @@ private <T> List<T> flatten(List<TrendChartModel.Segment<T>> segments) {
 }
 ```
 
-- [ ] **Step 6: Implement x/y mapping, marker shapes, and segment splitting**
+- [x] **Step 6: Implement x/y mapping, marker shapes, and segment splitting**
 
 Use the effective zone and the full local range for x coordinates:
 
@@ -675,15 +676,19 @@ Build ticks, chart points, and chronological segments with these helpers:
 ```java
 private List<TrendChartModel.DateTick> dateTicks(LocalDate from, LocalDate to, ZoneId zone) {
     var dates = from.datesUntil(to.plusDays(1)).toList();
-    var interval = Math.max(1, (int) Math.ceil(dates.size() / 6.0));
-    var ticks = new ArrayList<TrendChartModel.DateTick>();
-    for (int index = 0; index < dates.size(); index++) {
-        if (index == 0 || index == dates.size() - 1 || index % interval == 0) {
-            var date = dates.get(index);
-            ticks.add(new TrendChartModel.DateTick(x(date.atTime(12, 0), from, to, zone), date));
+    if (dates.size() == 1) {
+        var date = dates.getFirst();
+        return List.of(new TrendChartModel.DateTick(x(date.atTime(12, 0), from, to, zone), date));
+    }
+    var plotWidth = GEOMETRY.right() - GEOMETRY.left();
+    var maximumTickCount = Math.min(dates.size(), plotWidth / MIN_DATE_TICK_SPACING + 1);
+    for (var tickCount = maximumTickCount; tickCount >= 2; tickCount--) {
+        var ticks = evenlySpacedDateTicks(dates, tickCount, from, to, zone);
+        if (hasMinimumDateTickSpacing(ticks)) {
+            return ticks;
         }
     }
-    return List.copyOf(ticks);
+    throw new IllegalStateException("Unable to place trend date ticks");
 }
 
 private List<TrendChartModel.Segment<TrendChartModel.SymptomPoint>> symptomSegments(
@@ -747,7 +752,7 @@ private <T> List<TrendChartModel.Segment<T>> segments(List<T> points,
 
 The extraction filters above omit points with null value, type, unit, timestamp, or unsupported type/unit combinations.
 
-- [ ] **Step 7: Run model and converter tests and verify GREEN**
+- [x] **Step 7: Run model and converter tests and verify GREEN**
 
 Run:
 
@@ -757,7 +762,7 @@ Run:
 
 Expected: `BUILD SUCCESSFUL`; conversion, scaling, local-time positioning, segment, isolated-point, and empty-series cases pass.
 
-- [ ] **Step 8: Commit the chart model**
+- [x] **Step 8: Commit the chart model**
 
 ```bash
 git add src/main/java/com/metabion/controller/web/TrendChartModel.java src/main/java/com/metabion/controller/web/TrendChartModelBuilder.java src/test/java/com/metabion/controller/web/TrendChartModelBuilderTest.java
@@ -777,7 +782,7 @@ git commit -m "Build scaled trend chart models"
 - Produces: `String TrendSvgRenderer.render(DailyTrendResponse trend)`.
 - Depends on: Spring `MessageSource` and `LocaleContextHolder` for localized labels.
 
-- [ ] **Step 1: Replace fixed-band tests with failing two-chart assertions**
+- [x] **Step 1: Replace fixed-band tests with failing two-chart assertions**
 
 Construct the renderer with a real builder and a `StaticMessageSource`. Register English messages for `trends.noData`, `trends.symptomChart`, `trends.measurementChart`, `trends.symptomScore`, `trends.glucose`, `trends.ketones`, the two measurement units, and all three flare states.
 
@@ -820,7 +825,7 @@ The renderer must therefore put `data-y` on each point group in addition to the 
 
 Add separate tests asserting circle/triangle/square markup, only one polyline per sparse segment with at least two points, focusable point groups, escaped labels, localized no-data output, and visible values in tooltip text.
 
-- [ ] **Step 2: Run renderer tests and verify RED**
+- [x] **Step 2: Run renderer tests and verify RED**
 
 Run:
 
@@ -830,7 +835,7 @@ Run:
 
 Expected: assertions fail because the renderer still emits one SVG and fixed measurement y rows.
 
-- [ ] **Step 3: Inject the model builder and message source**
+- [x] **Step 3: Inject the model builder and message source**
 
 Use this class boundary:
 
@@ -885,7 +890,7 @@ private String escape(String value) {
 }
 ```
 
-- [ ] **Step 4: Render axes and segmented lines**
+- [x] **Step 4: Render axes and segmented lines**
 
 For each graph, render its own `<svg>` with `viewBox="0 0 640 220"`, `<title>`, `<desc>`, horizontal date ticks from `model.dateTicks()`, and y ticks from the relevant axes.
 
@@ -908,7 +913,7 @@ private <T> String polyline(TrendChartModel.Segment<T> segment,
 
 Use the glucose axis for glucose y ticks and the left axis line; use the ketone axis for ketone y ticks and the right axis line. Never share one numeric y transform between the two measurement series.
 
-- [ ] **Step 5: Render flare shapes and accessible measurement points**
+- [x] **Step 5: Render flare shapes and accessible measurement points**
 
 Render shapes from `MarkerShape`:
 
@@ -928,7 +933,7 @@ private String symptomShape(TrendChartModel.SymptomPoint point) {
 
 Wrap every point in a group such as `<g class="trend-point" tabindex="0" role="img" aria-label="2026-07-09, Glucose 5.20 mmol/L">`. Include escaped `data-value`, `data-unit`, and date/time attributes plus `<title>` fallback text. Add a nested `.trend-tooltip` group with two text lines: local date/time and exact localized value/state. Clamp its x position inside the plot and place it above the point unless the point is near the top.
 
-- [ ] **Step 6: Run renderer tests and verify GREEN**
+- [x] **Step 6: Run renderer tests and verify GREEN**
 
 Run:
 
@@ -938,7 +943,7 @@ Run:
 
 Expected: `BUILD SUCCESSFUL`; two-chart, dual-axis, flare-shape, segmentation, accessibility, escaping, and no-data tests pass.
 
-- [ ] **Step 7: Commit the renderer**
+- [x] **Step 7: Commit the renderer**
 
 ```bash
 git add src/main/java/com/metabion/controller/web/TrendSvgRenderer.java src/test/java/com/metabion/controller/web/TrendSvgRendererTest.java
@@ -961,7 +966,7 @@ git commit -m "Render accurate dual trend charts"
 - Consumes: `TrendSvgRenderer.render(DailyTrendResponse)` from Task 4.
 - Preserves: `trendSvg` model attribute and both existing templates.
 
-- [ ] **Step 1: Add failing web and localization assertions**
+- [x] **Step 1: Add failing web and localization assertions**
 
 Update the mocked renderer setup to return recognizable two-chart markup from the single-argument method:
 
@@ -994,7 +999,7 @@ trends.noGlucoseData=Nejsou dostupná měření glukózy
 trends.noKetoneData=Nejsou dostupná měření ketonů
 ```
 
-- [ ] **Step 2: Run web and localization tests and verify RED**
+- [x] **Step 2: Run web and localization tests and verify RED**
 
 Run:
 
@@ -1004,7 +1009,7 @@ Run:
 
 Expected: compilation or assertions fail until the controller uses the new renderer method and both bundles contain the new keys.
 
-- [ ] **Step 3: Simplify controller rendering and add aligned message keys**
+- [x] **Step 3: Simplify controller rendering and add aligned message keys**
 
 Change `addTrendModel` to:
 
@@ -1019,7 +1024,7 @@ private void addTrendModel(Model model, DailyTrendResponse trend, DateRange rang
 
 Remove the controller's `MessageSource` field, constructor parameter, `LocaleContextHolder` import, and private `message` method if they have no other callers. Add the three keys shown in Step 1 to both message bundles.
 
-- [ ] **Step 4: Replace fixed-band CSS with dual-chart styling**
+- [x] **Step 4: Replace fixed-band CSS with dual-chart styling**
 
 Keep `.trend-chart-wrap` and `.trend-chart` responsive behavior. Add:
 
@@ -1094,9 +1099,9 @@ Keep `.trend-chart-wrap` and `.trend-chart` responsive behavior. Add:
 }
 ```
 
-Define dedicated `--trend-symptom`, `--trend-glucose`, `--trend-ketone`, flare, axis, and grid tokens in `:root`, system dark mode, and explicit `LIGHT`/`DARK` preference blocks. Use them consistently for axes, tick labels, lines, markers, legends, grid lines, and date ticks. Verify at least 4.5:1 contrast where a series color is used for text and at least 3:1 for meaningful lines and markers.
+Define dedicated `--trend-symptom`, `--trend-glucose`, `--trend-ketone`, flare, axis, and grid tokens in `:root`, system dark mode, and explicit `LIGHT`/`DARK` preference blocks. Use them consistently for axes, tick labels, lines, markers, legends, grid lines, and date ticks. Verify at least 4.5:1 contrast where a series color is used for text and at least 3:1 for meaningful lines, markers, and grid strokes. Render ISO date labels at `0.75rem` and select the largest evenly distributed tick set that preserves the first/last date and at least 80 SVG units between adjacent labels.
 
-- [ ] **Step 5: Run focused trend, web, and localization tests**
+- [x] **Step 5: Run focused trend, web, and localization tests**
 
 Run:
 
@@ -1106,7 +1111,7 @@ Run:
 
 Expected: `BUILD SUCCESSFUL` with all focused tests passing.
 
-- [ ] **Step 6: Run full repository verification**
+- [x] **Step 6: Run full repository verification**
 
 Run:
 
@@ -1128,7 +1133,9 @@ Using the existing signed-in local session, reload `http://localhost:8080/app/tr
 - Keyboard focus and pointer hover reveal exact point details.
 - Both charts remain aligned at desktop width and horizontally usable at narrow width.
 
-- [ ] **Step 8: Commit localization and web integration**
+Status: blocked in the isolated in-app browser because it redirected to sign-in and could not reuse the user's authenticated Chrome session. Deterministic renderer, geometry, localization, tooltip-boundary, and contrast tests cover the implementation; an authenticated visual pass remains outstanding.
+
+- [x] **Step 8: Commit localization and web integration**
 
 ```bash
 git add src/main/java/com/metabion/controller/web/WebTrendController.java src/main/resources/static/css/app.css src/main/resources/messages.properties src/main/resources/messages_cs.properties src/test/java/com/metabion/controller/web/WebTrendControllerTest.java src/test/java/com/metabion/config/LocalizationConfigTest.java
@@ -1139,8 +1146,8 @@ git commit -m "Polish trend chart web presentation"
 
 ## Completion Review
 
-- [ ] Confirm `git status --short` contains only intended trend-chart changes plus the user's pre-existing unrelated files.
-- [ ] Confirm every implementation commit is focused and uses the messages listed above.
-- [ ] Confirm no dependency, migration, authentication, authorization, or database schema behavior changed.
-- [ ] Invoke `superpowers:verification-before-completion` before reporting success.
-- [ ] Invoke `superpowers:requesting-code-review` for a final review of the completed implementation.
+- [x] Confirm `git status --short` contains only intended trend-chart changes plus the user's pre-existing unrelated files.
+- [x] Confirm every implementation commit is focused and uses the messages listed above.
+- [x] Confirm no dependency, migration, authentication, authorization, or database schema behavior changed.
+- [x] Invoke `superpowers:verification-before-completion` before reporting success.
+- [x] Invoke `superpowers:requesting-code-review` for a final review of the completed implementation.

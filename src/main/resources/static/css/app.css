@@ -22,7 +22,7 @@
     --trend-flare-suspected: #965c00;
     --trend-flare-active: #9f1d1d;
     --trend-axis: #5f6f66;
-    --trend-grid: #aebbb3;
+    --trend-grid: #7a8b80;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -50,7 +50,7 @@
         --trend-flare-suspected: #ffc267;
         --trend-flare-active: #ff8a8a;
         --trend-axis: #9dafaa;
-        --trend-grid: #3a4e43;
+        --trend-grid: #60786b;
     }
 }
 
@@ -78,7 +78,7 @@
     --trend-flare-suspected: #965c00;
     --trend-flare-active: #9f1d1d;
     --trend-axis: #5f6f66;
-    --trend-grid: #aebbb3;
+    --trend-grid: #7a8b80;
 }
 
 [data-theme-preference="DARK"] {
@@ -105,7 +105,7 @@
     --trend-flare-suspected: #ffc267;
     --trend-flare-active: #ff8a8a;
     --trend-axis: #9dafaa;
-    --trend-grid: #3a4e43;
+    --trend-grid: #60786b;
 }
 
 * {
@@ -524,6 +524,10 @@ a {
 
 .trend-empty-state {
     font-size: 0.8rem;
+}
+
+.trend-date-label {
+    font-size: 0.75rem;
 }
 
 .trend-legend {
