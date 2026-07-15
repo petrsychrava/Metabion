@@ -69,7 +69,11 @@ class WebDietLogControllerTest {
         mvc.perform(get("/app/diet-logs/history").with(user("patient@example.com").roles(RoleName.PATIENT.name())))
                 .andExpect(status().isOk()).andExpect(view().name("diet-log-history"))
                 .andExpect(model().attribute("from", LocalDate.of(2026, 5, 23))).andExpect(model().attribute("to", LocalDate.of(2026, 6, 21)))
-                .andExpect(content().string(containsString("Diet log history")));
+                .andExpect(content().string(containsString("Diet log history")))
+                .andExpect(content().string(containsString("New log")))
+                .andExpect(content().string(containsString("/app/diet-logs?date=2026-06-10")))
+                .andExpect(content().string(containsString("5.80")))
+                .andExpect(content().string(containsString("1.20")));
     }
 
     @Test
@@ -79,6 +83,8 @@ class WebDietLogControllerTest {
         mvc.perform(get("/app/diet-logs/history").param("from", "2026-06-01").param("to", "2026-06-10")
                         .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
                 .andExpect(status().isOk()).andExpect(model().attribute("from", LocalDate.of(2026, 6, 1)))
+                .andExpect(model().attribute("to", LocalDate.of(2026, 6, 10)))
+                .andExpect(content().string(containsString("2026-06-09")))
                 .andExpect(content().string(containsString("Not provided")));
     }
 
