@@ -80,6 +80,12 @@ public class LabResultSet {
         updatedAt = now;
     }
 
+    public void updateDetails(LocalDate collectionDate, String notes, Instant now) {
+        this.collectionDate = Objects.requireNonNull(collectionDate);
+        this.notes = trimToNull(notes);
+        this.updatedAt = Objects.requireNonNull(now);
+    }
+
     public void markRemoved(User actor, String reason, Instant now) {
         if (removedAt != null) {
             throw new IllegalStateException("lab result set is already removed");

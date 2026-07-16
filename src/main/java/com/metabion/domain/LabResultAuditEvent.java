@@ -35,6 +35,16 @@ public class LabResultAuditEvent {
     private String afterSnapshot;
 
     protected LabResultAuditEvent() { }
+    public LabResultAuditEvent(LabResultSet resultSet, PatientProfile patientProfile, LabAuditAction action,
+                               User actorUser, Instant occurredAt, String beforeSnapshot, String afterSnapshot) {
+        this.resultSet = resultSet;
+        this.patientProfile = patientProfile;
+        this.action = action;
+        this.actorUser = actorUser;
+        this.occurredAt = occurredAt;
+        this.beforeSnapshot = beforeSnapshot;
+        this.afterSnapshot = afterSnapshot;
+    }
     public Long getId() { return id; }
     public LabResultSet getResultSet() { return resultSet; }
     public PatientProfile getPatientProfile() { return patientProfile; }
