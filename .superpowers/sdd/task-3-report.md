@@ -1,139 +1,27 @@
-# Task 3 Report: Build Scaled and Segmented Chart Models
+# Task 3 Report: Navigation, Localization, And Trend Links
 
-## Status
+## Scope
 
-Implemented the requested immutable chart model and Spring builder.
+- Replaced the clinical Diet log review navigation item with Daily check-in review at `/app/clinical/daily-check-ins`.
+- Added aligned English and Czech menu label and description messages. Existing `dailyCheckIns.*` template messages remain aligned in both bundles; templates reuse the diet and enum labels.
+- Linked a clinical trend date to the daily check-in detail when its day has either a diet log or a symptom check-in, leaving it as plain text only when it has neither.
 
-## Implementation
+## Tests
 
-- Added package-private TrendChartModel with the required nested records and marker enum.
-- Added package-private Spring TrendChartModelBuilder with constructor injection of TrendGlucoseConverter.
-- Defaulted glucose display metadata to MMOL_L unless the response explicitly requests MG_DL, and safely resolved invalid or missing timezones to the system zone.
-- Extracted only supported glucose and ketone measurements, converted glucose into the display unit, localized timestamps, and sorted points chronologically.
-- Built independently rounded glucose and ketone axes with the required minimum spans, steps, empty-series defaults, and three ticks.
-- Mapped date ticks, symptoms, glucose, and ketones into the fixed 640-by-220 geometry with clamped coordinates.
-- Mapped flare states to circle, triangle, and square markers while preserving original symptom values and scaling clamped scores.
-- Split symptom and measurement series only when at least one full calendar date is missing, preserving isolated points as one-point segments.
-- Added four focused tests for independent axes/y-coordinates, mmol/L-to-mg/dL conversion, patient-local measurement time/x-positioning, and sparse-date segmentation.
+### Red
 
-No dependency, DTO, service, persistence, security, migration, configuration, or public interface changes were made.
+`./gradlew test --tests 'com.metabion.controller.web.AppMenuCatalogTest' --tests 'com.metabion.controller.web.WebTrendControllerTest'`
 
-## TDD Evidence
+Failed as expected before implementation: the menu tests still found the old Diet log review label/route and the clinical trend test did not link a symptom-only day.
 
-### RED 1: Missing Model and Builder
+### Green
 
-Command:
+`./gradlew test --tests 'com.metabion.controller.web.AppMenuCatalogTest' --tests 'com.metabion.controller.web.WebTrendControllerTest'`
 
-    ./gradlew test --tests 'com.metabion.controller.web.TrendChartModelBuilderTest'
+Passed: 14 tests, including separate diet-only and symptom-only clinical trend URLs.
 
-Result: exit code 1, BUILD FAILED during :compileTestJava in 983ms. The expected root failures were:
+### Full suite
 
-    cannot find symbol: class TrendChartModelBuilder
-    package TrendChartModel does not exist
-    8 errors
+`./gradlew test`
 
-No chart model or builder production file existed during this run.
-
-### GREEN 1: Axes and Conversion
-
-Command:
-
-    ./gradlew test --tests 'com.metabion.controller.web.TrendChartModelBuilderTest'
-
-Result: exit code 0, BUILD SUCCESSFUL in 1s; the initial 2 tests passed.
-
-### RED 2: Local X Positions and Sparse Segments
-
-Command:
-
-    ./gradlew test --tests 'com.metabion.controller.web.TrendChartModelBuilderTest'
-
-Result: exit code 1, BUILD FAILED in 1s; 4 tests ran and the intended 2 failed:
-
-    usesPatientLocalMeasurementTimeForXCoordinates() FAILED
-    splitsSeriesAcrossMissingDaysButConnectsSameAndConsecutiveDates() FAILED
-    4 tests completed, 2 failed
-
-The first failure observed equal placeholder x-coordinates; the second observed one unsplit segment.
-
-### GREEN 2: Model and Converter
-
-Command:
-
-    ./gradlew test --tests 'com.metabion.controller.web.TrendGlucoseConverterTest' --tests 'com.metabion.controller.web.TrendChartModelBuilderTest'
-
-Result: exit code 0, BUILD SUCCESSFUL in 1s; all 6 focused tests passed.
-
-IntelliJ's focused build of both production files and the builder test also reported isSuccess=true with no problems.
-
-### GREEN: Full Suite
-
-Command:
-
-    ./gradlew test
-
-Result: exit code 0, BUILD SUCCESSFUL in 1m 22s; Jacoco report generation completed. Aggregating the generated JUnit XML results recorded 745 tests, 0 failures, 0 errors, and 0 skipped.
-
-Gradle emitted its existing Java native-access and class-data-sharing warnings; they did not affect either successful run.
-
-## Files Changed
-
-- src/main/java/com/metabion/controller/web/TrendChartModel.java
-- src/main/java/com/metabion/controller/web/TrendChartModelBuilder.java
-- src/test/java/com/metabion/controller/web/TrendChartModelBuilderTest.java
-- .superpowers/sdd/task-3-report.md
-
-## Self-Review
-
-- Compared every final model field, nested record, enum value, constant, visibility, constructor, and build signature with the task brief.
-- Recalculated the axis policies for single values, narrow ranges, exact ketone step boundaries, empty data, both glucose units, and values below zero; the implementation follows the specified rounding and clamping rules.
-- Confirmed glucose conversion happens before axis calculation and y-coordinate mapping, so values, units, bounds, and geometry remain internally consistent.
-- Confirmed measurement timestamps are converted from Instant into the patient zone before local-date segmentation and are interpreted in the same zone for x-positioning.
-- Confirmed same-day and consecutive-day points remain connected, gaps of one or more complete dates split segments, and empty series produce no segments.
-- Confirmed null lists/elements and missing or mismatched measurement value/type/unit/timestamp fields are excluded without guessing.
-- Confirmed symptom scores retain their original value in tooltips while only their y-coordinate input is clamped to 0–30.
-- Confirmed all generated collection values are unmodifiable through List.of, Stream.toList, or List.copyOf.
-- Reviewed IntelliJ diagnostics. The only production suggestions were two Math.clamp modernization warnings on the exact clamping expressions required by the brief; no errors were reported.
-- Confirmed no illustrative snippet needed a compile-safe correction and no behavior differs from the brief.
-- Confirmed the complete suite added exactly four tests relative to Task 2's 741-test baseline and contains no failures.
-
-## Concerns
-
-No functional concerns. The two IntelliJ Math.clamp suggestions and Gradle/JDK runtime warnings are non-blocking; the explicit expressions were retained to match the specified numeric policy exactly.
-
-## Review Fix: DST Fall-Back Overlap
-
-### Root Cause and Implementation
-
-The original builder converted each measurement Instant to a local LocalDateTime before sorting and x-coordinate mapping. During a fall-back overlap, two distinct instants can share the same local wall-clock time. Sorting then treated them as equal, and converting the ambiguous local time back with atZone selected the same offset for both x positions.
-
-RawMeasurementPoint now retains the source Instant alongside the patient-local date and LocalDateTime. Glucose and ketone points sort by the absolute Instant, and measurement x coordinates use that Instant directly against the patient-zone range boundaries. TrendChartModel.MeasurementPoint still exposes the patient-local LocalDateTime, and segmentation still derives its calendar date from that localized value.
-
-### RED
-
-Command:
-
-    ./gradlew test --tests 'com.metabion.controller.web.TrendChartModelBuilderTest'
-
-Result: exit code 1, BUILD FAILED in 1s. Five tests ran and only preservesChronologyAndDistinctXCoordinatesDuringDstOverlap failed at the chronological value-order assertion. The reversed input used America/New_York instants 2026-11-01T05:30:00Z and 2026-11-01T06:30:00Z, both of which expose local time 01:30 during the overlap.
-
-### GREEN
-
-Command:
-
-    ./gradlew test --tests 'com.metabion.controller.web.TrendGlucoseConverterTest' --tests 'com.metabion.controller.web.TrendChartModelBuilderTest'
-
-Result: exit code 0, BUILD SUCCESSFUL in 1s. Generated JUnit results recorded 7 tests, 0 failures, 0 errors, and 0 skipped. IntelliJ's focused build also reported isSuccess=true with no problems.
-
-### Review-Fix Self-Review
-
-- Confirmed both glucose and ketone extraction paths preserve and sort by the original Instant.
-- Confirmed only measurement x coordinates use the absolute Instant; date ticks and symptom points retain their intended local-noon mapping.
-- Confirmed the regression identifies chronological order through distinct measurement values while also demonstrating that both public measuredAt values remain the same patient-local 01:30.
-- Confirmed the later overlap instant receives a strictly greater x coordinate across the 25-hour local day.
-- Confirmed local-date segmentation behavior and all pre-existing scaling, filtering, conversion, and geometry policies remain unchanged.
-- Re-ran IntelliJ diagnostics; no errors were reported. The pre-existing Math.clamp suggestions remain intentionally unchanged.
-
-### Deferred Observation
-
-The reviewer noted at low priority that broader policy coverage could be added later. This fix intentionally does not expand scope beyond the DST overlap regression.
+Could not obtain a completion result in this execution environment. Each attempt was disconnected after roughly 30 seconds while Gradle had entered `:test`; no test report was produced or updated beyond the focused-test reports, and no Gradle failure or Docker/Testcontainers diagnostic was emitted. The focused suite passed; full-suite status remains unverified.

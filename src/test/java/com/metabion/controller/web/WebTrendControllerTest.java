@@ -169,7 +169,7 @@ class WebTrendControllerTest {
                 .andExpect(content().string(containsString("Ketones")))
                 .andExpect(content().string(containsString("trend-chart-symptoms")))
                 .andExpect(content().string(containsString("trend-chart-measurements")))
-                .andExpect(content().string(containsString("href=\"/app/clinical/diet-logs/200\"")));
+                .andExpect(content().string(containsString("href=\"/app/clinical/daily-check-ins/10/2026-06-26\"")));
 
         verify(dietLogService).listClinicalPatientOptions(any(Authentication.class));
         verify(dailyTrendService).clinicalTrend(any(), eq(10L), eq(LocalDate.of(2026, 6, 1)), eq(LocalDate.of(2026, 6, 26)));
@@ -213,7 +213,7 @@ class WebTrendControllerTest {
     }
 
     @Test
-    void clinicalTrendPageDoesNotLinkDaysWithoutDietLog() throws Exception {
+    void clinicalTrendPageLinksDaysWithSymptomsOnly() throws Exception {
         when(dailyTrendService.clinicalTrend(any(), eq(10L), any(), any())).thenReturn(trendResponseWithoutDietLog());
         when(dietLogService.listClinicalPatientOptions(any()))
                 .thenReturn(List.of(new PatientOptionResponse(10L, "patient@example.com")));
@@ -226,7 +226,7 @@ class WebTrendControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("clinical-trends"))
                 .andExpect(content().string(containsString("2026-06-26")))
-                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("/app/clinical/diet-logs/"))));
+                .andExpect(content().string(containsString("href=\"/app/clinical/daily-check-ins/10/2026-06-26\"")));
     }
 
     private DailyTrendResponse trendResponse() {
@@ -234,7 +234,7 @@ class WebTrendControllerTest {
                 MeasurementUnit.MMOL_L, "UTC",
                 List.of(new DailyTrendResponse.DayTrend(
                         LocalDate.of(2026, 6, 26),
-                        100L,
+                        null,
                         new BigDecimal("5.00"),
                         FlareState.SUSPECTED_FLARE,
                         200L,

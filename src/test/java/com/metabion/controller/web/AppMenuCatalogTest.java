@@ -48,7 +48,7 @@ class AppMenuCatalogTest {
                         "Home",
                         "Education library",
                         "Onboarding review",
-                        "Diet log review",
+                        "Daily check-in review",
                         "Patient trends",
                         "Content management",
                         "Assigned patient overview - planned",
@@ -70,7 +70,7 @@ class AppMenuCatalogTest {
                         "Home",
                         "Education library",
                         "Onboarding review",
-                        "Diet log review",
+                        "Daily check-in review",
                         "Patient trends",
                         "Content management",
                         "Assigned patient overview - planned",
@@ -141,10 +141,13 @@ class AppMenuCatalogTest {
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/clinical/onboarding");
         assertThat(catalog.sidebarItems(clinician))
-                .filteredOn(item -> "Diet log review".equals(item.label()))
+                .filteredOn(item -> "Daily check-in review".equals(item.label()))
                 .singleElement()
                 .extracting(AppMenuItem::route)
-                .isEqualTo("/app/clinical/diet-logs");
+                .isEqualTo("/app/clinical/daily-check-ins");
+        assertThat(catalog.sidebarItems(clinician))
+                .extracting(AppMenuItem::route)
+                .doesNotContain("/app/clinical/diet-logs");
         assertThat(catalog.sidebarItems(clinician))
                 .filteredOn(item -> "Patient trends".equals(item.label()))
                 .singleElement()

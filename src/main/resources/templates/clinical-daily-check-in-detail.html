@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell(#{dailyCheckIns.detail.pageTitle}, ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Metabion</p>
+            <h1 th:text="#{dailyCheckIns.detail.title}">Daily check-in detail</h1>
+        </div>
+        <a class="button-link secondary" th:href="@{/app/clinical/daily-check-ins}" th:text="#{dietLogs.back}">Back</a>
+    </header>
+
+    <section class="panel app-panel">
+        <dl class="details">
+            <dt th:text="#{dietLogs.patientEmail}">Patient email</dt><dd th:text="${checkIn.patientEmail()} ?: #{dailyCheckIns.notProvided}">patient@example.com</dd>
+            <dt th:text="#{dietLogs.logDate}">Date</dt><dd th:text="${checkIn.date()}">2026-07-15</dd>
+        </dl>
+    </section>
+
+    <th:block th:if="${checkIn.dietLog() != null}" th:with="log=${checkIn.dietLog()}">
+        <section class="panel app-panel">
+            <h2 th:text="#{dailyCheckIn.dietSection}">Diet</h2>
+            <dl class="details">
+                <dt th:text="#{dietLogs.adherenceLevel}">Adherence</dt><dd th:text="${#messages.msg('enum.dietAdherenceLevel.' + log.adherenceLevel().name())}">Mostly</dd>
+                <dt th:text="#{dietLogs.appetiteLevel}">Appetite</dt><dd th:text="${#messages.msg('enum.appetiteLevel.' + log.appetiteLevel().name())}">Normal</dd>
+                <dt th:text="#{dietLogs.notes}">Notes</dt><dd th:text="${log.notes()} ?: #{dailyCheckIns.notProvided}">Notes</dd>
+            </dl>
+        </section>
+
+        <section class="panel app-panel">
+            <h2 th:text="#{dietLogs.meals}">Meals</h2>
+            <div th:each="meal, mealRow : ${log.meals()}"
+                 th:with="mealDeviations=${log.deviationsForMeal(meal.id())}, mealPhotos=${log.photoReferencesForMeal(meal.id())}">
+                <h3><span th:text="#{dietLogs.meal}">Meal</span> <span th:text="${mealRow.index + 1}">1</span></h3>
+                <dl class="details">
+                    <dt th:text="#{dietLogs.mealType}">Meal type</dt><dd th:text="${#messages.msg('enum.mealType.' + meal.mealType().name())}">Lunch</dd>
+                    <dt th:text="#{dietLogs.foodDescription}">Food description</dt><dd th:text="${meal.foodDescription()} ?: #{dailyCheckIns.notProvided}">Avocado salad</dd>
+                    <dt th:text="#{dietLogs.notes}">Notes</dt><dd th:text="${meal.notes()} ?: #{dailyCheckIns.notProvided}">Meal notes</dd>
+                </dl>
+
+                <h4 th:text="#{dietLogs.deviation}">Deviation</h4>
+                <dl class="details" th:each="deviation : ${mealDeviations}">
+                    <dt th:text="#{dietLogs.deviationCategory}">Category</dt><dd th:text="${#messages.msg('enum.dietDeviationCategory.' + deviation.deviationCategory().name())}">Dining out</dd>
+                    <dt th:text="#{dietLogs.deviationSeverity}">Severity</dt><dd th:text="${#messages.msg('enum.dietDeviationSeverity.' + deviation.severity().name())}">Minor</dd>
+                    <dt th:text="#{dietLogs.notes}">Notes</dt><dd th:text="${deviation.notes()} ?: #{dailyCheckIns.notProvided}">Deviation notes</dd>
+                </dl>
+                <p th:if="${#lists.isEmpty(mealDeviations)}" th:text="#{dietLogs.noDeviations}">No deviations recorded</p>
+
+                <h4 th:text="#{dietLogs.photoReference}">Photos</h4>
+                <div th:each="photo : ${mealPhotos}">
+                    <p><a th:href="${photo.contentUrl()}" th:text="${photo.originalFilename()} ?: #{dietLogs.photo}">plate.jpg</a>
+                        <span th:text="${photo.caption()} ?: #{dailyCheckIns.notProvided}">Lunch</span></p>
+                    <img th:src="${photo.contentUrl()}" th:alt="${photo.caption()} ?: ${photo.originalFilename()}" style="max-width: 240px; height: auto;">
+                </div>
+                <p th:if="${#lists.isEmpty(mealPhotos)}" th:text="#{dietLogs.noPhotoReferences}">No photos recorded</p>
+            </div>
+            <p th:if="${#lists.isEmpty(log.meals())}" th:text="#{dietLogs.noMeals}">No meals recorded</p>
+        </section>
+
+        <section class="panel app-panel">
+            <h2 th:text="#{dietLogs.measurements}">Measurements</h2>
+            <dl class="details" th:each="measurement : ${log.measurements()}">
+                <dt th:text="#{dietLogs.measurementType}">Type</dt><dd th:text="${#messages.msg('enum.measurementType.' + measurement.measurementType().name())}">Glucose</dd>
+                <dt th:text="#{dietLogs.measurementValue}">Value</dt><dd th:text="${measurement.value()}">5.8</dd>
+                <dt th:text="#{dietLogs.measurementUnit}">Unit</dt><dd th:text="${#messages.msg('enum.measurementUnit.' + measurement.unit().name())}">mmol/L</dd>
+                <dt th:text="#{dietLogs.measuredAt}">Measured at</dt><dd th:text="${measurement.measuredAt()}">2026-07-15T07:30:00Z</dd>
+                <dt th:text="#{dietLogs.measurementContext}">Context</dt><dd th:text="${#messages.msg('enum.measurementContext.' + measurement.context().name())}">Fasting</dd>
+                <dt th:text="#{dietLogs.notes}">Notes</dt><dd th:text="${measurement.notes()} ?: #{dailyCheckIns.notProvided}">Morning</dd>
+            </dl>
+            <p th:if="${#lists.isEmpty(log.measurements())}" th:text="#{dietLogs.noMeasurements}">No measurements recorded</p>
+        </section>
+    </th:block>
+    <section class="panel app-panel" th:if="${checkIn.dietLog() == null}"><p th:text="#{dailyCheckIns.noDiet}">No diet log was provided for this day.</p></section>
+
+    <th:block th:if="${checkIn.symptomCheckIn() != null}" th:with="symptoms=${checkIn.symptomCheckIn()}">
+        <section class="panel app-panel">
+            <h2 th:text="#{dailyCheckIn.symptomsSection}">Symptoms</h2>
+            <dl class="details">
+                <dt th:text="#{dailyCheckIns.symptomScore}">Symptom score</dt><dd th:text="${symptoms.totalSymptomScore()} ?: #{dailyCheckIns.notProvided}">8</dd>
+                <dt th:text="#{dailyCheckIn.flareState}">Flare state</dt><dd th:text="${#messages.msg('enum.flareState.' + symptoms.flareState().name())}">Suspected flare</dd>
+                <dt th:text="#{dailyCheckIn.symptomNotes}">Notes</dt><dd th:text="${symptoms.notes()} ?: #{dailyCheckIns.notProvided}">Notes</dd>
+            </dl>
+            <dl class="details" th:each="answer : ${symptoms.answers()}">
+                <dt th:text="${(answer.questionStableKey() != null ? #messages.msgOrNull('symptomQuestion.' + answer.questionStableKey()) : null) ?: answer.label() ?: answer.questionStableKey() ?: #messages.msg('dailyCheckIns.notProvided')}">Question</dt>
+                <dd th:if="${answer.optionId() != null}" th:text="${(answer.questionStableKey() != null and answer.optionStableKey() != null ? #messages.msgOrNull('symptomQuestion.' + answer.questionStableKey() + '.option.' + answer.optionStableKey()) : null) ?: answer.optionLabel() ?: answer.optionStableKey() ?: #messages.msg('dailyCheckIns.notProvided')}">Answer</dd>
+                <dd th:if="${answer.optionId() == null}" th:text="${answer.answerText()} ?: (${answer.answerNumeric()} ?: #{dailyCheckIns.notProvided})">Answer</dd>
+            </dl>
+        </section>
+    </th:block>
+    <section class="panel app-panel" th:if="${checkIn.symptomCheckIn() == null}"><p th:text="#{dailyCheckIns.noSymptoms}">No symptoms were reported for this day.</p></section>
+</th:block>
+</html>
