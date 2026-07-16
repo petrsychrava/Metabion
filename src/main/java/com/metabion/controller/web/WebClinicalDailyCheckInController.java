@@ -1,7 +1,7 @@
 package com.metabion.controller.web;
 
 import com.metabion.service.ClinicalDailyCheckInService;
-import com.metabion.service.DietLogService;
+import com.metabion.service.ClinicalPatientDirectoryService;
 import com.metabion.service.UserPreferenceService;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
@@ -20,18 +20,18 @@ public class WebClinicalDailyCheckInController {
     private static final int DEFAULT_RANGE_DAYS = 7;
 
     private final ClinicalDailyCheckInService clinicalDailyCheckInService;
-    private final DietLogService dietLogService;
+    private final ClinicalPatientDirectoryService clinicalPatientDirectory;
     private final AppMenuCatalog appMenuCatalog;
     private final UserPreferenceService userPreferenceService;
     private final Clock clock;
 
     public WebClinicalDailyCheckInController(ClinicalDailyCheckInService clinicalDailyCheckInService,
-                                              DietLogService dietLogService,
+                                              ClinicalPatientDirectoryService clinicalPatientDirectory,
                                               AppMenuCatalog appMenuCatalog,
                                               UserPreferenceService userPreferenceService,
                                               Clock clock) {
         this.clinicalDailyCheckInService = clinicalDailyCheckInService;
-        this.dietLogService = dietLogService;
+        this.clinicalPatientDirectory = clinicalPatientDirectory;
         this.appMenuCatalog = appMenuCatalog;
         this.userPreferenceService = userPreferenceService;
         this.clock = clock;
@@ -46,7 +46,7 @@ public class WebClinicalDailyCheckInController {
         var selectedTo = to == null ? LocalDate.now(clock) : to;
         var selectedFrom = from == null ? selectedTo.minusDays(DEFAULT_RANGE_DAYS - 1L) : from;
         model.addAttribute("patientProfileId", patientProfileId);
-        model.addAttribute("patientOptions", dietLogService.listClinicalPatientOptions(authentication));
+        model.addAttribute("patientOptions", clinicalPatientDirectory.listAccessible(authentication));
         model.addAttribute("from", selectedFrom);
         model.addAttribute("to", selectedTo);
         model.addAttribute("clinicalDefaultRangeDays", String.valueOf(DEFAULT_RANGE_DAYS));

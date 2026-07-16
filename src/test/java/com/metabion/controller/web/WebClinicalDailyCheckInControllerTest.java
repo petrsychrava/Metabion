@@ -18,6 +18,7 @@ import com.metabion.dto.DailyMeasurementEntryResponse;
 import com.metabion.dto.PatientOptionResponse;
 import com.metabion.dto.SymptomCheckInResponse;
 import com.metabion.service.ClinicalDailyCheckInService;
+import com.metabion.service.ClinicalPatientDirectoryService;
 import com.metabion.service.DietLogService;
 import com.metabion.service.SecurityService;
 import com.metabion.service.UserPreferenceService;
@@ -73,7 +74,7 @@ class WebClinicalDailyCheckInControllerTest {
     @MockitoBean FindByIndexNameSessionRepository<Session> sessions;
     @MockitoBean UserService userService;
     @MockitoBean SecurityService securityService;
-    @MockitoBean DietLogService dietLogService;
+    @MockitoBean ClinicalPatientDirectoryService clinicalPatientDirectory;
     @MockitoBean ClinicalDailyCheckInService clinicalDailyCheckInService;
     @MockitoBean UserPreferenceService userPreferenceService;
     @MockitoBean Clock clock;
@@ -96,7 +97,7 @@ class WebClinicalDailyCheckInControllerTest {
         var summary = new ClinicalDailyCheckInSummaryResponse(42L, "patient@example.com", LocalDate.of(2026, 7, 15),
                 99L, DietAdherenceLevel.MOSTLY, AppetiteLevel.NORMAL, 1, 1, 1,
                 12L, new BigDecimal("8"), FlareState.SUSPECTED_FLARE);
-        when(dietLogService.listClinicalPatientOptions(any())).thenReturn(List.of(new PatientOptionResponse(42L, "patient@example.com")));
+        when(clinicalPatientDirectory.listAccessible(any())).thenReturn(List.of(new PatientOptionResponse(42L, "patient@example.com")));
         when(clinicalDailyCheckInService.list(any(), isNull(), eq(LocalDate.of(2026, 7, 9)), eq(LocalDate.of(2026, 7, 15))))
                 .thenReturn(List.of(summary));
 
@@ -118,7 +119,7 @@ class WebClinicalDailyCheckInControllerTest {
 
     @Test
     void clinicalListUsesSubmittedFilters() throws Exception {
-        when(dietLogService.listClinicalPatientOptions(any())).thenReturn(List.of(new PatientOptionResponse(42L, "patient@example.com")));
+        when(clinicalPatientDirectory.listAccessible(any())).thenReturn(List.of(new PatientOptionResponse(42L, "patient@example.com")));
         when(clinicalDailyCheckInService.list(any(), eq(42L), eq(LocalDate.of(2026, 7, 1)), eq(LocalDate.of(2026, 7, 10))))
                 .thenReturn(List.of());
 
@@ -187,7 +188,7 @@ class WebClinicalDailyCheckInControllerTest {
     void clinicalForbiddenErrorsRenderWebError() throws Exception {
         doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user cannot read check-ins"))
                 .when(clinicalDailyCheckInService).list(any(), eq(42L), any(), any());
-        when(dietLogService.listClinicalPatientOptions(any())).thenReturn(List.of());
+        when(clinicalPatientDirectory.listAccessible(any())).thenReturn(List.of());
 
         mvc.perform(get("/app/clinical/daily-check-ins").param("patientProfileId", "42").param("from", "2026-07-01").param("to", "2026-07-10")
                         .with(user("patient@example.com").roles(RoleName.PATIENT.name())))

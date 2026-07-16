@@ -2,6 +2,7 @@ package com.metabion.controller.web;
 
 import com.metabion.dto.DailyTrendResponse;
 import com.metabion.service.DailyTrendService;
+import com.metabion.service.ClinicalPatientDirectoryService;
 import com.metabion.service.DietLogService;
 import com.metabion.service.UserPreferenceService;
 import org.springframework.security.core.Authentication;
@@ -26,6 +27,7 @@ public class WebTrendController {
 
     private final DailyTrendService dailyTrendService;
     private final DietLogService dietLogService;
+    private final ClinicalPatientDirectoryService clinicalPatientDirectory;
     private final TrendSvgRenderer trendSvgRenderer;
     private final AppMenuCatalog appMenuCatalog;
     private final UserPreferenceService userPreferenceService;
@@ -33,12 +35,14 @@ public class WebTrendController {
 
     public WebTrendController(DailyTrendService dailyTrendService,
                               DietLogService dietLogService,
+                              ClinicalPatientDirectoryService clinicalPatientDirectory,
                               TrendSvgRenderer trendSvgRenderer,
                               AppMenuCatalog appMenuCatalog,
                               UserPreferenceService userPreferenceService,
                               Clock clock) {
         this.dailyTrendService = dailyTrendService;
         this.dietLogService = dietLogService;
+        this.clinicalPatientDirectory = clinicalPatientDirectory;
         this.trendSvgRenderer = trendSvgRenderer;
         this.appMenuCatalog = appMenuCatalog;
         this.userPreferenceService = userPreferenceService;
@@ -68,7 +72,7 @@ public class WebTrendController {
                 ? null
                 : dailyTrendService.clinicalTrend(authentication, patientProfileId, range.from(), range.to());
         model.addAttribute("patientProfileId", patientProfileId);
-        model.addAttribute("patientOptions", dietLogService.listClinicalPatientOptions(authentication));
+        model.addAttribute("patientOptions", clinicalPatientDirectory.listAccessible(authentication));
         addTrendModel(model, trend, range);
         addAppShell(model, authentication, CLINICAL_ACTIVE_PATH);
         return "clinical-trends";

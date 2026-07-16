@@ -8,6 +8,7 @@ import com.metabion.domain.RoleName;
 import com.metabion.dto.DailyTrendResponse;
 import com.metabion.dto.PatientOptionResponse;
 import com.metabion.service.DailyTrendService;
+import com.metabion.service.ClinicalPatientDirectoryService;
 import com.metabion.service.DietLogService;
 import com.metabion.service.SecurityService;
 import com.metabion.service.UserPreferenceService;
@@ -65,6 +66,7 @@ class WebTrendControllerTest {
     @MockitoBean SecurityService securityService;
     @MockitoBean DailyTrendService dailyTrendService;
     @MockitoBean DietLogService dietLogService;
+    @MockitoBean ClinicalPatientDirectoryService clinicalPatientDirectory;
     @MockitoBean TrendSvgRenderer trendSvgRenderer;
     @MockitoBean UserPreferenceService userPreferenceService;
     @MockitoBean Clock clock;
@@ -155,7 +157,7 @@ class WebTrendControllerTest {
     @Test
     void clinicalTrendPageRendersPatientSelectorTimelineAndCallsServices() throws Exception {
         when(dailyTrendService.clinicalTrend(any(), eq(10L), any(), any())).thenReturn(trendResponse());
-        when(dietLogService.listClinicalPatientOptions(any()))
+        when(clinicalPatientDirectory.listAccessible(any()))
                 .thenReturn(List.of(new PatientOptionResponse(10L, "patient@example.com")));
 
         var result = mvc.perform(get("/app/clinical/trends")
@@ -181,14 +183,14 @@ class WebTrendControllerTest {
         assertThat(content.indexOf("/app/clinical/daily-check-ins/10/2026-06-26"))
                 .isLessThan(content.indexOf("/app/clinical/daily-check-ins/10/2026-06-01"));
 
-        verify(dietLogService).listClinicalPatientOptions(any(Authentication.class));
+        verify(clinicalPatientDirectory).listAccessible(any(Authentication.class));
         verify(dailyTrendService).clinicalTrend(any(), eq(10L), eq(LocalDate.of(2026, 6, 1)), eq(LocalDate.of(2026, 6, 26)));
         verify(trendSvgRenderer).render(trendResponse());
     }
 
     @Test
     void clinicalTrendPageWithoutPatientSelectionRendersOptionsAndHintWithoutLoadingTrend() throws Exception {
-        when(dietLogService.listClinicalPatientOptions(any()))
+        when(clinicalPatientDirectory.listAccessible(any()))
                 .thenReturn(List.of(new PatientOptionResponse(10L, "patient@example.com")));
 
         mvc.perform(get("/app/clinical/trends")
@@ -200,14 +202,14 @@ class WebTrendControllerTest {
                 .andExpect(content().string(containsString("patient@example.com")))
                 .andExpect(content().string(containsString("Select a patient to review trends.")));
 
-        verify(dietLogService).listClinicalPatientOptions(any(Authentication.class));
+        verify(clinicalPatientDirectory).listAccessible(any(Authentication.class));
         verify(dailyTrendService, never()).clinicalTrend(any(), any(), any(), any());
     }
 
     @Test
     void clinicalTrendPageDefaultsToLastThirtyDaysInclusive() throws Exception {
         when(dailyTrendService.clinicalTrend(any(), eq(10L), any(), any())).thenReturn(trendResponse());
-        when(dietLogService.listClinicalPatientOptions(any())).thenReturn(List.of());
+        when(clinicalPatientDirectory.listAccessible(any())).thenReturn(List.of());
 
         mvc.perform(get("/app/clinical/trends")
                         .param("patientProfileId", "10")
@@ -225,7 +227,7 @@ class WebTrendControllerTest {
     @Test
     void clinicalTrendPageLinksDaysWithSymptomsOnly() throws Exception {
         when(dailyTrendService.clinicalTrend(any(), eq(10L), any(), any())).thenReturn(trendResponseWithoutDietLog());
-        when(dietLogService.listClinicalPatientOptions(any()))
+        when(clinicalPatientDirectory.listAccessible(any()))
                 .thenReturn(List.of(new PatientOptionResponse(10L, "patient@example.com")));
 
         mvc.perform(get("/app/clinical/trends")
