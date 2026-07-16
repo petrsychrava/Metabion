@@ -2,10 +2,13 @@ package com.metabion.service;
 
 import com.metabion.config.TimeConfig;
 import com.metabion.domain.PatientProfile;
+import com.metabion.domain.LabAuditAction;
+import com.metabion.domain.LabResultAuditEvent;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.LabResultRequest;
 import com.metabion.dto.LabResultSetRequest;
+import com.metabion.dto.LabResultRemovalRequest;
 import com.metabion.repository.LabResultAuditEventRepository;
 import com.metabion.repository.LabResultRepository;
 import com.metabion.repository.LabResultSetRepository;
@@ -33,6 +36,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Comparator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -84,6 +88,30 @@ class LabResultServicePersistenceTest {
         assertThat(results.count()).isEqualTo(1);
         assertThat(auditEvents.count()).isEqualTo(1);
         verify(auditEvents).save(any());
+    }
+
+    @Test
+    void createUpdateAndRemovePersistCompleteImmutableSnapshots() {
+        var created = service.saveForCurrentPatient(authentication(), request());
+        service.updateForCurrentPatient(authentication(), created.id(), new LabResultSetRequest(created.id(), created.version(),
+                LocalDate.of(2026, 7, 11), "corrected", List.of(new LabResultRequest("ALT", new BigDecimal("2.5"), "U/L", null, null))));
+        var updated = resultSets.findActiveById(created.id()).orElseThrow();
+        service.removeForCurrentPatient(authentication(), created.id(), new LabResultRemovalRequest(created.id(), updated.getVersion(), "duplicate"));
+
+        var events = auditEvents.findAll().stream().sorted(Comparator.comparing(LabResultAuditEvent::getId)).toList();
+        assertThat(events).extracting(LabResultAuditEvent::getAction)
+                .containsExactly(LabAuditAction.CREATE, LabAuditAction.UPDATE, LabAuditAction.REMOVE);
+        assertThat(events.get(0).getBeforeSnapshot()).isNull();
+        assertThat(events.get(0).getAfterSnapshot())
+                .contains("\"collectionDate\":\"2026-07-10\"", "\"reportedValue\":1.200000", "\"reportedUnit\":\"mg/dL\"",
+                        "\"canonicalValue\":12.000000", "\"canonicalUnit\":\"mg/L\"", "\"version\":0")
+                .containsPattern("\\\"createdAt\\\":\\\"\\d{4}-\\d{2}-\\d{2}T[^\\\"]+Z\\\"");
+        assertThat(events.get(1).getBeforeSnapshot()).contains("\"collectionDate\":\"2026-07-10\"", "\"version\":0", "\"canonicalValue\":12.000000");
+        assertThat(events.get(1).getAfterSnapshot()).contains("\"collectionDate\":\"2026-07-11\"", "\"testCode\":\"ALT\"", "\"reportedValue\":2.500000", "\"reportedUnit\":\"U/L\"", "\"canonicalValue\":3.000000", "\"canonicalUnit\":\"U/L\"", "\"version\":1")
+                .containsPattern("\\\"updatedAt\\\":\\\"\\d{4}-\\d{2}-\\d{2}T[^\\\"]+Z\\\"");
+        assertThat(events.get(2).getBeforeSnapshot()).contains("\"version\":1", "\"removedAt\":null");
+        assertThat(events.get(2).getAfterSnapshot()).contains("\"version\":2", "\"removalReason\":\"duplicate\"")
+                .containsPattern("\\\"removedAt\\\":\\\"\\d{4}-\\d{2}-\\d{2}T[^\\\"]+Z\\\"");
     }
 
     @Test

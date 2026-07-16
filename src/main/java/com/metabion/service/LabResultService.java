@@ -5,7 +5,9 @@ import com.metabion.dto.*;
 import com.metabion.repository.LabResultSetRepository;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
+import jakarta.persistence.OptimisticLockException;
 import org.springframework.http.HttpStatus;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -114,7 +116,7 @@ public class LabResultService {
         var before = audit.snapshot(set); var now = Instant.now(clock);
         set.updateDetails(request.collectionDate(), trimToNull(request.notes()), now);
         set.replaceResults(buildResults(set, request.results()), now);
-        resultSets.flush();
+        flushOrConflict();
         audit.recordUpdate(set, before, actor, now);
         return responses.resultSet(set, actor);
     }
@@ -123,7 +125,7 @@ public class LabResultService {
         var set = requireActiveSet(id, patient.getId());
         if (enforceCreator && !set.getCreatedByUser().getId().equals(actor.getId())) throw forbidden("Patient can only modify patient-created laboratory results");
         requireVersion(set, request.version()); var before = audit.snapshot(set); var now = Instant.now(clock);
-        set.markRemoved(actor, trimToNull(request.reason()), now); resultSets.flush(); audit.recordRemoval(set, before, actor, now);
+        set.markRemoved(actor, trimToNull(request.reason()), now); flushOrConflict(); audit.recordRemoval(set, before, actor, now);
     }
     private List<LabResult> buildResults(LabResultSet set, List<LabResultRequest> requests) {
         var seen = new HashSet<String>();
@@ -169,6 +171,13 @@ public class LabResultService {
     }
     private void validateRange(LocalDate from, LocalDate to) { if (from == null || to == null) throw badRequest("from and to are required"); if (from.isAfter(to)) throw badRequest("from must be on or before to"); }
     private void requireVersion(LabResultSet set, Long expected) { if (expected == null) throw badRequest("version is required"); if (set.getVersion() != expected) throw new ResponseStatusException(HttpStatus.CONFLICT, "Laboratory result set has changed"); }
+    private void flushOrConflict() {
+        try {
+            resultSets.flush();
+        } catch (OptimisticLockingFailureException | OptimisticLockException exception) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Laboratory result set has changed", exception);
+        }
+    }
     private void validateReferenceBounds(BigDecimal lower, BigDecimal upper) { if (lower != null && upper != null && lower.compareTo(upper) > 0) throw badRequest("referenceLower must not exceed referenceUpper"); }
     private static String trimToNull(String value) { if (value == null) return null; var trimmed = value.trim(); return trimmed.isEmpty() ? null : trimmed; }
     private static ResponseStatusException badRequest(String reason) { return new ResponseStatusException(HttpStatus.BAD_REQUEST, reason); }

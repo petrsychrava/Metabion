@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.springframework.http.HttpStatus;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -114,6 +115,31 @@ class LabResultServiceTest {
         assertThatThrownBy(() -> service.updateForCurrentPatient(auth("patient@example.com"), 90L, request(90L, 3L)))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    @Test
+    void flushTimeOptimisticLockFailureReturnsConflict() {
+        var patient = mock(PatientProfile.class);
+        when(patient.getId()).thenReturn(10L);
+        var patientUser = user(1L, RoleName.PATIENT);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        var set = mock(LabResultSet.class);
+        when(set.getPatientProfile()).thenReturn(patient);
+        when(set.getCreatedByUser()).thenReturn(patientUser);
+        when(set.getVersion()).thenReturn(0L);
+        when(resultSets.findActiveById(90L)).thenReturn(Optional.of(set));
+        var crp = mock(LabTestDefinition.class);
+        when(crp.getCode()).thenReturn("CRP");
+        when(crp.getCanonicalUnit()).thenReturn("mg/L");
+        when(catalog.requireActive("CRP")).thenReturn(crp);
+        when(conversions.toCanonical(eq(crp), eq("mg/dL"), any())).thenReturn(new BigDecimal("12.00"));
+        doThrow(new ObjectOptimisticLockingFailureException(LabResultSet.class, 90L)).when(resultSets).flush();
+
+        assertThatThrownBy(() -> service.updateForCurrentPatient(auth("patient@example.com"), 90L, request(90L, 0L)))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+        verify(audit, never()).recordUpdate(any(), any(), any(), any());
     }
 
     private static TestingAuthenticationToken auth(String email) { var token = new TestingAuthenticationToken(email, "n/a"); token.setAuthenticated(true); return token; }
