@@ -17,6 +17,9 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+
+import jakarta.persistence.OptimisticLockException;
 
 import java.util.Locale;
 
@@ -117,6 +120,20 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.error").value("validation_failed"));
     }
 
+    @Test
+    void optimisticConflictReturnsStable409() throws Exception {
+        mvc.perform(post("/throw/optimistic-conflict"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("conflict"));
+    }
+
+    @Test
+    void responseStatusConflictReturnsStable409() throws Exception {
+        mvc.perform(post("/throw/response-status-conflict"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("conflict"));
+    }
+
     @RestController
     private static class ThrowingController {
 
@@ -157,6 +174,16 @@ class GlobalExceptionHandlerTest {
 
         @PostMapping("/throw/validation")
         void validation(@Valid @RequestBody ValidationRequest request) {
+        }
+
+        @PostMapping("/throw/optimistic-conflict")
+        void optimisticConflict() {
+            throw new OptimisticLockException("conflict");
+        }
+
+        @PostMapping("/throw/response-status-conflict")
+        void responseStatusConflict() {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "conflict");
         }
     }
 
