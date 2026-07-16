@@ -14,6 +14,8 @@ import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Comparator;
+import java.util.List;
 
 @Controller
 public class WebTrendController {
@@ -87,6 +89,9 @@ public class WebTrendController {
         model.addAttribute("from", range.from());
         model.addAttribute("to", range.to());
         model.addAttribute("trend", trend);
+        model.addAttribute("trendDays", trend == null ? List.of() : trend.days().stream()
+                .sorted(Comparator.comparing(DailyTrendResponse.DayTrend::date, Comparator.reverseOrder()))
+                .toList());
         model.addAttribute("trendSvg", trendSvgRenderer.render(trend));
     }
 

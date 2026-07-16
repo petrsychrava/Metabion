@@ -55,7 +55,7 @@
             </tr>
             </thead>
             <tbody>
-            <tr th:each="day : ${trend.days()}">
+            <tr th:each="day : ${trendDays}">
                 <td>
                     <a th:if="${day.dietLogId() != null || day.symptomCheckInId() != null}"
                        th:href="@{/app/clinical/daily-check-ins/{patientProfileId}/{date}(patientProfileId=${patientProfileId}, date=${day.date()})}"

@@ -93,7 +93,7 @@ class WebTrendControllerTest {
     void patientTrendPageRendersCombinedTimelineAndCallsServiceWithRequestedRange() throws Exception {
         when(dailyTrendService.currentPatientTrend(any(), any(), any())).thenReturn(trendResponse());
 
-        mvc.perform(get("/app/trends")
+        var result = mvc.perform(get("/app/trends")
                         .param("from", "2026-06-01")
                         .param("to", "2026-06-26")
                         .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
@@ -108,7 +108,12 @@ class WebTrendControllerTest {
                 .andExpect(content().string(containsString("Ketones")))
                 .andExpect(content().string(containsString("href=\"/app/daily-check-in?date=2026-06-26\"")))
                 .andExpect(content().string(containsString("trend-chart-symptoms")))
-                .andExpect(content().string(containsString("trend-chart-measurements")));
+                .andExpect(content().string(containsString("trend-chart-measurements")))
+                .andReturn();
+
+        var content = result.getResponse().getContentAsString();
+        assertThat(content.indexOf("/app/daily-check-in?date=2026-06-26"))
+                .isLessThan(content.indexOf("/app/daily-check-in?date=2026-06-01"));
 
         verify(dailyTrendService).currentPatientTrend(any(), eq(LocalDate.of(2026, 6, 1)), eq(LocalDate.of(2026, 6, 26)));
         verify(trendSvgRenderer).render(trendResponse());
@@ -153,7 +158,7 @@ class WebTrendControllerTest {
         when(dietLogService.listClinicalPatientOptions(any()))
                 .thenReturn(List.of(new PatientOptionResponse(10L, "patient@example.com")));
 
-        mvc.perform(get("/app/clinical/trends")
+        var result = mvc.perform(get("/app/clinical/trends")
                         .param("patientProfileId", "10")
                         .param("from", "2026-06-01")
                         .param("to", "2026-06-26")
@@ -169,7 +174,12 @@ class WebTrendControllerTest {
                 .andExpect(content().string(containsString("Ketones")))
                 .andExpect(content().string(containsString("trend-chart-symptoms")))
                 .andExpect(content().string(containsString("trend-chart-measurements")))
-                .andExpect(content().string(containsString("href=\"/app/clinical/daily-check-ins/10/2026-06-26\"")));
+                .andExpect(content().string(containsString("href=\"/app/clinical/daily-check-ins/10/2026-06-26\"")))
+                .andReturn();
+
+        var content = result.getResponse().getContentAsString();
+        assertThat(content.indexOf("/app/clinical/daily-check-ins/10/2026-06-26"))
+                .isLessThan(content.indexOf("/app/clinical/daily-check-ins/10/2026-06-01"));
 
         verify(dietLogService).listClinicalPatientOptions(any(Authentication.class));
         verify(dailyTrendService).clinicalTrend(any(), eq(10L), eq(LocalDate.of(2026, 6, 1)), eq(LocalDate.of(2026, 6, 26)));
@@ -233,6 +243,16 @@ class WebTrendControllerTest {
         return new DailyTrendResponse(10L, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 26),
                 MeasurementUnit.MMOL_L, "UTC",
                 List.of(new DailyTrendResponse.DayTrend(
+                        LocalDate.of(2026, 6, 1),
+                        null,
+                        new BigDecimal("4.00"),
+                        FlareState.NO_FLARE,
+                        100L,
+                        null,
+                        null,
+                        List.of(),
+                        List.of()),
+                        new DailyTrendResponse.DayTrend(
                         LocalDate.of(2026, 6, 26),
                         null,
                         new BigDecimal("5.00"),
