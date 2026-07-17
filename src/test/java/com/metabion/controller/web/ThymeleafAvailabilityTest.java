@@ -6,7 +6,6 @@ import com.metabion.domain.RoleName;
 import com.metabion.domain.Sex;
 import com.metabion.domain.ThemePreference;
 import com.metabion.dto.PatientProfileForm;
-import com.metabion.service.LabAuditService;
 import com.metabion.service.LabResultService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,8 +48,6 @@ class ThymeleafAvailabilityTest {
     @MockitoBean
     LabResultService labResultService;
 
-    @MockitoBean
-    LabAuditService labAuditService;
 
     @Test
     void thymeleaf_template_engine_is_available() {

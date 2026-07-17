@@ -5,7 +5,6 @@ import com.metabion.dto.LabResultSetResponse;
 import com.metabion.dto.LabTestDefinitionResponse;
 import com.metabion.dto.LabTrendResponse;
 import com.metabion.service.LabCatalogService;
-import com.metabion.service.LabAuditService;
 import com.metabion.service.LabResultService;
 import com.metabion.service.LabTrendService;
 import com.metabion.service.SecurityService;
@@ -57,7 +56,6 @@ class WebLabControllerTest {
     @MockitoBean UserService userService;
     @MockitoBean SecurityService securityService;
     @MockitoBean LabResultService results;
-    @MockitoBean LabAuditService labAuditService;
     @MockitoBean LabTrendService trends;
     @MockitoBean LabCatalogService catalog;
     @MockitoBean LabTrendSvgRenderer renderer;
@@ -98,6 +96,15 @@ class WebLabControllerTest {
         mvc.perform(post("/app/labs/99/remove").with(user("patient@example.com").roles("PATIENT")).with(csrf())
                         .param("resultSetId", "99").param("version", "0"))
                 .andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("/app/labs"));
+    }
+
+    @Test
+    void newFormProvidesAccessibleControlForAddingIndexedRows() throws Exception {
+        mvc.perform(get("/app/labs/new").with(user("patient@example.com").roles("PATIENT")))
+                .andExpect(status().isOk()).andExpect(view().name("lab-result-form"))
+                .andExpect(content().string(containsString("data-add-lab-result")))
+                .andExpect(content().string(containsString("results[0].testCode")))
+                .andExpect(content().string(containsString("lab-result-form.js")));
     }
 
     @Test

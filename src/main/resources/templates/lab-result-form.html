@@ -1,10 +1,51 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: appShell(#{lab.form.title}, ${activePath}, ~{::content})}">
-<th:block th:fragment="content"><header class="app-header"><div><p class="eyebrow">Metabion</p><h1 th:text="#{lab.form.title}">Laboratory result set</h1></div></header>
-<section class="panel app-panel"><form class="form" th:object="${labResultSet}" th:action="${clinical} ? @{/app/clinical/labs/save} : @{/app/labs/save}" method="post">
-    <input th:if="${clinical}" type="hidden" name="patientProfileId" th:value="${patientProfileId}"><input type="hidden" th:field="*{resultSetId}"><input type="hidden" th:field="*{version}">
-    <label class="field"><span th:text="#{lab.form.collectionDate}">Collection date</span><input type="date" th:field="*{collectionDate}"><small class="field-error" th:errors="*{collectionDate}"></small></label><label class="field"><span th:text="#{lab.form.notes}">Notes</span><textarea th:field="*{notes}"></textarea></label>
-    <fieldset><legend th:text="#{lab.table.results}">Results</legend><div class="lab-result-row" data-lab-result-row th:each="result,row : *{results}"><label><span th:text="#{lab.test}">Biomarker</span><select data-lab-test th:field="*{results[__${row.index}__].testCode}"><option value=""></option><option th:each="item : ${catalog}" th:value="${item.code()}" th:text="${item.label()}">C-reactive protein</option></select></label><label><span th:text="#{lab.value}">Value</span><input type="number" step="0.000001" th:field="*{results[__${row.index}__].value}"></label><label><span th:text="#{lab.unit}">Unit</span><select data-lab-unit th:field="*{results[__${row.index}__].unit}"></select></label><label><span th:text="#{lab.referenceLower}">Reference lower</span><input type="number" step="0.000001" th:field="*{results[__${row.index}__].referenceLower}"></label><label><span th:text="#{lab.referenceUpper}">Reference upper</span><input type="number" step="0.000001" th:field="*{results[__${row.index}__].referenceUpper}"></label></div></fieldset>
-    <button type="submit" th:text="#{lab.form.save}">Save laboratory results</button></form>
-    <form th:if="*{resultSetId != null}" th:action="${clinical} ? @{/app/clinical/labs/{id}/remove(id=*{resultSetId},patientProfileId=${patientProfileId})} : @{/app/labs/{id}/remove(id=*{resultSetId})}" method="post"><input type="hidden" name="resultSetId" th:value="*{resultSetId}"><input type="hidden" name="version" th:value="*{version}"><button class="button-danger" type="submit" th:text="#{lab.form.remove}">Remove result set</button></form>
-</section><script th:inline="javascript">window.labCatalog = /*[[${catalog}]]*/ [];</script><script th:src="@{/js/lab-result-form.js}"></script></th:block></html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell(#{lab.form.title}, ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
+    <header class="app-header">
+        <div><p class="eyebrow">Metabion</p><h1 th:text="#{lab.form.title}">Laboratory result set</h1></div>
+    </header>
+    <section class="panel app-panel">
+        <form class="form" th:object="${labResultSet}"
+              th:action="${clinical} ? @{/app/clinical/labs/save} : @{/app/labs/save}" method="post">
+            <input th:if="${clinical}" type="hidden" name="patientProfileId" th:value="${patientProfileId}">
+            <input type="hidden" th:field="*{resultSetId}">
+            <input type="hidden" th:field="*{version}">
+            <label class="field"><span th:text="#{lab.form.collectionDate}">Collection date</span>
+                <input type="date" th:field="*{collectionDate}"><small class="field-error" th:errors="*{collectionDate}"></small>
+            </label>
+            <label class="field"><span th:text="#{lab.form.notes}">Notes</span><textarea th:field="*{notes}"></textarea></label>
+            <fieldset>
+                <legend th:text="#{lab.table.results}">Results</legend>
+                <div id="lab-result-rows" data-lab-results>
+                    <div class="lab-result-row" data-lab-result-row th:each="result,row : *{results}">
+                        <label><span th:text="#{lab.test}">Biomarker</span><select data-lab-test th:field="*{results[__${row.index}__].testCode}"><option value=""></option><option th:each="item : ${catalog}" th:value="${item.code()}" th:text="${item.label()}">C-reactive protein</option></select></label>
+                        <label><span th:text="#{lab.value}">Value</span><input type="number" step="0.000001" th:field="*{results[__${row.index}__].value}"></label>
+                        <label><span th:text="#{lab.unit}">Unit</span><select data-lab-unit th:field="*{results[__${row.index}__].unit}"></select></label>
+                        <label><span th:text="#{lab.referenceLower}">Reference lower</span><input type="number" step="0.000001" th:field="*{results[__${row.index}__].referenceLower}"></label>
+                        <label><span th:text="#{lab.referenceUpper}">Reference upper</span><input type="number" step="0.000001" th:field="*{results[__${row.index}__].referenceUpper}"></label>
+                    </div>
+                </div>
+                <button type="button" data-add-lab-result aria-controls="lab-result-rows" th:text="#{lab.form.addResult}">Add result</button>
+            </fieldset>
+            <button type="submit" th:text="#{lab.form.save}">Save laboratory results</button>
+        </form>
+        <form th:if="*{resultSetId != null}" method="post"
+              th:action="${clinical} ? @{/app/clinical/labs/{id}/remove(id=*{resultSetId},patientProfileId=${patientProfileId})} : @{/app/labs/{id}/remove(id=*{resultSetId})}">
+            <input type="hidden" name="resultSetId" th:value="*{resultSetId}"><input type="hidden" name="version" th:value="*{version}">
+            <button class="button-danger" type="submit" th:text="#{lab.form.remove}">Remove result set</button>
+        </form>
+    </section>
+    <template id="lab-result-row-template">
+        <div class="lab-result-row" data-lab-result-row>
+            <label><span th:text="#{lab.test}">Biomarker</span><select data-lab-test name="results[__INDEX__].testCode"><option value=""></option><option th:each="item : ${catalog}" th:value="${item.code()}" th:text="${item.label()}">C-reactive protein</option></select></label>
+            <label><span th:text="#{lab.value}">Value</span><input type="number" step="0.000001" name="results[__INDEX__].value"></label>
+            <label><span th:text="#{lab.unit}">Unit</span><select data-lab-unit name="results[__INDEX__].unit"></select></label>
+            <label><span th:text="#{lab.referenceLower}">Reference lower</span><input type="number" step="0.000001" name="results[__INDEX__].referenceLower"></label>
+            <label><span th:text="#{lab.referenceUpper}">Reference upper</span><input type="number" step="0.000001" name="results[__INDEX__].referenceUpper"></label>
+        </div>
+    </template>
+    <script th:inline="javascript">window.labCatalog = /*[[${catalog}]]*/ [];</script>
+    <script th:src="@{/js/lab-result-form.js}"></script>
+</th:block>
+</html>

@@ -62,6 +62,7 @@ public class WebClinicalLabController {
 
     @GetMapping("/app/clinical/labs/new")
     public String newForm(@RequestParam Long patientProfileId, Model model, Authentication authentication) {
+        results.requireClinicalPatientAccess(authentication, patientProfileId);
         form(model, WebLabController.emptyRequest(), patientProfileId, authentication); return "lab-result-form";
     }
     @GetMapping("/app/clinical/labs/{id}/edit")

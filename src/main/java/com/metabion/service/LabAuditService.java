@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.metabion.domain.*;
 import com.metabion.repository.LabResultAuditEventRepository;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -15,9 +16,9 @@ public class LabAuditService {
     private final LabResultAuditEventRepository events;
     private final ObjectMapper objectMapper;
 
-    public LabAuditService(LabResultAuditEventRepository events, ObjectMapper objectMapper) {
+    public LabAuditService(LabResultAuditEventRepository events, ObjectProvider<ObjectMapper> objectMapperProvider) {
         this.events = events;
-        this.objectMapper = objectMapper.copy().registerModule(javaTimeSnapshotModule());
+        this.objectMapper = objectMapperProvider.getIfAvailable(ObjectMapper::new).copy().registerModule(javaTimeSnapshotModule());
     }
 
     public LabAuditSnapshot snapshot(LabResultSet set) {

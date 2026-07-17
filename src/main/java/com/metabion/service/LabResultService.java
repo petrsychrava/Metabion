@@ -80,6 +80,10 @@ public class LabResultService {
         return request != null && request.resultSetId() != null ? update(patient, actor, request.resultSetId(), request, false) : create(patient, actor, request);
     }
     @Transactional(readOnly = true)
+    public void requireClinicalPatientAccess(Authentication authentication, Long patientId) {
+        clinicalPatient(authentication, patientId);
+    }
+    @Transactional(readOnly = true)
     public LabResultSetResponse getForClinicalPatient(Authentication authentication, Long patientId, Long id) {
         var actor = clinicalPatient(authentication, patientId);
         return responses.resultSet(requireActiveSet(id, patientId), actor);

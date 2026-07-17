@@ -3,7 +3,6 @@ package com.metabion.controller.web;
 import com.metabion.dto.PatientOptionResponse;
 import com.metabion.service.ClinicalPatientDirectoryService;
 import com.metabion.service.LabCatalogService;
-import com.metabion.service.LabAuditService;
 import com.metabion.service.LabResultService;
 import com.metabion.service.LabTrendService;
 import com.metabion.service.SecurityService;
@@ -30,6 +29,7 @@ import java.util.List;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -44,7 +44,6 @@ class WebClinicalLabControllerTest {
     @MockitoBean UserService userService;
     @MockitoBean SecurityService securityService;
     @MockitoBean LabResultService results;
-    @MockitoBean LabAuditService labAuditService;
     @MockitoBean LabTrendService trends;
     @MockitoBean LabCatalogService catalog;
     @MockitoBean LabTrendSvgRenderer renderer;
@@ -80,5 +79,15 @@ class WebClinicalLabControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(content().string(containsString("Reload before trying again")))
                 .andExpect(content().string(containsString("/app/clinical/labs")));
+    }
+
+    @Test
+    void clinicalNewFormAuthorizesPatientBeforeRendering() throws Exception {
+        doThrow(new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN))
+                .when(results).requireClinicalPatientAccess(any(), org.mockito.ArgumentMatchers.eq(999L));
+
+        mvc.perform(get("/app/clinical/labs/new").param("patientProfileId", "999")
+                        .with(user("doctor@example.com").roles("PHYSICIAN")))
+                .andExpect(status().isForbidden());
     }
 }
