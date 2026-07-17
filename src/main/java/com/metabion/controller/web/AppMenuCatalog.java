@@ -83,8 +83,8 @@ public class AppMenuCatalog {
                         "menu.trends.description"),
                 item(
                         "menu.labTrends",
-                        null,
-                        true,
+                        "/app/labs",
+                        false,
                         true,
                         "menu.labTrends.description"),
                 item(
@@ -127,6 +127,12 @@ public class AppMenuCatalog {
                         false,
                         true,
                         "menu.clinicalTrends.description"),
+                item(
+                        "menu.labTrends",
+                        "/app/clinical/labs",
+                        false,
+                        true,
+                        "menu.labTrends.description"),
                 contentManagement(),
                 item(
                         "menu.assignedPatientOverview",
@@ -180,6 +186,12 @@ public class AppMenuCatalog {
                         false,
                         true,
                         "menu.clinicalTrends.description"),
+                item(
+                        "menu.labTrends",
+                        "/app/clinical/labs",
+                        false,
+                        true,
+                        "menu.labTrends.description"),
                 contentManagement(),
                 item(
                         "menu.ruleConfiguration",

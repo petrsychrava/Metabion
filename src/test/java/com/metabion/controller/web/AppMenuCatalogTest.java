@@ -27,7 +27,7 @@ class AppMenuCatalogTest {
                         "Onboarding history",
                         "Daily check-in",
                         "Trends",
-                        "Lab trends - planned",
+                        "Laboratory results",
                         "Protocol phase - planned",
                         "Red-flag guidance - planned",
                         "Patient timeline - planned",
@@ -50,6 +50,7 @@ class AppMenuCatalogTest {
                         "Onboarding review",
                         "Daily check-in review",
                         "Patient trends",
+                        "Laboratory results",
                         "Content management",
                         "Assigned patient overview - planned",
                         "Red-flag monitoring - planned",
@@ -72,6 +73,7 @@ class AppMenuCatalogTest {
                         "Onboarding review",
                         "Daily check-in review",
                         "Patient trends",
+                        "Laboratory results",
                         "Content management",
                         "Assigned patient overview - planned",
                         "Red-flag monitoring - planned",
@@ -93,6 +95,7 @@ class AppMenuCatalogTest {
                         "Education library",
                         "Staff invitations",
                         "Patient trends",
+                        "Laboratory results",
                         "Content management",
                         "Rule configuration - planned",
                         "Audit review - planned",
@@ -120,6 +123,12 @@ class AppMenuCatalogTest {
                 .singleElement()
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/trends");
+        assertThat(catalog.sidebarItems(patient))
+                .filteredOn(item -> "Laboratory results".equals(item.label()))
+                .singleElement().satisfies(item -> {
+                    assertThat(item.planned()).isFalse();
+                    assertThat(item.route()).isEqualTo("/app/labs");
+                });
         assertThat(catalog.sidebarItems(patient))
                 .filteredOn(item -> "Education library".equals(item.label()))
                 .singleElement()
@@ -154,6 +163,9 @@ class AppMenuCatalogTest {
                 .extracting(AppMenuItem::route)
                 .isEqualTo("/app/clinical/trends");
         assertThat(catalog.sidebarItems(clinician))
+                .filteredOn(item -> "Laboratory results".equals(item.label()))
+                .singleElement().extracting(AppMenuItem::route).isEqualTo("/app/clinical/labs");
+        assertThat(catalog.sidebarItems(clinician))
                 .filteredOn(item -> "Content management".equals(item.label()))
                 .singleElement()
                 .extracting(AppMenuItem::route)
@@ -186,7 +198,7 @@ class AppMenuCatalogTest {
                         "Onboarding",
                         "Daily check-in",
                         "Trends",
-                        "Lab trends - planned",
+                        "Laboratory results",
                         "Red-flag guidance - planned");
     }
 
@@ -203,6 +215,7 @@ class AppMenuCatalogTest {
                             "Vzdělávací knihovna",
                             "Pozvánky pracovníků",
                             "Trendy pacientů",
+                            "Laboratorní výsledky",
                             "Správa obsahu",
                             "Nastavení pravidel - plánováno",
                             "Kontrola auditu - plánováno",
