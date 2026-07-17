@@ -13,6 +13,8 @@ public enum PatientAccessTokenScope {
     PATIENT_ONBOARDING_WRITE("patient:onboarding:write"),
     PATIENT_EDUCATION_READ("patient:education:read"),
     PATIENT_EDUCATION_WRITE("patient:education:write"),
+    PATIENT_LAB_READ("patient:lab:read"),
+    PATIENT_LAB_WRITE("patient:lab:write"),
     PATIENT_TREND_READ("patient:trend:read");
 
     private final String authority;

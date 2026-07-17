@@ -10,6 +10,11 @@ import com.metabion.dto.DailyTrendResponse;
 import com.metabion.dto.DietLogPhotoUploadResponse;
 import com.metabion.dto.EducationModuleDetailResponse;
 import com.metabion.dto.EducationModuleSummaryResponse;
+import com.metabion.dto.LabResultRemovalRequest;
+import com.metabion.dto.LabResultSetRequest;
+import com.metabion.dto.LabResultSetResponse;
+import com.metabion.dto.LabTestDefinitionResponse;
+import com.metabion.dto.LabTrendResponse;
 import com.metabion.dto.OnboardingSubmissionRequest;
 import com.metabion.dto.OnboardingSubmissionResponse;
 import com.metabion.dto.OnboardingSubmissionSummaryResponse;
@@ -38,6 +43,9 @@ public class PatientAppFacade {
     private final DailyTrendService trends;
     private final OnboardingService onboarding;
     private final EducationContentService education;
+    private final LabCatalogService labCatalog;
+    private final LabResultService labResults;
+    private final LabTrendService labTrends;
 
     public PatientAppFacade(UserPreferenceService preferences,
                             PatientProfileRepository patientProfiles,
@@ -46,7 +54,10 @@ public class PatientAppFacade {
                             SymptomTrackingService symptoms,
                             DailyTrendService trends,
                             OnboardingService onboarding,
-                            EducationContentService education) {
+                            EducationContentService education,
+                            LabCatalogService labCatalog,
+                            LabResultService labResults,
+                            LabTrendService labTrends) {
         this.preferences = preferences;
         this.patientProfiles = patientProfiles;
         this.dietLogs = dietLogs;
@@ -55,6 +66,9 @@ public class PatientAppFacade {
         this.trends = trends;
         this.onboarding = onboarding;
         this.education = education;
+        this.labCatalog = labCatalog;
+        this.labResults = labResults;
+        this.labTrends = labTrends;
     }
 
     public Long patientProfileId(Authentication auth) {
@@ -146,5 +160,29 @@ public class PatientAppFacade {
 
     public void uncompleteLesson(Authentication auth, String moduleSlug, String lessonSlug) {
         education.uncompleteLesson(auth, moduleSlug, lessonSlug);
+    }
+
+    public List<LabTestDefinitionResponse> listLabTests() {
+        return labCatalog.listActive();
+    }
+
+    public LabResultSetResponse saveLabResultSet(Authentication auth, LabResultSetRequest request) {
+        return labResults.saveForCurrentPatient(auth, request);
+    }
+
+    public LabResultSetResponse getLabResultSet(Authentication auth, Long resultSetId) {
+        return labResults.getForCurrentPatient(auth, resultSetId);
+    }
+
+    public List<LabResultSetResponse> listLabResultSets(Authentication auth, LocalDate from, LocalDate to) {
+        return labResults.listForCurrentPatient(auth, from, to);
+    }
+
+    public void removeLabResultSet(Authentication auth, LabResultRemovalRequest request) {
+        labResults.removeForCurrentPatient(auth, request);
+    }
+
+    public LabTrendResponse labTrend(Authentication auth, String testCode, LocalDate from, LocalDate to) {
+        return labTrends.currentPatientTrend(auth, testCode, from, to);
     }
 }

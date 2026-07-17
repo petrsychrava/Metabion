@@ -4,6 +4,11 @@ import com.metabion.config.PatientAccessTokenAuthentication;
 import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.dto.DailyMeasurementEntryRequest;
+import com.metabion.dto.LabResultRemovalRequest;
+import com.metabion.dto.LabResultSetRequest;
+import com.metabion.dto.LabResultSetResponse;
+import com.metabion.dto.LabTestDefinitionResponse;
+import com.metabion.dto.LabTrendResponse;
 import com.metabion.dto.OnboardingSubmissionRequest;
 import com.metabion.dto.PatientProfileForm;
 import com.metabion.dto.SymptomCheckInRequest;
@@ -24,8 +29,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 @Service
@@ -252,6 +259,48 @@ public class PatientMcpTools {
         return Map.of("status", "ok");
     }
 
+    @McpTool(name = "metabion_list_lab_tests", description = "List active laboratory tests available to the current Metabion patient.")
+    public List<LabTestDefinitionResponse> metabionListLabTests() {
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_LAB_READ, "metabion_list_lab_tests");
+        return auditedLab(auth, "metabion_list_lab_tests", patientApp::listLabTests);
+    }
+
+    @McpTool(name = "metabion_save_lab_result_set", description = "Save a laboratory result set for the current Metabion patient.")
+    public LabResultSetResponse metabionSaveLabResultSet(LabResultSetRequest request) {
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_LAB_WRITE, "metabion_save_lab_result_set");
+        return auditedLab(auth, "metabion_save_lab_result_set", () -> patientApp.saveLabResultSet(auth, request));
+    }
+
+    @McpTool(name = "metabion_get_lab_result_set", description = "Get a laboratory result set owned by the current Metabion patient.")
+    public LabResultSetResponse metabionGetLabResultSet(Long resultSetId) {
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_LAB_READ, "metabion_get_lab_result_set");
+        return auditedLab(auth, "metabion_get_lab_result_set", () -> patientApp.getLabResultSet(auth, resultSetId));
+    }
+
+    @McpTool(name = "metabion_list_lab_result_sets", description = "List laboratory result sets for the current Metabion patient in a date range.")
+    public List<LabResultSetResponse> metabionListLabResultSets(LocalDate from, LocalDate to) {
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_LAB_READ, "metabion_list_lab_result_sets");
+        return auditedLab(auth, "metabion_list_lab_result_sets", () -> patientApp.listLabResultSets(auth, from, to));
+    }
+
+    @McpTool(name = "metabion_remove_lab_result_set", description = "Remove a laboratory result set owned by the current Metabion patient.")
+    public void metabionRemoveLabResultSet(LabResultRemovalRequest request) {
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_LAB_WRITE, "metabion_remove_lab_result_set");
+        auditedLab(auth, "metabion_remove_lab_result_set", () -> patientApp.removeLabResultSet(auth, request));
+    }
+
+    @McpTool(name = "metabion_get_lab_trend", description = "Get a laboratory biomarker trend for the current Metabion patient.")
+    public LabTrendResponse metabionGetLabTrend(String testCode, LocalDate from, LocalDate to) {
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_LAB_READ, "metabion_get_lab_trend");
+        return auditedLab(auth, "metabion_get_lab_trend", () -> patientApp.labTrend(auth, testCode, from, to));
+    }
+
     private PatientAccessTokenAuthentication patientAuth() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth instanceof PatientAccessTokenAuthentication patientAuth) {
@@ -267,6 +316,27 @@ public class PatientMcpTools {
         if (!hasScope) {
             audit.recordToolFailure(auth, operation, "missing_scope");
             throw new InsufficientScopeException(scope.authority());
+        }
+    }
+
+    private <T> T auditedLab(PatientAccessTokenAuthentication auth, String operation, Supplier<T> request) {
+        try {
+            var response = request.get();
+            audit.recordToolSuccess(auth, operation);
+            return response;
+        } catch (RuntimeException ex) {
+            audit.recordToolFailure(auth, operation, "request_failed");
+            throw ex;
+        }
+    }
+
+    private void auditedLab(PatientAccessTokenAuthentication auth, String operation, Runnable request) {
+        try {
+            request.run();
+            audit.recordToolSuccess(auth, operation);
+        } catch (RuntimeException ex) {
+            audit.recordToolFailure(auth, operation, "request_failed");
+            throw ex;
         }
     }
 

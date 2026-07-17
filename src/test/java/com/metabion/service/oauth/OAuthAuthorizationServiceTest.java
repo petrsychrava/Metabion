@@ -162,6 +162,26 @@ class OAuthAuthorizationServiceTest {
     }
 
     @Test
+    void authorizationGrantsOnlyRequestedClientAllowedLaboratoryScope() {
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+        when(codes.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        var request = new OAuthAuthorizationRequest("code", "codex", REDIRECT_URI,
+                "patient:lab:read", "state-123", CHALLENGE, "S256", RESOURCE);
+        var labProperties = new OAuthAuthorizationProperties("http://localhost:8080", RESOURCE,
+                Duration.ofMinutes(5), Duration.ofHours(1),
+                new OAuthAuthorizationProperties.ClientMetadataProperties(true, Duration.ofSeconds(2), 32768),
+                Map.of("codex", new OAuthAuthorizationProperties.RegisteredClient("Codex", "native",
+                        List.of(REDIRECT_URI), List.of("patient:lab:read", "patient:lab:write"), List.of("authorization_code"))));
+        service = serviceWith(labProperties, new OAuthClientResolver(labProperties, clientId -> Optional.empty(), emptyRegisteredClients()));
+
+        service.approve(request, auth());
+
+        var captor = ArgumentCaptor.forClass(OAuthAuthorizationCode.class);
+        verify(codes).save(captor.capture());
+        assertThat(captor.getValue().scopes()).containsExactly("patient:lab:read");
+    }
+
+    @Test
     void denyValidatesRedirectAndPreservesState() {
         var denied = service.deny(request("S256"));
 
