@@ -7,13 +7,11 @@ import com.metabion.service.LabCatalogService;
 import com.metabion.service.LabResultService;
 import com.metabion.service.LabTrendService;
 import com.metabion.service.UserPreferenceService;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,7 +23,6 @@ import java.time.LocalDate;
 import java.util.List;
 
 @Controller
-@Validated
 public class WebClinicalLabController {
     private static final String ACTIVE_PATH = "/app/clinical/labs";
     private final LabResultService results; private final LabTrendService trends; private final LabCatalogService catalog;
@@ -71,14 +68,15 @@ public class WebClinicalLabController {
         return "lab-result-form";
     }
     @PostMapping("/app/clinical/labs/save")
-    public String save(@RequestParam @NotNull Long patientProfileId, @Valid @ModelAttribute("labResultSet") LabResultSetRequest request,
+    public String save(@RequestParam Long patientProfileId, @Valid @ModelAttribute("labResultSet") LabResultSetRequest request,
                        BindingResult binding, Model model, Authentication authentication) {
+        results.requireClinicalPatientAccess(authentication, patientProfileId);
         if (binding.hasErrors()) { form(model, request, patientProfileId, authentication); return "lab-result-form"; }
         results.saveForClinicalPatient(authentication, patientProfileId, request);
         return "redirect:/app/clinical/labs?patientProfileId=" + patientProfileId;
     }
     @PostMapping("/app/clinical/labs/{id}/remove")
-    public String remove(@PathVariable Long id, @RequestParam @NotNull Long patientProfileId, @Valid @ModelAttribute LabResultRemovalRequest request,
+    public String remove(@PathVariable Long id, @RequestParam Long patientProfileId, @Valid @ModelAttribute LabResultRemovalRequest request,
                          BindingResult binding, Authentication authentication) {
         if (!binding.hasErrors()) results.removeForClinicalPatient(authentication, patientProfileId, id, request);
         return "redirect:/app/clinical/labs?patientProfileId=" + patientProfileId;

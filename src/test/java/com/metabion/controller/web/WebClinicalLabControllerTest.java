@@ -31,9 +31,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 @SpringBootTest(properties = {"spring.profiles.active=dev", "spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=none",
         "spring.datasource.url=jdbc:h2:mem:web_clinical_lab_controller_test;DB_CLOSE_DELAY=-1", "spring.datasource.driver-class-name=org.h2.Driver",
@@ -89,5 +92,16 @@ class WebClinicalLabControllerTest {
         mvc.perform(get("/app/clinical/labs/new").param("patientProfileId", "999")
                         .with(user("doctor@example.com").roles("PHYSICIAN")))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void invalidClinicalSaveAuthorizesBeforeRenderingBoundForm() throws Exception {
+        doThrow(new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN))
+                .when(results).requireClinicalPatientAccess(any(), org.mockito.ArgumentMatchers.eq(999L));
+
+        mvc.perform(post("/app/clinical/labs/save").param("patientProfileId", "999").with(csrf())
+                        .with(user("patient@example.com").roles("PATIENT")))
+                .andExpect(status().isForbidden())
+                .andExpect(view().name("result"));
     }
 }
