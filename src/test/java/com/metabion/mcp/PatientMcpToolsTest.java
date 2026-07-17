@@ -173,6 +173,47 @@ class PatientMcpToolsTest {
     }
 
     @Test
+    void saveLabResultSetDelegatesAndAuditsSuccess() {
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_WRITE);
+        var request = mock(LabResultSetRequest.class);
+        var expected = mock(LabResultSetResponse.class);
+        when(patientApp.saveLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request))).thenReturn(expected);
+
+        assertThat(tools.metabionSaveLabResultSet(request)).isSameAs(expected);
+        verify(patientApp).saveLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request));
+        verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_save_lab_result_set"));
+    }
+
+    @Test
+    void saveLabResultSetPreservesBadRequestForMalformedDirectInput() {
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_WRITE);
+        var request = mock(LabResultSetRequest.class);
+        when(patientApp.saveLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request)))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "value must have at most 12 integer digits and 6 fraction digits"));
+
+        assertThatThrownBy(() -> tools.metabionSaveLabResultSet(request))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(audit).recordToolFailure(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("metabion_save_lab_result_set"), org.mockito.ArgumentMatchers.eq("request_failed"));
+    }
+
+    @Test
+    void listLabResultSetsPreserves370DayRangeRejection() {
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_READ);
+        var from = LocalDate.of(2025, 1, 1);
+        var to = LocalDate.of(2026, 1, 7);
+        when(patientApp.listLabResultSets(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(from), org.mockito.ArgumentMatchers.eq(to)))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "date range cannot exceed 370 days"));
+
+        assertThatThrownBy(() -> tools.metabionListLabResultSets(from, to))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(audit).recordToolFailure(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("metabion_list_lab_result_sets"), org.mockito.ArgumentMatchers.eq("request_failed"));
+    }
+
+    @Test
     void laboratoryReadToolsDelegateAndAuditFailuresWithoutValues() {
         authenticate(PatientAccessTokenScope.PATIENT_LAB_READ, PatientAccessTokenScope.PATIENT_LAB_WRITE);
         var from = LocalDate.of(2026, 1, 1);

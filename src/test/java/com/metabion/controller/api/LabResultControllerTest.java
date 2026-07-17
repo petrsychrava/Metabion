@@ -87,6 +87,29 @@ class LabResultControllerTest {
     }
 
     @Test
+    void patientMutationsRejectMissingCsrf() throws Exception {
+        mvc.perform(post("/api/lab-result-sets")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .contentType(MediaType.APPLICATION_JSON).content(validCreateJson()))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/lab-result-sets/90")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .contentType(MediaType.APPLICATION_JSON).content(validUpdateJson()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void patientMutationsRejectMismatchedPathAndBodyIds() throws Exception {
+        var patient = user("patient@example.com").roles(RoleName.PATIENT.name());
+        mvc.perform(put("/api/lab-result-sets/90").with(patient).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(validUpdateJson().replace("\"resultSetId\":90", "\"resultSetId\":91")))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/lab-result-sets/90/removal").with(patient).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"resultSetId\":91,\"version\":1}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void invalidBoundaryReturnsValidationFailure() throws Exception {
         mvc.perform(post("/api/lab-result-sets")
                         .with(user("patient@example.com").roles(RoleName.PATIENT.name()))

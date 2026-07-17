@@ -17,7 +17,7 @@ public class LabResponseAssembler {
     public LabResultSetResponse resultSet(LabResultSet set, User viewer) {
         return new LabResultSetResponse(set.getId(), set.getVersion(), set.getPatientProfile().getId(),
                 set.getCollectionDate(), set.getNotes(), set.getSource(), set.getConfirmationStatus(),
-                set.getPatientProfile().getUser().getId().equals(viewer.getId()), set.getCreatedAt(), set.getUpdatedAt(),
+                set.getCreatedByUser().getId().equals(viewer.getId()), set.getCreatedAt(), set.getUpdatedAt(),
                 set.getResults().stream().map(this::result).toList());
     }
     private LabResultResponse result(LabResult result) {

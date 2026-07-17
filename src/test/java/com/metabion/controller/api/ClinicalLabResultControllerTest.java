@@ -79,6 +79,20 @@ class ClinicalLabResultControllerTest {
         verify(trends).clinicalTrend(any(), eq(12L), eq("HBA1C"), any(), any());
     }
 
+    @Test
+    void clinicalMutationsRejectMissingCsrfAndMismatchedIds() throws Exception {
+        var doctor = user("doctor@example.com").roles(RoleName.PHYSICIAN.name());
+        mvc.perform(post("/api/clinical/patients/12/labs/result-sets").with(doctor)
+                        .contentType(MediaType.APPLICATION_JSON).content(validCreateJson()))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/clinical/patients/12/labs/result-sets/90").with(doctor).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(validUpdateJson().replace("\"resultSetId\":90", "\"resultSetId\":91")))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/clinical/patients/12/labs/result-sets/90/removal").with(doctor).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"resultSetId\":91,\"version\":1}"))
+                .andExpect(status().isBadRequest());
+    }
+
     private String validCreateJson() { return "{\"collectionDate\":\"2026-06-10\",\"results\":[{\"testCode\":\"HBA1C\",\"value\":5.4,\"unit\":\"%\"}]}"; }
     private String validUpdateJson() { return "{\"resultSetId\":90,\"version\":1,\"collectionDate\":\"2026-06-10\",\"results\":[{\"testCode\":\"HBA1C\",\"value\":5.4,\"unit\":\"%\"}]}"; }
 }

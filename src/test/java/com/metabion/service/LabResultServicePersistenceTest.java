@@ -48,7 +48,8 @@ import static org.mockito.Mockito.verify;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
 @Import({LabResultService.class, LabAuditService.class, LabResponseAssembler.class,
-        LabCatalogService.class, LabUnitConversionService.class, TimeConfig.class, LabResultServicePersistenceTest.JsonConfiguration.class})
+        LabCatalogService.class, LabUnitConversionService.class, DateRangeValidator.class,
+        TimeConfig.class, LabResultServicePersistenceTest.JsonConfiguration.class})
 class LabResultServicePersistenceTest {
     @Container static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
 

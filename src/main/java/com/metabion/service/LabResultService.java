@@ -32,15 +32,17 @@ public class LabResultService {
     private final AccessControlService accessControl;
     private final LabAuditService audit;
     private final LabResponseAssembler responses;
+    private final DateRangeValidator dateRanges;
     private final Clock clock;
 
     public LabResultService(UserRepository users, PatientProfileRepository patientProfiles,
                             LabResultSetRepository resultSets, LabCatalogService catalog,
                             LabUnitConversionService conversions, AccessControlService accessControl,
-                            LabAuditService audit, LabResponseAssembler responses, Clock clock) {
+                            LabAuditService audit, LabResponseAssembler responses,
+                            DateRangeValidator dateRanges, Clock clock) {
         this.users = users; this.patientProfiles = patientProfiles; this.resultSets = resultSets;
         this.catalog = catalog; this.conversions = conversions; this.accessControl = accessControl;
-        this.audit = audit; this.responses = responses; this.clock = clock;
+        this.audit = audit; this.responses = responses; this.dateRanges = dateRanges; this.clock = clock;
     }
 
     public LabResultSetResponse saveForCurrentPatient(Authentication authentication, LabResultSetRequest request) {
@@ -163,8 +165,12 @@ public class LabResultService {
     private void validateRequest(PatientProfile patient, LabResultSetRequest request, boolean versionRequired) {
         if (request == null) throw badRequest("request is required");
         if (versionRequired && request.version() == null) throw badRequest("version is required");
+        if (request.version() != null && request.version() < 0) throw badRequest("version must be zero or positive");
         validateCollectionDate(patient, request.collectionDate());
         if (request.results() == null || request.results().isEmpty()) throw badRequest("at least one laboratory result is required");
+        if (request.results().size() > 50) throw badRequest("at most 50 laboratory results are allowed");
+        if (request.notes() != null && request.notes().length() > 2000) throw badRequest("notes must not exceed 2000 characters");
+        request.results().forEach(this::validateResultRequest);
     }
     private void validateCollectionDate(PatientProfile patient, LocalDate date) {
         if (date == null) throw badRequest("collectionDate is required");
@@ -173,7 +179,7 @@ public class LabResultService {
         catch (RuntimeException ignored) { zone = ZoneId.of("UTC"); }
         if (date.isAfter(LocalDate.now(clock.withZone(zone)))) throw badRequest("collectionDate cannot be in the future");
     }
-    private void validateRange(LocalDate from, LocalDate to) { if (from == null || to == null) throw badRequest("from and to are required"); if (from.isAfter(to)) throw badRequest("from must be on or before to"); }
+    private void validateRange(LocalDate from, LocalDate to) { dateRanges.validate(from, to); }
     private void requireVersion(LabResultSet set, Long expected) { if (expected == null) throw badRequest("version is required"); if (set.getVersion() != expected) throw new ResponseStatusException(HttpStatus.CONFLICT, "Laboratory result set has changed"); }
     private void flushOrConflict() {
         try {
@@ -183,6 +189,26 @@ public class LabResultService {
         }
     }
     private void validateReferenceBounds(BigDecimal lower, BigDecimal upper) { if (lower != null && upper != null && lower.compareTo(upper) > 0) throw badRequest("referenceLower must not exceed referenceUpper"); }
+    private void validateResultRequest(LabResultRequest request) {
+        if (request == null) throw badRequest("laboratory result is required");
+        if (request.testCode() == null || request.testCode().isBlank()) throw badRequest("testCode is required");
+        if (request.testCode().length() > 64) throw badRequest("testCode must not exceed 64 characters");
+        if (request.unit() == null || request.unit().isBlank()) throw badRequest("unit is required");
+        if (request.unit().length() > 40) throw badRequest("unit must not exceed 40 characters");
+        validateDecimal("value", request.value(), true);
+        validateDecimal("referenceLower", request.referenceLower(), false);
+        validateDecimal("referenceUpper", request.referenceUpper(), false);
+    }
+    private void validateDecimal(String field, BigDecimal value, boolean required) {
+        if (value == null) {
+            if (required) throw badRequest(field + " is required");
+            return;
+        }
+        if (value.signum() < 0) throw badRequest(field + " must be zero or positive");
+        if (value.scale() > 6 || value.precision() - value.scale() > 12) {
+            throw badRequest(field + " must have at most 12 integer digits and 6 fraction digits");
+        }
+    }
     private static String trimToNull(String value) { if (value == null) return null; var trimmed = value.trim(); return trimmed.isEmpty() ? null : trimmed; }
     private static ResponseStatusException badRequest(String reason) { return new ResponseStatusException(HttpStatus.BAD_REQUEST, reason); }
     private static ResponseStatusException forbidden(String reason) { return new ResponseStatusException(HttpStatus.FORBIDDEN, reason); }

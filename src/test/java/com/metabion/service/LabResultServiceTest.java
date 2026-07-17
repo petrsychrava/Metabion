@@ -38,7 +38,8 @@ class LabResultServiceTest {
     @BeforeEach
     void setUp() {
         service = new LabResultService(users, patientProfiles, resultSets, catalog, conversions,
-                accessControl, audit, responses, Clock.fixed(Instant.parse("2026-07-16T12:00:00Z"), java.time.ZoneOffset.UTC));
+                accessControl, audit, responses, new DateRangeValidator(),
+                Clock.fixed(Instant.parse("2026-07-16T12:00:00Z"), java.time.ZoneOffset.UTC));
     }
 
     @Test
@@ -140,6 +141,48 @@ class LabResultServiceTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
         verify(audit, never()).recordUpdate(any(), any(), any(), any());
+    }
+
+    @Test
+    void directPatientSaveRejectsValuesThatExceedDtoFractionPrecision() {
+        var patientUser = user(1L, RoleName.PATIENT);
+        var patient = mock(PatientProfile.class);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+
+        var malformed = new LabResultSetRequest(null, null, LocalDate.of(2026, 7, 16), null,
+                List.of(new LabResultRequest("CRP", new BigDecimal("1.0000001"), "mg/L", null, null)));
+
+        assertThatThrownBy(() -> service.saveForCurrentPatient(auth("patient@example.com"), malformed))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    @Test
+    void resultSetListRejectsRangesLongerThan370Days() {
+        var patientUser = user(1L, RoleName.PATIENT);
+        var patient = mock(PatientProfile.class);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+
+        assertThatThrownBy(() -> service.listForCurrentPatient(auth("patient@example.com"),
+                LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 7)))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verifyNoInteractions(resultSets);
+    }
+
+    @Test
+    void clinicalResultSetListRejectsRangesLongerThan370Days() {
+        var clinician = user(2L, RoleName.PHYSICIAN);
+        when(users.findByEmail("clinician@example.com")).thenReturn(Optional.of(clinician));
+        when(accessControl.canAccessPatientProfile(any(), eq(10L))).thenReturn(true);
+
+        assertThatThrownBy(() -> service.listForClinicalPatient(auth("clinician@example.com"), 10L,
+                LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 7)))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verifyNoInteractions(resultSets);
     }
 
     private static TestingAuthenticationToken auth(String email) { var token = new TestingAuthenticationToken(email, "n/a"); token.setAuthenticated(true); return token; }
