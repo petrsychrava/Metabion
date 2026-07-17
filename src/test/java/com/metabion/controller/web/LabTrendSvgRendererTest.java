@@ -54,6 +54,7 @@ class LabTrendSvgRendererTest {
         assertThat(single).contains("<circle class=\"lab-trend-marker ")
                 .doesNotContain("<polyline class=\"lab-trend-line ");
         assertThat(multiple).contains("<polyline class=\"lab-trend-line ")
+                .contains("fill=\"none\"")
                 .contains("<circle class=\"lab-trend-marker ");
     }
 
@@ -77,6 +78,8 @@ class LabTrendSvgRendererTest {
 
         assertThat(svg).contains("Nejsou dostupn&aacute; laboratorn&iacute; měřen&iacute;")
                 .contains("class=\"lab-trend-chart trend-chart trend-chart-empty\"")
+                .contains("<line class=\"trend-date-tick\"")
+                .contains("<text class=\"trend-date-label\"")
                 .contains("2026-06-10");
     }
 

@@ -62,10 +62,10 @@ public class LabTrendSvgRenderer {
         var geometry = model.geometry();
         var out = new StringBuilder();
         for (var tick : model.dateTicks()) {
-            out.append("<line class=\"trend-axis\" x1=\"").append(tick.x()).append("\" y1=\"")
+            out.append("<line class=\"trend-date-tick\" x1=\"").append(tick.x()).append("\" y1=\"")
                     .append(geometry.bottom()).append("\" x2=\"").append(tick.x()).append("\" y2=\"")
                     .append(geometry.bottom() + 4).append("\"/>")
-                    .append("<text class=\"trend-date-tick\" x=\"").append(tick.x()).append("\" y=\"")
+                    .append("<text class=\"trend-date-label\" x=\"").append(tick.x()).append("\" y=\"")
                     .append(geometry.bottom() + 18).append("\" text-anchor=\"middle\">")
                     .append(escape(tick.date().toString())).append("</text>");
         }
@@ -78,7 +78,8 @@ public class LabTrendSvgRenderer {
         }
         var coordinates = model.points().stream().map(point -> point.x() + "," + point.y())
                 .collect(Collectors.joining(" "));
-        return "<polyline class=\"lab-trend-line trend-line glucose\" points=\"" + escape(coordinates) + "\"/>";
+        return "<polyline class=\"lab-trend-line trend-line glucose\" fill=\"none\" points=\""
+                + escape(coordinates) + "\"/>";
     }
 
     private String points(LabTrendChartModel model) {
