@@ -24,10 +24,36 @@ public interface PatientProfileRepository extends JpaRepository<PatientProfile, 
     List<PatientOptionResponse> findAllPatientOptions();
 
     @Query("""
+            select new com.metabion.dto.PatientOptionResponse(profile.id, user.email)
+            from PatientProfile profile
+            join profile.user user
+            where user.enabled = true
+            order by user.email asc, profile.id asc
+            """)
+    List<PatientOptionResponse> findAllEnabledPatientOptions();
+
+    @Query("""
             select distinct new com.metabion.dto.PatientOptionResponse(profile.id, user.email)
             from PatientProfile profile
             join profile.user user
-            where exists (
+            join PatientCohortMembership membership on membership.patientProfile = profile
+            join CohortStaffAssignment assignment on assignment.cohort = membership.cohort
+            where assignment.staffProfile.id = :staffProfileId
+              and user.enabled = true
+              and membership.endedAt is null
+              and assignment.endedAt is null
+              and membership.cohort.archivedAt is null
+            order by user.email asc, profile.id asc
+            """)
+    List<PatientOptionResponse> findEnabledPatientOptionsForStaff(
+            @Param("staffProfileId") Long staffProfileId);
+
+    @Query("""
+            select distinct new com.metabion.dto.PatientOptionResponse(profile.id, user.email)
+            from PatientProfile profile
+            join profile.user user
+            where user.enabled = true
+              and (exists (
                 select assignment.id
                 from PatientExpertAssignment assignment
                 where assignment.patientProfile = profile
@@ -43,7 +69,7 @@ public interface PatientProfileRepository extends JpaRepository<PatientProfile, 
                   and membership.endedAt is null
                   and assignment.endedAt is null
                   and membership.cohort.archivedAt is null
-            )
+            ))
             order by user.email asc, profile.id asc
             """)
     List<PatientOptionResponse> findAccessiblePatientOptionsForStaff(@Param("staffProfileId") Long staffProfileId);

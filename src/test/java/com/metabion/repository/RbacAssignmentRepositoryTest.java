@@ -480,15 +480,218 @@ class RbacAssignmentRepositoryTest {
         assertThat(cohortStaff.getEndedBy()).isEqualTo(actor);
     }
 
+    @Test
+    void enabledCandidateQueriesExcludeDisabledUsersAndOrderByEmail() {
+        var enabledPatientB = createPatientProfile("b@example.com");
+        var enabledPatientA = createPatientProfile("a@example.com");
+        var disabledPatient = patientProfiles.saveAndFlush(
+                new PatientProfile(createDisabledUser("disabled-patient@example.com", RoleName.PATIENT)));
+        var enabledStaffB = createStaffProfile("staff-b@example.com", RoleName.PHYSICIAN);
+        var enabledStaffA = createStaffProfile("staff-a@example.com", RoleName.NUTRITION_SPECIALIST);
+        var disabledStaff = staffProfiles.saveAndFlush(
+                new StaffProfile(createDisabledUser("disabled-staff@example.com", RoleName.PHYSICIAN)));
+        var assignedBy = createUser("candidate-admin@example.com", RoleName.ADMIN);
+        patientExpertAssignments.saveAndFlush(
+                new PatientExpertAssignment(enabledPatientB, enabledStaffB, assignedBy));
+        patientExpertAssignments.saveAndFlush(
+                new PatientExpertAssignment(enabledPatientA, enabledStaffB, assignedBy));
+        patientExpertAssignments.saveAndFlush(
+                new PatientExpertAssignment(disabledPatient, enabledStaffB, assignedBy));
+        entityManager.clear();
+
+        assertThat(patientProfiles.findAllEnabledPatientOptions())
+                .filteredOn(option -> option.id().equals(enabledPatientA.getId())
+                        || option.id().equals(enabledPatientB.getId())
+                        || option.id().equals(disabledPatient.getId()))
+                .extracting(option -> option.email())
+                .containsExactly("a@example.com", "b@example.com");
+        assertThat(patientProfiles.findAccessiblePatientOptionsForStaff(enabledStaffB.getId()))
+                .extracting(option -> option.email())
+                .containsExactly("a@example.com", "b@example.com");
+        assertThat(staffProfiles.findAllEnabledWithRoles())
+                .filteredOn(profile -> profile.getId().equals(enabledStaffA.getId())
+                        || profile.getId().equals(enabledStaffB.getId())
+                        || profile.getId().equals(disabledStaff.getId()))
+                .extracting(profile -> profile.getUser().getEmail())
+                .containsExactly("staff-a@example.com", "staff-b@example.com");
+        assertThat(staffProfiles.findAllEnabledWithRoles())
+                .allSatisfy(profile -> assertThat(profile.getUser().getRoles()).isNotEmpty());
+        assertThat(staffProfiles.lockById(enabledStaffA.getId())).isPresent();
+        assertThat(staffProfiles.lockById(disabledStaff.getId())).isPresent();
+    }
+
+    @Test
+    void coordinatorScopedQueriesDeduplicateAcrossActiveCohortsAndExcludeArchivedData() {
+        var coordinatorProfile = createStaffProfile("coordinator@example.com", RoleName.COORDINATOR);
+        var assignedBy = createUser("scope-admin@example.com", RoleName.ADMIN);
+        var alpha = cohorts.saveAndFlush(new Cohort("Alpha", null, assignedBy));
+        var beta = cohorts.saveAndFlush(new Cohort("Beta", null, assignedBy));
+        var archived = cohorts.saveAndFlush(new Cohort("Archived", null, assignedBy));
+        var unassigned = cohorts.saveAndFlush(new Cohort("Gamma", null, assignedBy));
+        var patientA = createPatientProfile("a@example.com");
+        var patientB = createPatientProfile("b@example.com");
+        var archivedPatient = createPatientProfile("archived@example.com");
+        var disabledPatient = patientProfiles.saveAndFlush(
+                new PatientProfile(createDisabledUser("disabled@example.com", RoleName.PATIENT)));
+        cohortStaffAssignments.saveAndFlush(new CohortStaffAssignment(alpha, coordinatorProfile, assignedBy));
+        cohortStaffAssignments.saveAndFlush(new CohortStaffAssignment(beta, coordinatorProfile, assignedBy));
+        cohortStaffAssignments.saveAndFlush(new CohortStaffAssignment(archived, coordinatorProfile, assignedBy));
+        patientCohortMemberships.saveAndFlush(new PatientCohortMembership(patientA, alpha, assignedBy));
+        patientCohortMemberships.saveAndFlush(new PatientCohortMembership(patientA, beta, assignedBy));
+        patientCohortMemberships.saveAndFlush(new PatientCohortMembership(patientB, beta, assignedBy));
+        patientCohortMemberships.saveAndFlush(new PatientCohortMembership(archivedPatient, archived, assignedBy));
+        patientCohortMemberships.saveAndFlush(new PatientCohortMembership(disabledPatient, alpha, assignedBy));
+        archived.archive(assignedBy, Instant.parse("2026-07-18T12:00:00Z"));
+        cohorts.saveAndFlush(archived);
+        entityManager.clear();
+
+        assertThat(patientProfiles.findEnabledPatientOptionsForStaff(coordinatorProfile.getId()))
+                .extracting(option -> option.email())
+                .containsExactly("a@example.com", "b@example.com");
+        assertThat(cohorts.findActiveForStaff(coordinatorProfile.getId()))
+                .extracting(Cohort::getName)
+                .containsExactly("Alpha", "Beta");
+        assertThat(cohorts.findAllActive())
+                .filteredOn(cohort -> cohort.getId().equals(alpha.getId())
+                        || cohort.getId().equals(beta.getId())
+                        || cohort.getId().equals(archived.getId())
+                        || cohort.getId().equals(unassigned.getId()))
+                .extracting(Cohort::getName)
+                .containsExactly("Alpha", "Beta", "Gamma");
+        assertThat(cohorts.findAllForAdministration())
+                .filteredOn(cohort -> cohort.getId().equals(alpha.getId())
+                        || cohort.getId().equals(beta.getId())
+                        || cohort.getId().equals(archived.getId())
+                        || cohort.getId().equals(unassigned.getId()))
+                .extracting(Cohort::getName)
+                .containsExactly("Alpha", "Beta", "Gamma", "Archived");
+        assertThat(cohorts.lockById(alpha.getId())).isPresent();
+        assertThat(unassigned.getId()).isNotNull();
+    }
+
+    @Test
+    void activeHistoryAndLockedRelationshipQueriesAreDeterministic() {
+        var assignedBy = createUser("history-admin@example.com", RoleName.ADMIN);
+        var cohort = cohorts.saveAndFlush(new Cohort("History", null, assignedBy));
+        var patientA = createPatientProfile("history-a@example.com");
+        var patientB = createPatientProfile("history-b@example.com");
+        var staffA = createStaffProfile("history-staff-a@example.com", RoleName.PHYSICIAN);
+        var staffB = createStaffProfile("history-staff-b@example.com", RoleName.NUTRITION_SPECIALIST);
+        var earliest = Instant.parse("2026-07-18T09:00:00Z");
+        var middle = Instant.parse("2026-07-18T10:00:00Z");
+        var latest = Instant.parse("2026-07-18T11:00:00Z");
+
+        var endedMembership = new PatientCohortMembership(patientB, cohort, assignedBy);
+        endedMembership.setAssignedAt(earliest);
+        endedMembership.end(assignedBy, middle);
+        endedMembership = patientCohortMemberships.saveAndFlush(endedMembership);
+        var activeMembershipB = new PatientCohortMembership(patientB, cohort, assignedBy);
+        activeMembershipB.setAssignedAt(middle);
+        activeMembershipB = patientCohortMemberships.saveAndFlush(activeMembershipB);
+        var activeMembershipA = new PatientCohortMembership(patientA, cohort, assignedBy);
+        activeMembershipA.setAssignedAt(latest);
+        activeMembershipA = patientCohortMemberships.saveAndFlush(activeMembershipA);
+
+        var endedDirect = new PatientExpertAssignment(patientA, staffB, assignedBy);
+        endedDirect.setAssignedAt(earliest);
+        endedDirect.end(assignedBy, middle);
+        endedDirect = patientExpertAssignments.saveAndFlush(endedDirect);
+        var activeDirectB = new PatientExpertAssignment(patientA, staffB, assignedBy);
+        activeDirectB.setAssignedAt(middle);
+        activeDirectB = patientExpertAssignments.saveAndFlush(activeDirectB);
+        var activeDirectA = new PatientExpertAssignment(patientA, staffA, assignedBy);
+        activeDirectA.setAssignedAt(latest);
+        activeDirectA = patientExpertAssignments.saveAndFlush(activeDirectA);
+
+        var endedCohortStaff = new CohortStaffAssignment(cohort, staffB, assignedBy);
+        endedCohortStaff.setAssignedAt(earliest);
+        endedCohortStaff.end(assignedBy, middle);
+        endedCohortStaff = cohortStaffAssignments.saveAndFlush(endedCohortStaff);
+        var activeCohortStaffB = new CohortStaffAssignment(cohort, staffB, assignedBy);
+        activeCohortStaffB.setAssignedAt(middle);
+        activeCohortStaffB = cohortStaffAssignments.saveAndFlush(activeCohortStaffB);
+        var activeCohortStaffA = new CohortStaffAssignment(cohort, staffA, assignedBy);
+        activeCohortStaffA.setAssignedAt(latest);
+        activeCohortStaffA = cohortStaffAssignments.saveAndFlush(activeCohortStaffA);
+        entityManager.clear();
+
+        assertThat(patientCohortMemberships.findActiveByCohortId(cohort.getId()))
+                .extracting(membership -> membership.getPatientProfile().getUser().getEmail())
+                .containsExactly("history-a@example.com", "history-b@example.com");
+        assertThat(patientCohortMemberships.findHistoryByCohortId(cohort.getId()))
+                .extracting(PatientCohortMembership::getId)
+                .containsExactly(activeMembershipA.getId(), activeMembershipB.getId(), endedMembership.getId());
+        assertThat(patientCohortMemberships.findActiveById(activeMembershipA.getId())).isPresent();
+        assertThat(patientCohortMemberships.findActiveById(endedMembership.getId())).isEmpty();
+
+        assertThat(patientExpertAssignments.findActiveByPatientProfileId(patientA.getId()))
+                .extracting(assignment -> assignment.getStaffProfile().getUser().getEmail())
+                .containsExactly("history-staff-a@example.com", "history-staff-b@example.com");
+        assertThat(patientExpertAssignments.findHistoryByPatientProfileId(patientA.getId()))
+                .extracting(PatientExpertAssignment::getId)
+                .containsExactly(activeDirectA.getId(), activeDirectB.getId(), endedDirect.getId());
+        assertThat(patientExpertAssignments.findActiveById(activeDirectA.getId())).isPresent();
+        assertThat(patientExpertAssignments.findActiveById(endedDirect.getId())).isEmpty();
+
+        assertThat(cohortStaffAssignments.findActiveByCohortId(cohort.getId()))
+                .extracting(assignment -> assignment.getStaffProfile().getUser().getEmail())
+                .containsExactly("history-staff-a@example.com", "history-staff-b@example.com");
+        assertThat(cohortStaffAssignments.findHistoryByCohortId(cohort.getId()))
+                .extracting(CohortStaffAssignment::getId)
+                .containsExactly(activeCohortStaffA.getId(), activeCohortStaffB.getId(), endedCohortStaff.getId());
+        assertThat(cohortStaffAssignments.findActiveById(activeCohortStaffA.getId())).isPresent();
+        assertThat(cohortStaffAssignments.findActiveById(endedCohortStaff.getId())).isEmpty();
+    }
+
+    @Test
+    void inheritedAssignmentQueryOrdersResultsAndExcludesArchivedCohorts() {
+        var assignedBy = createUser("inherited-admin@example.com", RoleName.ADMIN);
+        var patient = createPatientProfile("inherited-patient@example.com");
+        var staffA = createStaffProfile("inherited-a@example.com", RoleName.PHYSICIAN);
+        var staffB = createStaffProfile("inherited-b@example.com", RoleName.NUTRITION_SPECIALIST);
+        var alpha = cohorts.saveAndFlush(new Cohort("Alpha inherited", null, assignedBy));
+        var beta = cohorts.saveAndFlush(new Cohort("Beta inherited", null, assignedBy));
+        var archived = cohorts.saveAndFlush(new Cohort("Archived inherited", null, assignedBy));
+        patientCohortMemberships.saveAndFlush(new PatientCohortMembership(patient, beta, assignedBy));
+        patientCohortMemberships.saveAndFlush(new PatientCohortMembership(patient, alpha, assignedBy));
+        patientCohortMemberships.saveAndFlush(new PatientCohortMembership(patient, archived, assignedBy));
+        var betaAssignment = cohortStaffAssignments.saveAndFlush(
+                new CohortStaffAssignment(beta, staffA, assignedBy));
+        var alphaAssignment = cohortStaffAssignments.saveAndFlush(
+                new CohortStaffAssignment(alpha, staffA, assignedBy));
+        cohortStaffAssignments.saveAndFlush(new CohortStaffAssignment(archived, staffA, assignedBy));
+        var staffBAssignment = cohortStaffAssignments.saveAndFlush(
+                new CohortStaffAssignment(alpha, staffB, assignedBy));
+        archived.archive(assignedBy, Instant.parse("2026-07-18T12:00:00Z"));
+        cohorts.saveAndFlush(archived);
+        entityManager.clear();
+
+        assertThat(cohortStaffAssignments.findActiveAssignmentsForPatient(patient.getId()))
+                .extracting(CohortStaffAssignment::getId)
+                .containsExactly(alphaAssignment.getId(), betaAssignment.getId(), staffBAssignment.getId());
+    }
+
     private PatientProfile createPatientProfile(String email) {
         return patientProfiles.saveAndFlush(new PatientProfile(createUser(email, RoleName.PATIENT)));
     }
 
     private StaffProfile createStaffProfile(String email) {
-        return staffProfiles.saveAndFlush(new StaffProfile(createUser(email, RoleName.PHYSICIAN)));
+        return createStaffProfile(email, RoleName.PHYSICIAN);
+    }
+
+    private StaffProfile createStaffProfile(String email, RoleName role) {
+        return staffProfiles.saveAndFlush(new StaffProfile(createUser(email, role)));
     }
 
     private User createUser(String email, RoleName role) {
+        var user = new User(email, "hash");
+        user.setEnabled(true);
+        user = users.saveAndFlush(user);
+        user.addRole(role);
+        return users.saveAndFlush(user);
+    }
+
+    private User createDisabledUser(String email, RoleName role) {
         var user = users.saveAndFlush(new User(email, "hash"));
         user.addRole(role);
         return users.saveAndFlush(user);
