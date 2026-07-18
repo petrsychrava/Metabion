@@ -14,6 +14,7 @@ import com.metabion.repository.PatientExpertAssignmentRepository;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.StaffProfileRepository;
 import com.metabion.repository.UserRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -114,6 +115,87 @@ public class AssignmentManagementService {
         activeStaffAssignments.forEach(row -> end(row, actor, now));
     }
 
+    @Transactional
+    public void addPatientToCohort(Authentication authentication,
+                                   Long cohortId,
+                                   Long patientProfileId) {
+        var actor = requireAssignmentManager(authentication);
+        var mayManage = accessControl.canManageCohortMemberships(authentication, cohortId);
+        if (!mayManage && !actor.hasRole(RoleName.ADMIN)) {
+            throw notFound("Cohort not found");
+        }
+        var cohort = activeLockedCohort(cohortId);
+        var patient = patientProfiles.lockById(patientProfileId)
+                .filter(profile -> profile.getUser().isEnabled())
+                .orElseThrow(() -> notFound("Patient profile not found"));
+        if (memberships.existsActiveMembership(patientProfileId, cohortId)) {
+            throw conflict("Patient is already assigned to cohort");
+        }
+        try {
+            memberships.save(new PatientCohortMembership(patient, cohort, actor));
+            memberships.flush();
+        } catch (DataIntegrityViolationException exception) {
+            throw conflict("Patient is already assigned to cohort");
+        }
+    }
+
+    @Transactional
+    public void endMembership(Authentication authentication, Long cohortId, Long membershipId) {
+        var actor = requireAssignmentManager(authentication);
+        var membership = memberships.findActiveById(membershipId)
+                .orElseThrow(() -> notFound("Cohort membership not found"));
+        if (!membership.getCohort().getId().equals(cohortId)) {
+            throw notFound("Cohort membership not found");
+        }
+        var mayManage = accessControl.canManageCohortMemberships(authentication, cohortId);
+        if (!mayManage && !actor.hasRole(RoleName.ADMIN)) {
+            throw notFound("Cohort membership not found");
+        }
+        activeLockedCohort(cohortId);
+        end(membership, actor, clock.instant());
+    }
+
+    @Transactional
+    public void assignCohortStaff(Authentication authentication,
+                                  Long cohortId,
+                                  Long staffProfileId) {
+        var actor = requireAssignmentManager(authentication);
+        var target = staffProfiles.lockById(staffProfileId)
+                .filter(profile -> profile.getUser().isEnabled())
+                .filter(profile -> profile.getUser().hasAnyRole(
+                        RoleName.PHYSICIAN, RoleName.NUTRITION_SPECIALIST, RoleName.COORDINATOR))
+                .orElseThrow(() -> notFound("Staff profile not found"));
+        if (!accessControl.canManageCohortStaff(authentication, cohortId, staffProfileId)) {
+            throw notFound("Cohort not found");
+        }
+        var cohort = activeLockedCohort(cohortId);
+        if (cohortStaffAssignments.existsActiveAssignment(cohortId, staffProfileId)) {
+            throw conflict("Staff member is already assigned to cohort");
+        }
+        try {
+            cohortStaffAssignments.save(new CohortStaffAssignment(cohort, target, actor));
+            cohortStaffAssignments.flush();
+        } catch (DataIntegrityViolationException exception) {
+            throw conflict("Staff member is already assigned to cohort");
+        }
+    }
+
+    @Transactional
+    public void endCohortStaffAssignment(Authentication authentication,
+                                         Long cohortId,
+                                         Long assignmentId) {
+        var actor = requireAssignmentManager(authentication);
+        var assignment = cohortStaffAssignments.findActiveById(assignmentId)
+                .orElseThrow(() -> notFound("Cohort staff assignment not found"));
+        if (!assignment.getCohort().getId().equals(cohortId)
+                || !accessControl.canManageCohortStaff(
+                        authentication, cohortId, assignment.getStaffProfile().getId())) {
+            throw notFound("Cohort staff assignment not found");
+        }
+        activeLockedCohort(cohortId);
+        end(assignment, actor, clock.instant());
+    }
+
     private Cohort editableLockedCohort(Authentication authentication, User actor, Long cohortId) {
         if (!actor.hasRole(RoleName.ADMIN)
                 && !accessControl.canManageCohort(authentication, cohortId)) {
@@ -123,6 +205,15 @@ public class AssignmentManagementService {
                 .orElseThrow(() -> notFound("Cohort not found"));
         if (cohort.isArchived()) {
             throw conflict("Archived cohort cannot be edited");
+        }
+        return cohort;
+    }
+
+    private Cohort activeLockedCohort(Long cohortId) {
+        var cohort = cohorts.lockById(cohortId)
+                .orElseThrow(() -> notFound("Cohort not found"));
+        if (cohort.isArchived()) {
+            throw conflict("Archived cohort cannot be changed");
         }
         return cohort;
     }

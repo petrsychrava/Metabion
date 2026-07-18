@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -294,6 +295,307 @@ class AssignmentManagementServiceTest {
                 HttpStatus.CONFLICT);
     }
 
+    @Test
+    void assignedCoordinatorMayAddAnyEnabledPatientToMultipleActiveCohorts() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var patientProfile = patientProfile(40L, patient);
+        var alpha = cohort(10L, "Alpha", coordinator);
+        var beta = cohort(20L, "Beta", coordinator);
+        var authentication = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(accessControl.canManageCohortMemberships(authentication, 10L)).thenReturn(true);
+        when(accessControl.canManageCohortMemberships(authentication, 20L)).thenReturn(true);
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(alpha));
+        when(cohorts.lockById(20L)).thenReturn(Optional.of(beta));
+        when(patientProfiles.lockById(40L)).thenReturn(Optional.of(patientProfile));
+
+        service.addPatientToCohort(authentication, 10L, 40L);
+        service.addPatientToCohort(authentication, 20L, 40L);
+
+        verify(memberships).save(argThat(row -> row.getPatientProfile().equals(patientProfile)
+                && row.getCohort().equals(alpha) && row.getAssignedBy().equals(coordinator)));
+        verify(memberships).save(argThat(row -> row.getPatientProfile().equals(patientProfile)
+                && row.getCohort().equals(beta) && row.getAssignedBy().equals(coordinator)));
+    }
+
+    @Test
+    void membershipWriteRequiresManagerRoleAndCoordinatorScopeWithoutLeakingCohort() {
+        var physician = user(3L, "physician@example.com", RoleName.PHYSICIAN);
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var physicianAuth = auth("physician@example.com");
+        var coordinatorAuth = auth("coordinator@example.com");
+        when(users.findByEmail("physician@example.com")).thenReturn(Optional.of(physician));
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(accessControl.canManageCohortMemberships(coordinatorAuth, 10L)).thenReturn(false);
+
+        assertStatus(() -> service.addPatientToCohort(physicianAuth, 10L, 40L),
+                HttpStatus.FORBIDDEN);
+        assertStatus(() -> service.addPatientToCohort(coordinatorAuth, 10L, 40L),
+                HttpStatus.NOT_FOUND);
+
+        verifyNoInteractions(cohorts, patientProfiles, memberships);
+    }
+
+    @Test
+    void addingDuplicateOrDisabledPatientIsRejected() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var enabledPatient = enabledUser(4L, "enabled@example.com", RoleName.PATIENT);
+        var disabledPatient = user(5L, "disabled@example.com", RoleName.PATIENT);
+        var cohort = cohort(10L, "Pilot", coordinator);
+        var authentication = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(accessControl.canManageCohortMemberships(authentication, 10L)).thenReturn(true);
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+        when(patientProfiles.lockById(40L)).thenReturn(Optional.of(patientProfile(40L, enabledPatient)));
+        when(patientProfiles.lockById(50L)).thenReturn(Optional.of(patientProfile(50L, disabledPatient)));
+        when(memberships.existsActiveMembership(40L, 10L)).thenReturn(true);
+
+        assertStatus(() -> service.addPatientToCohort(authentication, 10L, 40L),
+                HttpStatus.CONFLICT);
+        assertStatus(() -> service.addPatientToCohort(authentication, 10L, 50L),
+                HttpStatus.NOT_FOUND);
+
+        verify(memberships, never()).save(any());
+    }
+
+    @Test
+    void concurrentMembershipInsertConflictIsTranslated() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var cohort = cohort(10L, "Pilot", admin);
+        var authentication = auth("admin@example.com");
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+        when(patientProfiles.lockById(40L)).thenReturn(Optional.of(patientProfile(40L, patient)));
+        when(memberships.save(any(PatientCohortMembership.class)))
+                .thenThrow(new DataIntegrityViolationException("active pair"));
+
+        assertStatus(() -> service.addPatientToCohort(authentication, 10L, 40L),
+                HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void endMembershipLocksRowValidatesPathAndAttributesEnd() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var cohort = cohort(10L, "Pilot", coordinator);
+        var membership = new PatientCohortMembership(patientProfile(40L, patient), cohort, coordinator);
+        membership.setId(100L);
+        var authentication = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(memberships.findActiveById(100L)).thenReturn(Optional.of(membership));
+        when(accessControl.canManageCohortMemberships(authentication, 10L)).thenReturn(true);
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+
+        service.endMembership(authentication, 10L, 100L);
+
+        assertThat(membership.getEndedAt()).isEqualTo(NOW);
+        assertThat(membership.getEndedBy()).isEqualTo(coordinator);
+    }
+
+    @Test
+    void endMembershipHidesMismatchedRelationshipAndCurrentScopeFailure() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var actualCohort = cohort(20L, "Actual", coordinator);
+        var mismatched = new PatientCohortMembership(
+                patientProfile(40L, patient), actualCohort, coordinator);
+        mismatched.setId(100L);
+        var inPathCohort = cohort(10L, "Path", coordinator);
+        var inPath = new PatientCohortMembership(
+                patientProfile(40L, patient), inPathCohort, coordinator);
+        inPath.setId(200L);
+        var authentication = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(memberships.findActiveById(100L)).thenReturn(Optional.of(mismatched));
+        when(memberships.findActiveById(200L)).thenReturn(Optional.of(inPath));
+
+        assertStatus(() -> service.endMembership(authentication, 10L, 100L),
+                HttpStatus.NOT_FOUND);
+        assertStatus(() -> service.endMembership(authentication, 10L, 200L),
+                HttpStatus.NOT_FOUND);
+
+        assertThat(mismatched.isActive()).isTrue();
+        assertThat(inPath.isActive()).isTrue();
+        verify(cohorts, never()).lockById(any());
+    }
+
+    @Test
+    void coordinatorMayAssignPhysicianAndNutritionistButNotCoordinatorTargets() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var nutritionist = enabledUser(6L, "nutrition@example.com", RoleName.NUTRITION_SPECIALIST);
+        var coordinatorTarget = enabledUser(7L, "other@example.com", RoleName.COORDINATOR);
+        var dualTarget = enabledUser(8L, "dual@example.com", RoleName.COORDINATOR);
+        dualTarget.addRole(RoleName.PHYSICIAN);
+        var physicianProfile = staffProfile(50L, physician);
+        var nutritionProfile = staffProfile(60L, nutritionist);
+        var coordinatorProfile = staffProfile(70L, coordinatorTarget);
+        var dualProfile = staffProfile(80L, dualTarget);
+        var cohort = cohort(10L, "Pilot", coordinator);
+        var authentication = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+        when(staffProfiles.lockById(50L)).thenReturn(Optional.of(physicianProfile));
+        when(staffProfiles.lockById(60L)).thenReturn(Optional.of(nutritionProfile));
+        when(staffProfiles.lockById(70L)).thenReturn(Optional.of(coordinatorProfile));
+        when(staffProfiles.lockById(80L)).thenReturn(Optional.of(dualProfile));
+        when(accessControl.canManageCohortStaff(authentication, 10L, 50L)).thenReturn(true);
+        when(accessControl.canManageCohortStaff(authentication, 10L, 60L)).thenReturn(true);
+
+        service.assignCohortStaff(authentication, 10L, 50L);
+        service.assignCohortStaff(authentication, 10L, 60L);
+        assertStatus(() -> service.assignCohortStaff(authentication, 10L, 70L),
+                HttpStatus.NOT_FOUND);
+        assertStatus(() -> service.assignCohortStaff(authentication, 10L, 80L),
+                HttpStatus.NOT_FOUND);
+
+        verify(cohortStaffAssignments).save(argThat(row -> row.getStaffProfile().equals(physicianProfile)));
+        verify(cohortStaffAssignments).save(argThat(row -> row.getStaffProfile().equals(nutritionProfile)));
+    }
+
+    @Test
+    void administratorMayAssignCoordinatorTarget() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var coordinatorTarget = enabledUser(7L, "coordinator@example.com", RoleName.COORDINATOR);
+        var targetProfile = staffProfile(70L, coordinatorTarget);
+        var cohort = cohort(10L, "Pilot", admin);
+        var authentication = auth("admin@example.com");
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(staffProfiles.lockById(70L)).thenReturn(Optional.of(targetProfile));
+        when(accessControl.canManageCohortStaff(authentication, 10L, 70L)).thenReturn(true);
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+
+        service.assignCohortStaff(authentication, 10L, 70L);
+
+        verify(cohortStaffAssignments).save(argThat(row -> row.getCohort().equals(cohort)
+                && row.getStaffProfile().equals(targetProfile) && row.getAssignedBy().equals(admin)));
+    }
+
+    @Test
+    void cohortStaffTargetMustBeEnabledAndHaveAllowedRole() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var disabledPhysician = user(5L, "disabled@example.com", RoleName.PHYSICIAN);
+        var disallowedRole = enabledUser(6L, "admin-role@example.com", RoleName.PHYSICIAN);
+        var disallowedProfile = staffProfile(60L, disallowedRole);
+        disallowedRole.getRoles().clear();
+        disallowedRole.addRole(RoleName.ADMIN);
+        var authentication = auth("admin@example.com");
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(staffProfiles.lockById(50L)).thenReturn(Optional.of(staffProfile(50L, disabledPhysician)));
+        when(staffProfiles.lockById(60L)).thenReturn(Optional.of(disallowedProfile));
+
+        assertStatus(() -> service.assignCohortStaff(authentication, 10L, 50L),
+                HttpStatus.NOT_FOUND);
+        assertStatus(() -> service.assignCohortStaff(authentication, 10L, 60L),
+                HttpStatus.NOT_FOUND);
+
+        verifyNoInteractions(cohorts, cohortStaffAssignments);
+    }
+
+    @Test
+    void duplicateAndConcurrentCohortStaffAssignmentsReturnConflict() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var target = staffProfile(50L, physician);
+        var cohort = cohort(10L, "Pilot", admin);
+        var authentication = auth("admin@example.com");
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(staffProfiles.lockById(50L)).thenReturn(Optional.of(target));
+        when(accessControl.canManageCohortStaff(authentication, 10L, 50L)).thenReturn(true);
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+        when(cohortStaffAssignments.existsActiveAssignment(10L, 50L))
+                .thenReturn(true, false);
+        when(cohortStaffAssignments.save(any(CohortStaffAssignment.class)))
+                .thenThrow(new DataIntegrityViolationException("active pair"));
+
+        assertStatus(() -> service.assignCohortStaff(authentication, 10L, 50L),
+                HttpStatus.CONFLICT);
+        assertStatus(() -> service.assignCohortStaff(authentication, 10L, 50L),
+                HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void endCohortStaffAssignmentRechecksTargetCapabilityAndAttributesEnd() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var cohort = cohort(10L, "Pilot", coordinator);
+        var assignment = new CohortStaffAssignment(cohort, staffProfile(50L, physician), coordinator);
+        assignment.setId(100L);
+        var authentication = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(cohortStaffAssignments.findActiveById(100L)).thenReturn(Optional.of(assignment));
+        when(accessControl.canManageCohortStaff(authentication, 10L, 50L)).thenReturn(true);
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+
+        service.endCohortStaffAssignment(authentication, 10L, 100L);
+
+        assertThat(assignment.getEndedAt()).isEqualTo(NOW);
+        assertThat(assignment.getEndedBy()).isEqualTo(coordinator);
+    }
+
+    @Test
+    void endCohortStaffAssignmentHidesMismatchedPathAndCoordinatorTarget() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var coordinatorTarget = enabledUser(6L, "other@example.com", RoleName.COORDINATOR);
+        var actualCohort = cohort(20L, "Actual", coordinator);
+        var mismatched = new CohortStaffAssignment(actualCohort, staffProfile(50L, physician), coordinator);
+        mismatched.setId(100L);
+        var pathCohort = cohort(10L, "Path", coordinator);
+        var coordinatorAssignment = new CohortStaffAssignment(
+                pathCohort, staffProfile(60L, coordinatorTarget), coordinator);
+        coordinatorAssignment.setId(200L);
+        var authentication = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(cohortStaffAssignments.findActiveById(100L)).thenReturn(Optional.of(mismatched));
+        when(cohortStaffAssignments.findActiveById(200L)).thenReturn(Optional.of(coordinatorAssignment));
+
+        assertStatus(() -> service.endCohortStaffAssignment(authentication, 10L, 100L),
+                HttpStatus.NOT_FOUND);
+        assertStatus(() -> service.endCohortStaffAssignment(authentication, 10L, 200L),
+                HttpStatus.NOT_FOUND);
+
+        assertThat(mismatched.isActive()).isTrue();
+        assertThat(coordinatorAssignment.isActive()).isTrue();
+        verify(cohorts, never()).lockById(any());
+    }
+
+    @Test
+    void archivedCohortRejectsAllRelationshipMutations() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var archived = cohort(10L, "Archived", admin);
+        archived.archive(admin, NOW.minusSeconds(60));
+        var membership = new PatientCohortMembership(patientProfile(40L, patient), archived, admin);
+        membership.setId(100L);
+        var assignment = new CohortStaffAssignment(archived, staffProfile(50L, physician), admin);
+        assignment.setId(200L);
+        var authentication = auth("admin@example.com");
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(archived));
+        when(staffProfiles.lockById(50L)).thenReturn(Optional.of(staffProfile(50L, physician)));
+        when(accessControl.canManageCohortStaff(authentication, 10L, 50L)).thenReturn(true);
+        when(memberships.findActiveById(100L)).thenReturn(Optional.of(membership));
+        when(cohortStaffAssignments.findActiveById(200L)).thenReturn(Optional.of(assignment));
+
+        assertStatus(() -> service.addPatientToCohort(authentication, 10L, 40L),
+                HttpStatus.CONFLICT);
+        assertStatus(() -> service.endMembership(authentication, 10L, 100L),
+                HttpStatus.CONFLICT);
+        assertStatus(() -> service.assignCohortStaff(authentication, 10L, 50L),
+                HttpStatus.CONFLICT);
+        assertStatus(() -> service.endCohortStaffAssignment(authentication, 10L, 200L),
+                HttpStatus.CONFLICT);
+
+        assertThat(membership.isActive()).isTrue();
+        assertThat(assignment.isActive()).isTrue();
+        verify(memberships, never()).save(any());
+        verify(cohortStaffAssignments, never()).save(any());
+    }
+
     private static void assertStatus(Runnable operation, HttpStatus expected) {
         assertThatThrownBy(operation::run)
                 .isInstanceOfSatisfying(ResponseStatusException.class,
@@ -308,6 +610,12 @@ class AssignmentManagementServiceTest {
         var user = new User(email, "hash");
         user.setId(id);
         user.addRole(role);
+        return user;
+    }
+
+    private static User enabledUser(Long id, String email, RoleName role) {
+        var user = user(id, email, role);
+        user.setEnabled(true);
         return user;
     }
 
