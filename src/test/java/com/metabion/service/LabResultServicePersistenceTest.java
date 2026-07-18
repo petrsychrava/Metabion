@@ -116,6 +116,23 @@ class LabResultServicePersistenceTest {
     }
 
     @Test
+    void updatingAnExistingTestPersistsWithoutAUniqueConstraintViolation() {
+        var created = service.saveForCurrentPatient(authentication(), request());
+
+        var updated = service.updateForCurrentPatient(authentication(), created.id(),
+                new LabResultSetRequest(created.id(), created.version(), created.collectionDate(), "corrected",
+                        List.of(new LabResultRequest("CRP", new BigDecimal("1.5"), "mg/dL", null, null))));
+
+        assertThat(updated.collectionDate()).isEqualTo(created.collectionDate());
+        assertThat(updated.results()).singleElement().satisfies(result -> {
+            assertThat(result.testCode()).isEqualTo("CRP");
+            assertThat(result.reportedValue()).isEqualByComparingTo("1.500000");
+            assertThat(result.reportedUnit()).isEqualTo("mg/dL");
+        });
+        assertThat(results.count()).isEqualTo(1);
+    }
+
+    @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void auditFailureRollsBackResultSetAndRows() {
         doThrow(new IllegalStateException("audit storage unavailable")).when(auditEvents).save(any());

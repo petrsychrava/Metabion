@@ -52,6 +52,16 @@ public class LabResult {
         this.referenceUpper = referenceUpper == null ? null : toDatabaseScale(referenceUpper);
     }
 
+    void updateMeasurements(BigDecimal reportedValue, String reportedUnit, BigDecimal canonicalValue,
+                            String canonicalUnit, BigDecimal referenceLower, BigDecimal referenceUpper) {
+        this.reportedValue = toDatabaseScale(reportedValue);
+        this.reportedUnit = Objects.requireNonNull(reportedUnit);
+        this.canonicalValue = toDatabaseScale(canonicalValue);
+        this.canonicalUnit = Objects.requireNonNull(canonicalUnit);
+        this.referenceLower = referenceLower == null ? null : toDatabaseScale(referenceLower);
+        this.referenceUpper = referenceUpper == null ? null : toDatabaseScale(referenceUpper);
+    }
+
     private static BigDecimal toDatabaseScale(BigDecimal value) {
         return Objects.requireNonNull(value).setScale(6, RoundingMode.UNNECESSARY);
     }
