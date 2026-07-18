@@ -185,6 +185,25 @@ class LabResultServiceTest {
         verifyNoInteractions(resultSets);
     }
 
+    @Test
+    void directPatientRemovalRejectsMalformedRequestsBeforeLoadingTheResultSet() {
+        assertBadRequest(() -> service.removeForCurrentPatient(auth("patient@example.com"), (LabResultRemovalRequest) null));
+        assertBadRequest(() -> service.removeForCurrentPatient(auth("patient@example.com"),
+                new LabResultRemovalRequest(null, 0L, null)));
+        assertBadRequest(() -> service.removeForCurrentPatient(auth("patient@example.com"),
+                new LabResultRemovalRequest(90L, -1L, null)));
+        assertBadRequest(() -> service.removeForCurrentPatient(auth("patient@example.com"),
+                new LabResultRemovalRequest(90L, 0L, "x".repeat(501))));
+
+        verifyNoInteractions(resultSets);
+    }
+
+    private static void assertBadRequest(org.assertj.core.api.ThrowableAssert.ThrowingCallable operation) {
+        assertThatThrownBy(operation)
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
     private static TestingAuthenticationToken auth(String email) { var token = new TestingAuthenticationToken(email, "n/a"); token.setAuthenticated(true); return token; }
     private static User user(Long id, RoleName role) { var user = new User("user@example.com", "hash"); user.setId(id); user.addRole(role); return user; }
     private static LabResultSetRequest request(Long id, Long version) { return new LabResultSetRequest(id, version, LocalDate.of(2026, 7, 16), null, List.of(new LabResultRequest("CRP", new BigDecimal("1.2"), "mg/dL", null, null))); }

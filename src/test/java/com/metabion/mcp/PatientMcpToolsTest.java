@@ -250,6 +250,20 @@ class PatientMcpToolsTest {
     }
 
     @Test
+    void removeLabResultSetPreservesBadRequestFromDirectFacadeValidation() {
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_WRITE);
+        var request = new LabResultRemovalRequest(7L, -1L, null);
+        org.mockito.Mockito.doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "version must be zero or positive"))
+                .when(patientApp).removeLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request));
+
+        assertThatThrownBy(() -> tools.metabionRemoveLabResultSet(request))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(audit).recordToolFailure(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("metabion_remove_lab_result_set"), org.mockito.ArgumentMatchers.eq("request_failed"));
+    }
+
+    @Test
     void mcpToolsBeanIsAbsentWhenMcpIsDisabled() {
         contextRunner()
                 .withPropertyValues("metabion.mcp.enabled=false")

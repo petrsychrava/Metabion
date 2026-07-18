@@ -74,7 +74,10 @@ public class LabResultService {
         var patient = patientProfiles.findByUserId(actor.getId()).orElseThrow(() -> forbidden("Patient profile not found"));
         remove(patient, actor, id, request, true);
     }
-    public void removeForCurrentPatient(Authentication authentication, LabResultRemovalRequest request) { removeForCurrentPatient(authentication, request.resultSetId(), request); }
+    public void removeForCurrentPatient(Authentication authentication, LabResultRemovalRequest request) {
+        validateRemovalRequest(request);
+        removeForCurrentPatient(authentication, request.resultSetId(), request);
+    }
 
     public LabResultSetResponse saveForClinicalPatient(Authentication authentication, Long patientId, LabResultSetRequest request) {
         var actor = clinicalPatient(authentication, patientId);
@@ -103,7 +106,10 @@ public class LabResultService {
         var actor = clinicalPatient(authentication, patientId);
         remove(requirePatientProfile(patientId), actor, id, request, false);
     }
-    public void removeForClinicalPatient(Authentication authentication, Long patientId, LabResultRemovalRequest request) { removeForClinicalPatient(authentication, patientId, request.resultSetId(), request); }
+    public void removeForClinicalPatient(Authentication authentication, Long patientId, LabResultRemovalRequest request) {
+        validateRemovalRequest(request);
+        removeForClinicalPatient(authentication, patientId, request.resultSetId(), request);
+    }
 
     private LabResultSetResponse create(PatientProfile patient, User actor, LabResultSetRequest request) {
         validateRequest(patient, request, false);
@@ -127,7 +133,7 @@ public class LabResultService {
         return responses.resultSet(set, actor);
     }
     private void remove(PatientProfile patient, User actor, Long id, LabResultRemovalRequest request, boolean enforceCreator) {
-        if (request == null) throw badRequest("request is required");
+        validateRemovalRequest(request);
         var set = requireActiveSet(id, patient.getId());
         if (enforceCreator && !set.getCreatedByUser().getId().equals(actor.getId())) throw forbidden("Patient can only modify patient-created laboratory results");
         requireVersion(set, request.version()); var before = audit.snapshot(set); var now = Instant.now(clock);
@@ -189,6 +195,13 @@ public class LabResultService {
         }
     }
     private void validateReferenceBounds(BigDecimal lower, BigDecimal upper) { if (lower != null && upper != null && lower.compareTo(upper) > 0) throw badRequest("referenceLower must not exceed referenceUpper"); }
+    private void validateRemovalRequest(LabResultRemovalRequest request) {
+        if (request == null) throw badRequest("request is required");
+        if (request.resultSetId() == null) throw badRequest("resultSetId is required");
+        if (request.version() == null) throw badRequest("version is required");
+        if (request.version() < 0) throw badRequest("version must be zero or positive");
+        if (request.reason() != null && request.reason().length() > 500) throw badRequest("reason must not exceed 500 characters");
+    }
     private void validateResultRequest(LabResultRequest request) {
         if (request == null) throw badRequest("laboratory result is required");
         if (request.testCode() == null || request.testCode().isBlank()) throw badRequest("testCode is required");
