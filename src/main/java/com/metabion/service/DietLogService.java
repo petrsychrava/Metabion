@@ -12,11 +12,9 @@ import com.metabion.dto.DailyDietLogResponse;
 import com.metabion.dto.DailyDietLogSummaryResponse;
 import com.metabion.dto.DailyMeasurementEntryRequest;
 import com.metabion.dto.DailyMeasurementEntryResponse;
-import com.metabion.dto.PatientOptionResponse;
 import com.metabion.repository.DailyDietLogRepository;
 import com.metabion.repository.DailyMeasurementEntryRepository;
 import com.metabion.repository.PatientProfileRepository;
-import com.metabion.repository.StaffProfileRepository;
 import com.metabion.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,7 +37,6 @@ public class DietLogService {
 
     private final UserRepository users;
     private final PatientProfileRepository patientProfiles;
-    private final StaffProfileRepository staffProfiles;
     private final DailyDietLogRepository dailyDietLogs;
     private final DailyMeasurementEntryRepository measurements;
     private final AccessControlService accessControl;
@@ -49,26 +46,10 @@ public class DietLogService {
     private final DietLogResponseAssembler responseAssembler;
     private final DietLogPhotoService dietLogPhotoService;
     private final DateRangeValidator dateRangeValidator;
+    private final ClinicalPatientDirectoryService clinicalPatientDirectory;
 
     public DietLogService(UserRepository users,
                           PatientProfileRepository patientProfiles,
-                          StaffProfileRepository staffProfiles,
-                          DailyDietLogRepository dailyDietLogs,
-                          DailyMeasurementEntryRepository measurements,
-                          AccessControlService accessControl,
-                          MeasurementWindowService measurementWindows,
-                          MeasurementValidator measurementValidator,
-                          DietLogRequestMapper requestMapper,
-                          DietLogResponseAssembler responseAssembler,
-                          DietLogPhotoService dietLogPhotoService) {
-        this(users, patientProfiles, staffProfiles, dailyDietLogs, measurements, accessControl, measurementWindows,
-                measurementValidator, requestMapper, responseAssembler, dietLogPhotoService, new DateRangeValidator());
-    }
-
-    @Autowired
-    public DietLogService(UserRepository users,
-                          PatientProfileRepository patientProfiles,
-                          StaffProfileRepository staffProfiles,
                           DailyDietLogRepository dailyDietLogs,
                           DailyMeasurementEntryRepository measurements,
                           AccessControlService accessControl,
@@ -77,10 +58,27 @@ public class DietLogService {
                           DietLogRequestMapper requestMapper,
                           DietLogResponseAssembler responseAssembler,
                           DietLogPhotoService dietLogPhotoService,
-                          DateRangeValidator dateRangeValidator) {
+                          ClinicalPatientDirectoryService clinicalPatientDirectory) {
+        this(users, patientProfiles, dailyDietLogs, measurements, accessControl, measurementWindows,
+                measurementValidator, requestMapper, responseAssembler, dietLogPhotoService, new DateRangeValidator(),
+                clinicalPatientDirectory);
+    }
+
+    @Autowired
+    public DietLogService(UserRepository users,
+                          PatientProfileRepository patientProfiles,
+                          DailyDietLogRepository dailyDietLogs,
+                          DailyMeasurementEntryRepository measurements,
+                          AccessControlService accessControl,
+                          MeasurementWindowService measurementWindows,
+                          MeasurementValidator measurementValidator,
+                          DietLogRequestMapper requestMapper,
+                          DietLogResponseAssembler responseAssembler,
+                          DietLogPhotoService dietLogPhotoService,
+                          DateRangeValidator dateRangeValidator,
+                          ClinicalPatientDirectoryService clinicalPatientDirectory) {
         this.users = users;
         this.patientProfiles = patientProfiles;
-        this.staffProfiles = staffProfiles;
         this.dailyDietLogs = dailyDietLogs;
         this.measurements = measurements;
         this.accessControl = accessControl;
@@ -90,6 +88,7 @@ public class DietLogService {
         this.responseAssembler = responseAssembler;
         this.dietLogPhotoService = dietLogPhotoService;
         this.dateRangeValidator = dateRangeValidator;
+        this.clinicalPatientDirectory = clinicalPatientDirectory;
     }
 
     public DailyDietLogResponse saveForCurrentPatient(Authentication authentication, DailyDietLogRequest request) {
@@ -172,8 +171,8 @@ public class DietLogService {
         requireClinicalReader(currentUser);
         validateRange(from, to);
         if (patientProfileId == null) {
-            return clinicalPatientOptionsFor(currentUser).stream()
-                    .map(PatientOptionResponse::id)
+            return clinicalPatientDirectory.listAccessible(authentication).stream()
+                    .map(option -> option.id())
                     .flatMap(id -> listClinicalLogsForPatient(id, from, to).stream())
                     .sorted(clinicalSummaryComparator())
                     .toList();
@@ -197,21 +196,6 @@ public class DietLogService {
                 .comparing(DailyDietLogSummaryResponse::logDate, Comparator.nullsLast(Comparator.reverseOrder()))
                 .thenComparing(DailyDietLogSummaryResponse::patientEmail, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
                 .thenComparing(DailyDietLogSummaryResponse::id, Comparator.nullsLast(Comparator.naturalOrder()));
-    }
-
-    public List<PatientOptionResponse> listClinicalPatientOptions(Authentication authentication) {
-        var currentUser = currentUser(authentication);
-        requireClinicalReader(currentUser);
-        return clinicalPatientOptionsFor(currentUser);
-    }
-
-    private List<PatientOptionResponse> clinicalPatientOptionsFor(User currentUser) {
-        if (currentUser.hasRole(RoleName.ADMIN)) {
-            return patientProfiles.findAllPatientOptions();
-        }
-        return staffProfiles.findByUserId(currentUser.getId())
-                .map(staffProfile -> patientProfiles.findAccessiblePatientOptionsForStaff(staffProfile.getId()))
-                .orElseGet(List::of);
     }
 
     public DailyDietLogResponse getClinicalLog(Authentication authentication, Long id) {

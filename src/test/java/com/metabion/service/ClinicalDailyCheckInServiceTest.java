@@ -36,15 +36,16 @@ class ClinicalDailyCheckInServiceTest {
 
     @Mock DietLogService dietLogService;
     @Mock SymptomTrackingService symptomTrackingService;
+    @Mock ClinicalPatientDirectoryService clinicalPatientDirectory;
     @Mock Authentication authentication;
 
     @Test
     void listJoinsDietAndSymptomDaysAndUsesPatientOptionsForSymptomOnlyEmail() {
-        var service = new ClinicalDailyCheckInService(dietLogService, symptomTrackingService);
+        var service = new ClinicalDailyCheckInService(dietLogService, symptomTrackingService, clinicalPatientDirectory);
         var earlier = DATE.minusDays(1);
         when(dietLogService.listClinicalLogs(authentication, null, earlier, DATE))
                 .thenReturn(List.of(dietSummary(10L, "diet@example.com", earlier)));
-        when(dietLogService.listClinicalPatientOptions(authentication)).thenReturn(List.of(
+        when(clinicalPatientDirectory.listAccessible(authentication)).thenReturn(List.of(
                 new PatientOptionResponse(10L, "diet@example.com"),
                 new PatientOptionResponse(20L, "symptom@example.com")));
         when(symptomTrackingService.listClinicalCheckIns(authentication, 10L, earlier, DATE))
@@ -67,7 +68,7 @@ class ClinicalDailyCheckInServiceTest {
 
     @Test
     void listPropagatesClinicalForbiddenResponse() {
-        var service = new ClinicalDailyCheckInService(dietLogService, symptomTrackingService);
+        var service = new ClinicalDailyCheckInService(dietLogService, symptomTrackingService, clinicalPatientDirectory);
         var forbidden = new ResponseStatusException(HttpStatus.FORBIDDEN, "Patient profile is not assigned to current user");
         when(dietLogService.listClinicalLogs(authentication, 10L, DATE, DATE)).thenThrow(forbidden);
 
@@ -79,7 +80,7 @@ class ClinicalDailyCheckInServiceTest {
 
     @Test
     void getReturnsFullDietDetailAndSymptomCheckIn() {
-        var service = new ClinicalDailyCheckInService(dietLogService, symptomTrackingService);
+        var service = new ClinicalDailyCheckInService(dietLogService, symptomTrackingService, clinicalPatientDirectory);
         var summary = dietSummary(10L, "patient@example.com", DATE);
         var detail = dietDetail(10L, "patient@example.com", DATE);
         var symptom = symptomCheckIn(100L, 10L, DATE);
@@ -99,7 +100,7 @@ class ClinicalDailyCheckInServiceTest {
 
     @Test
     void getThrowsNotFoundWhenNeitherSideExists() {
-        var service = new ClinicalDailyCheckInService(dietLogService, symptomTrackingService);
+        var service = new ClinicalDailyCheckInService(dietLogService, symptomTrackingService, clinicalPatientDirectory);
         when(dietLogService.listClinicalLogs(authentication, 10L, DATE, DATE)).thenReturn(List.of());
         when(symptomTrackingService.listClinicalCheckIns(authentication, 10L, DATE, DATE)).thenReturn(List.of());
 

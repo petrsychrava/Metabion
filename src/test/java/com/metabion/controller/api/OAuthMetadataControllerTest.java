@@ -85,6 +85,8 @@ class OAuthMetadataControllerTest {
                 .andExpect(jsonPath("$.scopes_supported", hasItems(
                         "patient:profile:read",
                         "patient:diet-log:write",
+                        "patient:lab:read",
+                        "patient:lab:write",
                         "patient:trend:read")))
                 .andExpect(jsonPath("$.scopes_supported", not(hasItem("admin"))));
     }
@@ -104,6 +106,8 @@ class OAuthMetadataControllerTest {
                 .andExpect(jsonPath("$.scopes_supported", hasItems(
                         "patient:profile:read",
                         "patient:diet-log:write",
+                        "patient:lab:read",
+                        "patient:lab:write",
                         "patient:trend:read")))
                 .andExpect(jsonPath("$.scopes_supported", not(hasItem("admin"))));
     }

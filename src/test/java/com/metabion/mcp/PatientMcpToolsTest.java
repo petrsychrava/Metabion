@@ -7,6 +7,11 @@ import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.DailyDietLogRequest;
+import com.metabion.dto.LabResultRemovalRequest;
+import com.metabion.dto.LabResultSetRequest;
+import com.metabion.dto.LabResultSetResponse;
+import com.metabion.dto.LabTestDefinitionResponse;
+import com.metabion.dto.LabTrendResponse;
 import com.metabion.dto.PatientProfileForm;
 import com.metabion.exception.InsufficientScopeException;
 import com.metabion.service.PatientAccessAuditService;
@@ -28,6 +33,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.lang.reflect.Method;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,6 +42,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class PatientMcpToolsTest {
@@ -127,6 +135,132 @@ class PatientMcpToolsTest {
         verify(patientApp).completeLesson(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("nutrition"),
                 org.mockito.ArgumentMatchers.eq("fiber"));
         verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_complete_education_lesson"));
+    }
+
+    @Test
+    void laboratoryToolsUseOnlyPatientBoundParametersAndContractNames() throws Exception {
+        assertThat(toolName("metabionListLabTests")).isEqualTo("metabion_list_lab_tests");
+        assertThat(toolName("metabionSaveLabResultSet", LabResultSetRequest.class)).isEqualTo("metabion_save_lab_result_set");
+        assertThat(toolName("metabionGetLabResultSet", Long.class)).isEqualTo("metabion_get_lab_result_set");
+        assertThat(toolName("metabionListLabResultSets", LocalDate.class, LocalDate.class)).isEqualTo("metabion_list_lab_result_sets");
+        assertThat(toolName("metabionRemoveLabResultSet", LabResultRemovalRequest.class)).isEqualTo("metabion_remove_lab_result_set");
+        assertThat(toolName("metabionGetLabTrend", String.class, LocalDate.class, LocalDate.class)).isEqualTo("metabion_get_lab_trend");
+    }
+
+    @Test
+    void labTrendRequiresReadScopeAndDelegatesThroughFacade() {
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_READ);
+        var from = LocalDate.of(2026, 1, 1);
+        var to = LocalDate.of(2026, 1, 31);
+        var expected = mock(LabTrendResponse.class);
+        when(patientApp.labTrend(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("CRP"),
+                org.mockito.ArgumentMatchers.eq(from), org.mockito.ArgumentMatchers.eq(to))).thenReturn(expected);
+
+        assertThat(tools.metabionGetLabTrend("CRP", from, to)).isSameAs(expected);
+        verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(PatientAccessTokenAuthentication.class),
+                org.mockito.ArgumentMatchers.eq("metabion_get_lab_trend"));
+    }
+
+    @Test
+    void saveLabResultSetRejectsTokenWithoutWriteScope() {
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_READ);
+
+        assertThatThrownBy(() -> tools.metabionSaveLabResultSet(mock(LabResultSetRequest.class)))
+                .isInstanceOf(InsufficientScopeException.class);
+        verifyNoInteractions(patientApp);
+        verify(audit).recordToolFailure(org.mockito.ArgumentMatchers.any(PatientAccessTokenAuthentication.class),
+                org.mockito.ArgumentMatchers.eq("metabion_save_lab_result_set"), org.mockito.ArgumentMatchers.eq("missing_scope"));
+    }
+
+    @Test
+    void saveLabResultSetDelegatesAndAuditsSuccess() {
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_WRITE);
+        var request = mock(LabResultSetRequest.class);
+        var expected = mock(LabResultSetResponse.class);
+        when(patientApp.saveLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request))).thenReturn(expected);
+
+        assertThat(tools.metabionSaveLabResultSet(request)).isSameAs(expected);
+        verify(patientApp).saveLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request));
+        verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_save_lab_result_set"));
+    }
+
+    @Test
+    void saveLabResultSetPreservesBadRequestForMalformedDirectInput() {
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_WRITE);
+        var request = mock(LabResultSetRequest.class);
+        when(patientApp.saveLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request)))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "value must have at most 12 integer digits and 6 fraction digits"));
+
+        assertThatThrownBy(() -> tools.metabionSaveLabResultSet(request))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(audit).recordToolFailure(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("metabion_save_lab_result_set"), org.mockito.ArgumentMatchers.eq("request_failed"));
+    }
+
+    @Test
+    void listLabResultSetsPreserves370DayRangeRejection() {
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_READ);
+        var from = LocalDate.of(2025, 1, 1);
+        var to = LocalDate.of(2026, 1, 7);
+        when(patientApp.listLabResultSets(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(from), org.mockito.ArgumentMatchers.eq(to)))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "date range cannot exceed 370 days"));
+
+        assertThatThrownBy(() -> tools.metabionListLabResultSets(from, to))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(audit).recordToolFailure(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("metabion_list_lab_result_sets"), org.mockito.ArgumentMatchers.eq("request_failed"));
+    }
+
+    @Test
+    void laboratoryReadToolsDelegateAndAuditFailuresWithoutValues() {
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_READ, PatientAccessTokenScope.PATIENT_LAB_WRITE);
+        var from = LocalDate.of(2026, 1, 1);
+        var to = LocalDate.of(2026, 1, 31);
+        var resultSet = mock(LabResultSetResponse.class);
+        when(patientApp.listLabTests()).thenReturn(List.of(mock(LabTestDefinitionResponse.class)));
+        when(patientApp.getLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(7L))).thenReturn(resultSet);
+        when(patientApp.listLabResultSets(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(from), org.mockito.ArgumentMatchers.eq(to))).thenReturn(List.of(resultSet));
+        when(patientApp.labTrend(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("CRP"), org.mockito.ArgumentMatchers.eq(from), org.mockito.ArgumentMatchers.eq(to)))
+                .thenThrow(new IllegalArgumentException("sensitive lab value"));
+
+        assertThat(tools.metabionListLabTests()).hasSize(1);
+        assertThat(tools.metabionGetLabResultSet(7L)).isSameAs(resultSet);
+        assertThat(tools.metabionListLabResultSets(from, to)).containsExactly(resultSet);
+        assertThatThrownBy(() -> tools.metabionGetLabTrend("CRP", from, to)).isInstanceOf(IllegalArgumentException.class);
+
+        verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_list_lab_tests"));
+        verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_get_lab_result_set"));
+        verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_list_lab_result_sets"));
+        verify(audit).recordToolFailure(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_get_lab_trend"), org.mockito.ArgumentMatchers.eq("request_failed"));
+    }
+
+    @Test
+    void removeLabResultSetRequiresWriteScopeAndAuditsSuccess() {
+        var request = mock(LabResultRemovalRequest.class);
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_READ);
+        assertThatThrownBy(() -> tools.metabionRemoveLabResultSet(request)).isInstanceOf(InsufficientScopeException.class);
+        verifyNoInteractions(patientApp);
+
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_WRITE);
+        tools.metabionRemoveLabResultSet(request);
+        verify(patientApp).removeLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request));
+        verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_remove_lab_result_set"));
+    }
+
+    @Test
+    void removeLabResultSetPreservesBadRequestFromDirectFacadeValidation() {
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_WRITE);
+        var request = new LabResultRemovalRequest(7L, -1L, null);
+        org.mockito.Mockito.doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "version must be zero or positive"))
+                .when(patientApp).removeLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request));
+
+        assertThatThrownBy(() -> tools.metabionRemoveLabResultSet(request))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(audit).recordToolFailure(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("metabion_remove_lab_result_set"), org.mockito.ArgumentMatchers.eq("request_failed"));
     }
 
     @Test

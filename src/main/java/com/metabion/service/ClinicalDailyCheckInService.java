@@ -24,11 +24,14 @@ public class ClinicalDailyCheckInService {
 
     private final DietLogService dietLogService;
     private final SymptomTrackingService symptomTrackingService;
+    private final ClinicalPatientDirectoryService clinicalPatientDirectory;
 
     public ClinicalDailyCheckInService(DietLogService dietLogService,
-                                       SymptomTrackingService symptomTrackingService) {
+                                       SymptomTrackingService symptomTrackingService,
+                                       ClinicalPatientDirectoryService clinicalPatientDirectory) {
         this.dietLogService = dietLogService;
         this.symptomTrackingService = symptomTrackingService;
+        this.clinicalPatientDirectory = clinicalPatientDirectory;
     }
 
     public List<ClinicalDailyCheckInSummaryResponse> list(Authentication authentication,
@@ -36,7 +39,7 @@ public class ClinicalDailyCheckInService {
                                                             LocalDate from,
                                                             LocalDate to) {
         var dietLogs = dietLogService.listClinicalLogs(authentication, patientProfileId, from, to);
-        var patientOptions = dietLogService.listClinicalPatientOptions(authentication);
+        var patientOptions = clinicalPatientDirectory.listAccessible(authentication);
         var emailsByPatientId = emailsByPatientId(patientOptions);
         var checkIns = patientProfileId == null
                 ? patientOptions.stream()
@@ -74,7 +77,7 @@ public class ClinicalDailyCheckInService {
         var dietLog = dietSummary == null ? null : dietLogService.getClinicalLog(authentication, dietSummary.id());
         var patientEmail = dietLog == null ? null : dietLog.patientEmail();
         if (patientEmail == null) {
-            patientEmail = emailsByPatientId(dietLogService.listClinicalPatientOptions(authentication)).get(patientProfileId);
+            patientEmail = emailsByPatientId(clinicalPatientDirectory.listAccessible(authentication)).get(patientProfileId);
         }
         return new ClinicalDailyCheckInDetailResponse(patientProfileId, patientEmail, date, dietLog, symptomCheckIn);
     }

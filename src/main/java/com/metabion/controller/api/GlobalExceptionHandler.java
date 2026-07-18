@@ -7,6 +7,8 @@ import com.metabion.exception.StaffInvitationException;
 import com.metabion.exception.ValidationException;
 import com.metabion.service.RateLimitedException;
 import com.metabion.service.oauth.OAuthTokenException;
+import jakarta.persistence.OptimisticLockException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mail.MailException;
@@ -89,8 +91,15 @@ public class GlobalExceptionHandler {
             error = "not_found";
         } else if (statusCode.isSameCodeAs(HttpStatus.UNAUTHORIZED)) {
             error = "unauthorized";
+        } else if (statusCode.isSameCodeAs(HttpStatus.CONFLICT)) {
+            error = "conflict";
         }
         return ResponseEntity.status(statusCode).body(Map.of("error", error));
+    }
+
+    @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockException.class})
+    public ResponseEntity<Map<String, String>> optimisticConflict(Exception exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "conflict"));
     }
 
     @ExceptionHandler(RateLimitedException.class)

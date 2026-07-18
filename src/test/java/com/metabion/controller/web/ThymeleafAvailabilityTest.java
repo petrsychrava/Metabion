@@ -6,6 +6,7 @@ import com.metabion.domain.RoleName;
 import com.metabion.domain.Sex;
 import com.metabion.domain.ThemePreference;
 import com.metabion.dto.PatientProfileForm;
+import com.metabion.service.LabResultService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -43,6 +44,10 @@ class ThymeleafAvailabilityTest {
 
     @MockitoBean
     FindByIndexNameSessionRepository<Session> sessions;
+
+    @MockitoBean
+    LabResultService labResultService;
+
 
     @Test
     void thymeleaf_template_engine_is_available() {

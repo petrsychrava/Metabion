@@ -10,6 +10,11 @@ import com.metabion.domain.User;
 import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.dto.DailyDietLogResponse;
 import com.metabion.dto.EducationModuleDetailResponse;
+import com.metabion.dto.LabResultRemovalRequest;
+import com.metabion.dto.LabResultSetRequest;
+import com.metabion.dto.LabResultSetResponse;
+import com.metabion.dto.LabTestDefinitionResponse;
+import com.metabion.dto.LabTrendResponse;
 import com.metabion.dto.PatientProfileForm;
 import com.metabion.dto.SymptomQuestionnaireResponse;
 import com.metabion.repository.PatientProfileRepository;
@@ -21,6 +26,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -56,6 +63,15 @@ class PatientAppFacadeTest {
     @Mock
     EducationContentService education;
 
+    @Mock
+    LabCatalogService labCatalog;
+
+    @Mock
+    LabResultService labResults;
+
+    @Mock
+    LabTrendService labTrends;
+
     PatientAppFacade facade;
     PatientAccessTokenAuthentication authentication;
 
@@ -69,7 +85,10 @@ class PatientAppFacadeTest {
                 symptoms,
                 trends,
                 onboarding,
-                education);
+                education,
+                labCatalog,
+                labResults,
+                labTrends);
         authentication = new PatientAccessTokenAuthentication(token());
     }
 
@@ -120,6 +139,43 @@ class PatientAppFacadeTest {
         when(education.getPublishedModule(authentication, "nutrition")).thenReturn(response);
 
         assertThat(facade.getEducation(authentication, "nutrition")).isSameAs(response);
+    }
+
+    @Test
+    void delegatesLaboratoryOperationsToLaboratoryServices() {
+        var save = mock(LabResultSetRequest.class);
+        var removal = mock(LabResultRemovalRequest.class);
+        var response = mock(LabResultSetResponse.class);
+        var trend = mock(LabTrendResponse.class);
+        when(labResults.saveForCurrentPatient(authentication, save)).thenReturn(response);
+        when(labTrends.currentPatientTrend(authentication, "CRP", java.time.LocalDate.MIN, java.time.LocalDate.MAX)).thenReturn(trend);
+
+        assertThat(facade.saveLabResultSet(authentication, save)).isSameAs(response);
+        assertThat(facade.labTrend(authentication, "CRP", java.time.LocalDate.MIN, java.time.LocalDate.MAX)).isSameAs(trend);
+        facade.removeLabResultSet(authentication, removal);
+
+        verify(labResults).saveForCurrentPatient(authentication, save);
+        verify(labResults).removeForCurrentPatient(authentication, removal);
+        verify(labTrends).currentPatientTrend(authentication, "CRP", java.time.LocalDate.MIN, java.time.LocalDate.MAX);
+    }
+
+    @Test
+    void delegatesLaboratoryCatalogGetAndListOperations() {
+        var catalogRows = List.of(new LabTestDefinitionResponse("CRP", "CRP", null, "mg/L", 2, List.of("mg/L")));
+        var set = mock(LabResultSetResponse.class);
+        var from = LocalDate.of(2026, 1, 1);
+        var to = LocalDate.of(2026, 1, 31);
+        when(labCatalog.listActive()).thenReturn(catalogRows);
+        when(labResults.getForCurrentPatient(authentication, 7L)).thenReturn(set);
+        when(labResults.listForCurrentPatient(authentication, from, to)).thenReturn(List.of(set));
+
+        assertThat(facade.listLabTests()).containsExactlyElementsOf(catalogRows);
+        assertThat(facade.getLabResultSet(authentication, 7L)).isSameAs(set);
+        assertThat(facade.listLabResultSets(authentication, from, to)).containsExactly(set);
+
+        verify(labCatalog).listActive();
+        verify(labResults).getForCurrentPatient(authentication, 7L);
+        verify(labResults).listForCurrentPatient(authentication, from, to);
     }
 
     private static PatientAccessToken token() {

@@ -394,6 +394,11 @@ a {
     overflow-x: auto;
 }
 
+.lab-trend-wrap { overflow-x: auto; }
+.lab-trend-wrap .lab-trend-chart { min-width: 640px; max-width: 100%; }
+.lab-result-row { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); margin-block: 0.75rem; }
+.lab-value { display: block; }
+
 .trend-chart {
     display: block;
     min-width: 640px;

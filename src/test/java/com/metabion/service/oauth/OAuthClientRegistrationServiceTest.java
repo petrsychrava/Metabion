@@ -69,6 +69,15 @@ class OAuthClientRegistrationServiceTest {
     }
 
     @Test
+    void registersLaboratoryScopes() {
+        var response = service.register(new OAuthClientRegistrationRequest(
+                List.of("http://127.0.0.1:49152/callback"), "Codex", null,
+                "patient:lab:write patient:lab:read", "none", List.of("authorization_code"), "native", List.of("code")));
+
+        assertThat(response.scope()).isEqualTo("patient:lab:read patient:lab:write");
+    }
+
+    @Test
     void registersHttpsClient() {
         var response = service.register(new OAuthClientRegistrationRequest(
                 List.of("https://client.example/callback"),

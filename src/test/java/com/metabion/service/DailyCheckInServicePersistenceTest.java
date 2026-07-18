@@ -86,6 +86,9 @@ class DailyCheckInServicePersistenceTest {
     DietLogPhotoService dietLogPhotoService;
 
     @MockitoBean
+    ClinicalPatientDirectoryService clinicalPatientDirectory;
+
+    @MockitoBean
     SymptomTrackingService symptomTrackingService;
 
     PatientProfile patient;

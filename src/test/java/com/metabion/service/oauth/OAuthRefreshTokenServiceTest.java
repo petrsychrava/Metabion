@@ -116,6 +116,35 @@ class OAuthRefreshTokenServiceTest {
     }
 
     @Test
+    void refreshPreservesGrantedLaboratoryScopesWithoutWideningThem() {
+        var service = service();
+        var old = refreshToken("lab-refresh", NOW.plus(Duration.ofDays(1)));
+        old = new OAuthRefreshToken(PatientAccessTokenService.sha256Hex("lab-refresh"), "family-1", old.getUser(),
+                "mobile-app", OAuthClientSource.CONFIGURED, PatientAccessClientType.MCP_OTHER, "Mobile",
+                "http://localhost:8080/api/mcp", NOW.minusSeconds(60), NOW.plus(Duration.ofDays(1)),
+                Set.of(PatientAccessTokenScope.PATIENT_LAB_READ));
+        mockLookup("lab-refresh", Optional.of(old));
+        when(clients.resolve("mobile-app")).thenReturn(Optional.of(new OAuthClientMetadata("mobile-app", "Mobile", "native",
+                OAuthClientSource.CONFIGURED, List.of("myapp:/callback"),
+                List.of("patient:lab:read", "patient:lab:write"), List.of("authorization_code", "refresh_token"))));
+        when(tokens.save(any())).thenAnswer(invocation -> {
+            var saved = invocation.getArgument(0, OAuthRefreshToken.class);
+            ReflectionTestUtils.setField(saved, "id", 43L);
+            return saved;
+        });
+        when(accessTokens.issueForPatient(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new IssuePatientAccessTokenResponse(7L, "new-access", PatientAccessClientType.MCP_OTHER,
+                        "Mobile", NOW.plus(Duration.ofHours(1)), Set.of("patient:lab:read")));
+
+        var response = service.refreshGrant("lab-refresh", "mobile-app", "http://localhost:8080/api/mcp");
+
+        assertThat(response.response().scope()).isEqualTo("patient:lab:read");
+        var replacement = org.mockito.ArgumentCaptor.forClass(OAuthRefreshToken.class);
+        verify(tokens).save(replacement.capture());
+        assertThat(replacement.getValue().scopes()).containsExactly(PatientAccessTokenScope.PATIENT_LAB_READ);
+    }
+
+    @Test
     void rotateRejectsInvalidStoredOrCurrentClientState() {
         assertRejected("unknown", Optional.empty(), mobileClient(), "mobile-app", "http://localhost:8080/api/mcp");
         assertRejectedToken("expired", refreshToken("expired", NOW), mobileClient(), "mobile-app", "http://localhost:8080/api/mcp");

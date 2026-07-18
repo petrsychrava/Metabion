@@ -18,6 +18,11 @@ class AuthFlowIT extends AbstractAuthIT {
     VerificationTokenRepository verificationTokens;
 
     @Test
+    void smtpTestServerUsesAnEphemeralPort() {
+        assertThat(greenMail.getSmtp().getPort()).isNotEqualTo(3025).isPositive();
+    }
+
+    @Test
     void register_new_email() throws Exception {
         var response = register(newClient(), "Alice@Example.com", PASSWORD);
 
