@@ -318,6 +318,32 @@ class RbacAssignmentRepositoryTest {
     }
 
     @Test
+    void archivedCohortDoesNotGrantPatientAccessThroughOpenRelationships() {
+        var patient = createPatientProfile("archived-cohort-patient@example.com");
+        var staff = createStaffProfile("archived-cohort-staff@example.com");
+        var assignedBy = createUser("archived-cohort-admin@example.com", RoleName.ADMIN);
+        var cohort = cohorts.saveAndFlush(new Cohort("Archived cohort", null, assignedBy));
+        patientCohortMemberships.saveAndFlush(new PatientCohortMembership(patient, cohort, assignedBy));
+        cohortStaffAssignments.saveAndFlush(new CohortStaffAssignment(cohort, staff, assignedBy));
+
+        assertThat(cohortStaffAssignments.existsActiveAssignmentForPatient(patient.getId(), staff.getId()))
+                .isTrue();
+        assertThat(patientProfiles.findAccessiblePatientOptionsForStaff(staff.getId()))
+                .extracting(option -> option.id())
+                .contains(patient.getId());
+
+        cohort.archive(assignedBy, Instant.parse("2026-07-18T12:00:00Z"));
+        cohorts.saveAndFlush(cohort);
+        entityManager.clear();
+
+        assertThat(cohortStaffAssignments.existsActiveAssignmentForPatient(patient.getId(), staff.getId()))
+                .isFalse();
+        assertThat(patientProfiles.findAccessiblePatientOptionsForStaff(staff.getId()))
+                .extracting(option -> option.id())
+                .doesNotContain(patient.getId());
+    }
+
+    @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void duplicateActiveAssignmentsAreRejected() {
         var patient = createPatientProfile("duplicate-patient@example.com");

@@ -42,6 +42,7 @@ public interface PatientProfileRepository extends JpaRepository<PatientProfile, 
                   and assignment.staffProfile.id = :staffProfileId
                   and membership.endedAt is null
                   and assignment.endedAt is null
+                  and membership.cohort.archivedAt is null
             )
             order by user.email asc, profile.id asc
             """)

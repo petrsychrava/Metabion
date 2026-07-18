@@ -25,6 +25,7 @@ public interface CohortStaffAssignmentRepository extends JpaRepository<CohortSta
               and assignment.staffProfile.id = :staffProfileId
               and membership.endedAt is null
               and assignment.endedAt is null
+              and assignment.cohort.archivedAt is null
             """)
     boolean existsActiveAssignmentForPatient(@Param("patientProfileId") Long patientProfileId,
                                              @Param("staffProfileId") Long staffProfileId);
