@@ -3,7 +3,7 @@ package com.metabion.integration;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.icegreen.greenmail.util.GreenMail;
-import com.icegreen.greenmail.util.ServerSetupTest;
+import com.icegreen.greenmail.util.ServerSetup;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.repository.UserRepository;
@@ -51,7 +51,7 @@ abstract class AbstractAuthIT {
     @Container
     static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
 
-    static final GreenMail greenMail = new GreenMail(ServerSetupTest.SMTP);
+    static final GreenMail greenMail = new GreenMail(new ServerSetup(0, "127.0.0.1", ServerSetup.PROTOCOL_SMTP));
 
     @LocalServerPort
     int port;
