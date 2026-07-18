@@ -21,7 +21,7 @@
                     <div class="lab-result-row" data-lab-result-row th:each="result,row : *{results}">
                         <label><span th:text="#{lab.test}">Biomarker</span><select data-lab-test th:field="*{results[__${row.index}__].testCode}"><option value=""></option><option th:each="item : ${catalog}" th:value="${item.code()}" th:text="${item.label()}">C-reactive protein</option></select></label>
                         <label><span th:text="#{lab.value}">Value</span><input type="number" step="0.000001" th:field="*{results[__${row.index}__].value}"></label>
-                        <label><span th:text="#{lab.unit}">Unit</span><select data-lab-unit th:field="*{results[__${row.index}__].unit}"></select></label>
+                        <label><span th:text="#{lab.unit}">Unit</span><select data-lab-unit th:field="*{results[__${row.index}__].unit}"><option th:if="${!#strings.isEmpty(result.unit())}" th:value="${result.unit()}" th:text="${result.unit()}"></option></select></label>
                         <label><span th:text="#{lab.referenceLower}">Reference lower</span><input type="number" step="0.000001" th:field="*{results[__${row.index}__].referenceLower}"></label>
                         <label><span th:text="#{lab.referenceUpper}">Reference upper</span><input type="number" step="0.000001" th:field="*{results[__${row.index}__].referenceUpper}"></label>
                     </div>

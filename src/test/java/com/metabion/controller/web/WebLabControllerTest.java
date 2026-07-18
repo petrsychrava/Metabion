@@ -108,6 +108,17 @@ class WebLabControllerTest {
     }
 
     @Test
+    void editFormRendersTheReportedUnitAsTheSelectedOption() throws Exception {
+        when(catalog.listActive()).thenReturn(List.of(crpWithAlternativeUnit()));
+        when(results.getForCurrentPatient(any(), eq(99L))).thenReturn(crpSetReportedInMgDl());
+
+        mvc.perform(get("/app/labs/99/edit").with(user("patient@example.com").roles("PATIENT")))
+                .andExpect(status().isOk())
+                .andExpect(view().name("lab-result-form"))
+                .andExpect(content().string(containsString("<option value=\"mg/dL\" selected=\"selected\">mg/dL</option>")));
+    }
+
+    @Test
     void patientConflictRendersSafeLaboratoryReturnPath() throws Exception {
         when(results.listForCurrentPatient(any(), any(), any()))
                 .thenThrow(new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT));
@@ -120,6 +131,18 @@ class WebLabControllerTest {
 
     private LabTestDefinitionResponse crp() {
         return new LabTestDefinitionResponse("CRP", "C-reactive protein", LabTestCategory.INFLAMMATION, "mg/L", 1, List.of("mg/L"));
+    }
+
+    private LabTestDefinitionResponse crpWithAlternativeUnit() {
+        return new LabTestDefinitionResponse("CRP", "C-reactive protein", LabTestCategory.INFLAMMATION,
+                "mg/L", 1, List.of("mg/L", "mg/dL"));
+    }
+
+    private LabResultSetResponse crpSetReportedInMgDl() {
+        return new LabResultSetResponse(99L, 0, 10L, LocalDate.of(2026, 7, 15), null,
+                LabResultSource.MANUAL, LabResultConfirmationStatus.CONFIRMED, true,
+                Instant.now(), Instant.now(), List.of(new LabResultResponse(1L, "CRP", "C-reactive protein",
+                new BigDecimal("1.2"), "mg/dL", new BigDecimal("12.0"), "mg/L", null, null)));
     }
 
     private LabResultSetResponse recentCrpSet() {
