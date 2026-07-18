@@ -48,6 +48,10 @@ public enum RoleName {
         };
     }
 
+    public boolean isClinicalExpert() {
+        return this == NUTRITION_SPECIALIST || this == PHYSICIAN;
+    }
+
     public String getName() {
         return name;
     }

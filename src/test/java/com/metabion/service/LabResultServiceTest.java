@@ -86,7 +86,7 @@ class LabResultServiceTest {
         var clinician = user(2L, RoleName.PHYSICIAN);
         when(users.findByEmail("clinician@example.com")).thenReturn(Optional.of(clinician));
         when(patientProfiles.findById(10L)).thenReturn(Optional.of(patient));
-        when(accessControl.canAccessPatientProfile(any(), eq(10L))).thenReturn(true);
+        when(accessControl.canViewPatientClinicalData(any(), eq(10L))).thenReturn(true);
         var set = mock(LabResultSet.class);
         when(set.getPatientProfile()).thenReturn(patient);
         when(set.getVersion()).thenReturn(0L);
@@ -176,13 +176,24 @@ class LabResultServiceTest {
     void clinicalResultSetListRejectsRangesLongerThan370Days() {
         var clinician = user(2L, RoleName.PHYSICIAN);
         when(users.findByEmail("clinician@example.com")).thenReturn(Optional.of(clinician));
-        when(accessControl.canAccessPatientProfile(any(), eq(10L))).thenReturn(true);
+        when(accessControl.canViewPatientClinicalData(any(), eq(10L))).thenReturn(true);
 
         assertThatThrownBy(() -> service.listForClinicalPatient(auth("clinician@example.com"), 10L,
                 LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 7)))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
         verifyNoInteractions(resultSets);
+    }
+
+    @Test
+    void coordinatorCannotAccessClinicalLabResults() {
+        var coordinator = user(3L, RoleName.COORDINATOR);
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+
+        assertThatThrownBy(() -> service.requireClinicalPatientAccess(
+                auth("coordinator@example.com"), 10L))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
     }
 
     @Test

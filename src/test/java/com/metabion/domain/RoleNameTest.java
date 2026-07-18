@@ -43,4 +43,13 @@ class RoleNameTest {
         assertThat(RoleName.PATIENT.isClinicalStaff()).isFalse();
         assertThat(RoleName.ADMIN.isClinicalStaff()).isFalse();
     }
+
+    @Test
+    void isClinicalExpertReturnsTrueOnlyForPhysiciansAndNutritionSpecialists() {
+        assertThat(RoleName.NUTRITION_SPECIALIST.isClinicalExpert()).isTrue();
+        assertThat(RoleName.PHYSICIAN.isClinicalExpert()).isTrue();
+        assertThat(RoleName.COORDINATOR.isClinicalExpert()).isFalse();
+        assertThat(RoleName.PATIENT.isClinicalExpert()).isFalse();
+        assertThat(RoleName.ADMIN.isClinicalExpert()).isFalse();
+    }
 }

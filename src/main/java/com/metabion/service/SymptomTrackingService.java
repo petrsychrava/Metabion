@@ -143,7 +143,7 @@ public class SymptomTrackingService {
         if (patientProfileId == null) {
             throw badRequest("patientProfileId is required");
         }
-        if (!accessControl.canAccessPatientProfile(authentication, patientProfileId)) {
+        if (!accessControl.canViewPatientClinicalData(authentication, patientProfileId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Patient profile is not assigned to current user");
         }
         validateRange(from, to);
@@ -284,10 +284,9 @@ public class SymptomTrackingService {
         if (!user.hasAnyRole(
                 RoleName.NUTRITION_SPECIALIST,
                 RoleName.PHYSICIAN,
-                RoleName.COORDINATOR,
                 RoleName.ADMIN)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Current user cannot read symptom check-ins");
+                    "Current user cannot access clinical data");
         }
     }
 

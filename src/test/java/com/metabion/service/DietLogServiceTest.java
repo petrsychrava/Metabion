@@ -573,9 +573,19 @@ class DietLogServiceTest {
         var log = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
         when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(reviewer));
         when(dailyDietLogs.findById(99L)).thenReturn(Optional.of(log));
-        when(accessControl.canAccessPatientProfile(any(), eq(20L))).thenReturn(false);
+        when(accessControl.canViewPatientClinicalData(any(), eq(20L))).thenReturn(false);
 
         assertThatThrownBy(() -> service.getClinicalLog(auth("doctor@example.com"), 99L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403 FORBIDDEN");
+    }
+
+    @Test
+    void coordinatorCannotReadClinicalDietLog() {
+        var coordinator = user(5L, "coordinator@example.com", RoleName.COORDINATOR);
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+
+        assertThatThrownBy(() -> service.getClinicalLog(auth("coordinator@example.com"), 99L))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("403 FORBIDDEN");
     }
@@ -588,7 +598,7 @@ class DietLogServiceTest {
         var log = savedLog(99L, patient, LocalDate.of(2026, 6, 10));
         when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(reviewer));
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
-        when(accessControl.canAccessPatientProfile(any(), eq(20L))).thenReturn(false);
+        when(accessControl.canViewPatientClinicalData(any(), eq(20L))).thenReturn(false);
         when(dailyDietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(
                 20L,
                 LocalDate.of(2026, 6, 1),
@@ -645,7 +655,7 @@ class DietLogServiceTest {
                 .containsExactly(100L, 99L);
         assertThat(summaries).extracting(DailyDietLogSummaryResponse::patientEmail)
                 .containsExactly("beta@example.com", "alpha@example.com");
-        verify(accessControl, never()).canAccessPatientProfile(any(), any());
+        verify(accessControl, never()).canViewPatientClinicalData(any(), any());
     }
 
     @Test
@@ -660,7 +670,7 @@ class DietLogServiceTest {
         var response = service.getClinicalLog(auth("admin@example.com"), 99L);
 
         assertThat(response.id()).isEqualTo(99L);
-        verify(accessControl, never()).canAccessPatientProfile(any(), any());
+        verify(accessControl, never()).canViewPatientClinicalData(any(), any());
     }
 
     @Test
