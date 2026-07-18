@@ -181,11 +181,11 @@ Add nullable archival metadata to `cohorts`:
 - `archived_at`
 - `archived_by_user_id`
 
-Add creation attribution for new cohorts:
+Add required creation attribution to `cohorts`:
 
-- `created_by_user_id`
+- `created_by_user_id` as a non-null foreign key to `users(id)`
 
-Legacy cohorts may have a null creator. New application-created cohorts must record the actor.
+The application has not been used and there are no legacy cohorts to preserve or backfill. Every cohort must therefore record its creator at both the database and application boundaries.
 
 An archived cohort:
 
@@ -428,6 +428,7 @@ Cover the least-privilege correction:
 Cover:
 
 - archive and ending-attribution mappings
+- required cohort-creator mapping and constraint
 - active, archived, and scoped list queries
 - multiple cohort membership for one patient
 - partial unique index behavior
@@ -506,4 +507,5 @@ Out of scope:
 12. Physicians and nutrition specialists can access patients through active direct or cohort assignments but cannot manage assignments.
 13. All mutation routes enforce CSRF and server-side scope checks.
 14. English and Czech interfaces provide clear assignment source, confirmation, success, and error messaging.
-15. The full Gradle test suite passes.
+15. Every cohort records its creator; a null creator is rejected.
+16. The full Gradle test suite passes.
