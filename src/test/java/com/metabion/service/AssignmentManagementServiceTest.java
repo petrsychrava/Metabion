@@ -36,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -368,11 +369,14 @@ class AssignmentManagementServiceTest {
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
         when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
         when(patientProfiles.lockById(40L)).thenReturn(Optional.of(patientProfile(40L, patient)));
-        when(memberships.save(any(PatientCohortMembership.class)))
-                .thenThrow(new DataIntegrityViolationException("active pair"));
+        doThrow(new DataIntegrityViolationException("active pair"))
+                .when(memberships).flush();
 
         assertStatus(() -> service.addPatientToCohort(authentication, 10L, 40L),
                 HttpStatus.CONFLICT);
+
+        verify(memberships).save(any(PatientCohortMembership.class));
+        verify(memberships).flush();
     }
 
     @Test
@@ -507,13 +511,16 @@ class AssignmentManagementServiceTest {
         when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
         when(cohortStaffAssignments.existsActiveAssignment(10L, 50L))
                 .thenReturn(true, false);
-        when(cohortStaffAssignments.save(any(CohortStaffAssignment.class)))
-                .thenThrow(new DataIntegrityViolationException("active pair"));
+        doThrow(new DataIntegrityViolationException("active pair"))
+                .when(cohortStaffAssignments).flush();
 
         assertStatus(() -> service.assignCohortStaff(authentication, 10L, 50L),
                 HttpStatus.CONFLICT);
         assertStatus(() -> service.assignCohortStaff(authentication, 10L, 50L),
                 HttpStatus.CONFLICT);
+
+        verify(cohortStaffAssignments).save(any(CohortStaffAssignment.class));
+        verify(cohortStaffAssignments).flush();
     }
 
     @Test
@@ -533,6 +540,31 @@ class AssignmentManagementServiceTest {
 
         assertThat(assignment.getEndedAt()).isEqualTo(NOW);
         assertThat(assignment.getEndedBy()).isEqualTo(coordinator);
+    }
+
+    @Test
+    void coordinatorCannotEndDisabledTargetButAdministratorMayCleanItUp() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var disabledPhysician = user(5L, "disabled@example.com", RoleName.PHYSICIAN);
+        var cohort = cohort(10L, "Pilot", admin);
+        var assignment = new CohortStaffAssignment(
+                cohort, staffProfile(50L, disabledPhysician), admin);
+        assignment.setId(100L);
+        var coordinatorAuth = auth("coordinator@example.com");
+        var adminAuth = auth("admin@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(cohortStaffAssignments.findActiveById(100L)).thenReturn(Optional.of(assignment));
+        when(accessControl.canManageCohortStaff(adminAuth, 10L, 50L)).thenReturn(true);
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+
+        assertStatus(() -> service.endCohortStaffAssignment(coordinatorAuth, 10L, 100L),
+                HttpStatus.NOT_FOUND);
+        service.endCohortStaffAssignment(adminAuth, 10L, 100L);
+
+        assertThat(assignment.getEndedAt()).isEqualTo(NOW);
+        assertThat(assignment.getEndedBy()).isEqualTo(admin);
     }
 
     @Test

@@ -188,6 +188,8 @@ public class AssignmentManagementService {
         var assignment = cohortStaffAssignments.findActiveById(assignmentId)
                 .orElseThrow(() -> notFound("Cohort staff assignment not found"));
         if (!assignment.getCohort().getId().equals(cohortId)
+                || (!actor.hasRole(RoleName.ADMIN)
+                        && !assignment.getStaffProfile().getUser().isEnabled())
                 || !accessControl.canManageCohortStaff(
                         authentication, cohortId, assignment.getStaffProfile().getId())) {
             throw notFound("Cohort staff assignment not found");
