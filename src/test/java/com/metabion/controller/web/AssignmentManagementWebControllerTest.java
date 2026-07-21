@@ -1,26 +1,39 @@
 package com.metabion.controller.web;
 
+import com.metabion.config.LocalizationConfig;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.ThemePreference;
+import com.metabion.dto.PatientOptionResponse;
 import com.metabion.dto.assignment.AssignmentManagementForms.CohortForm;
+import com.metabion.dto.assignment.AssignmentManagementView.AccessSource;
 import com.metabion.dto.assignment.AssignmentManagementView.CohortItem;
 import com.metabion.dto.assignment.AssignmentManagementView.CohortPage;
+import com.metabion.dto.assignment.AssignmentManagementView.DirectPatient;
 import com.metabion.dto.assignment.AssignmentManagementView.DirectPage;
+import com.metabion.dto.assignment.AssignmentManagementView.ExpertAccess;
+import com.metabion.dto.assignment.AssignmentManagementView.PatientRow;
+import com.metabion.dto.assignment.AssignmentManagementView.StaffOption;
 import com.metabion.service.AssignmentManagementService;
 import com.metabion.service.UserPreferenceService;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.web.csrf.DefaultCsrfToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.servlet.view.InternalResourceViewResolver;
 import org.springframework.web.server.ResponseStatusException;
+import org.thymeleaf.spring6.SpringTemplateEngine;
+import org.thymeleaf.spring6.view.ThymeleafViewResolver;
+import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
+import org.springframework.web.servlet.i18n.CookieLocaleResolver;
 
 import java.time.Instant;
 import java.util.List;
@@ -41,6 +54,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -62,8 +76,101 @@ class AssignmentManagementWebControllerTest {
                 assignments, appMenuCatalog, userPreferenceService, messages);
         mvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new WebExceptionHandler(messages))
-                .setViewResolvers(new InternalResourceViewResolver("/WEB-INF/views/", ".jsp"))
+                .defaultRequest(get("/").requestAttr(
+                        "_csrf", new DefaultCsrfToken("X-CSRF-TOKEN", "_csrf", "test-csrf")))
+                .setLocaleResolver(localeResolver())
+                .setViewResolvers(viewResolver(messageSource()))
                 .build();
+    }
+
+    @Test
+    void activeCohortWorkspaceRendersLocalizedControlsAndNamedConfirmationsForAdmin() throws Exception {
+        stubAppShell();
+        var authentication = auth("admin@example.com", RoleName.ADMIN);
+        when(assignments.cohortPage(same(authentication), eq(10L))).thenReturn(activeCohortPage(true));
+
+        mvc.perform(get("/app/assignment-management/cohorts/10").principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Patients")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Care team")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Direct assignments")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Access through cohort")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Active")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"_csrf\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Archive cohort")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Archive cohort “Pilot cohort” and end all of its active memberships and staff assignments?")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "End patient@example.com’s membership in cohort “Pilot cohort”?")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "coordinator-target@example.com")));
+    }
+
+    @Test
+    void coordinatorWorkspaceOmitsArchiveAndCoordinatorTargets() throws Exception {
+        stubAppShell();
+        var authentication = auth("coordinator@example.com", RoleName.COORDINATOR);
+        when(assignments.cohortPage(same(authentication), eq(10L))).thenReturn(activeCohortPage(false));
+
+        mvc.perform(get("/app/assignment-management/cohorts/10").principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Archive cohort"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "coordinator-target@example.com"))))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("physician-target@example.com")));
+    }
+
+    @Test
+    void archivedCohortWorkspaceShowsStatusWithoutSelectedCohortMutationForms() throws Exception {
+        stubAppShell();
+        var authentication = auth("admin@example.com", RoleName.ADMIN);
+        when(assignments.cohortPage(same(authentication), eq(10L))).thenReturn(archivedCohortPage());
+
+        mvc.perform(get("/app/assignment-management/cohorts/10").principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Archived")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "/app/assignment-management/cohorts/10/edit"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "/app/assignment-management/cohorts/10/archive"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "/app/assignment-management/cohorts/10/patients"))));
+    }
+
+    @Test
+    void directWorkspaceUsesEachPatientsStaffCandidatesAndLinksInheritedAccessToCohorts() throws Exception {
+        stubAppShell();
+        var authentication = auth("admin@example.com", RoleName.ADMIN);
+        when(assignments.directPage(same(authentication))).thenReturn(directPage());
+
+        mvc.perform(get("/app/assignment-management/direct").principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Direct assignments")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Access through cohort")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("one-candidate@example.com")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("two-candidate@example.com")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "href=\"/app/assignment-management/cohorts/10\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Manage care team")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "End doctor@example.com’s direct assignment to patient patient@example.com?")));
+    }
+
+    @Test
+    void assignmentWorkspaceUsesCzechCopyWhenLocaleCookieIsCzech() throws Exception {
+        stubAppShell();
+        var authentication = auth("admin@example.com", RoleName.ADMIN);
+        when(assignments.directPage(same(authentication))).thenReturn(directPage());
+
+        mvc.perform(get("/app/assignment-management/direct")
+                        .cookie(new Cookie(LocalizationConfig.LOCALE_COOKIE_NAME, "cs"))
+                        .principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Správa přiřazení")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Přímá přiřazení")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Přístup přes kohortu")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Ukončit přímé přiřazení odborníka doctor@example.com k pacientovi patient@example.com?")));
     }
 
     @Test
@@ -290,6 +397,52 @@ class AssignmentManagementWebControllerTest {
         return new CohortPage(List.of(), null, List.of(), List.of(), List.of(), List.of());
     }
 
+    private static CohortPage activeCohortPage(boolean includeCoordinatorCandidate) {
+        var cohort = new CohortItem(10L, "Pilot cohort", "Pilot notes", false,
+                "admin@example.com", Instant.EPOCH);
+        var direct = new ExpertAccess(20L, 50L, "doctor@example.com", List.of("PHYSICIAN"),
+                AccessSource.DIRECT, null, null);
+        var inherited = new ExpertAccess(30L, 60L, "nutrition@example.com", List.of("NUTRITION_SPECIALIST"),
+                AccessSource.COHORT, 10L, "Pilot cohort");
+        var patient = new PatientRow(40L, 70L, "patient@example.com", List.of(direct), List.of(inherited));
+        var coordinator = new ExpertAccess(80L, 90L, "coordinator@example.com", List.of("COORDINATOR"),
+                AccessSource.COHORT, 10L, "Pilot cohort");
+        var physician = new ExpertAccess(81L, 91L, "physician@example.com", List.of("PHYSICIAN"),
+                AccessSource.COHORT, 10L, "Pilot cohort");
+        var staffCandidates = includeCoordinatorCandidate
+                ? List.of(
+                        new StaffOption(92L, "coordinator-target@example.com", List.of("COORDINATOR")),
+                        new StaffOption(93L, "physician-target@example.com", List.of("PHYSICIAN")))
+                : List.of(new StaffOption(93L, "physician-target@example.com", List.of("PHYSICIAN")));
+        return new CohortPage(
+                List.of(cohort),
+                cohort,
+                List.of(patient),
+                List.of(coordinator, physician),
+                List.of(new PatientOptionResponse(71L, "candidate-patient@example.com")),
+                staffCandidates);
+    }
+
+    private static CohortPage archivedCohortPage() {
+        var archived = new CohortItem(10L, "Pilot cohort", "Pilot notes", true,
+                "admin@example.com", Instant.EPOCH);
+        return new CohortPage(List.of(archived), archived, List.of(), List.of(), List.of(), List.of());
+    }
+
+    private static DirectPage directPage() {
+        var cohort = new CohortItem(10L, "Pilot cohort", "Pilot notes", false,
+                "admin@example.com", Instant.EPOCH);
+        var direct = new ExpertAccess(20L, 50L, "doctor@example.com", List.of("PHYSICIAN"),
+                AccessSource.DIRECT, null, null);
+        var inherited = new ExpertAccess(30L, 60L, "nutrition@example.com", List.of("NUTRITION_SPECIALIST"),
+                AccessSource.COHORT, 10L, "Pilot cohort");
+        return new DirectPage(List.of(
+                new DirectPatient(70L, "patient@example.com", List.of(cohort), List.of(direct), List.of(inherited),
+                        List.of(new StaffOption(91L, "one-candidate@example.com", List.of("PHYSICIAN")))),
+                new DirectPatient(71L, "second-patient@example.com", List.of(), List.of(), List.of(),
+                        List.of(new StaffOption(92L, "two-candidate@example.com", List.of("NUTRITION_SPECIALIST"))))));
+    }
+
     private void stubAppShell() {
         when(appMenuCatalog.sidebarItems(any())).thenReturn(List.of());
         when(userPreferenceService.currentThemePreference(any())).thenReturn(ThemePreference.SYSTEM);
@@ -298,5 +451,37 @@ class AssignmentManagementWebControllerTest {
     private void stubMessages() {
         when(messages.getMessage(anyString(), nullable(Object[].class), any(Locale.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    private static CookieLocaleResolver localeResolver() {
+        var resolver = new CookieLocaleResolver(LocalizationConfig.LOCALE_COOKIE_NAME);
+        resolver.setDefaultLocale(Locale.ENGLISH);
+        return resolver;
+    }
+
+    private static ResourceBundleMessageSource messageSource() {
+        var source = new ResourceBundleMessageSource();
+        source.setBasename("messages");
+        source.setDefaultEncoding("UTF-8");
+        source.setFallbackToSystemLocale(false);
+        source.setDefaultLocale(Locale.ENGLISH);
+        return source;
+    }
+
+    private static ThymeleafViewResolver viewResolver(ResourceBundleMessageSource messages) {
+        var templateResolver = new ClassLoaderTemplateResolver();
+        templateResolver.setPrefix("templates/");
+        templateResolver.setSuffix(".html");
+        templateResolver.setTemplateMode("HTML");
+        templateResolver.setCharacterEncoding("UTF-8");
+
+        var templateEngine = new SpringTemplateEngine();
+        templateEngine.setTemplateResolver(templateResolver);
+        templateEngine.setMessageSource(messages);
+
+        var viewResolver = new ThymeleafViewResolver();
+        viewResolver.setTemplateEngine(templateEngine);
+        viewResolver.setCharacterEncoding("UTF-8");
+        return viewResolver;
     }
 }

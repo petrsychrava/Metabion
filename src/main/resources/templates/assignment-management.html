@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell(#{assignment.pageTitle}, '/app/assignment-management', ~{::content})}">
+<th:block th:fragment="content">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Metabion</p>
+            <h1 th:text="#{assignment.title}">Assignment management</h1>
+        </div>
+    </header>
+
+    <nav class="assignment-tabs" aria-label="Assignment views">
+        <a th:href="@{/app/assignment-management}" th:text="#{assignment.cohorts}">Cohorts</a>
+        <a th:href="@{/app/assignment-management/direct}" th:text="#{assignment.direct}">Direct assignments</a>
+    </nav>
+
+    <p class="success" th:if="${success}" th:text="${success}">Saved</p>
+
+    <section th:if="${cohortPage != null}" class="assignment-workspace">
+        <aside class="panel assignment-cohorts">
+            <h2 th:text="#{assignment.cohorts}">Cohorts</h2>
+            <a th:each="cohort : ${cohortPage.cohorts()}"
+               th:href="@{/app/assignment-management/cohorts/{id}(id=${cohort.id()})}"
+               th:text="${cohort.name()}">Cohort</a>
+
+            <form class="form" th:action="@{/app/assignment-management/cohorts}" th:object="${cohortForm}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <div class="field">
+                    <label th:text="#{assignment.cohortName}" for="new-cohort-name">Cohort name</label>
+                    <input id="new-cohort-name" th:field="*{name}" required maxlength="255">
+                </div>
+                <div class="field">
+                    <label th:text="#{assignment.description}" for="new-cohort-description">Description</label>
+                    <textarea id="new-cohort-description" th:field="*{description}" maxlength="4000"></textarea>
+                </div>
+                <button type="submit" th:text="#{assignment.create}">Create cohort</button>
+            </form>
+        </aside>
+
+        <div class="assignment-detail" th:if="${cohortPage.selected() != null}">
+            <section class="panel app-panel">
+                <h2 th:text="${cohortPage.selected().name()}">Selected cohort</h2>
+                <span class="status-badge"
+                      th:text="${cohortPage.selected().archived()} ? #{assignment.archived} : #{assignment.active}">
+                    Active
+                </span>
+
+                <th:block th:if="${!cohortPage.selected().archived()}">
+                    <form class="form"
+                          th:action="@{/app/assignment-management/cohorts/{id}/edit(id=${cohortPage.selected().id()})}"
+                          method="post">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                        <div class="field">
+                            <label th:text="#{assignment.cohortName}" for="edit-cohort-name">Cohort name</label>
+                            <input id="edit-cohort-name" name="name" th:value="${cohortPage.selected().name()}" required maxlength="255">
+                        </div>
+                        <div class="field">
+                            <label th:text="#{assignment.description}" for="edit-cohort-description">Description</label>
+                            <textarea id="edit-cohort-description" name="description" maxlength="4000"
+                                      th:text="${cohortPage.selected().description()}"></textarea>
+                        </div>
+                        <button type="submit" th:text="#{assignment.save}">Save changes</button>
+                    </form>
+
+                    <form class="form" th:if="${isAdmin}"
+                          th:action="@{/app/assignment-management/cohorts/{id}/archive(id=${cohortPage.selected().id()})}"
+                          method="post" onsubmit="return confirm(this.dataset.confirm)"
+                          th:attr="data-confirm=#{assignment.confirm.archive(${cohortPage.selected().name()})}">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                        <button type="submit" class="button-danger" th:text="#{assignment.archive}">Archive cohort</button>
+                    </form>
+                </th:block>
+            </section>
+
+            <section class="panel app-panel">
+                <div class="assignment-columns">
+                    <div>
+                        <h2 th:text="#{assignment.patients}">Patients</h2>
+                        <form class="form" th:if="${!cohortPage.selected().archived()}"
+                              th:action="@{/app/assignment-management/cohorts/{id}/patients(id=${cohortPage.selected().id()})}"
+                              method="post">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                            <div class="field">
+                                <label th:text="#{assignment.addPatient}" for="patient-target">Add patient</label>
+                                <select id="patient-target" name="targetId" required>
+                                    <option value="" th:text="#{assignment.choosePatient}">Choose patient</option>
+                                    <option th:each="candidate : ${cohortPage.patientCandidates()}"
+                                            th:value="${candidate.id()}" th:text="${candidate.email()}">patient@example.com</option>
+                                </select>
+                            </div>
+                            <button type="submit" th:text="#{assignment.add}">Add</button>
+                        </form>
+
+                        <article th:each="patient : ${cohortPage.patients()}" class="assignment-patient">
+                            <h3 th:text="${patient.email()}">patient@example.com</h3>
+                            <div>
+                                <strong th:text="#{assignment.direct}">Direct assignments</strong>
+                                <span th:each="access : ${patient.direct()}" th:text="${access.email()}">expert@example.com</span>
+                            </div>
+                            <div>
+                                <strong th:text="#{assignment.inherited}">Access through cohort</strong>
+                                <span th:each="access : ${patient.inherited()}"
+                                      th:text="${access.email() + ' · ' + access.cohortName()}">expert@example.com · Cohort</span>
+                            </div>
+                            <a th:href="@{/app/assignment-management/direct}"
+                               th:text="#{assignment.manageCareTeam}">Manage care team</a>
+                            <form th:if="${!cohortPage.selected().archived()}"
+                                  th:action="@{/app/assignment-management/cohorts/{cohortId}/memberships/{membershipId}/end(
+                                      cohortId=${cohortPage.selected().id()}, membershipId=${patient.membershipId()})}"
+                                  method="post" onsubmit="return confirm(this.dataset.confirm)"
+                                  th:attr="data-confirm=#{assignment.confirm.endMembership(${patient.email()}, ${cohortPage.selected().name()})}">
+                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                                <button type="submit" th:text="#{assignment.endMembership}">End membership</button>
+                            </form>
+                        </article>
+                    </div>
+
+                    <div>
+                        <h2 th:text="#{assignment.careTeam}">Care team</h2>
+                        <form class="form" th:if="${!cohortPage.selected().archived()}"
+                              th:action="@{/app/assignment-management/cohorts/{id}/staff(id=${cohortPage.selected().id()})}"
+                              method="post">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                            <div class="field">
+                                <label th:text="#{assignment.addStaff}" for="cohort-staff-target">Add staff member</label>
+                                <select id="cohort-staff-target" name="targetId" required>
+                                    <option value="" th:text="#{assignment.chooseStaff}">Choose staff member</option>
+                                    <option th:each="candidate : ${cohortPage.staffCandidates()}"
+                                            th:value="${candidate.staffProfileId()}" th:text="${candidate.email()}">expert@example.com</option>
+                                </select>
+                            </div>
+                            <button type="submit" th:text="#{assignment.add}">Add</button>
+                        </form>
+
+                        <article th:each="access : ${cohortPage.careTeam()}" class="assignment-staff">
+                            <span th:text="${access.email()}">expert@example.com</span>
+                            <form th:if="${!cohortPage.selected().archived() and (isAdmin or !access.roles().contains('COORDINATOR'))}"
+                                  th:action="@{/app/assignment-management/cohorts/{cohortId}/staff-assignments/{assignmentId}/end(
+                                      cohortId=${cohortPage.selected().id()}, assignmentId=${access.assignmentId()})}"
+                                  method="post" onsubmit="return confirm(this.dataset.confirm)"
+                                  th:attr="data-confirm=#{assignment.confirm.endStaff(${access.email()}, ${cohortPage.selected().name()})}">
+                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                                <button type="submit" th:text="#{assignment.endAssignment}">End assignment</button>
+                            </form>
+                        </article>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </section>
+
+    <section th:if="${directPage != null}" class="panel app-panel">
+        <h2 th:text="#{assignment.direct}">Direct assignments</h2>
+        <article th:each="patient : ${directPage.patients()}" class="assignment-patient">
+            <h3 th:text="${patient.email()}">patient@example.com</h3>
+            <div>
+                <strong th:text="#{assignment.direct}">Direct assignments</strong>
+                <span th:each="access : ${patient.direct()}" th:text="${access.email()}">expert@example.com</span>
+            </div>
+            <div>
+                <strong th:text="#{assignment.inherited}">Access through cohort</strong>
+                <a th:each="access : ${patient.inherited()}"
+                   th:href="@{/app/assignment-management/cohorts/{id}(id=${access.cohortId()})}"
+                   th:text="${access.email() + ' · ' + access.cohortName()}">Expert · Cohort</a>
+                <a th:if="${!patient.inherited().isEmpty()}"
+                   th:href="@{/app/assignment-management}"
+                   th:text="#{assignment.manageCareTeam}">Manage care team</a>
+            </div>
+            <form class="form" th:action="@{/app/assignment-management/patients/{patientId}/direct-assignments(
+                    patientId=${patient.patientProfileId()})}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <div class="field">
+                    <label th:text="#{assignment.addDirectExpert}" th:for="${'direct-target-' + patient.patientProfileId()}">
+                        Add direct expert
+                    </label>
+                    <select th:id="${'direct-target-' + patient.patientProfileId()}" name="targetId" required>
+                        <option value="" th:text="#{assignment.chooseExpert}">Choose expert</option>
+                        <option th:each="candidate : ${patient.staffCandidates()}"
+                                th:value="${candidate.staffProfileId()}" th:text="${candidate.email()}">expert@example.com</option>
+                    </select>
+                </div>
+                <button type="submit" th:text="#{assignment.add}">Add</button>
+            </form>
+            <form th:each="access : ${patient.direct()}"
+                  th:action="@{/app/assignment-management/patients/{patientId}/direct-assignments/{assignmentId}/end(
+                      patientId=${patient.patientProfileId()}, assignmentId=${access.assignmentId()})}"
+                  method="post" onsubmit="return confirm(this.dataset.confirm)"
+                  th:attr="data-confirm=#{assignment.confirm.endDirect(${access.email()}, ${patient.email()})}">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <button type="submit" th:text="#{assignment.endAssignment}">End assignment</button>
+            </form>
+        </article>
+    </section>
+</th:block>
+</html>
