@@ -32,10 +32,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @Service
 @Transactional(readOnly = true)
@@ -307,25 +305,29 @@ public class AssignmentManagementService {
                 ? cohorts.findAllForAdministration()
                 : cohorts.findActiveForStaff(coordinatorProfileId);
         var cohortsByPatient = activeCohortsByPatient(visibleCohorts);
-        Set<Long> assignedStaffIds = new HashSet<>();
+        var directCandidateBase = staffProfiles.findAllEnabledWithRoles().stream()
+                .filter(this::eligibleDirectExpert)
+                .map(this::staffOption)
+                .toList();
         var patients = patientOptions.stream().map(patient -> {
             var direct = directAssignments.findActiveByPatientProfileId(patient.id()).stream()
                     .map(this::directAccess)
                     .toList();
-            direct.forEach(access -> assignedStaffIds.add(access.staffProfileId()));
             var inherited = cohortStaffAssignments.findActiveAssignmentsForPatient(patient.id()).stream()
                     .map(this::cohortAccess)
                     .toList();
+            var activeDirectStaffIds = direct.stream()
+                    .map(ExpertAccess::staffProfileId)
+                    .collect(java.util.stream.Collectors.toSet());
+            var staffCandidates = directCandidateBase.stream()
+                    .filter(candidate -> !activeDirectStaffIds.contains(candidate.staffProfileId()))
+                    .toList();
             return new DirectPatient(
                     patient.id(), patient.email(),
-                    cohortsByPatient.getOrDefault(patient.id(), List.of()), direct, inherited);
+                    cohortsByPatient.getOrDefault(patient.id(), List.of()),
+                    direct, inherited, staffCandidates);
         }).toList();
-        var staffCandidates = staffProfiles.findAllEnabledWithRoles().stream()
-                .filter(this::eligibleDirectExpert)
-                .filter(profile -> !assignedStaffIds.contains(profile.getId()))
-                .map(this::staffOption)
-                .toList();
-        return new DirectPage(patients, staffCandidates);
+        return new DirectPage(patients);
     }
 
     private Cohort editableLockedCohort(Authentication authentication, User actor, Long cohortId) {

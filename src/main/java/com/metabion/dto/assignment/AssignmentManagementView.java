@@ -26,7 +26,8 @@ public final class AssignmentManagementView {
                              List<StaffOption> staffCandidates) {}
 
     public record DirectPatient(Long patientProfileId, String email, List<CohortItem> cohorts,
-                                List<ExpertAccess> direct, List<ExpertAccess> inherited) {}
+                                List<ExpertAccess> direct, List<ExpertAccess> inherited,
+                                List<StaffOption> staffCandidates) {}
 
-    public record DirectPage(List<DirectPatient> patients, List<StaffOption> staffCandidates) {}
+    public record DirectPage(List<DirectPatient> patients) {}
 }

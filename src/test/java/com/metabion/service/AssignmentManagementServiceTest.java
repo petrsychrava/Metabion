@@ -817,9 +817,9 @@ class AssignmentManagementServiceTest {
     }
 
     @Test
-    void directPageFiltersEnabledExpertCandidatesAndActivePairs() {
+    void directPageFiltersEnabledExpertCandidatesForEachPatientPair() {
         var admin = user(2L, "admin@example.com", RoleName.ADMIN);
-        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var patientA = enabledUser(4L, "a@example.com", RoleName.PATIENT);
         var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
         var nutritionist = enabledUser(6L, "nutrition@example.com", RoleName.NUTRITION_SPECIALIST);
         var coordinatorOnly = enabledUser(7L, "coordinator@example.com", RoleName.COORDINATOR);
@@ -827,13 +827,16 @@ class AssignmentManagementServiceTest {
         var dualExpert = enabledUser(9L, "dual@example.com", RoleName.COORDINATOR);
         dualExpert.addRole(RoleName.PHYSICIAN);
         var active = directAssignment(
-                100L, patientProfile(40L, patient), staffProfile(50L, physician), admin);
+                100L, patientProfile(40L, patientA), staffProfile(50L, physician), admin);
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
         when(patientProfiles.findAllEnabledPatientOptions()).thenReturn(List.of(
-                new com.metabion.dto.PatientOptionResponse(40L, "patient@example.com")));
+                new com.metabion.dto.PatientOptionResponse(40L, "a@example.com"),
+                new com.metabion.dto.PatientOptionResponse(100L, "b@example.com")));
         when(cohorts.findAllForAdministration()).thenReturn(List.of());
         when(directAssignments.findActiveByPatientProfileId(40L)).thenReturn(List.of(active));
+        when(directAssignments.findActiveByPatientProfileId(100L)).thenReturn(List.of());
         when(cohortStaffAssignments.findActiveAssignmentsForPatient(40L)).thenReturn(List.of());
+        when(cohortStaffAssignments.findActiveAssignmentsForPatient(100L)).thenReturn(List.of());
         when(staffProfiles.findAllEnabledWithRoles()).thenReturn(List.of(
                 staffProfile(50L, physician), staffProfile(60L, nutritionist),
                 staffProfile(70L, coordinatorOnly), staffProfile(80L, disabledExpert),
@@ -841,9 +844,13 @@ class AssignmentManagementServiceTest {
 
         var page = service.directPage(auth("admin@example.com"));
 
-        assertThat(page.staffCandidates()).extracting(option -> option.staffProfileId())
+        assertThat(page.patients().getFirst().staffCandidates())
+                .extracting(option -> option.staffProfileId())
                 .containsExactly(60L, 90L);
-        assertThat(page.staffCandidates().getLast().roles())
+        assertThat(page.patients().getLast().staffCandidates())
+                .extracting(option -> option.staffProfileId())
+                .containsExactly(50L, 60L, 90L);
+        assertThat(page.patients().getLast().staffCandidates().getLast().roles())
                 .containsExactly("COORDINATOR", "PHYSICIAN");
     }
 
