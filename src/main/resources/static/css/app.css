@@ -635,6 +635,11 @@ a {
     margin-bottom: 1rem;
 }
 
+.assignment-tabs a[aria-current="page"] {
+    color: var(--accent-dark);
+    background: var(--secondary-bg);
+}
+
 .assignment-workspace {
     display: grid;
     grid-template-columns: minmax(15rem, 0.8fr) minmax(0, 2.2fr);

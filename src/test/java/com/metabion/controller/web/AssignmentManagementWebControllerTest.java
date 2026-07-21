@@ -174,6 +174,98 @@ class AssignmentManagementWebControllerTest {
     }
 
     @Test
+    void invalidCreateRendersSubmittedCreateValuesAndValidationFeedbackWithoutMutation() throws Exception {
+        stubAppShell();
+        var authentication = auth("admin@example.com", RoleName.ADMIN);
+        when(assignments.cohortPage(same(authentication), isNull())).thenReturn(activeCohortPage(false));
+
+        mvc.perform(post("/app/assignment-management/cohorts")
+                        .principal(authentication)
+                        .param("name", "")
+                        .param("description", "Submitted create description"))
+                .andExpect(status().isOk())
+                .andExpect(model().attributeExists("createCohortForm"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "id=\"new-cohort-description\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "name=\"description\">Submitted create description</textarea>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Review the highlighted assignment details.")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("must not be blank")));
+
+        verify(assignments, never()).createCohort(any(), any());
+    }
+
+    @Test
+    void invalidEditRendersSubmittedEditValuesWithoutReplacingTheIndependentCreateForm() throws Exception {
+        stubAppShell();
+        var authentication = auth("admin@example.com", RoleName.ADMIN);
+        when(assignments.cohortPage(same(authentication), eq(10L))).thenReturn(activeCohortPage(false));
+
+        mvc.perform(post("/app/assignment-management/cohorts/10/edit")
+                        .principal(authentication)
+                        .param("name", "")
+                        .param("description", "Submitted edit description"))
+                .andExpect(status().isOk())
+                .andExpect(model().attributeExists("editCohortForm"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "id=\"edit-cohort-description\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "name=\"description\">Submitted edit description</textarea>")))
+                .andDo(result -> assertThat(result.getResponse().getContentAsString())
+                        .containsPattern("(?s)<input id=\"edit-cohort-name\"[^>]*value=\"\""))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "new-cohort-description\" maxlength=\"4000\" name=\"description\">Submitted edit description</textarea>"))))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Review the highlighted assignment details.")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("must not be blank")));
+
+        verify(assignments, never()).updateCohort(any(), any(), any());
+    }
+
+    @Test
+    void assignmentTabsUseLocalizedLabelsAndMarkOnlyTheCurrentView() throws Exception {
+        stubAppShell();
+        var authentication = auth("admin@example.com", RoleName.ADMIN);
+        when(assignments.cohortPage(same(authentication), isNull())).thenReturn(activeCohortPage(false));
+        when(assignments.directPage(same(authentication))).thenReturn(directPage());
+
+        mvc.perform(get("/app/assignment-management").principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "aria-label=\"Assignment views\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "aria-current=\"page\">Cohorts")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "aria-current=\"page\">Direct assignments"))));
+
+        mvc.perform(get("/app/assignment-management/direct").principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "aria-current=\"page\">Direct assignments")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "aria-current=\"page\">Cohorts"))));
+
+        mvc.perform(get("/app/assignment-management/direct")
+                        .cookie(new Cookie(LocalizationConfig.LOCALE_COOKIE_NAME, "cs"))
+                        .principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "aria-label=\"Pohledy přiřazení\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "aria-current=\"page\">Přímá přiřazení")));
+
+        mvc.perform(get("/app/assignment-management")
+                        .cookie(new Cookie(LocalizationConfig.LOCALE_COOKIE_NAME, "cs"))
+                        .principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "aria-label=\"Pohledy přiřazení\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "aria-current=\"page\">Kohorty")));
+    }
+
+    @Test
     void controllerHasOnlyTheApprovedCollaborators() {
         assertThat(AssignmentManagementWebController.class.getDeclaredConstructors())
                 .singleElement()
@@ -197,7 +289,7 @@ class AssignmentManagementWebControllerTest {
                 .andExpect(view().name("assignment-management"))
                 .andExpect(model().attribute("cohortPage", page))
                 .andExpect(model().attributeExists(
-                        "cohortForm", "patientSelection", "staffSelection", "appMenuItems",
+                        "createCohortForm", "editCohortForm", "patientSelection", "staffSelection", "appMenuItems",
                         "activePath", "themePreference"))
                 .andExpect(model().attribute("isAdmin", true))
                 .andExpect(model().attribute("activePath", "/app/assignment-management"));
@@ -325,7 +417,7 @@ class AssignmentManagementWebControllerTest {
                         .param("name", ""))
                 .andExpect(status().isOk())
                 .andExpect(view().name("assignment-management"))
-                .andExpect(model().attributeHasFieldErrors("cohortForm", "name"));
+                .andExpect(model().attributeHasFieldErrors("createCohortForm", "name"));
 
         verify(assignments, never()).createCohort(any(), any());
         verify(assignments).cohortPage(same(authentication), isNull());
@@ -342,7 +434,7 @@ class AssignmentManagementWebControllerTest {
                         .param("name", ""))
                 .andExpect(status().isOk())
                 .andExpect(view().name("assignment-management"))
-                .andExpect(model().attributeHasFieldErrors("cohortForm", "name"));
+                .andExpect(model().attributeHasFieldErrors("editCohortForm", "name"));
 
         verify(assignments, never()).updateCohort(any(), any(), any());
         verify(assignments).cohortPage(same(authentication), eq(10L));

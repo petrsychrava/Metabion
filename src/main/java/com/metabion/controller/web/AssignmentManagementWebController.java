@@ -55,7 +55,7 @@ public class AssignmentManagementWebController {
     }
 
     @PostMapping("/app/assignment-management/cohorts")
-    public String createCohort(@Valid @ModelAttribute("cohortForm") CohortForm form,
+    public String createCohort(@Valid @ModelAttribute("createCohortForm") CohortForm form,
                                BindingResult bindingResult,
                                Authentication authentication,
                                Model model,
@@ -70,7 +70,7 @@ public class AssignmentManagementWebController {
 
     @PostMapping("/app/assignment-management/cohorts/{cohortId}/edit")
     public String editCohort(@PathVariable Long cohortId,
-                             @Valid @ModelAttribute("cohortForm") CohortForm form,
+                             @Valid @ModelAttribute("editCohortForm") CohortForm form,
                              BindingResult bindingResult,
                              Authentication authentication,
                              Model model,
@@ -153,9 +153,16 @@ public class AssignmentManagementWebController {
     }
 
     private String renderCohorts(Authentication authentication, Long cohortId, Model model) {
-        model.addAttribute("cohortPage", assignments.cohortPage(authentication, cohortId));
-        if (!model.containsAttribute("cohortForm")) {
-            model.addAttribute("cohortForm", new CohortForm("", ""));
+        var cohortPage = assignments.cohortPage(authentication, cohortId);
+        model.addAttribute("cohortPage", cohortPage);
+        if (!model.containsAttribute("createCohortForm")) {
+            model.addAttribute("createCohortForm", new CohortForm("", ""));
+        }
+        if (!model.containsAttribute("editCohortForm")) {
+            var selected = cohortPage.selected();
+            model.addAttribute("editCohortForm", selected == null
+                    ? new CohortForm("", "")
+                    : new CohortForm(selected.name(), selected.description()));
         }
         if (!model.containsAttribute("patientSelection")) {
             model.addAttribute("patientSelection", new SelectionForm(null));
@@ -163,6 +170,7 @@ public class AssignmentManagementWebController {
         if (!model.containsAttribute("staffSelection")) {
             model.addAttribute("staffSelection", new SelectionForm(null));
         }
+        model.addAttribute("assignmentView", "cohorts");
         model.addAttribute("isAdmin", hasAuthority(authentication, "ROLE_ADMIN"));
         addAppShell(model, authentication, ACTIVE_PATH);
         return "assignment-management";
@@ -171,6 +179,7 @@ public class AssignmentManagementWebController {
     private String renderDirect(Authentication authentication, Model model) {
         model.addAttribute("directPage", assignments.directPage(authentication));
         model.addAttribute("staffSelection", new SelectionForm(null));
+        model.addAttribute("assignmentView", "direct");
         model.addAttribute("isAdmin", hasAuthority(authentication, "ROLE_ADMIN"));
         addAppShell(model, authentication, ACTIVE_PATH);
         return "assignment-management";

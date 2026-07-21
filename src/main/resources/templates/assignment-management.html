@@ -9,9 +9,13 @@
         </div>
     </header>
 
-    <nav class="assignment-tabs" aria-label="Assignment views">
-        <a th:href="@{/app/assignment-management}" th:text="#{assignment.cohorts}">Cohorts</a>
-        <a th:href="@{/app/assignment-management/direct}" th:text="#{assignment.direct}">Direct assignments</a>
+    <nav class="assignment-tabs" th:attr="aria-label=#{assignment.views}">
+        <a th:href="@{/app/assignment-management}"
+           th:attr="aria-current=${assignmentView == 'cohorts'} ? 'page' : null"
+           th:text="#{assignment.cohorts}">Cohorts</a>
+        <a th:href="@{/app/assignment-management/direct}"
+           th:attr="aria-current=${assignmentView == 'direct'} ? 'page' : null"
+           th:text="#{assignment.direct}">Direct assignments</a>
     </nav>
 
     <p class="success" th:if="${success}" th:text="${success}">Saved</p>
@@ -23,15 +27,20 @@
                th:href="@{/app/assignment-management/cohorts/{id}(id=${cohort.id()})}"
                th:text="${cohort.name()}">Cohort</a>
 
-            <form class="form" th:action="@{/app/assignment-management/cohorts}" th:object="${cohortForm}" method="post">
+            <form class="form" th:action="@{/app/assignment-management/cohorts}" th:object="${createCohortForm}" method="post">
                 <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <p class="error" th:if="${#fields.hasAnyErrors()}" th:text="#{assignment.validation.review}">
+                    Review the highlighted assignment details.
+                </p>
                 <div class="field">
                     <label th:text="#{assignment.cohortName}" for="new-cohort-name">Cohort name</label>
                     <input id="new-cohort-name" th:field="*{name}" required maxlength="255">
+                    <p class="error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}">Name error</p>
                 </div>
                 <div class="field">
                     <label th:text="#{assignment.description}" for="new-cohort-description">Description</label>
                     <textarea id="new-cohort-description" th:field="*{description}" maxlength="4000"></textarea>
+                    <p class="error" th:if="${#fields.hasErrors('description')}" th:errors="*{description}">Description error</p>
                 </div>
                 <button type="submit" th:text="#{assignment.create}">Create cohort</button>
             </form>
@@ -48,16 +57,21 @@
                 <th:block th:if="${!cohortPage.selected().archived()}">
                     <form class="form"
                           th:action="@{/app/assignment-management/cohorts/{id}/edit(id=${cohortPage.selected().id()})}"
+                          th:object="${editCohortForm}"
                           method="post">
                         <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                        <p class="error" th:if="${#fields.hasAnyErrors()}" th:text="#{assignment.validation.review}">
+                            Review the highlighted assignment details.
+                        </p>
                         <div class="field">
                             <label th:text="#{assignment.cohortName}" for="edit-cohort-name">Cohort name</label>
-                            <input id="edit-cohort-name" name="name" th:value="${cohortPage.selected().name()}" required maxlength="255">
+                            <input id="edit-cohort-name" th:field="*{name}" required maxlength="255">
+                            <p class="error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}">Name error</p>
                         </div>
                         <div class="field">
                             <label th:text="#{assignment.description}" for="edit-cohort-description">Description</label>
-                            <textarea id="edit-cohort-description" name="description" maxlength="4000"
-                                      th:text="${cohortPage.selected().description()}"></textarea>
+                            <textarea id="edit-cohort-description" th:field="*{description}" maxlength="4000"></textarea>
+                            <p class="error" th:if="${#fields.hasErrors('description')}" th:errors="*{description}">Description error</p>
                         </div>
                         <button type="submit" th:text="#{assignment.save}">Save changes</button>
                     </form>

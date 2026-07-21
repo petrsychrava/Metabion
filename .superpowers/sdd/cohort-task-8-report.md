@@ -40,3 +40,27 @@ Implemented the cohort-centric assignment-management Thymeleaf workspace with:
 ## Concerns
 
 None. The Gradle runtime emits pre-existing JVM restricted-method warnings, but no test failures.
+
+## Review fixes
+
+### Separate create and edit bindings
+
+- The create and edit handlers now bind `createCohortForm` and `editCohortForm` independently.
+- Cohort rendering initializes an empty create form and initializes the edit form from the selected cohort only when no bound edit form is already present.
+- The template now renders form-level review feedback and field-level name/description errors for each form. Invalid edit submissions remain in the edit form and do not populate the create form.
+
+### Localized tab state
+
+- Added aligned `assignment.views` messages: `Assignment views` / `Pohledy přiřazení`.
+- The tab navigation uses that localized label; exactly the active cohort or direct tab receives `aria-current="page"` and the corresponding visual style.
+
+### TDD evidence
+
+- RED: `./gradlew test --tests 'com.metabion.controller.web.AssignmentManagementWebControllerTest' --tests 'com.metabion.controller.web.AppMenuCatalogTest' --rerun-tasks` ran 26 tests with 3 expected failures: independent create/edit rendered validation and localized current-tab assertions.
+- GREEN: the same command passed after the binding and tab-state fixes. The final rerun also passed with 26 tests and no failures.
+
+### Self-review
+
+- Verified no `cohortForm` binding remains in the assignment controller/template tests.
+- Verified English and Czech `assignment.*` key sets remain aligned.
+- Verified unchanged routes, service calls, CSRF markup, archive/role controls, and scoped candidate bindings.
