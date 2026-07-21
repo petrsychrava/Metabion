@@ -3,6 +3,7 @@ package com.metabion.service;
 import com.metabion.domain.Cohort;
 import com.metabion.domain.CohortStaffAssignment;
 import com.metabion.domain.PatientCohortMembership;
+import com.metabion.domain.PatientExpertAssignment;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.StaffProfile;
@@ -32,6 +33,8 @@ import java.util.List;
 import java.util.Optional;
 
 import static com.metabion.dto.assignment.AssignmentManagementForms.CohortForm;
+import static com.metabion.dto.assignment.AssignmentManagementView.AccessSource.COHORT;
+import static com.metabion.dto.assignment.AssignmentManagementView.AccessSource.DIRECT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -628,6 +631,308 @@ class AssignmentManagementServiceTest {
         verify(cohortStaffAssignments, never()).save(any());
     }
 
+    @Test
+    void coordinatorDirectAssignmentRequiresCurrentPatientScopeWhileAdministratorMayAssignAnyPatient() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var patientProfile = patientProfile(40L, patient);
+        var expertProfile = staffProfile(50L, physician);
+        var coordinatorAuth = auth("coordinator@example.com");
+        var adminAuth = auth("admin@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(accessControl.canManageDirectExpertAssignments(coordinatorAuth, 40L)).thenReturn(false);
+        when(accessControl.canManageDirectExpertAssignments(adminAuth, 40L)).thenReturn(true);
+        when(patientProfiles.lockById(40L)).thenReturn(Optional.of(patientProfile));
+        when(staffProfiles.lockById(50L)).thenReturn(Optional.of(expertProfile));
+
+        assertStatus(() -> service.assignDirectExpert(coordinatorAuth, 40L, 50L),
+                HttpStatus.NOT_FOUND);
+        service.assignDirectExpert(adminAuth, 40L, 50L);
+
+        verify(directAssignments).save(argThat(row -> row.getPatientProfile().equals(patientProfile)
+                && row.getStaffProfile().equals(expertProfile) && row.getAssignedBy().equals(admin)));
+    }
+
+    @Test
+    void directTargetMustBeEnabledExpertButMayAlsoBeCoordinator() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var disabledPhysician = user(5L, "disabled@example.com", RoleName.PHYSICIAN);
+        var coordinatorOnly = enabledUser(6L, "coordinator@example.com", RoleName.COORDINATOR);
+        var dualExpert = enabledUser(7L, "dual@example.com", RoleName.COORDINATOR);
+        dualExpert.addRole(RoleName.NUTRITION_SPECIALIST);
+        var authentication = auth("admin@example.com");
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(accessControl.canManageDirectExpertAssignments(authentication, 40L)).thenReturn(true);
+        when(patientProfiles.lockById(40L)).thenReturn(Optional.of(patientProfile(40L, patient)));
+        when(staffProfiles.lockById(50L)).thenReturn(Optional.of(staffProfile(50L, disabledPhysician)));
+        when(staffProfiles.lockById(60L)).thenReturn(Optional.of(staffProfile(60L, coordinatorOnly)));
+        when(staffProfiles.lockById(70L)).thenReturn(Optional.of(staffProfile(70L, dualExpert)));
+
+        assertStatus(() -> service.assignDirectExpert(authentication, 40L, 50L),
+                HttpStatus.BAD_REQUEST);
+        assertStatus(() -> service.assignDirectExpert(authentication, 40L, 60L),
+                HttpStatus.BAD_REQUEST);
+        service.assignDirectExpert(authentication, 40L, 70L);
+
+        verify(directAssignments).save(argThat(row -> row.getStaffProfile().getId().equals(70L)));
+    }
+
+    @Test
+    void duplicateAndConcurrentDirectAssignmentsReturnConflict() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var authentication = auth("admin@example.com");
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(accessControl.canManageDirectExpertAssignments(authentication, 40L)).thenReturn(true);
+        when(patientProfiles.lockById(40L)).thenReturn(Optional.of(patientProfile(40L, patient)));
+        when(staffProfiles.lockById(50L)).thenReturn(Optional.of(staffProfile(50L, physician)));
+        when(directAssignments.existsActiveAssignment(40L, 50L)).thenReturn(true, false);
+        doThrow(new DataIntegrityViolationException("active pair")).when(directAssignments).flush();
+
+        assertStatus(() -> service.assignDirectExpert(authentication, 40L, 50L),
+                HttpStatus.CONFLICT);
+        assertStatus(() -> service.assignDirectExpert(authentication, 40L, 50L),
+                HttpStatus.CONFLICT);
+
+        verify(directAssignments).save(any(PatientExpertAssignment.class));
+        verify(directAssignments).flush();
+    }
+
+    @Test
+    void endingDirectAssignmentLocksActiveRowRechecksScopeAndAttributesEnd() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var assignment = directAssignment(
+                100L, patientProfile(40L, patient), staffProfile(50L, physician), coordinator);
+        var authentication = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(directAssignments.findActiveById(100L)).thenReturn(Optional.of(assignment));
+        when(accessControl.canManageDirectExpertAssignments(authentication, 40L)).thenReturn(true);
+
+        service.endDirectExpertAssignment(authentication, 40L, 100L);
+
+        assertThat(assignment.getEndedAt()).isEqualTo(NOW);
+        assertThat(assignment.getEndedBy()).isEqualTo(coordinator);
+    }
+
+    @Test
+    void endingDirectAssignmentConcealsMissingMismatchedAndOutOfScopeRows() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var mismatched = directAssignment(
+                100L, patientProfile(41L, patient), staffProfile(50L, physician), coordinator);
+        var inPath = directAssignment(
+                200L, patientProfile(40L, patient), staffProfile(50L, physician), coordinator);
+        var authentication = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(directAssignments.findActiveById(99L)).thenReturn(Optional.empty());
+        when(directAssignments.findActiveById(100L)).thenReturn(Optional.of(mismatched));
+        when(directAssignments.findActiveById(200L)).thenReturn(Optional.of(inPath));
+
+        assertStatus(() -> service.endDirectExpertAssignment(authentication, 40L, 99L),
+                HttpStatus.NOT_FOUND);
+        assertStatus(() -> service.endDirectExpertAssignment(authentication, 40L, 100L),
+                HttpStatus.NOT_FOUND);
+        assertStatus(() -> service.endDirectExpertAssignment(authentication, 40L, 200L),
+                HttpStatus.NOT_FOUND);
+
+        assertThat(mismatched.isActive()).isTrue();
+        assertThat(inPath.isActive()).isTrue();
+    }
+
+    @Test
+    void endingCohortMembershipLeavesDirectAssignmentActive() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var cohort = cohort(10L, "Pilot", coordinator);
+        var membership = membership(300L, patientProfile(40L, patient), cohort, coordinator);
+        var direct = directAssignment(
+                100L, patientProfile(40L, patient), staffProfile(50L, physician), coordinator);
+        var authentication = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(memberships.findActiveById(300L)).thenReturn(Optional.of(membership));
+        when(accessControl.canManageCohortMemberships(authentication, 10L)).thenReturn(true);
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+
+        service.endMembership(authentication, 10L, 300L);
+
+        assertThat(membership.isActive()).isFalse();
+        assertThat(direct.isActive()).isTrue();
+        verifyNoInteractions(directAssignments);
+    }
+
+    @Test
+    void directPageUsesRoleSpecificPatientScopeAndKeepsAccessSourcesSeparate() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var coordinatorProfile = staffProfile(11L, coordinator);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var cohort = cohort(10L, "Pilot", admin);
+        var direct = directAssignment(
+                100L, patientProfile(40L, patient), staffProfile(50L, physician), admin);
+        var inherited = cohortAssignment(200L, cohort, staffProfile(50L, physician), admin);
+        var membership = membership(300L, patientProfile(40L, patient), cohort, admin);
+        var adminAuth = auth("admin@example.com");
+        var coordinatorAuth = auth("coordinator@example.com");
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(staffProfiles.findByUserId(coordinator.getId())).thenReturn(Optional.of(coordinatorProfile));
+        when(patientProfiles.findAllEnabledPatientOptions()).thenReturn(List.of(
+                new com.metabion.dto.PatientOptionResponse(40L, "patient@example.com"),
+                new com.metabion.dto.PatientOptionResponse(80L, "other@example.com")));
+        when(patientProfiles.findEnabledPatientOptionsForStaff(11L)).thenReturn(List.of(
+                new com.metabion.dto.PatientOptionResponse(40L, "patient@example.com")));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of(cohort));
+        when(cohorts.findActiveForStaff(11L)).thenReturn(List.of(cohort));
+        when(memberships.findActiveByCohortId(10L)).thenReturn(List.of(membership));
+        when(directAssignments.findActiveByPatientProfileId(40L)).thenReturn(List.of(direct));
+        when(directAssignments.findActiveByPatientProfileId(80L)).thenReturn(List.of());
+        when(cohortStaffAssignments.findActiveAssignmentsForPatient(40L)).thenReturn(List.of(inherited));
+        when(cohortStaffAssignments.findActiveAssignmentsForPatient(80L)).thenReturn(List.of());
+
+        var adminPage = service.directPage(adminAuth);
+        var coordinatorPage = service.directPage(coordinatorAuth);
+
+        assertThat(adminPage.patients()).extracting(row -> row.patientProfileId())
+                .containsExactly(40L, 80L);
+        assertThat(coordinatorPage.patients()).extracting(row -> row.patientProfileId())
+                .containsExactly(40L);
+        assertThat(adminPage.patients().getFirst().cohorts()).extracting(item -> item.id())
+                .containsExactly(10L);
+        assertThat(adminPage.patients().getFirst().direct())
+                .extracting(access -> access.source()).containsOnly(DIRECT);
+        assertThat(adminPage.patients().getFirst().inherited())
+                .extracting(access -> access.source()).containsOnly(COHORT);
+        assertThat(adminPage.patients().getFirst().direct().getFirst().staffProfileId())
+                .isEqualTo(adminPage.patients().getFirst().inherited().getFirst().staffProfileId());
+    }
+
+    @Test
+    void directPageFiltersEnabledExpertCandidatesAndActivePairs() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var nutritionist = enabledUser(6L, "nutrition@example.com", RoleName.NUTRITION_SPECIALIST);
+        var coordinatorOnly = enabledUser(7L, "coordinator@example.com", RoleName.COORDINATOR);
+        var disabledExpert = user(8L, "disabled@example.com", RoleName.PHYSICIAN);
+        var dualExpert = enabledUser(9L, "dual@example.com", RoleName.COORDINATOR);
+        dualExpert.addRole(RoleName.PHYSICIAN);
+        var active = directAssignment(
+                100L, patientProfile(40L, patient), staffProfile(50L, physician), admin);
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(patientProfiles.findAllEnabledPatientOptions()).thenReturn(List.of(
+                new com.metabion.dto.PatientOptionResponse(40L, "patient@example.com")));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of());
+        when(directAssignments.findActiveByPatientProfileId(40L)).thenReturn(List.of(active));
+        when(cohortStaffAssignments.findActiveAssignmentsForPatient(40L)).thenReturn(List.of());
+        when(staffProfiles.findAllEnabledWithRoles()).thenReturn(List.of(
+                staffProfile(50L, physician), staffProfile(60L, nutritionist),
+                staffProfile(70L, coordinatorOnly), staffProfile(80L, disabledExpert),
+                staffProfile(90L, dualExpert)));
+
+        var page = service.directPage(auth("admin@example.com"));
+
+        assertThat(page.staffCandidates()).extracting(option -> option.staffProfileId())
+                .containsExactly(60L, 90L);
+        assertThat(page.staffCandidates().getLast().roles())
+                .containsExactly("COORDINATOR", "PHYSICIAN");
+    }
+
+    @Test
+    void cohortPageFiltersActiveCandidatesAndReturnsOperationalDataOnly() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var coordinatorProfile = staffProfile(11L, coordinator);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var nutritionist = enabledUser(6L, "nutrition@example.com", RoleName.NUTRITION_SPECIALIST);
+        var coordinatorOnly = enabledUser(7L, "other-coordinator@example.com", RoleName.COORDINATOR);
+        var dualExpert = enabledUser(9L, "dual@example.com", RoleName.COORDINATOR);
+        dualExpert.addRole(RoleName.PHYSICIAN);
+        var cohort = cohort(10L, "Pilot", coordinator);
+        var member = membership(300L, patientProfile(40L, patient), cohort, coordinator);
+        var direct = directAssignment(
+                100L, patientProfile(40L, patient), staffProfile(50L, physician), coordinator);
+        var inherited = cohortAssignment(200L, cohort, staffProfile(60L, nutritionist), coordinator);
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(staffProfiles.findByUserId(coordinator.getId())).thenReturn(Optional.of(coordinatorProfile));
+        when(cohorts.findActiveForStaff(11L)).thenReturn(List.of(cohort));
+        when(memberships.findActiveByCohortId(10L)).thenReturn(List.of(member));
+        when(cohortStaffAssignments.findActiveByCohortId(10L)).thenReturn(List.of(inherited));
+        when(directAssignments.findActiveByPatientProfileId(40L)).thenReturn(List.of(direct));
+        when(cohortStaffAssignments.findActiveAssignmentsForPatient(40L)).thenReturn(List.of(inherited));
+        when(patientProfiles.findAllEnabledPatientOptions()).thenReturn(List.of(
+                new com.metabion.dto.PatientOptionResponse(40L, "patient@example.com"),
+                new com.metabion.dto.PatientOptionResponse(80L, "other@example.com")));
+        when(staffProfiles.findAllEnabledWithRoles()).thenReturn(List.of(
+                staffProfile(50L, physician), staffProfile(60L, nutritionist),
+                staffProfile(70L, coordinatorOnly), staffProfile(90L, dualExpert)));
+
+        var page = service.cohortPage(auth("coordinator@example.com"), 10L);
+
+        assertThat(page.patientCandidates()).extracting(candidate -> candidate.id())
+                .containsExactly(80L);
+        assertThat(page.staffCandidates()).extracting(option -> option.staffProfileId())
+                .containsExactly(50L);
+        assertThat(page.patients().getFirst().direct()).extracting(access -> access.source())
+                .containsOnly(DIRECT);
+        assertThat(page.patients().getFirst().inherited()).extracting(access -> access.source())
+                .containsOnly(COHORT);
+        assertThat(page.careTeam()).extracting(access -> access.source()).containsOnly(COHORT);
+        assertThat(page.patients().getFirst().email()).isEqualTo("patient@example.com");
+    }
+
+    @Test
+    void administratorArchivedCohortPageIsHistoryOnlyAndHasNoMutationCandidates() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var archived = cohort(10L, "Archived", admin);
+        archived.archive(admin, NOW.minusSeconds(60));
+        var endedMembership = membership(300L, patientProfile(40L, patient), archived, admin);
+        endedMembership.end(admin, NOW.minusSeconds(60));
+        var endedAssignment = cohortAssignment(200L, archived, staffProfile(50L, physician), admin);
+        endedAssignment.end(admin, NOW.minusSeconds(60));
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of(archived));
+        when(memberships.findHistoryByCohortId(10L)).thenReturn(List.of(endedMembership));
+        when(cohortStaffAssignments.findHistoryByCohortId(10L)).thenReturn(List.of(endedAssignment));
+        when(directAssignments.findActiveByPatientProfileId(40L)).thenReturn(List.of());
+        when(cohortStaffAssignments.findActiveAssignmentsForPatient(40L)).thenReturn(List.of());
+
+        var page = service.cohortPage(auth("admin@example.com"), 10L);
+
+        assertThat(page.selected().archived()).isTrue();
+        assertThat(page.patients()).extracting(row -> row.membershipId()).containsExactly(300L);
+        assertThat(page.careTeam()).extracting(access -> access.assignmentId()).containsExactly(200L);
+        assertThat(page.patientCandidates()).isEmpty();
+        assertThat(page.staffCandidates()).isEmpty();
+        verifyNoInteractions(patientProfiles);
+        verify(staffProfiles, never()).findAllEnabledWithRoles();
+    }
+
+    @Test
+    void coordinatorCannotOpenUnassignedOrArchivedCohortPage() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var coordinatorProfile = staffProfile(11L, coordinator);
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(staffProfiles.findByUserId(coordinator.getId())).thenReturn(Optional.of(coordinatorProfile));
+        when(cohorts.findActiveForStaff(11L)).thenReturn(List.of());
+
+        assertStatus(() -> service.cohortPage(auth("coordinator@example.com"), 10L),
+                HttpStatus.NOT_FOUND);
+
+        verifyNoInteractions(memberships, directAssignments, cohortStaffAssignments, patientProfiles);
+    }
+
     private static void assertStatus(Runnable operation, HttpStatus expected) {
         assertThatThrownBy(operation::run)
                 .isInstanceOfSatisfying(ResponseStatusException.class,
@@ -661,6 +966,27 @@ class AssignmentManagementServiceTest {
         var profile = new PatientProfile(user);
         profile.setId(id);
         return profile;
+    }
+
+    private static PatientExpertAssignment directAssignment(
+            Long id, PatientProfile patient, StaffProfile staff, User actor) {
+        var assignment = new PatientExpertAssignment(patient, staff, actor);
+        assignment.setId(id);
+        return assignment;
+    }
+
+    private static PatientCohortMembership membership(
+            Long id, PatientProfile patient, Cohort cohort, User actor) {
+        var membership = new PatientCohortMembership(patient, cohort, actor);
+        membership.setId(id);
+        return membership;
+    }
+
+    private static CohortStaffAssignment cohortAssignment(
+            Long id, Cohort cohort, StaffProfile staff, User actor) {
+        var assignment = new CohortStaffAssignment(cohort, staff, actor);
+        assignment.setId(id);
+        return assignment;
     }
 
     private static Cohort cohort(Long id, String name, User creator) {

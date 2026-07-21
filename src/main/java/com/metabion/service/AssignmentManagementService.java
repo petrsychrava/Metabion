@@ -3,10 +3,19 @@ package com.metabion.service;
 import com.metabion.domain.Cohort;
 import com.metabion.domain.CohortStaffAssignment;
 import com.metabion.domain.PatientCohortMembership;
+import com.metabion.domain.PatientExpertAssignment;
 import com.metabion.domain.RoleName;
+import com.metabion.domain.StaffProfile;
 import com.metabion.domain.User;
 import com.metabion.dto.assignment.AssignmentManagementForms.CohortForm;
+import com.metabion.dto.assignment.AssignmentManagementView.AccessSource;
 import com.metabion.dto.assignment.AssignmentManagementView.CohortItem;
+import com.metabion.dto.assignment.AssignmentManagementView.CohortPage;
+import com.metabion.dto.assignment.AssignmentManagementView.DirectPage;
+import com.metabion.dto.assignment.AssignmentManagementView.DirectPatient;
+import com.metabion.dto.assignment.AssignmentManagementView.ExpertAccess;
+import com.metabion.dto.assignment.AssignmentManagementView.PatientRow;
+import com.metabion.dto.assignment.AssignmentManagementView.StaffOption;
 import com.metabion.repository.CohortRepository;
 import com.metabion.repository.CohortStaffAssignmentRepository;
 import com.metabion.repository.PatientCohortMembershipRepository;
@@ -22,7 +31,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 @Transactional(readOnly = true)
@@ -198,6 +211,123 @@ public class AssignmentManagementService {
         end(assignment, actor, clock.instant());
     }
 
+    @Transactional
+    public void assignDirectExpert(Authentication authentication,
+                                   Long patientProfileId,
+                                   Long staffProfileId) {
+        var actor = requireAssignmentManager(authentication);
+        if (!accessControl.canManageDirectExpertAssignments(authentication, patientProfileId)) {
+            throw notFound("Patient profile not found");
+        }
+        var patient = patientProfiles.lockById(patientProfileId)
+                .filter(profile -> profile.getUser().isEnabled())
+                .orElseThrow(() -> notFound("Patient profile not found"));
+        var target = staffProfiles.lockById(staffProfileId)
+                .filter(profile -> profile.getUser().isEnabled())
+                .filter(profile -> profile.getUser().hasAnyRole(
+                        RoleName.PHYSICIAN, RoleName.NUTRITION_SPECIALIST))
+                .orElseThrow(() -> badRequest(
+                        "Target must be an active physician or nutrition specialist"));
+        if (directAssignments.existsActiveAssignment(patientProfileId, staffProfileId)) {
+            throw conflict("Expert is already directly assigned to patient");
+        }
+        try {
+            directAssignments.save(new PatientExpertAssignment(patient, target, actor));
+            directAssignments.flush();
+        } catch (DataIntegrityViolationException exception) {
+            throw conflict("Expert is already directly assigned to patient");
+        }
+    }
+
+    @Transactional
+    public void endDirectExpertAssignment(Authentication authentication,
+                                          Long patientProfileId,
+                                          Long assignmentId) {
+        var actor = requireAssignmentManager(authentication);
+        var assignment = directAssignments.findActiveById(assignmentId)
+                .orElseThrow(() -> notFound("Direct expert assignment not found"));
+        if (!assignment.getPatientProfile().getId().equals(patientProfileId)
+                || !accessControl.canManageDirectExpertAssignments(authentication, patientProfileId)) {
+            throw notFound("Direct expert assignment not found");
+        }
+        end(assignment, actor, clock.instant());
+    }
+
+    @Transactional(readOnly = true)
+    public CohortPage cohortPage(Authentication authentication, Long cohortId) {
+        var actor = requireAssignmentManager(authentication);
+        var visibleCohorts = visibleCohorts(actor);
+        var selected = visibleCohorts.stream()
+                .filter(cohort -> cohort.getId().equals(cohortId))
+                .findFirst()
+                .orElseThrow(() -> notFound("Cohort not found"));
+        var cohortItems = visibleCohorts.stream().map(this::cohortItem).toList();
+        var cohortMemberships = selected.isArchived()
+                ? memberships.findHistoryByCohortId(cohortId)
+                : memberships.findActiveByCohortId(cohortId);
+        var staffAssignments = selected.isArchived()
+                ? cohortStaffAssignments.findHistoryByCohortId(cohortId)
+                : cohortStaffAssignments.findActiveByCohortId(cohortId);
+        var patients = cohortMemberships.stream().map(this::patientRow).toList();
+        var careTeam = staffAssignments.stream().map(this::cohortAccess).toList();
+        if (selected.isArchived()) {
+            return new CohortPage(
+                    cohortItems, cohortItem(selected), patients, careTeam, List.of(), List.of());
+        }
+
+        var activePatientIds = cohortMemberships.stream()
+                .map(row -> row.getPatientProfile().getId())
+                .collect(java.util.stream.Collectors.toSet());
+        var patientCandidates = patientProfiles.findAllEnabledPatientOptions().stream()
+                .filter(candidate -> !activePatientIds.contains(candidate.id()))
+                .toList();
+        var activeStaffIds = staffAssignments.stream()
+                .map(row -> row.getStaffProfile().getId())
+                .collect(java.util.stream.Collectors.toSet());
+        var staffCandidates = staffProfiles.findAllEnabledWithRoles().stream()
+                .filter(profile -> eligibleCohortStaff(actor, profile))
+                .filter(profile -> !activeStaffIds.contains(profile.getId()))
+                .map(this::staffOption)
+                .toList();
+        return new CohortPage(
+                cohortItems, cohortItem(selected), patients, careTeam,
+                patientCandidates, staffCandidates);
+    }
+
+    @Transactional(readOnly = true)
+    public DirectPage directPage(Authentication authentication) {
+        var actor = requireAssignmentManager(authentication);
+        Long coordinatorProfileId = actor.hasRole(RoleName.ADMIN)
+                ? null
+                : requireCoordinatorProfileId(actor);
+        var patientOptions = actor.hasRole(RoleName.ADMIN)
+                ? patientProfiles.findAllEnabledPatientOptions()
+                : patientProfiles.findEnabledPatientOptionsForStaff(coordinatorProfileId);
+        var visibleCohorts = actor.hasRole(RoleName.ADMIN)
+                ? cohorts.findAllForAdministration()
+                : cohorts.findActiveForStaff(coordinatorProfileId);
+        var cohortsByPatient = activeCohortsByPatient(visibleCohorts);
+        Set<Long> assignedStaffIds = new HashSet<>();
+        var patients = patientOptions.stream().map(patient -> {
+            var direct = directAssignments.findActiveByPatientProfileId(patient.id()).stream()
+                    .map(this::directAccess)
+                    .toList();
+            direct.forEach(access -> assignedStaffIds.add(access.staffProfileId()));
+            var inherited = cohortStaffAssignments.findActiveAssignmentsForPatient(patient.id()).stream()
+                    .map(this::cohortAccess)
+                    .toList();
+            return new DirectPatient(
+                    patient.id(), patient.email(),
+                    cohortsByPatient.getOrDefault(patient.id(), List.of()), direct, inherited);
+        }).toList();
+        var staffCandidates = staffProfiles.findAllEnabledWithRoles().stream()
+                .filter(this::eligibleDirectExpert)
+                .filter(profile -> !assignedStaffIds.contains(profile.getId()))
+                .map(this::staffOption)
+                .toList();
+        return new DirectPage(patients, staffCandidates);
+    }
+
     private Cohort editableLockedCohort(Authentication authentication, User actor, Long cohortId) {
         if (!actor.hasRole(RoleName.ADMIN)
                 && !accessControl.canManageCohort(authentication, cohortId)) {
@@ -224,6 +354,74 @@ public class AssignmentManagementService {
         return staffProfiles.findByUserId(actor.getId())
                 .orElseThrow(() -> forbidden("Coordinator staff profile not found"))
                 .getId();
+    }
+
+    private List<Cohort> visibleCohorts(User actor) {
+        return actor.hasRole(RoleName.ADMIN)
+                ? cohorts.findAllForAdministration()
+                : cohorts.findActiveForStaff(requireCoordinatorProfileId(actor));
+    }
+
+    private Map<Long, List<CohortItem>> activeCohortsByPatient(List<Cohort> visibleCohorts) {
+        Map<Long, List<CohortItem>> result = new HashMap<>();
+        visibleCohorts.stream()
+                .filter(cohort -> !cohort.isArchived())
+                .forEach(cohort -> memberships.findActiveByCohortId(cohort.getId()).forEach(membership ->
+                        result.computeIfAbsent(membership.getPatientProfile().getId(), ignored ->
+                                new java.util.ArrayList<>()).add(cohortItem(cohort))));
+        return result.entrySet().stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+                Map.Entry::getKey, entry -> List.copyOf(entry.getValue())));
+    }
+
+    private PatientRow patientRow(PatientCohortMembership membership) {
+        var patient = membership.getPatientProfile();
+        var direct = directAssignments.findActiveByPatientProfileId(patient.getId()).stream()
+                .map(this::directAccess)
+                .toList();
+        var inherited = cohortStaffAssignments.findActiveAssignmentsForPatient(patient.getId()).stream()
+                .map(this::cohortAccess)
+                .toList();
+        return new PatientRow(
+                membership.getId(), patient.getId(), patient.getUser().getEmail(), direct, inherited);
+    }
+
+    private ExpertAccess directAccess(PatientExpertAssignment assignment) {
+        var staff = assignment.getStaffProfile();
+        return new ExpertAccess(
+                assignment.getId(), staff.getId(), staff.getUser().getEmail(),
+                staff.getUser().roleNames(), AccessSource.DIRECT, null, null);
+    }
+
+    private ExpertAccess cohortAccess(CohortStaffAssignment assignment) {
+        var staff = assignment.getStaffProfile();
+        var cohort = assignment.getCohort();
+        return new ExpertAccess(
+                assignment.getId(), staff.getId(), staff.getUser().getEmail(),
+                staff.getUser().roleNames(), AccessSource.COHORT, cohort.getId(), cohort.getName());
+    }
+
+    private StaffOption staffOption(StaffProfile profile) {
+        return new StaffOption(
+                profile.getId(), profile.getUser().getEmail(), profile.getUser().roleNames());
+    }
+
+    private boolean eligibleCohortStaff(User actor, StaffProfile profile) {
+        var user = profile.getUser();
+        if (!user.isEnabled()) {
+            return false;
+        }
+        if (actor.hasRole(RoleName.ADMIN)) {
+            return user.hasAnyRole(
+                    RoleName.PHYSICIAN, RoleName.NUTRITION_SPECIALIST, RoleName.COORDINATOR);
+        }
+        return !user.hasRole(RoleName.COORDINATOR)
+                && user.hasAnyRole(RoleName.PHYSICIAN, RoleName.NUTRITION_SPECIALIST);
+    }
+
+    private boolean eligibleDirectExpert(StaffProfile profile) {
+        var user = profile.getUser();
+        return user.isEnabled()
+                && user.hasAnyRole(RoleName.PHYSICIAN, RoleName.NUTRITION_SPECIALIST);
     }
 
     private User requireAssignmentManager(Authentication authentication) {
@@ -267,6 +465,14 @@ public class AssignmentManagementService {
             assignment.end(actor, now);
         } catch (IllegalStateException exception) {
             throw conflict("Cohort relationships have changed");
+        }
+    }
+
+    private static void end(PatientExpertAssignment assignment, User actor, java.time.Instant now) {
+        try {
+            assignment.end(actor, now);
+        } catch (IllegalStateException exception) {
+            throw conflict("Direct expert assignment has changed");
         }
     }
 
