@@ -29,11 +29,24 @@ public class AppMenuCatalog {
         if (roles.contains(RoleName.PATIENT)) {
             items.addAll(patientItems());
         }
-        if (roles.stream().anyMatch(RoleName::isClinicalStaff)) {
+        if (roles.stream().anyMatch(RoleName::isClinicalExpert)) {
             items.addAll(clinicalItems());
         }
+        if (roles.contains(RoleName.COORDINATOR)) {
+            if (!roles.contains(RoleName.ADMIN)
+                    && roles.stream().noneMatch(RoleName::isClinicalExpert)) {
+                items.add(contentManagement());
+            }
+            items.add(assignmentManagement());
+        }
         if (roles.contains(RoleName.ADMIN)) {
-            items.addAll(adminItems());
+            adminItems().stream()
+                    .filter(item -> !items.contains(item))
+                    .forEach(items::add);
+            if (items.stream().noneMatch(
+                    item -> "/app/assignment-management".equals(item.route()))) {
+                items.add(assignmentManagement());
+            }
         }
 
         items.add(account());
@@ -159,12 +172,6 @@ public class AppMenuCatalog {
                         false,
                         "menu.protocolCheckpoints.description"),
                 item(
-                        "menu.cohortManagement",
-                        null,
-                        true,
-                        false,
-                        "menu.cohortManagement.description"),
-                item(
                         "menu.researchExport",
                         null,
                         true,
@@ -217,6 +224,15 @@ public class AppMenuCatalog {
 
     private AppMenuItem contentManagement() {
         return item("menu.contentManagement", "/app/content/education", false, false, "menu.contentManagement.description");
+    }
+
+    private AppMenuItem assignmentManagement() {
+        return item(
+                "menu.assignmentManagement",
+                "/app/assignment-management",
+                false,
+                true,
+                "menu.assignmentManagement.description");
     }
 
     private AppMenuItem account() {

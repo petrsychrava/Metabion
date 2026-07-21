@@ -255,17 +255,23 @@ public class AssignmentManagementService {
     public CohortPage cohortPage(Authentication authentication, Long cohortId) {
         var actor = requireAssignmentManager(authentication);
         var visibleCohorts = visibleCohorts(actor);
-        var selected = visibleCohorts.stream()
-                .filter(cohort -> cohort.getId().equals(cohortId))
-                .findFirst()
-                .orElseThrow(() -> notFound("Cohort not found"));
         var cohortItems = visibleCohorts.stream().map(this::cohortItem).toList();
+        var selected = cohortId == null
+                ? visibleCohorts.stream().filter(cohort -> !cohort.isArchived()).findFirst().orElse(null)
+                : visibleCohorts.stream()
+                        .filter(cohort -> cohort.getId().equals(cohortId))
+                        .findFirst()
+                        .orElseThrow(() -> notFound("Cohort not found"));
+        if (selected == null) {
+            return new CohortPage(cohortItems, null, List.of(), List.of(), List.of(), List.of());
+        }
+        var selectedId = selected.getId();
         var cohortMemberships = selected.isArchived()
-                ? memberships.findHistoryByCohortId(cohortId)
-                : memberships.findActiveByCohortId(cohortId);
+                ? memberships.findHistoryByCohortId(selectedId)
+                : memberships.findActiveByCohortId(selectedId);
         var staffAssignments = selected.isArchived()
-                ? cohortStaffAssignments.findHistoryByCohortId(cohortId)
-                : cohortStaffAssignments.findActiveByCohortId(cohortId);
+                ? cohortStaffAssignments.findHistoryByCohortId(selectedId)
+                : cohortStaffAssignments.findActiveByCohortId(selectedId);
         var patients = cohortMemberships.stream().map(this::patientRow).toList();
         var careTeam = staffAssignments.stream().map(this::cohortAccess).toList();
         if (selected.isArchived()) {

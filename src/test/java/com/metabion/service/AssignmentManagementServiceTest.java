@@ -898,6 +898,47 @@ class AssignmentManagementServiceTest {
     }
 
     @Test
+    void defaultCohortPageSelectsFirstActiveCohortFromScopedOrder() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var archived = cohort(10L, "Archived", admin);
+        archived.archive(admin, NOW.minusSeconds(60));
+        var firstActive = cohort(20L, "First active", admin);
+        var secondActive = cohort(30L, "Second active", admin);
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of(archived, firstActive, secondActive));
+        when(memberships.findActiveByCohortId(20L)).thenReturn(List.of());
+        when(cohortStaffAssignments.findActiveByCohortId(20L)).thenReturn(List.of());
+        when(patientProfiles.findAllEnabledPatientOptions()).thenReturn(List.of());
+        when(staffProfiles.findAllEnabledWithRoles()).thenReturn(List.of());
+
+        var page = service.cohortPage(auth("admin@example.com"), null);
+
+        assertThat(page.cohorts()).extracting(item -> item.id()).containsExactly(10L, 20L, 30L);
+        assertThat(page.selected().id()).isEqualTo(20L);
+        verify(memberships).findActiveByCohortId(20L);
+        verify(cohortStaffAssignments).findActiveByCohortId(20L);
+    }
+
+    @Test
+    void defaultCohortPageReturnsEmptyWorkspaceWhenNoActiveCohortExists() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var archived = cohort(10L, "Archived", admin);
+        archived.archive(admin, NOW.minusSeconds(60));
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of(archived));
+
+        var page = service.cohortPage(auth("admin@example.com"), null);
+
+        assertThat(page.cohorts()).extracting(item -> item.id()).containsExactly(10L);
+        assertThat(page.selected()).isNull();
+        assertThat(page.patients()).isEmpty();
+        assertThat(page.careTeam()).isEmpty();
+        assertThat(page.patientCandidates()).isEmpty();
+        assertThat(page.staffCandidates()).isEmpty();
+        verifyNoInteractions(memberships, cohortStaffAssignments, directAssignments, patientProfiles, staffProfiles);
+    }
+
+    @Test
     void administratorArchivedCohortPageIsHistoryOnlyAndHasNoMutationCandidates() {
         var admin = user(2L, "admin@example.com", RoleName.ADMIN);
         var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);

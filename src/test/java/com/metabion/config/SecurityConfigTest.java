@@ -6,6 +6,7 @@ import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.LoginResponse;
+import com.metabion.service.AssignmentManagementService;
 import com.metabion.service.PatientAccessTokenService;
 import com.metabion.service.SecurityService;
 import com.metabion.service.StaffInvitationService;
@@ -22,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -45,6 +47,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.mail.MailAuthenticationException;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
 import org.springframework.session.FindByIndexNameSessionRepository;
@@ -54,6 +57,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.server.ResponseStatusException;
 
 @SpringBootTest(properties = {
         "spring.profiles.active=dev",
@@ -88,6 +92,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     PatientAccessTokenService patientAccessTokenService;
+
+    @MockitoBean
+    AssignmentManagementService assignmentManagementService;
 
     private MockMvc mvc;
 
@@ -253,6 +260,64 @@ class SecurityConfigTest {
         mvc.perform(get("/app"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/login"));
+    }
+
+    @Test
+    void assignmentManagementRoutesRequireAdministratorOrCoordinatorRole() throws Exception {
+        mvc.perform(get("/app/assignment-management"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+
+        for (var role : List.of(
+                RoleName.PATIENT,
+                RoleName.PHYSICIAN,
+                RoleName.NUTRITION_SPECIALIST)) {
+            mvc.perform(get("/app/assignment-management")
+                            .with(user(role.name().toLowerCase() + "@example.com").roles(role.name())))
+                    .andExpect(status().isForbidden());
+            mvc.perform(get("/app/assignment-management/direct")
+                            .with(user(role.name().toLowerCase() + "@example.com").roles(role.name())))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    void assignmentManagerRolesReachTheController() throws Exception {
+        when(assignmentManagementService.cohortPage(any(), isNull()))
+                .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+        mvc.perform(get("/app/assignment-management")
+                        .with(user("coordinator@example.com").roles(RoleName.COORDINATOR.name())))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/app/assignment-management")
+                        .with(user("admin@example.com").roles(RoleName.ADMIN.name())))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/app/assignment-management")
+                        .with(user("multi-role@example.com")
+                                .roles(RoleName.PHYSICIAN.name(), RoleName.COORDINATOR.name())))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void everyAssignmentManagementPostRequiresCsrf() throws Exception {
+        var paths = List.of(
+                "/app/assignment-management/cohorts",
+                "/app/assignment-management/cohorts/10/edit",
+                "/app/assignment-management/cohorts/10/archive",
+                "/app/assignment-management/cohorts/10/patients",
+                "/app/assignment-management/cohorts/10/memberships/20/end",
+                "/app/assignment-management/cohorts/10/staff",
+                "/app/assignment-management/cohorts/10/staff-assignments/30/end",
+                "/app/assignment-management/patients/40/direct-assignments",
+                "/app/assignment-management/patients/40/direct-assignments/50/end");
+
+        for (var path : paths) {
+            mvc.perform(post(path)
+                            .with(user("admin@example.com").roles(RoleName.ADMIN.name()))
+                            .param("name", "Pilot")
+                            .param("targetId", "60"))
+                    .andExpect(status().isForbidden());
+        }
     }
 
     @Test
