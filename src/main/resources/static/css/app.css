@@ -674,10 +674,80 @@ a {
     border-bottom: 1px solid var(--border);
 }
 
+.assignment-cohorts a[aria-current="page"] {
+    background: var(--secondary-bg);
+    box-shadow: inset 3px 0 0 var(--accent);
+    font-weight: 700;
+}
+
+.assignment-cohorts .form {
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+}
+
+.assignment-access-group {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.assignment-access-group h4 {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.assignment-access-list {
+    display: grid;
+    gap: 0.5rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.assignment-access-row {
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    padding: 0.625rem 0.75rem;
+}
+
+.assignment-access-row > :first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.assignment-row-action {
+    margin: 0;
+}
+
+.assignment-row-action button {
+    white-space: nowrap;
+}
+
+.button-danger {
+    background: var(--error);
+}
+
+.button-danger:hover {
+    filter: brightness(0.9);
+}
+
 @media (max-width: 800px) {
     .assignment-workspace,
     .assignment-columns {
         grid-template-columns: 1fr;
+    }
+
+    .assignment-access-row {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .assignment-row-action,
+    .assignment-row-action button {
+        width: 100%;
     }
 }
 
