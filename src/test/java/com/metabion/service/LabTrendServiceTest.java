@@ -119,9 +119,21 @@ class LabTrendServiceTest {
     void unassignedClinicianCannotReadTrend() {
         var clinician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
         when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(clinician));
-        when(accessControl.canAccessPatientProfile(clinicalAuth, 10L)).thenReturn(false);
+        when(accessControl.canViewPatientClinicalData(clinicalAuth, 10L)).thenReturn(false);
 
         assertThatThrownBy(() -> service.clinicalTrend(clinicalAuth, 10L, "CRP", FROM, TO))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+                        .isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
+    @Test
+    void coordinatorCannotReadClinicalTrend() {
+        var coordinator = user(4L, "coordinator@example.com", RoleName.COORDINATOR);
+        var coordinatorAuth = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+
+        assertThatThrownBy(() -> service.clinicalTrend(coordinatorAuth, 10L, "CRP", FROM, TO))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
                         .isEqualTo(HttpStatus.FORBIDDEN));
@@ -131,7 +143,7 @@ class LabTrendServiceTest {
     void assignedClinicianCanReadRequestedPatientTrend() {
         var clinician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
         when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(clinician));
-        when(accessControl.canAccessPatientProfile(clinicalAuth, 10L)).thenReturn(true);
+        when(accessControl.canViewPatientClinicalData(clinicalAuth, 10L)).thenReturn(true);
         when(results.findTrend(10L, "CRP", FROM, TO))
                 .thenReturn(List.of(result(patient, clinician, LocalDate.of(2026, 1, 10), "5.00", "0.5")));
 
@@ -150,7 +162,7 @@ class LabTrendServiceTest {
 
         assertThat(service.clinicalTrend(adminAuth, 10L, "CRP", FROM, TO).points()).isEmpty();
 
-        verify(accessControl, never()).canAccessPatientProfile(adminAuth, 10L);
+        verify(accessControl, never()).canViewPatientClinicalData(adminAuth, 10L);
     }
 
     private LabResult result(PatientProfile owner, User creator, LocalDate date, String canonical, String reported) {

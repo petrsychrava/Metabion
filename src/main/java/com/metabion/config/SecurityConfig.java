@@ -177,6 +177,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/verify").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/admin/staff-invitations").hasRole("ADMIN")
                         .requestMatchers("/app/staff-invitations/**").hasRole("ADMIN")
+                        .requestMatchers("/app/assignment-management", "/app/assignment-management/**")
+                            .hasAnyRole("COORDINATOR", "ADMIN")
                         .requestMatchers("/app", "/app/**", "/logout").authenticated()
                         .requestMatchers("/api/auth/logout").authenticated()
                         .requestMatchers(MCP_ENDPOINTS).authenticated()

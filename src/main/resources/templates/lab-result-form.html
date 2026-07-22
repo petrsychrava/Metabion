@@ -12,7 +12,7 @@
             <input type="hidden" th:field="*{resultSetId}">
             <input type="hidden" th:field="*{version}">
             <label class="field"><span th:text="#{lab.form.collectionDate}">Collection date</span>
-                <input type="date" th:field="*{collectionDate}"><small class="field-error" th:errors="*{collectionDate}"></small>
+                <input type="date" th:field="*{collectionDate}" required><small class="field-error" th:errors="*{collectionDate}"></small>
             </label>
             <label class="field"><span th:text="#{lab.form.notes}">Notes</span><textarea th:field="*{notes}"></textarea></label>
             <fieldset>

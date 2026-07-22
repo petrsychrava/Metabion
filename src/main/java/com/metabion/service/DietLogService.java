@@ -241,9 +241,8 @@ public class DietLogService {
         if (!user.hasAnyRole(
                 RoleName.NUTRITION_SPECIALIST,
                 RoleName.PHYSICIAN,
-                RoleName.COORDINATOR,
                 RoleName.ADMIN)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user cannot read diet logs");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user cannot access clinical data");
         }
     }
 
@@ -251,7 +250,7 @@ public class DietLogService {
         if (user.hasRole(RoleName.ADMIN)) {
             return;
         }
-        if (!accessControl.canAccessPatientProfile(authentication, patientProfileId)) {
+        if (!accessControl.canViewPatientClinicalData(authentication, patientProfileId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Patient profile is not assigned to current user");
         }
     }

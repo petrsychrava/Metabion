@@ -296,6 +296,22 @@ class DietLogPhotoServiceTest {
     }
 
     @Test
+    void coordinatorCannotReadAttachedPhotoContent() throws Exception {
+        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patient(10L, patientUser);
+        var coordinator = user(2L, "coordinator@example.com", RoleName.COORDINATOR);
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var photo = attachedPhoto(50L, patient, patientUser, log, "plate", 0);
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(photos.findById(50L)).thenReturn(Optional.of(photo));
+
+        assertThatThrownBy(() -> service.readContent(auth("coordinator@example.com"), 50L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403 FORBIDDEN");
+        verify(storage, never()).read(anyString());
+    }
+
+    @Test
     void cleanupDeletesOldPendingRowsAndToleratesMissingFiles() throws Exception {
         var user = user(1L, "patient@example.com", RoleName.PATIENT);
         var pending = DailyDietLogPhotoReference.pending(

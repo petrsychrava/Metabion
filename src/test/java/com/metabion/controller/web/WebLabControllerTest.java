@@ -119,6 +119,22 @@ class WebLabControllerTest {
     }
 
     @Test
+    void editFormRendersTheOriginalDateInBrowserCompatibleFormat() throws Exception {
+        when(results.getForCurrentPatient(any(), eq(99L))).thenReturn(recentCrpSet());
+
+        mvc.perform(get("/app/labs/99/edit").with(user("patient@example.com").roles("PATIENT")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("name=\"collectionDate\" value=\"2026-07-15\"")));
+    }
+
+    @Test
+    void collectionDateUsesBrowserRequiredValidation() throws Exception {
+        mvc.perform(get("/app/labs/new").with(user("patient@example.com").roles("PATIENT")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("type=\"date\" required")));
+    }
+
+    @Test
     void patientConflictRendersSafeLaboratoryReturnPath() throws Exception {
         when(results.listForCurrentPatient(any(), any(), any()))
                 .thenThrow(new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT));

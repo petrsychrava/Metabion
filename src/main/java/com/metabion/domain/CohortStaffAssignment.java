@@ -11,6 +11,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.Objects;
 
 @Entity
 @Table(name = "cohort_staff_assignments")
@@ -38,6 +39,10 @@ public class CohortStaffAssignment {
     @Column(name = "ended_at")
     private Instant endedAt;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ended_by_user_id")
+    private User endedBy;
+
     public CohortStaffAssignment() {
     }
 
@@ -49,6 +54,14 @@ public class CohortStaffAssignment {
 
     public boolean isActive() {
         return endedAt == null;
+    }
+
+    public void end(User actor, Instant at) {
+        if (!isActive()) {
+            throw new IllegalStateException("Assignment is already ended");
+        }
+        endedBy = Objects.requireNonNull(actor, "actor");
+        endedAt = Objects.requireNonNull(at, "at");
     }
 
     public Long getId() {
@@ -97,5 +110,9 @@ public class CohortStaffAssignment {
 
     public void setEndedAt(Instant endedAt) {
         this.endedAt = endedAt;
+    }
+
+    public User getEndedBy() {
+        return endedBy;
     }
 }

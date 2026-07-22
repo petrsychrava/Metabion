@@ -175,7 +175,7 @@ class DailyTrendServiceTest {
         var clinician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
         var clinicalAuth = auth("doctor@example.com");
         when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(clinician));
-        when(accessControl.canAccessPatientProfile(any(), eq(10L))).thenReturn(true);
+        when(accessControl.canViewPatientClinicalData(any(Authentication.class), eq(10L))).thenReturn(true);
         when(checkIns.findByPatientProfileIdAndCheckInDateBetweenOrderByCheckInDateDesc(
                 eq(10L), any(), any())).thenReturn(List.of());
         when(dietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(
@@ -191,7 +191,22 @@ class DailyTrendServiceTest {
 
         assertThat(response.patientProfileId()).isEqualTo(10L);
         assertThat(response.days()).hasSize(1);
-        verify(accessControl).canAccessPatientProfile(clinicalAuth, 10L);
+        verify(accessControl).canViewPatientClinicalData(clinicalAuth, 10L);
+    }
+
+    @Test
+    void coordinatorCannotReadClinicalTrend() {
+        var coordinator = user(3L, "coordinator@example.com", RoleName.COORDINATOR);
+        var coordinatorAuth = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+
+        assertThatThrownBy(() -> service.clinicalTrend(
+                coordinatorAuth,
+                10L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 1)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403 FORBIDDEN");
     }
 
     private SymptomCheckIn checkIn(Long id,

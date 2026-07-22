@@ -106,7 +106,7 @@ public class OnboardingService {
 
         return candidates.stream()
                 .filter(submission -> currentUser.hasRole(RoleName.ADMIN)
-                        || accessControl.canAccessPatientProfile(authentication, submission.getPatientProfile().getId()))
+                        || accessControl.canViewPatientClinicalData(currentUser, submission.getPatientProfile().getId()))
                 .map(OnboardingSubmissionSummaryResponse::from)
                 .toList();
     }
@@ -134,15 +134,14 @@ public class OnboardingService {
         if (!user.hasAnyRole(
                 RoleName.NUTRITION_SPECIALIST,
                 RoleName.PHYSICIAN,
-                RoleName.COORDINATOR,
                 RoleName.ADMIN)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Current user cannot review onboarding submissions");
+                    "Current user cannot access clinical data");
         }
     }
 
     private void requireReviewAccess(Authentication authentication, OnboardingSubmission submission) {
-        if (!accessControl.canAccessPatientProfile(authentication, submission.getPatientProfile().getId())) {
+        if (!accessControl.canViewPatientClinicalData(authentication, submission.getPatientProfile().getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Onboarding submission is not assigned to current user");
         }

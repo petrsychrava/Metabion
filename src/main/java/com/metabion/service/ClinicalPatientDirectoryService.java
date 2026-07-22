@@ -35,8 +35,8 @@ public class ClinicalPatientDirectoryService {
         if (user.hasRole(RoleName.ADMIN)) {
             return patientProfiles.findAllPatientOptions();
         }
-        if (!user.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN, RoleName.COORDINATOR)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user cannot list patients");
+        if (!user.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user cannot access clinical data");
         }
         return staffProfiles.findByUserId(user.getId())
                 .map(staff -> patientProfiles.findAccessiblePatientOptionsForStaff(staff.getId()))

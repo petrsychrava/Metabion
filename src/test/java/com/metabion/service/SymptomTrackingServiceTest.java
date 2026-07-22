@@ -101,6 +101,22 @@ class SymptomTrackingServiceTest {
     }
 
     @Test
+    void coordinatorCannotListClinicalCheckIns() {
+        var coordinator = user(2L, "coordinator@example.com", RoleName.COORDINATOR);
+        var coordinatorAuth = new TestingAuthenticationToken("coordinator@example.com", "password");
+        coordinatorAuth.setAuthenticated(true);
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+
+        assertThatThrownBy(() -> service.listClinicalCheckIns(
+                coordinatorAuth,
+                10L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403 FORBIDDEN");
+    }
+
+    @Test
     void saveForCurrentPatientScoresAnswersAndReplacesSameDayCheckIn() {
         var date = LocalDate.of(2026, 6, 26);
         var first = completeRequest(date, FlareState.SUSPECTED_FLARE, "mild");

@@ -204,8 +204,8 @@ public class DietLogPhotoService {
             return;
         }
         if (photo.getStatus() == DietLogPhotoStatus.ATTACHED
-                && user.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN, RoleName.COORDINATOR)
-                && accessControl.canAccessPatientProfile(authentication, patient.getId())) {
+                && user.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN)
+                && accessControl.canViewPatientClinicalData(authentication, patient.getId())) {
             return;
         }
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user cannot read photo");

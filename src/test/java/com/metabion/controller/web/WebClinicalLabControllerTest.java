@@ -1,5 +1,9 @@
 package com.metabion.controller.web;
 
+import com.metabion.domain.LabResultConfirmationStatus;
+import com.metabion.domain.LabResultSource;
+import com.metabion.dto.LabResultResponse;
+import com.metabion.dto.LabResultSetResponse;
 import com.metabion.dto.PatientOptionResponse;
 import com.metabion.service.ClinicalPatientDirectoryService;
 import com.metabion.service.LabCatalogService;
@@ -21,13 +25,16 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -103,5 +110,23 @@ class WebClinicalLabControllerTest {
                         .with(user("patient@example.com").roles("PATIENT")))
                 .andExpect(status().isForbidden())
                 .andExpect(view().name("result"));
+    }
+
+    @Test
+    void physicianEditFormRendersTheOriginalDateInBrowserCompatibleFormat() throws Exception {
+        when(results.getForClinicalPatient(any(), eq(10L), eq(99L))).thenReturn(recentCrpSet());
+
+        mvc.perform(get("/app/clinical/labs/99/edit").param("patientProfileId", "10")
+                        .with(user("doctor@example.com").roles("PHYSICIAN")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("name=\"collectionDate\" value=\"2026-07-15\"")))
+                .andExpect(content().string(containsString("type=\"date\" required")));
+    }
+
+    private LabResultSetResponse recentCrpSet() {
+        return new LabResultSetResponse(99L, 0, 10L, LocalDate.of(2026, 7, 15), null,
+                LabResultSource.MANUAL, LabResultConfirmationStatus.CONFIRMED, true,
+                Instant.now(), Instant.now(), List.of(new LabResultResponse(1L, "CRP", "C-reactive protein",
+                new BigDecimal("5.2"), "mg/L", new BigDecimal("5.2"), "mg/L", null, null)));
     }
 }

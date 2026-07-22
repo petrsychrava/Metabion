@@ -56,13 +56,12 @@ class AppMenuCatalogTest {
                         "Red-flag monitoring - planned",
                         "Data completeness - planned",
                         "Protocol checkpoints - planned",
-                        "Cohort and participant management - planned",
                         "Research export and reports - planned",
                         "Account");
     }
 
     @Test
-    void coordinatorReceivesClinicalAndStudyItems() {
+    void coordinatorReceivesOperationsButNoClinicalItems() {
         var auth = auth("coordinator@example.com", RoleName.COORDINATOR.authority());
 
         assertThat(catalog.sidebarItems(auth))
@@ -70,18 +69,16 @@ class AppMenuCatalogTest {
                 .containsExactly(
                         "Home",
                         "Education library",
-                        "Onboarding review",
-                        "Daily check-in review",
-                        "Patient trends",
-                        "Laboratory results",
                         "Content management",
-                        "Assigned patient overview - planned",
-                        "Red-flag monitoring - planned",
-                        "Data completeness - planned",
-                        "Protocol checkpoints - planned",
-                        "Cohort and participant management - planned",
-                        "Research export and reports - planned",
+                        "Assignment management",
                         "Account");
+        assertThat(catalog.sidebarItems(auth)).extracting(AppMenuItem::route)
+                .contains("/app/assignment-management")
+                .doesNotContain(
+                        "/app/clinical/onboarding",
+                        "/app/clinical/daily-check-ins",
+                        "/app/clinical/trends",
+                        "/app/clinical/labs");
     }
 
     @Test
@@ -99,7 +96,34 @@ class AppMenuCatalogTest {
                         "Content management",
                         "Rule configuration - planned",
                         "Audit review - planned",
+                        "Assignment management",
                         "Account");
+    }
+
+    @Test
+    void expertsDoNotReceiveAssignmentManagement() {
+        var physician = auth("doctor@example.com", RoleName.PHYSICIAN.authority());
+        var nutritionist = auth("nutrition@example.com", RoleName.NUTRITION_SPECIALIST.authority());
+
+        assertThat(catalog.sidebarItems(physician)).extracting(AppMenuItem::route)
+                .doesNotContain("/app/assignment-management");
+        assertThat(catalog.sidebarItems(nutritionist)).extracting(AppMenuItem::route)
+                .doesNotContain("/app/assignment-management");
+    }
+
+    @Test
+    void multiRoleManagerMenusContainNoDuplicateItems() {
+        var auth = auth(
+                "manager@example.com",
+                RoleName.ADMIN.authority(),
+                RoleName.COORDINATOR.authority(),
+                RoleName.PHYSICIAN.authority());
+
+        assertThat(catalog.sidebarItems(auth))
+                .doesNotHaveDuplicates();
+        assertThat(catalog.sidebarItems(auth).stream()
+                .filter(item -> "/app/assignment-management".equals(item.route())))
+                .hasSize(1);
     }
 
     @Test
@@ -215,11 +239,12 @@ class AppMenuCatalogTest {
                             "Vzdělávací knihovna",
                             "Pozvánky pracovníků",
                             "Trendy pacientů",
-                            "Laboratorní výsledky",
-                            "Správa obsahu",
-                            "Nastavení pravidel - plánováno",
-                            "Kontrola auditu - plánováno",
-                            "Účet");
+                             "Laboratorní výsledky",
+                             "Správa obsahu",
+                             "Nastavení pravidel - plánováno",
+                             "Kontrola auditu - plánováno",
+                             "Správa přiřazení",
+                             "Účet");
         } finally {
             LocaleContextHolder.resetLocaleContext();
         }

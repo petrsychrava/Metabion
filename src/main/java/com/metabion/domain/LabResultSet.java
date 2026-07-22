@@ -18,7 +18,9 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @Entity
@@ -70,12 +72,26 @@ public class LabResultSet {
     }
 
     public void replaceResults(List<LabResult> replacements, Instant now) {
-        results.clear();
+        var replacementsByCode = new HashMap<String, LabResult>();
         replacements.forEach(result -> {
             if (result.getResultSet() != this) {
                 throw new IllegalArgumentException("lab result must belong to this result set");
             }
-            results.add(result);
+            replacementsByCode.put(result.getTestDefinition().getCode(), result);
+        });
+
+        Map<String, LabResult> existingByCode = new HashMap<>();
+        results.forEach(result -> existingByCode.put(result.getTestDefinition().getCode(), result));
+        results.removeIf(result -> !replacementsByCode.containsKey(result.getTestDefinition().getCode()));
+        replacements.forEach(replacement -> {
+            var existing = existingByCode.get(replacement.getTestDefinition().getCode());
+            if (existing == null) {
+                results.add(replacement);
+                return;
+            }
+            existing.updateMeasurements(replacement.getReportedValue(), replacement.getReportedUnit(),
+                    replacement.getCanonicalValue(), replacement.getCanonicalUnit(),
+                    replacement.getReferenceLower(), replacement.getReferenceUpper());
         });
         updatedAt = now;
     }

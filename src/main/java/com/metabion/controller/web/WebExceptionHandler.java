@@ -75,8 +75,15 @@ public class WebExceptionHandler {
 
     private void conflict(Model model, HttpServletRequest request) {
         model.addAttribute("title", message("error.requestFailed.title"));
-        model.addAttribute("message", message("lab.error.conflict"));
-        var href = request.getRequestURI().startsWith("/app/clinical/labs") ? "/app/clinical/labs" : "/app/labs";
+        var assignmentManagement = request.getRequestURI().startsWith("/app/assignment-management");
+        model.addAttribute(
+                "message",
+                message(assignmentManagement ? "assignment.error.conflict" : "lab.error.conflict"));
+        var href = assignmentManagement
+                ? "/app/assignment-management"
+                : request.getRequestURI().startsWith("/app/clinical/labs")
+                        ? "/app/clinical/labs"
+                        : "/app/labs";
         model.addAttribute("href", href);
         model.addAttribute("action", message("error.backToApp"));
     }

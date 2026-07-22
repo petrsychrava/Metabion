@@ -158,7 +158,7 @@ public class LabResultService {
     private User clinicalPatient(Authentication authentication, Long patientId) {
         var actor = currentUser(authentication); requireClinicalActor(actor);
         if (patientId == null) throw badRequest("patientProfileId is required");
-        if (!actor.hasRole(RoleName.ADMIN) && !accessControl.canAccessPatientProfile(authentication, patientId)) throw forbidden("Patient profile is not assigned to current user");
+        if (!actor.hasRole(RoleName.ADMIN) && !accessControl.canViewPatientClinicalData(authentication, patientId)) throw forbidden("Patient profile is not assigned to current user");
         return actor;
     }
     private PatientProfile requirePatientProfile(Long id) { return patientProfiles.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Patient profile not found")); }
@@ -167,7 +167,7 @@ public class LabResultService {
         return users.findByEmail(UserService.normalize(authentication.getName())).orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authenticated user not found"));
     }
     private void requirePatient(User actor) { if (!actor.hasRole(RoleName.PATIENT)) throw forbidden("Current user is not a patient"); }
-    private void requireClinicalActor(User actor) { if (!actor.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN, RoleName.COORDINATOR, RoleName.ADMIN)) throw forbidden("Current user cannot manage laboratory results"); }
+    private void requireClinicalActor(User actor) { if (!actor.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN, RoleName.ADMIN)) throw forbidden("Current user cannot access clinical data"); }
     private void validateRequest(PatientProfile patient, LabResultSetRequest request, boolean versionRequired) {
         if (request == null) throw badRequest("request is required");
         if (versionRequired && request.version() == null) throw badRequest("version is required");

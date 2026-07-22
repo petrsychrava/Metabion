@@ -69,6 +69,18 @@ class ClinicalPatientDirectoryServiceTest {
                         .isEqualTo(HttpStatus.FORBIDDEN));
     }
 
+    @Test
+    void coordinatorCannotListClinicalOptions() {
+        var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles);
+        var coordinator = user(4L, "coordinator@example.com", RoleName.COORDINATOR);
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+
+        assertThatThrownBy(() -> service.listAccessible(auth("coordinator@example.com")))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+                        .isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
     private User user(Long id, String email, RoleName role) {
         var user = new User(email, "hash");
         user.setId(id);
