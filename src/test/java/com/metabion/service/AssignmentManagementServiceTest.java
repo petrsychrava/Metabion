@@ -669,6 +669,34 @@ class AssignmentManagementServiceTest {
     }
 
     @Test
+    void coordinatorCannotDistinguishArchivedOutOfScopeCohortThroughMutations() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var archived = cohort(10L, "Archived", admin);
+        archived.archive(admin, NOW.minusSeconds(60));
+        var authentication = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(archived));
+        when(accessControl.canManageCohort(authentication, 10L)).thenReturn(false);
+        when(accessControl.canManageCohortMemberships(authentication, 10L)).thenReturn(false);
+
+        assertStatus(() -> service.updateCohort(
+                authentication, 10L, new CohortForm("Guessed", null)), HttpStatus.NOT_FOUND);
+        assertStatus(() -> service.addPatientToCohort(authentication, 10L, 40L),
+                HttpStatus.NOT_FOUND);
+        assertStatus(() -> service.endMembership(authentication, 10L, 100L),
+                HttpStatus.NOT_FOUND);
+        assertStatus(() -> service.assignCohortStaff(authentication, 10L, 50L),
+                HttpStatus.NOT_FOUND);
+        assertStatus(() -> service.endCohortStaffAssignment(authentication, 10L, 200L),
+                HttpStatus.NOT_FOUND);
+
+        verify(cohorts, org.mockito.Mockito.times(5)).lockById(10L);
+        verify(patientProfiles, never()).lockById(any());
+        verify(staffProfiles, never()).lockById(any());
+    }
+
+    @Test
     void coordinatorDirectAssignmentRequiresCurrentPatientScopeWhileAdministratorMayAssignAnyPatient() {
         var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
         var admin = user(2L, "admin@example.com", RoleName.ADMIN);

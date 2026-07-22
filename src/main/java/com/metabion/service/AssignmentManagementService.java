@@ -104,11 +104,12 @@ public class AssignmentManagementService {
     @Transactional
     public void updateCohort(Authentication authentication, Long cohortId, CohortForm form) {
         var actor = requireAssignmentManager(authentication);
-        var cohort = activeLockedCohort(cohortId, "Archived cohort cannot be edited");
+        var cohort = lockedCohort(cohortId);
         if (!actor.hasRole(RoleName.ADMIN)
                 && !accessControl.canManageCohort(authentication, cohortId)) {
             throw notFound("Cohort not found");
         }
+        requireActiveCohort(cohort, "Archived cohort cannot be edited");
         requireForm(form);
         cohort.edit(normalizeName(form.name()), normalizeDescription(form.description()));
     }
@@ -143,11 +144,12 @@ public class AssignmentManagementService {
                                    Long cohortId,
                                    Long patientProfileId) {
         var actor = requireAssignmentManager(authentication);
-        var cohort = activeLockedCohort(cohortId);
+        var cohort = lockedCohort(cohortId);
         if (!actor.hasRole(RoleName.ADMIN)
                 && !accessControl.canManageCohortMemberships(authentication, cohortId)) {
             throw notFound("Cohort not found");
         }
+        requireActiveCohort(cohort);
         var patient = patientProfiles.lockById(patientProfileId)
                 .filter(profile -> profile.getUser().isEnabled())
                 .orElseThrow(() -> notFound("Patient profile not found"));
@@ -165,11 +167,12 @@ public class AssignmentManagementService {
     @Transactional
     public void endMembership(Authentication authentication, Long cohortId, Long membershipId) {
         var actor = requireAssignmentManager(authentication);
-        activeLockedCohort(cohortId);
+        var cohort = lockedCohort(cohortId);
         if (!actor.hasRole(RoleName.ADMIN)
                 && !accessControl.canManageCohortMemberships(authentication, cohortId)) {
             throw notFound("Cohort membership not found");
         }
+        requireActiveCohort(cohort);
         var patientProfileId = memberships.findActivePatientProfileId(cohortId, membershipId)
                 .orElseThrow(() -> notFound("Cohort membership not found"));
         patientProfiles.lockById(patientProfileId)
@@ -184,11 +187,12 @@ public class AssignmentManagementService {
                                   Long cohortId,
                                   Long staffProfileId) {
         var actor = requireAssignmentManager(authentication);
-        var cohort = activeLockedCohort(cohortId);
+        var cohort = lockedCohort(cohortId);
         if (!actor.hasRole(RoleName.ADMIN)
                 && !accessControl.canManageCohort(authentication, cohortId)) {
             throw notFound("Cohort not found");
         }
+        requireActiveCohort(cohort);
         var target = staffProfiles.lockById(staffProfileId)
                 .filter(profile -> profile.getUser().isEnabled())
                 .filter(profile -> profile.getUser().hasAnyRole(
@@ -213,11 +217,12 @@ public class AssignmentManagementService {
                                          Long cohortId,
                                          Long assignmentId) {
         var actor = requireAssignmentManager(authentication);
-        activeLockedCohort(cohortId);
+        var cohort = lockedCohort(cohortId);
         if (!actor.hasRole(RoleName.ADMIN)
                 && !accessControl.canManageCohort(authentication, cohortId)) {
             throw notFound("Cohort staff assignment not found");
         }
+        requireActiveCohort(cohort);
         var assignment = cohortStaffAssignments.findActiveByCohortIdAndId(cohortId, assignmentId)
                 .orElseThrow(() -> notFound("Cohort staff assignment not found"));
         if ((!actor.hasRole(RoleName.ADMIN)
@@ -382,17 +387,19 @@ public class AssignmentManagementService {
                 patients, pageIndex, patientPage.getTotalPages(), patientPage.getTotalElements());
     }
 
-    private Cohort activeLockedCohort(Long cohortId) {
-        return activeLockedCohort(cohortId, "Archived cohort cannot be changed");
+    private Cohort lockedCohort(Long cohortId) {
+        return cohorts.lockById(cohortId)
+                .orElseThrow(() -> notFound("Cohort not found"));
     }
 
-    private Cohort activeLockedCohort(Long cohortId, String archivedMessage) {
-        var cohort = cohorts.lockById(cohortId)
-                .orElseThrow(() -> notFound("Cohort not found"));
+    private static void requireActiveCohort(Cohort cohort) {
+        requireActiveCohort(cohort, "Archived cohort cannot be changed");
+    }
+
+    private static void requireActiveCohort(Cohort cohort, String archivedMessage) {
         if (cohort.isArchived()) {
             throw conflict(archivedMessage);
         }
-        return cohort;
     }
 
     private Long requireCoordinatorProfileId(User actor) {

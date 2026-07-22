@@ -349,6 +349,7 @@ class AssignmentManagementIT extends AbstractAuthIT {
 
         var revokedButUncommitted = new CountDownLatch(1);
         var releaseRevocation = new CountDownLatch(1);
+        var directWriteAttempted = new CountDownLatch(1);
         var executor = Executors.newFixedThreadPool(2);
         try {
             var revoke = executor.submit(() -> captureFailure(() ->
@@ -360,9 +361,12 @@ class AssignmentManagementIT extends AbstractAuthIT {
                     })));
             assertThat(revokedButUncommitted.await(5, TimeUnit.SECONDS)).isTrue();
 
-            var directWrite = executor.submit(() -> captureFailure(() ->
-                    assignmentManagement.assignDirectExpert(
-                            coordinatorAuth, patient.getId(), physician.getId())));
+            var directWrite = executor.submit(() -> captureFailure(() -> {
+                directWriteAttempted.countDown();
+                assignmentManagement.assignDirectExpert(
+                        coordinatorAuth, patient.getId(), physician.getId());
+            }));
+            assertThat(directWriteAttempted.await(5, TimeUnit.SECONDS)).isTrue();
             var completedBeforeRevocationCommit = completesWithin(directWrite, 500);
             releaseRevocation.countDown();
 
@@ -392,6 +396,7 @@ class AssignmentManagementIT extends AbstractAuthIT {
 
         var archivedButUncommitted = new CountDownLatch(1);
         var releaseArchive = new CountDownLatch(1);
+        var membershipEndAttempted = new CountDownLatch(1);
         var executor = Executors.newFixedThreadPool(2);
         try {
             var archive = executor.submit(() -> captureFailure(() ->
@@ -402,8 +407,11 @@ class AssignmentManagementIT extends AbstractAuthIT {
                     })));
             assertThat(archivedButUncommitted.await(5, TimeUnit.SECONDS)).isTrue();
 
-            var end = executor.submit(() -> captureFailure(() ->
-                    assignmentManagement.endMembership(adminAuth, cohort.id(), membership.getId())));
+            var end = executor.submit(() -> captureFailure(() -> {
+                membershipEndAttempted.countDown();
+                assignmentManagement.endMembership(adminAuth, cohort.id(), membership.getId());
+            }));
+            assertThat(membershipEndAttempted.await(5, TimeUnit.SECONDS)).isTrue();
             var completedBeforeArchiveCommit = completesWithin(end, 500);
             releaseArchive.countDown();
 
