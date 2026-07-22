@@ -351,7 +351,9 @@ public class AssignmentManagementService {
                 : requireCoordinatorProfileId(actor);
         var pageIndex = Math.max(0, requestedPage);
         var patientPage = patientPage(actor, coordinatorProfileId, pageIndex);
-        if (patientPage.getTotalPages() > 0 && pageIndex >= patientPage.getTotalPages()) {
+        if (patientPage.getTotalPages() == 0) {
+            pageIndex = 0;
+        } else if (pageIndex >= patientPage.getTotalPages()) {
             pageIndex = patientPage.getTotalPages() - 1;
             patientPage = patientPage(actor, coordinatorProfileId, pageIndex);
         }

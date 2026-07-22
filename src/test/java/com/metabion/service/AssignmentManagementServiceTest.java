@@ -979,6 +979,25 @@ class AssignmentManagementServiceTest {
     }
 
     @Test
+    void directPageClampsToFirstPageWhenResultSetIsEmpty() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(patientProfiles.findAllEnabledPatientOptions(
+                any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(7, 50), 0));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of());
+
+        var page = service.directPage(auth("admin@example.com"), 7);
+
+        assertThat(page.pageIndex()).isZero();
+        assertThat(page.totalPages()).isZero();
+        assertThat(page.totalPatients()).isZero();
+        assertThat(page.hasPrevious()).isFalse();
+        assertThat(page.hasNext()).isFalse();
+        assertThat(page.patients()).isEmpty();
+    }
+
+    @Test
     void directPageFiltersEnabledExpertCandidatesForEachPatientPair() {
         var admin = user(2L, "admin@example.com", RoleName.ADMIN);
         var patientA = enabledUser(4L, "a@example.com", RoleName.PATIENT);

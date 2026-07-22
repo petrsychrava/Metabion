@@ -175,7 +175,7 @@ class DailyTrendServiceTest {
         var clinician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
         var clinicalAuth = auth("doctor@example.com");
         when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(clinician));
-        when(accessControl.canViewPatientClinicalData(any(), eq(10L))).thenReturn(true);
+        when(accessControl.canViewPatientClinicalData(any(Authentication.class), eq(10L))).thenReturn(true);
         when(checkIns.findByPatientProfileIdAndCheckInDateBetweenOrderByCheckInDateDesc(
                 eq(10L), any(), any())).thenReturn(List.of());
         when(dietLogs.findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(

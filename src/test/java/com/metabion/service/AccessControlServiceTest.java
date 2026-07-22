@@ -229,7 +229,7 @@ class AccessControlServiceTest {
 
     @Test
     void nullAuthenticationCannotAccessAnything() {
-        assertThat(accessControlService.canViewPatientClinicalData(null, 10L)).isFalse();
+        assertThat(accessControlService.canViewPatientClinicalData((Authentication) null, 10L)).isFalse();
         assertThat(accessControlService.canAccessCohort(null, 100L)).isFalse();
         assertThat(accessControlService.canManageCohort(null, 100L)).isFalse();
         assertThat(accessControlService.canManageCohortMemberships(null, 100L)).isFalse();

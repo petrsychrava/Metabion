@@ -294,7 +294,7 @@ class OnboardingServiceTest {
         var submission = submission(patient, "default", 1);
         when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(reviewer));
         when(submissions.findById(99L)).thenReturn(Optional.of(submission));
-        when(accessControl.canViewPatientClinicalData(any(), eq(30L))).thenReturn(false);
+        when(accessControl.canViewPatientClinicalData(any(Authentication.class), eq(30L))).thenReturn(false);
 
         assertThatThrownBy(() -> service.review(
                 auth("doctor@example.com"),
@@ -311,7 +311,7 @@ class OnboardingServiceTest {
         var submission = submission(patient, "default", 1);
         when(users.findByEmail("assigned-doctor@example.com")).thenReturn(Optional.of(reviewer));
         when(submissions.findById(100L)).thenReturn(Optional.of(submission));
-        when(accessControl.canViewPatientClinicalData(any(), eq(50L))).thenReturn(true);
+        when(accessControl.canViewPatientClinicalData(any(Authentication.class), eq(50L))).thenReturn(true);
 
         var response = service.review(
                 auth("assigned-doctor@example.com"),
@@ -367,8 +367,8 @@ class OnboardingServiceTest {
         when(submissions.findByOnboardingContextAndReviewStatusOrderBySubmittedAtDesc(
                 "default", OnboardingReviewStatus.PENDING_REVIEW))
                 .thenReturn(List.of(assigned, unassigned));
-        when(accessControl.canViewPatientClinicalData(any(), eq(90L))).thenReturn(true);
-        when(accessControl.canViewPatientClinicalData(any(), eq(91L))).thenReturn(false);
+        when(accessControl.canViewPatientClinicalData(any(User.class), eq(90L))).thenReturn(true);
+        when(accessControl.canViewPatientClinicalData(any(User.class), eq(91L))).thenReturn(false);
 
         var summaries = service.listReviewable(
                 auth("list-doctor@example.com"),
@@ -378,6 +378,9 @@ class OnboardingServiceTest {
         assertThat(summaries)
                 .extracting(OnboardingSubmissionSummaryResponse::patientProfileId)
                 .containsExactly(90L);
+        verify(accessControl).canViewPatientClinicalData(reviewer, 90L);
+        verify(accessControl).canViewPatientClinicalData(reviewer, 91L);
+        verify(accessControl, never()).canViewPatientClinicalData(any(Authentication.class), any());
     }
 
     @Test
@@ -395,7 +398,8 @@ class OnboardingServiceTest {
         assertThat(summaries)
                 .extracting(OnboardingSubmissionSummaryResponse::patientProfileId)
                 .containsExactly(120L, 121L);
-        verify(accessControl, never()).canViewPatientClinicalData(any(), any());
+        verify(accessControl, never()).canViewPatientClinicalData(any(Authentication.class), any());
+        verify(accessControl, never()).canViewPatientClinicalData(any(User.class), any());
     }
 
     @Test

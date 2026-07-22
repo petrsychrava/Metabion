@@ -106,7 +106,7 @@ public class OnboardingService {
 
         return candidates.stream()
                 .filter(submission -> currentUser.hasRole(RoleName.ADMIN)
-                        || accessControl.canViewPatientClinicalData(authentication, submission.getPatientProfile().getId()))
+                        || accessControl.canViewPatientClinicalData(currentUser, submission.getPatientProfile().getId()))
                 .map(OnboardingSubmissionSummaryResponse::from)
                 .toList();
     }

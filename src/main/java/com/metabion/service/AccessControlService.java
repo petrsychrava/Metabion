@@ -110,7 +110,7 @@ public class AccessControlService {
         return users.findByEmail(UserService.normalize(authentication.getName()));
     }
 
-    private boolean canViewPatientClinicalData(User user, Long patientProfileId) {
+    public boolean canViewPatientClinicalData(User user, Long patientProfileId) {
         if (user.hasRole(RoleName.ADMIN)) {
             return true;
         }
