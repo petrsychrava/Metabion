@@ -8,6 +8,7 @@
     --accent: #1f7a5a;
     --accent-dark: #15553f;
     --error: #9f1d1d;
+    --error-bg: #9f1d1d;
     --focus: #2d8fcc;
     --secondary-bg: #e7eee9;
     --secondary-hover: #d8e1db;
@@ -36,6 +37,7 @@
         --accent: #45c28d;
         --accent-dark: #77d9ad;
         --error: #ff8a8a;
+        --error-bg: #9f1d1d;
         --focus: #6fbde8;
         --secondary-bg: #22342b;
         --secondary-hover: #2d4438;
@@ -64,6 +66,7 @@
     --accent: #1f7a5a;
     --accent-dark: #15553f;
     --error: #9f1d1d;
+    --error-bg: #9f1d1d;
     --focus: #2d8fcc;
     --secondary-bg: #e7eee9;
     --secondary-hover: #d8e1db;
@@ -91,6 +94,7 @@
     --accent: #45c28d;
     --accent-dark: #77d9ad;
     --error: #ff8a8a;
+    --error-bg: #9f1d1d;
     --focus: #6fbde8;
     --secondary-bg: #22342b;
     --secondary-hover: #2d4438;
@@ -674,10 +678,81 @@ a {
     border-bottom: 1px solid var(--border);
 }
 
+.assignment-cohorts a[aria-current="page"] {
+    background: var(--secondary-bg);
+    box-shadow: inset 3px 0 0 var(--accent);
+    font-weight: 700;
+}
+
+.assignment-cohorts .form {
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+}
+
+.assignment-access-group {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.assignment-access-group h4 {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.assignment-access-list {
+    display: grid;
+    gap: 0.5rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.assignment-access-row {
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    padding: 0.625rem 0.75rem;
+}
+
+.assignment-access-row > :first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.assignment-row-action {
+    margin: 0;
+}
+
+.assignment-row-action button {
+    white-space: nowrap;
+}
+
+.button-danger {
+    background: var(--error-bg);
+}
+
+.button-danger:hover {
+    background: var(--error-bg);
+    filter: brightness(0.9);
+}
+
 @media (max-width: 800px) {
     .assignment-workspace,
     .assignment-columns {
         grid-template-columns: 1fr;
+    }
+
+    .assignment-access-row {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .assignment-row-action,
+    .assignment-row-action button {
+        width: 100%;
     }
 }
 

@@ -157,9 +157,52 @@ class AssignmentManagementWebControllerTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("two-candidate@example.com")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
                         "href=\"/app/assignment-management/cohorts/10\"")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("Manage care team")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "aria-label=\"Manage cohort “Pilot cohort”\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
                         "End doctor@example.com’s direct assignment to patient patient@example.com?")));
+    }
+
+    @Test
+    void directWorkspaceBindsEachEndActionToItsDirectExpert() throws Exception {
+        stubAppShell();
+        var authentication = auth("admin@example.com", RoleName.ADMIN);
+        when(assignments.directPage(same(authentication))).thenReturn(directPage());
+
+        mvc.perform(get("/app/assignment-management/direct").principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "class=\"assignment-access-list\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "End direct assignment")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Assign expert")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "aria-label=\"Manage cohort “Pilot cohort”\"")))
+                .andExpect(result -> assertThat(result.getResponse().getContentAsString())
+                        .containsPattern("(?s)doctor@example\\.com.*?End direct assignment"));
+    }
+
+    @Test
+    void cohortWorkspaceUsesSpecificActionsAndMarksTheSelectedCohort() throws Exception {
+        stubAppShell();
+        var authentication = auth("admin@example.com", RoleName.ADMIN);
+        when(assignments.cohortPage(same(authentication), eq(10L))).thenReturn(activeCohortPage(true));
+
+        mvc.perform(get("/app/assignment-management/cohorts/10").principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "aria-current=\"page\">Pilot cohort")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Create new cohort")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Add patient to cohort")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Add staff member to cohort")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "End cohort membership")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "End care-team assignment")));
     }
 
     @Test
@@ -175,6 +218,8 @@ class AssignmentManagementWebControllerTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Správa přiřazení")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Přímá přiřazení")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Přístup přes kohortu")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Přiřadit odborníka")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Ukončit přímé přiřazení")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
                         "Ukončit přímé přiřazení odborníka doctor@example.com k pacientovi patient@example.com?")));
     }

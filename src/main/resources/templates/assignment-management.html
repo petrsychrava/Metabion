@@ -25,8 +25,10 @@
             <h2 th:text="#{assignment.cohorts}">Cohorts</h2>
             <a th:each="cohort : ${cohortPage.cohorts()}"
                th:href="@{/app/assignment-management/cohorts/{id}(id=${cohort.id()})}"
+               th:attr="aria-current=${cohortPage.selected() != null and cohortPage.selected().id() == cohort.id()} ? 'page' : null"
                th:text="${cohort.name()}">Cohort</a>
 
+            <h3 th:text="#{assignment.createNewCohort}">Create new cohort</h3>
             <form class="form" th:action="@{/app/assignment-management/cohorts}" th:object="${createCohortForm}" method="post">
                 <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                 <p class="error" th:if="${#fields.hasAnyErrors()}" th:text="#{assignment.validation.review}">
@@ -111,7 +113,7 @@
                                 <p class="error" th:if="${#fields.hasErrors('targetId')}"
                                    th:errors="*{targetId}">Patient selection error</p>
                             </div>
-                            <button type="submit" th:text="#{assignment.add}">Add</button>
+                            <button type="submit" th:text="#{assignment.addPatientToCohort}">Add patient to cohort</button>
                         </form>
 
                         <article th:each="patient : ${cohortPage.patients()}" class="assignment-patient">
@@ -126,17 +128,25 @@
                                 <dt th:text="#{assignment.endedBy}">Ended by</dt>
                                 <dd th:text="${patient.endedByEmail()}">admin@example.com</dd>
                             </dl>
-                            <div th:if="${!cohortPage.selected().archived()}">
-                                <strong th:text="#{assignment.direct}">Direct assignments</strong>
-                                <span th:each="access : ${patient.direct()}" th:text="${access.email()}">expert@example.com</span>
-                            </div>
-                            <div th:if="${!cohortPage.selected().archived()}">
-                                <strong th:text="#{assignment.inherited}">Access through cohort</strong>
-                                <span th:each="access : ${patient.inherited()}"
-                                      th:text="${access.email() + ' · ' + access.cohortName()}">expert@example.com · Cohort</span>
-                            </div>
+                            <section class="assignment-access-group" th:if="${!cohortPage.selected().archived()}">
+                                <h4 th:text="#{assignment.directExpertAccess}">Direct expert access</h4>
+                                <ul class="assignment-access-list">
+                                    <li th:each="access : ${patient.direct()}" class="assignment-access-row">
+                                        <span th:text="${access.email()}">expert@example.com</span>
+                                    </li>
+                                </ul>
+                            </section>
+                            <section class="assignment-access-group" th:if="${!cohortPage.selected().archived()}">
+                                <h4 th:text="#{assignment.inherited}">Access through cohort</h4>
+                                <ul class="assignment-access-list">
+                                    <li th:each="access : ${patient.inherited()}" class="assignment-access-row">
+                                        <span th:text="${access.email() + ' · ' + access.cohortName()}">expert@example.com · Cohort</span>
+                                    </li>
+                                </ul>
+                            </section>
                             <a th:if="${!cohortPage.selected().archived()}"
                                th:href="@{/app/assignment-management/direct}"
+                               th:attr="aria-label=#{assignment.manageCareTeamForPatient(${patient.email()})}"
                                th:text="#{assignment.manageCareTeam}">Manage care team</a>
                             <form th:if="${!cohortPage.selected().archived()}"
                                   th:action="@{/app/assignment-management/cohorts/{cohortId}/memberships/{membershipId}/end(
@@ -144,7 +154,7 @@
                                   method="post" onsubmit="return confirm(this.dataset.confirm)"
                                   th:attr="data-confirm=#{assignment.confirm.endMembership(${patient.email()}, ${cohortPage.selected().name()})}">
                                 <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                                <button type="submit" th:text="#{assignment.endMembership}">End membership</button>
+                                <button type="submit" th:text="#{assignment.endCohortMembership}">End cohort membership</button>
                             </form>
                         </article>
                     </div>
@@ -166,30 +176,33 @@
                                 <p class="error" th:if="${#fields.hasErrors('targetId')}"
                                    th:errors="*{targetId}">Staff selection error</p>
                             </div>
-                            <button type="submit" th:text="#{assignment.add}">Add</button>
+                            <button type="submit" th:text="#{assignment.addStaffToCohort}">Add staff member to cohort</button>
                         </form>
 
-                        <article th:each="access : ${cohortPage.careTeam()}" class="assignment-staff">
-                            <span th:text="${access.email()}">expert@example.com</span>
-                            <dl th:if="${cohortPage.selected().archived()}" class="assignment-history">
-                                <dt th:text="#{assignment.assignedAt}">Assigned at</dt>
-                                <dd th:text="${access.assignedAt()}">2026-07-18T09:00:00Z</dd>
-                                <dt th:text="#{assignment.assignedBy}">Assigned by</dt>
-                                <dd th:text="${access.assignedByEmail()}">admin@example.com</dd>
-                                <dt th:text="#{assignment.endedAt}">Ended at</dt>
-                                <dd th:text="${access.endedAt()}">2026-07-18T10:00:00Z</dd>
-                                <dt th:text="#{assignment.endedBy}">Ended by</dt>
-                                <dd th:text="${access.endedByEmail()}">admin@example.com</dd>
-                            </dl>
-                            <form th:if="${!cohortPage.selected().archived() and (isAdmin or !access.roles().contains('COORDINATOR'))}"
-                                  th:action="@{/app/assignment-management/cohorts/{cohortId}/staff-assignments/{assignmentId}/end(
-                                      cohortId=${cohortPage.selected().id()}, assignmentId=${access.assignmentId()})}"
-                                  method="post" onsubmit="return confirm(this.dataset.confirm)"
-                                  th:attr="data-confirm=#{assignment.confirm.endStaff(${access.email()}, ${cohortPage.selected().name()})}">
-                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                                <button type="submit" th:text="#{assignment.endAssignment}">End assignment</button>
-                            </form>
-                        </article>
+                        <ul class="assignment-access-list">
+                            <li th:each="access : ${cohortPage.careTeam()}" class="assignment-access-row">
+                                <span th:text="${access.email()}">expert@example.com</span>
+                                <dl th:if="${cohortPage.selected().archived()}" class="assignment-history">
+                                    <dt th:text="#{assignment.assignedAt}">Assigned at</dt>
+                                    <dd th:text="${access.assignedAt()}">2026-07-18T09:00:00Z</dd>
+                                    <dt th:text="#{assignment.assignedBy}">Assigned by</dt>
+                                    <dd th:text="${access.assignedByEmail()}">admin@example.com</dd>
+                                    <dt th:text="#{assignment.endedAt}">Ended at</dt>
+                                    <dd th:text="${access.endedAt()}">2026-07-18T10:00:00Z</dd>
+                                    <dt th:text="#{assignment.endedBy}">Ended by</dt>
+                                    <dd th:text="${access.endedByEmail()}">admin@example.com</dd>
+                                </dl>
+                                <form class="assignment-row-action"
+                                      th:if="${!cohortPage.selected().archived() and (isAdmin or !access.roles().contains('COORDINATOR'))}"
+                                      th:action="@{/app/assignment-management/cohorts/{cohortId}/staff-assignments/{assignmentId}/end(
+                                          cohortId=${cohortPage.selected().id()}, assignmentId=${access.assignmentId()})}"
+                                      method="post" onsubmit="return confirm(this.dataset.confirm)"
+                                      th:attr="data-confirm=#{assignment.confirm.endStaff(${access.email()}, ${cohortPage.selected().name()})}">
+                                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                                    <button type="submit" th:text="#{assignment.endCareTeamAssignment}">End care-team assignment</button>
+                                </form>
+                            </li>
+                        </ul>
                     </div>
                 </div>
             </section>
@@ -200,21 +213,22 @@
         <h2 th:text="#{assignment.direct}">Direct assignments</h2>
         <article th:each="patient : ${directPage.patients()}" class="assignment-patient">
             <h3 th:text="${patient.email()}">patient@example.com</h3>
-            <div>
-                <strong th:text="#{assignment.direct}">Direct assignments</strong>
-                <span th:each="access : ${patient.direct()}" th:text="${access.email()}">expert@example.com</span>
-            </div>
-            <div>
-                <strong th:text="#{assignment.inherited}">Access through cohort</strong>
-                <th:block th:each="access : ${patient.inherited()}">
-                <a th:if="${access.cohortManageable()}"
-                   th:href="@{/app/assignment-management/cohorts/{id}(id=${access.cohortId()})}"
-                   th:attr="aria-label=#{assignment.manageCareTeam}"
-                   th:text="${access.email() + ' · ' + access.cohortName()}">Expert · Cohort</a>
-                <span th:if="${!access.cohortManageable()}"
-                      th:text="${access.email() + ' · ' + access.cohortName()}">Expert · Cohort</span>
-                </th:block>
-            </div>
+            <section class="assignment-access-group">
+                <h4 th:text="#{assignment.directExpertAccess}">Direct expert access</h4>
+                <ul class="assignment-access-list">
+                    <li th:each="access : ${patient.direct()}" class="assignment-access-row">
+                        <span th:text="${access.email()}">expert@example.com</span>
+                        <form class="assignment-row-action"
+                              th:action="@{/app/assignment-management/patients/{patientId}/direct-assignments/{assignmentId}/end(
+                                  patientId=${patient.patientProfileId()}, assignmentId=${access.assignmentId()})}"
+                              method="post" onsubmit="return confirm(this.dataset.confirm)"
+                              th:attr="data-confirm=#{assignment.confirm.endDirect(${access.email()}, ${patient.email()})}">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                            <button type="submit" th:text="#{assignment.endDirectAssignment}">End direct assignment</button>
+                        </form>
+                    </li>
+                </ul>
+            </section>
             <form class="form" th:action="@{/app/assignment-management/patients/{patientId}/direct-assignments(
                     patientId=${patient.patientProfileId()})}" th:object="${staffSelection}" method="post">
                 <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
@@ -233,16 +247,21 @@
                            and #fields.hasErrors('targetId')}"
                        th:errors="*{targetId}">Expert selection error</p>
                 </div>
-                <button type="submit" th:text="#{assignment.add}">Add</button>
+                <button type="submit" th:text="#{assignment.assignExpert}">Assign expert</button>
             </form>
-            <form th:each="access : ${patient.direct()}"
-                  th:action="@{/app/assignment-management/patients/{patientId}/direct-assignments/{assignmentId}/end(
-                      patientId=${patient.patientProfileId()}, assignmentId=${access.assignmentId()})}"
-                  method="post" onsubmit="return confirm(this.dataset.confirm)"
-                  th:attr="data-confirm=#{assignment.confirm.endDirect(${access.email()}, ${patient.email()})}">
-                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                <button type="submit" th:text="#{assignment.endAssignment}">End assignment</button>
-            </form>
+            <section class="assignment-access-group">
+                <h4 th:text="#{assignment.inherited}">Access through cohort</h4>
+                <ul class="assignment-access-list">
+                    <li th:each="access : ${patient.inherited()}" class="assignment-access-row">
+                        <a th:if="${access.cohortManageable()}"
+                           th:href="@{/app/assignment-management/cohorts/{id}(id=${access.cohortId()})}"
+                           th:attr="aria-label=#{assignment.manageCohort(${access.cohortName()})}"
+                           th:text="${access.email() + ' · ' + access.cohortName()}">Expert · Cohort</a>
+                        <span th:if="${!access.cohortManageable()}"
+                              th:text="${access.email() + ' · ' + access.cohortName()}">Expert · Cohort</span>
+                    </li>
+                </ul>
+            </section>
         </article>
         <nav class="assignment-pagination" th:if="${directPage.totalPages() > 1}"
              th:attr="aria-label=#{assignment.pagination}">
