@@ -735,6 +735,7 @@ a {
 }
 
 .button-danger:hover {
+    background: var(--error-bg);
     filter: brightness(0.9);
 }
 
