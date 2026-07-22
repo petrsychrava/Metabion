@@ -19,12 +19,20 @@ import com.metabion.service.AssignmentManagementService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,6 +62,9 @@ class AssignmentManagementIT extends AbstractAuthIT {
 
     @Autowired
     StaffProfileRepository staffProfiles;
+
+    @Autowired
+    PlatformTransactionManager transactionManager;
 
     @Test
     void coordinatorEnrollsAnyEnabledPatientAndAssignedPhysicianGetsClinicalAccess() {
@@ -318,6 +329,124 @@ class AssignmentManagementIT extends AbstractAuthIT {
                 .extracting(candidate -> candidate.staffProfileId())
                 .contains(enabledPhysician.getId())
                 .doesNotContain(disabledPhysician.getId());
+    }
+
+    @Test
+    void revokingCoordinatorScopeSerializesWithDirectAssignmentWrite() throws Exception {
+        var admin = enabledUser("admin-direct-race@example.com", RoleName.ADMIN);
+        var coordinator = staff("coordinator-direct-race@example.com", RoleName.COORDINATOR);
+        var patient = patient("patient-direct-race@example.com");
+        var physician = staff("physician-direct-race@example.com", RoleName.PHYSICIAN);
+        var adminAuth = auth(admin.getEmail());
+        var coordinatorAuth = auth(coordinator.getUser().getEmail());
+        var cohort = assignmentManagement.createCohort(
+                adminAuth, new CohortForm("Direct race", null));
+        assignmentManagement.addPatientToCohort(adminAuth, cohort.id(), patient.getId());
+        assignmentManagement.assignCohortStaff(adminAuth, cohort.id(), coordinator.getId());
+        var coordinatorAssignment = cohortStaffAssignments.findActiveByCohortId(cohort.id()).stream()
+                .filter(row -> row.getStaffProfile().getId().equals(coordinator.getId()))
+                .findFirst().orElseThrow();
+
+        var revokedButUncommitted = new CountDownLatch(1);
+        var releaseRevocation = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var revoke = executor.submit(() -> captureFailure(() ->
+                    new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                        assignmentManagement.endCohortStaffAssignment(
+                                adminAuth, cohort.id(), coordinatorAssignment.getId());
+                        revokedButUncommitted.countDown();
+                        await(releaseRevocation);
+                    })));
+            assertThat(revokedButUncommitted.await(5, TimeUnit.SECONDS)).isTrue();
+
+            var directWrite = executor.submit(() -> captureFailure(() ->
+                    assignmentManagement.assignDirectExpert(
+                            coordinatorAuth, patient.getId(), physician.getId())));
+            var completedBeforeRevocationCommit = completesWithin(directWrite, 500);
+            releaseRevocation.countDown();
+
+            assertThat(revoke.get(5, TimeUnit.SECONDS)).isNull();
+            var directFailure = directWrite.get(5, TimeUnit.SECONDS);
+            assertThat(completedBeforeRevocationCommit).isFalse();
+            assertThat(directFailure).isInstanceOfSatisfying(
+                    ResponseStatusException.class,
+                    exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+            assertThat(patientExpertAssignments.existsActiveAssignment(
+                    patient.getId(), physician.getId())).isFalse();
+        } finally {
+            releaseRevocation.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void archiveAndMembershipEndCompleteWithoutDeadlock() throws Exception {
+        var admin = enabledUser("admin-archive-race@example.com", RoleName.ADMIN);
+        var patient = patient("patient-archive-race@example.com");
+        var adminAuth = auth(admin.getEmail());
+        var cohort = assignmentManagement.createCohort(
+                adminAuth, new CohortForm("Archive race", null));
+        assignmentManagement.addPatientToCohort(adminAuth, cohort.id(), patient.getId());
+        var membership = memberships.findActiveByCohortId(cohort.id()).getFirst();
+
+        var archivedButUncommitted = new CountDownLatch(1);
+        var releaseArchive = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var archive = executor.submit(() -> captureFailure(() ->
+                    new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                        assignmentManagement.archiveCohort(adminAuth, cohort.id());
+                        archivedButUncommitted.countDown();
+                        await(releaseArchive);
+                    })));
+            assertThat(archivedButUncommitted.await(5, TimeUnit.SECONDS)).isTrue();
+
+            var end = executor.submit(() -> captureFailure(() ->
+                    assignmentManagement.endMembership(adminAuth, cohort.id(), membership.getId())));
+            var completedBeforeArchiveCommit = completesWithin(end, 500);
+            releaseArchive.countDown();
+
+            assertThat(archive.get(5, TimeUnit.SECONDS)).isNull();
+            var endFailure = end.get(5, TimeUnit.SECONDS);
+            assertThat(completedBeforeArchiveCommit).isFalse();
+            assertThat(endFailure).isInstanceOfSatisfying(
+                    ResponseStatusException.class,
+                    exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+        } finally {
+            releaseArchive.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    private static Throwable captureFailure(Runnable operation) {
+        try {
+            operation.run();
+            return null;
+        } catch (Throwable failure) {
+            return failure;
+        }
+    }
+
+    private static boolean completesWithin(java.util.concurrent.Future<?> future,
+                                           long timeoutMillis) throws Exception {
+        try {
+            future.get(timeoutMillis, TimeUnit.MILLISECONDS);
+            return true;
+        } catch (TimeoutException expected) {
+            return false;
+        }
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                throw new AssertionError("Timed out waiting for concurrent transaction");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted while waiting for concurrent transaction", exception);
+        }
     }
 
     private Authentication auth(String email) {

@@ -24,6 +24,8 @@ import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.StaffProfileRepository;
 import com.metabion.repository.UserRepository;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -32,12 +34,18 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
 public class AssignmentManagementService {
+
+    private static final int DIRECT_PAGE_SIZE = 50;
 
     private final UserRepository users;
     private final PatientProfileRepository patientProfiles;
@@ -96,7 +104,11 @@ public class AssignmentManagementService {
     @Transactional
     public void updateCohort(Authentication authentication, Long cohortId, CohortForm form) {
         var actor = requireAssignmentManager(authentication);
-        var cohort = editableLockedCohort(authentication, actor, cohortId);
+        var cohort = activeLockedCohort(cohortId, "Archived cohort cannot be edited");
+        if (!actor.hasRole(RoleName.ADMIN)
+                && !accessControl.canManageCohort(authentication, cohortId)) {
+            throw notFound("Cohort not found");
+        }
         requireForm(form);
         cohort.edit(normalizeName(form.name()), normalizeDescription(form.description()));
     }
@@ -113,8 +125,8 @@ public class AssignmentManagementService {
             throw conflict("Cohort is already archived");
         }
 
-        var activeMemberships = memberships.findActiveByCohortId(cohortId);
-        var activeStaffAssignments = cohortStaffAssignments.findActiveByCohortId(cohortId);
+        var activeMemberships = memberships.lockActiveByCohortId(cohortId);
+        var activeStaffAssignments = cohortStaffAssignments.lockActiveByCohortId(cohortId);
         if (activeMemberships.stream().anyMatch(row -> !row.isActive())
                 || activeStaffAssignments.stream().anyMatch(row -> !row.isActive())) {
             throw conflict("Cohort relationships have changed");
@@ -131,11 +143,11 @@ public class AssignmentManagementService {
                                    Long cohortId,
                                    Long patientProfileId) {
         var actor = requireAssignmentManager(authentication);
-        var mayManage = accessControl.canManageCohortMemberships(authentication, cohortId);
-        if (!mayManage && !actor.hasRole(RoleName.ADMIN)) {
+        var cohort = activeLockedCohort(cohortId);
+        if (!actor.hasRole(RoleName.ADMIN)
+                && !accessControl.canManageCohortMemberships(authentication, cohortId)) {
             throw notFound("Cohort not found");
         }
-        var cohort = activeLockedCohort(cohortId);
         var patient = patientProfiles.lockById(patientProfileId)
                 .filter(profile -> profile.getUser().isEnabled())
                 .orElseThrow(() -> notFound("Patient profile not found"));
@@ -153,16 +165,17 @@ public class AssignmentManagementService {
     @Transactional
     public void endMembership(Authentication authentication, Long cohortId, Long membershipId) {
         var actor = requireAssignmentManager(authentication);
-        var membership = memberships.findActiveById(membershipId)
-                .orElseThrow(() -> notFound("Cohort membership not found"));
-        if (!membership.getCohort().getId().equals(cohortId)) {
-            throw notFound("Cohort membership not found");
-        }
-        var mayManage = accessControl.canManageCohortMemberships(authentication, cohortId);
-        if (!mayManage && !actor.hasRole(RoleName.ADMIN)) {
-            throw notFound("Cohort membership not found");
-        }
         activeLockedCohort(cohortId);
+        if (!actor.hasRole(RoleName.ADMIN)
+                && !accessControl.canManageCohortMemberships(authentication, cohortId)) {
+            throw notFound("Cohort membership not found");
+        }
+        var patientProfileId = memberships.findActivePatientProfileId(cohortId, membershipId)
+                .orElseThrow(() -> notFound("Cohort membership not found"));
+        patientProfiles.lockById(patientProfileId)
+                .orElseThrow(() -> notFound("Cohort membership not found"));
+        var membership = memberships.findActiveByCohortIdAndId(cohortId, membershipId)
+                .orElseThrow(() -> notFound("Cohort membership not found"));
         end(membership, actor, clock.instant());
     }
 
@@ -171,6 +184,11 @@ public class AssignmentManagementService {
                                   Long cohortId,
                                   Long staffProfileId) {
         var actor = requireAssignmentManager(authentication);
+        var cohort = activeLockedCohort(cohortId);
+        if (!actor.hasRole(RoleName.ADMIN)
+                && !accessControl.canManageCohort(authentication, cohortId)) {
+            throw notFound("Cohort not found");
+        }
         var target = staffProfiles.lockById(staffProfileId)
                 .filter(profile -> profile.getUser().isEnabled())
                 .filter(profile -> profile.getUser().hasAnyRole(
@@ -179,7 +197,6 @@ public class AssignmentManagementService {
         if (!accessControl.canManageCohortStaff(authentication, cohortId, staffProfileId)) {
             throw notFound("Cohort not found");
         }
-        var cohort = activeLockedCohort(cohortId);
         if (cohortStaffAssignments.existsActiveAssignment(cohortId, staffProfileId)) {
             throw conflict("Staff member is already assigned to cohort");
         }
@@ -196,16 +213,19 @@ public class AssignmentManagementService {
                                          Long cohortId,
                                          Long assignmentId) {
         var actor = requireAssignmentManager(authentication);
-        var assignment = cohortStaffAssignments.findActiveById(assignmentId)
+        activeLockedCohort(cohortId);
+        if (!actor.hasRole(RoleName.ADMIN)
+                && !accessControl.canManageCohort(authentication, cohortId)) {
+            throw notFound("Cohort staff assignment not found");
+        }
+        var assignment = cohortStaffAssignments.findActiveByCohortIdAndId(cohortId, assignmentId)
                 .orElseThrow(() -> notFound("Cohort staff assignment not found"));
-        if (!assignment.getCohort().getId().equals(cohortId)
-                || (!actor.hasRole(RoleName.ADMIN)
+        if ((!actor.hasRole(RoleName.ADMIN)
                         && !assignment.getStaffProfile().getUser().isEnabled())
                 || !accessControl.canManageCohortStaff(
                         authentication, cohortId, assignment.getStaffProfile().getId())) {
             throw notFound("Cohort staff assignment not found");
         }
-        activeLockedCohort(cohortId);
         end(assignment, actor, clock.instant());
     }
 
@@ -214,12 +234,10 @@ public class AssignmentManagementService {
                                    Long patientProfileId,
                                    Long staffProfileId) {
         var actor = requireAssignmentManager(authentication);
-        if (!accessControl.canManageDirectExpertAssignments(authentication, patientProfileId)) {
-            throw notFound("Patient profile not found");
-        }
         var patient = patientProfiles.lockById(patientProfileId)
                 .filter(profile -> profile.getUser().isEnabled())
                 .orElseThrow(() -> notFound("Patient profile not found"));
+        lockAndRecheckDirectScope(authentication, actor, patientProfileId);
         var target = staffProfiles.lockById(staffProfileId)
                 .filter(profile -> profile.getUser().isEnabled())
                 .filter(profile -> profile.getUser().hasAnyRole(
@@ -242,12 +260,12 @@ public class AssignmentManagementService {
                                           Long patientProfileId,
                                           Long assignmentId) {
         var actor = requireAssignmentManager(authentication);
-        var assignment = directAssignments.findActiveById(assignmentId)
+        patientProfiles.lockById(patientProfileId)
                 .orElseThrow(() -> notFound("Direct expert assignment not found"));
-        if (!assignment.getPatientProfile().getId().equals(patientProfileId)
-                || !accessControl.canManageDirectExpertAssignments(authentication, patientProfileId)) {
-            throw notFound("Direct expert assignment not found");
-        }
+        lockAndRecheckDirectScope(authentication, actor, patientProfileId);
+        var assignment = directAssignments.findActiveByPatientProfileIdAndId(
+                        patientProfileId, assignmentId)
+                .orElseThrow(() -> notFound("Direct expert assignment not found"));
         end(assignment, actor, clock.instant());
     }
 
@@ -272,12 +290,29 @@ public class AssignmentManagementService {
         var staffAssignments = selected.isArchived()
                 ? cohortStaffAssignments.findHistoryByCohortId(selectedId)
                 : cohortStaffAssignments.findActiveByCohortId(selectedId);
-        var patients = cohortMemberships.stream().map(this::patientRow).toList();
-        var careTeam = staffAssignments.stream().map(this::cohortAccess).toList();
         if (selected.isArchived()) {
+            var patients = cohortMemberships.stream().map(this::historicalPatientRow).toList();
+            var careTeam = staffAssignments.stream()
+                    .map(assignment -> cohortAccess(assignment, true, true))
+                    .toList();
             return new CohortPage(
                     cohortItems, cohortItem(selected), patients, careTeam, List.of(), List.of());
         }
+
+        var patientIds = cohortMemberships.stream()
+                .map(row -> row.getPatientProfile().getId())
+                .toList();
+        var manageableCohortIds = visibleCohorts.stream()
+                .filter(cohort -> !cohort.isArchived())
+                .map(Cohort::getId)
+                .collect(Collectors.toUnmodifiableSet());
+        var access = accessForPatients(patientIds, manageableCohortIds);
+        var patients = cohortMemberships.stream()
+                .map(membership -> patientRow(membership, access))
+                .toList();
+        var careTeam = staffAssignments.stream()
+                .map(assignment -> cohortAccess(assignment, true, false))
+                .toList();
 
         var activePatientIds = cohortMemberships.stream()
                 .map(row -> row.getPatientProfile().getId())
@@ -300,28 +335,38 @@ public class AssignmentManagementService {
 
     @Transactional(readOnly = true)
     public DirectPage directPage(Authentication authentication) {
+        return directPage(authentication, 0);
+    }
+
+    @Transactional(readOnly = true)
+    public DirectPage directPage(Authentication authentication, int requestedPage) {
         var actor = requireAssignmentManager(authentication);
         Long coordinatorProfileId = actor.hasRole(RoleName.ADMIN)
                 ? null
                 : requireCoordinatorProfileId(actor);
-        var patientOptions = actor.hasRole(RoleName.ADMIN)
-                ? patientProfiles.findAllEnabledPatientOptions()
-                : patientProfiles.findEnabledPatientOptionsForStaff(coordinatorProfileId);
+        var pageIndex = Math.max(0, requestedPage);
+        var patientPage = patientPage(actor, coordinatorProfileId, pageIndex);
+        if (patientPage.getTotalPages() > 0 && pageIndex >= patientPage.getTotalPages()) {
+            pageIndex = patientPage.getTotalPages() - 1;
+            patientPage = patientPage(actor, coordinatorProfileId, pageIndex);
+        }
+        var patientOptions = patientPage.getContent();
         var visibleCohorts = actor.hasRole(RoleName.ADMIN)
                 ? cohorts.findAllForAdministration()
                 : cohorts.findActiveForStaff(coordinatorProfileId);
-        var cohortsByPatient = activeCohortsByPatient(visibleCohorts);
+        var manageableCohortIds = visibleCohorts.stream()
+                .filter(cohort -> !cohort.isArchived())
+                .map(Cohort::getId)
+                .collect(Collectors.toUnmodifiableSet());
+        var patientIds = patientOptions.stream().map(com.metabion.dto.PatientOptionResponse::id).toList();
+        var access = accessForPatients(patientIds, manageableCohortIds);
         var directCandidateBase = staffProfiles.findAllEnabledWithRoles().stream()
                 .filter(this::eligibleDirectExpert)
                 .map(this::staffOption)
                 .toList();
         var patients = patientOptions.stream().map(patient -> {
-            var direct = directAssignments.findActiveByPatientProfileId(patient.id()).stream()
-                    .map(this::directAccess)
-                    .toList();
-            var inherited = cohortStaffAssignments.findActiveAssignmentsForPatient(patient.id()).stream()
-                    .map(this::cohortAccess)
-                    .toList();
+            var direct = access.directByPatient().getOrDefault(patient.id(), List.of());
+            var inherited = access.inheritedByPatient().getOrDefault(patient.id(), List.of());
             var activeDirectStaffIds = direct.stream()
                     .map(ExpertAccess::staffProfileId)
                     .collect(java.util.stream.Collectors.toSet());
@@ -330,30 +375,22 @@ public class AssignmentManagementService {
                     .toList();
             return new DirectPatient(
                     patient.id(), patient.email(),
-                    cohortsByPatient.getOrDefault(patient.id(), List.of()),
+                    access.cohortsByPatient().getOrDefault(patient.id(), List.of()),
                     direct, inherited, staffCandidates);
         }).toList();
-        return new DirectPage(patients);
-    }
-
-    private Cohort editableLockedCohort(Authentication authentication, User actor, Long cohortId) {
-        if (!actor.hasRole(RoleName.ADMIN)
-                && !accessControl.canManageCohort(authentication, cohortId)) {
-            throw notFound("Cohort not found");
-        }
-        var cohort = cohorts.lockById(cohortId)
-                .orElseThrow(() -> notFound("Cohort not found"));
-        if (cohort.isArchived()) {
-            throw conflict("Archived cohort cannot be edited");
-        }
-        return cohort;
+        return new DirectPage(
+                patients, pageIndex, patientPage.getTotalPages(), patientPage.getTotalElements());
     }
 
     private Cohort activeLockedCohort(Long cohortId) {
+        return activeLockedCohort(cohortId, "Archived cohort cannot be changed");
+    }
+
+    private Cohort activeLockedCohort(Long cohortId, String archivedMessage) {
         var cohort = cohorts.lockById(cohortId)
                 .orElseThrow(() -> notFound("Cohort not found"));
         if (cohort.isArchived()) {
-            throw conflict("Archived cohort cannot be changed");
+            throw conflict(archivedMessage);
         }
         return cohort;
     }
@@ -370,42 +407,129 @@ public class AssignmentManagementService {
                 : cohorts.findActiveForStaff(requireCoordinatorProfileId(actor));
     }
 
-    private Map<Long, List<CohortItem>> activeCohortsByPatient(List<Cohort> visibleCohorts) {
-        Map<Long, List<CohortItem>> result = new HashMap<>();
-        visibleCohorts.stream()
-                .filter(cohort -> !cohort.isArchived())
-                .forEach(cohort -> memberships.findActiveByCohortId(cohort.getId()).forEach(membership ->
-                        result.computeIfAbsent(membership.getPatientProfile().getId(), ignored ->
-                                new java.util.ArrayList<>()).add(cohortItem(cohort))));
-        return result.entrySet().stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+    private Page<com.metabion.dto.PatientOptionResponse> patientPage(
+            User actor, Long coordinatorProfileId, int pageIndex) {
+        var pageable = PageRequest.of(pageIndex, DIRECT_PAGE_SIZE);
+        return actor.hasRole(RoleName.ADMIN)
+                ? patientProfiles.findAllEnabledPatientOptions(pageable)
+                : patientProfiles.findEnabledPatientOptionsForStaff(coordinatorProfileId, pageable);
+    }
+
+    private PatientAccess accessForPatients(Collection<Long> patientIds,
+                                            Set<Long> manageableCohortIds) {
+        if (patientIds.isEmpty()) {
+            return PatientAccess.empty();
+        }
+        var directByPatient = directAssignments.findActiveByPatientProfileIdIn(patientIds).stream()
+                .collect(Collectors.groupingBy(
+                        assignment -> assignment.getPatientProfile().getId(),
+                        Collectors.mapping(this::directAccess, Collectors.toUnmodifiableList())));
+        var activeMemberships = memberships.findActiveByPatientProfileIdIn(patientIds);
+        var cohortIds = activeMemberships.stream()
+                .map(membership -> membership.getCohort().getId())
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        var staffByCohort = cohortIds.isEmpty()
+                ? Map.<Long, List<CohortStaffAssignment>>of()
+                : cohortStaffAssignments.findActiveByCohortIdIn(cohortIds).stream()
+                        .collect(Collectors.groupingBy(
+                                assignment -> assignment.getCohort().getId(),
+                                Collectors.toUnmodifiableList()));
+        Map<Long, List<CohortItem>> cohortsByPatient = new HashMap<>();
+        Map<Long, List<ExpertAccess>> inheritedByPatient = new HashMap<>();
+        for (var membership : activeMemberships) {
+            var patientId = membership.getPatientProfile().getId();
+            var cohort = membership.getCohort();
+            if (manageableCohortIds.contains(cohort.getId())) {
+                cohortsByPatient.computeIfAbsent(patientId, ignored -> new ArrayList<>())
+                        .add(cohortItem(cohort));
+            }
+            staffByCohort.getOrDefault(cohort.getId(), List.of()).forEach(assignment ->
+                    inheritedByPatient.computeIfAbsent(patientId, ignored -> new ArrayList<>())
+                            .add(cohortAccess(
+                                    assignment, manageableCohortIds.contains(cohort.getId()), false)));
+        }
+        return new PatientAccess(
+                immutableLists(directByPatient), immutableLists(inheritedByPatient),
+                immutableLists(cohortsByPatient));
+    }
+
+    private void lockAndRecheckDirectScope(Authentication authentication,
+                                           User actor,
+                                           Long patientProfileId) {
+        if (!actor.hasRole(RoleName.ADMIN)) {
+            var coordinatorProfileId = requireCoordinatorProfileId(actor);
+            var activeMemberships = memberships.lockActiveByPatientProfileId(patientProfileId);
+            var cohortIds = activeMemberships.stream()
+                    .map(membership -> membership.getCohort().getId())
+                    .distinct()
+                    .toList();
+            if (!cohortIds.isEmpty()) {
+                cohortStaffAssignments.lockActiveByCohortIdsAndStaffProfileId(
+                        cohortIds, coordinatorProfileId);
+            }
+        }
+        if (!accessControl.canManageDirectExpertAssignments(authentication, patientProfileId)) {
+            throw notFound("Patient profile not found");
+        }
+    }
+
+    // Lock hierarchy: cohort -> patient -> membership, cohort -> staff row, direct patient -> scope rows -> direct row.
+    private static <T> Map<Long, List<T>> immutableLists(Map<Long, List<T>> values) {
+        return values.entrySet().stream().collect(Collectors.toUnmodifiableMap(
                 Map.Entry::getKey, entry -> List.copyOf(entry.getValue())));
     }
 
-    private PatientRow patientRow(PatientCohortMembership membership) {
+    private static String email(User user) {
+        return user == null ? null : user.getEmail();
+    }
+
+    private record PatientAccess(Map<Long, List<ExpertAccess>> directByPatient,
+                                 Map<Long, List<ExpertAccess>> inheritedByPatient,
+                                 Map<Long, List<CohortItem>> cohortsByPatient) {
+        private static PatientAccess empty() {
+            return new PatientAccess(Map.of(), Map.of(), Map.of());
+        }
+    }
+
+    private PatientRow patientRow(PatientCohortMembership membership, PatientAccess access) {
         var patient = membership.getPatientProfile();
-        var direct = directAssignments.findActiveByPatientProfileId(patient.getId()).stream()
-                .map(this::directAccess)
-                .toList();
-        var inherited = cohortStaffAssignments.findActiveAssignmentsForPatient(patient.getId()).stream()
-                .map(this::cohortAccess)
-                .toList();
         return new PatientRow(
-                membership.getId(), patient.getId(), patient.getUser().getEmail(), direct, inherited);
+                membership.getId(), patient.getId(), patient.getUser().getEmail(),
+                access.directByPatient().getOrDefault(patient.getId(), List.of()),
+                access.inheritedByPatient().getOrDefault(patient.getId(), List.of()),
+                membership.getAssignedAt(), email(membership.getAssignedBy()),
+                membership.getEndedAt(), email(membership.getEndedBy()));
+    }
+
+    private PatientRow historicalPatientRow(PatientCohortMembership membership) {
+        var patient = membership.getPatientProfile();
+        return new PatientRow(
+                membership.getId(), patient.getId(), patient.getUser().getEmail(),
+                List.of(), List.of(), membership.getAssignedAt(), email(membership.getAssignedBy()),
+                membership.getEndedAt(), email(membership.getEndedBy()));
     }
 
     private ExpertAccess directAccess(PatientExpertAssignment assignment) {
         var staff = assignment.getStaffProfile();
         return new ExpertAccess(
                 assignment.getId(), staff.getId(), staff.getUser().getEmail(),
-                staff.getUser().roleNames(), AccessSource.DIRECT, null, null);
+                staff.getUser().roleNames(), AccessSource.DIRECT, null, null, false,
+                null, null, null, null);
     }
 
-    private ExpertAccess cohortAccess(CohortStaffAssignment assignment) {
+    private ExpertAccess cohortAccess(CohortStaffAssignment assignment,
+                                      boolean manageable,
+                                      boolean includeLifecycle) {
         var staff = assignment.getStaffProfile();
         var cohort = assignment.getCohort();
         return new ExpertAccess(
                 assignment.getId(), staff.getId(), staff.getUser().getEmail(),
-                staff.getUser().roleNames(), AccessSource.COHORT, cohort.getId(), cohort.getName());
+                staff.getUser().roleNames(), AccessSource.COHORT, cohort.getId(), cohort.getName(),
+                manageable,
+                includeLifecycle ? assignment.getAssignedAt() : null,
+                includeLifecycle ? email(assignment.getAssignedBy()) : null,
+                includeLifecycle ? assignment.getEndedAt() : null,
+                includeLifecycle ? email(assignment.getEndedBy()) : null);
     }
 
     private StaffOption staffOption(StaffProfile profile) {
@@ -457,7 +581,9 @@ public class AssignmentManagementService {
                 cohort.getDescription(),
                 cohort.isArchived(),
                 cohort.getCreatedBy().getEmail(),
-                cohort.getCreatedAt());
+                cohort.getCreatedAt(),
+                email(cohort.getArchivedBy()),
+                cohort.getArchivedAt());
     }
 
     private static void end(PatientCohortMembership membership, User actor, java.time.Instant now) {

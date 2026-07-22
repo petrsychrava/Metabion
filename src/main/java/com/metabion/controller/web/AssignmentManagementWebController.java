@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
@@ -50,8 +51,10 @@ public class AssignmentManagementWebController {
     }
 
     @GetMapping("/app/assignment-management/direct")
-    public String direct(Authentication authentication, Model model) {
-        return renderDirect(authentication, model);
+    public String direct(@RequestParam(defaultValue = "0") int page,
+                         Authentication authentication,
+                         Model model) {
+        return renderDirect(authentication, page, model);
     }
 
     @PostMapping("/app/assignment-management/cohorts")
@@ -95,8 +98,13 @@ public class AssignmentManagementWebController {
     @PostMapping("/app/assignment-management/cohorts/{cohortId}/patients")
     public String addPatient(@PathVariable Long cohortId,
                              @Valid @ModelAttribute("patientSelection") SelectionForm form,
+                             BindingResult bindingResult,
                              Authentication authentication,
+                             Model model,
                              RedirectAttributes redirect) {
+        if (bindingResult.hasErrors()) {
+            return renderCohorts(authentication, cohortId, model);
+        }
         assignments.addPatientToCohort(authentication, cohortId, form.targetId());
         success(redirect, "assignment.success.patientAdded");
         return cohortRedirect(cohortId);
@@ -115,8 +123,13 @@ public class AssignmentManagementWebController {
     @PostMapping("/app/assignment-management/cohorts/{cohortId}/staff")
     public String addCohortStaff(@PathVariable Long cohortId,
                                  @Valid @ModelAttribute("staffSelection") SelectionForm form,
+                                 BindingResult bindingResult,
                                  Authentication authentication,
+                                 Model model,
                                  RedirectAttributes redirect) {
+        if (bindingResult.hasErrors()) {
+            return renderCohorts(authentication, cohortId, model);
+        }
         assignments.assignCohortStaff(authentication, cohortId, form.targetId());
         success(redirect, "assignment.success.staffAdded");
         return cohortRedirect(cohortId);
@@ -134,9 +147,16 @@ public class AssignmentManagementWebController {
 
     @PostMapping("/app/assignment-management/patients/{patientProfileId}/direct-assignments")
     public String addDirectExpert(@PathVariable Long patientProfileId,
+                                  @RequestParam(defaultValue = "0") int page,
                                   @Valid @ModelAttribute("staffSelection") SelectionForm form,
+                                  BindingResult bindingResult,
                                   Authentication authentication,
+                                  Model model,
                                   RedirectAttributes redirect) {
+        if (bindingResult.hasErrors()) {
+            model.addAttribute("invalidDirectPatientId", patientProfileId);
+            return renderDirect(authentication, page, model);
+        }
         assignments.assignDirectExpert(authentication, patientProfileId, form.targetId());
         success(redirect, "assignment.success.directAdded");
         return directRedirect();
@@ -176,9 +196,13 @@ public class AssignmentManagementWebController {
         return "assignment-management";
     }
 
-    private String renderDirect(Authentication authentication, Model model) {
-        model.addAttribute("directPage", assignments.directPage(authentication));
-        model.addAttribute("staffSelection", new SelectionForm(null));
+    private String renderDirect(Authentication authentication, int page, Model model) {
+        model.addAttribute("directPage", page == 0
+                ? assignments.directPage(authentication)
+                : assignments.directPage(authentication, page));
+        if (!model.containsAttribute("staffSelection")) {
+            model.addAttribute("staffSelection", new SelectionForm(null));
+        }
         model.addAttribute("assignmentView", "direct");
         model.addAttribute("isAdmin", hasAuthority(authentication, "ROLE_ADMIN"));
         addAppShell(model, authentication, ACTIVE_PATH);

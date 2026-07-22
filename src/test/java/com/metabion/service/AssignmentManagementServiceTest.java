@@ -21,6 +21,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -39,7 +41,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -195,15 +199,17 @@ class AssignmentManagementServiceTest {
     @Test
     void outOfScopeCoordinatorGetsNotFoundWhenEditingCohort() {
         var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var cohort = cohort(10L, "Before", coordinator);
         var authentication = auth("coordinator@example.com");
         when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
         when(accessControl.canManageCohort(authentication, 10L)).thenReturn(false);
 
         assertStatus(
                 () -> service.updateCohort(authentication, 10L, new CohortForm("After", null)),
                 HttpStatus.NOT_FOUND);
 
-        verify(cohorts, never()).lockById(any());
+        verify(cohorts).lockById(10L);
     }
 
     @Test
@@ -255,8 +261,8 @@ class AssignmentManagementServiceTest {
         var staffAssignment = new CohortStaffAssignment(cohort, staffProfile(50L, physician), admin);
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
         when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
-        when(memberships.findActiveByCohortId(10L)).thenReturn(List.of(membership));
-        when(cohortStaffAssignments.findActiveByCohortId(10L)).thenReturn(List.of(staffAssignment));
+        when(memberships.lockActiveByCohortId(10L)).thenReturn(List.of(membership));
+        when(cohortStaffAssignments.lockActiveByCohortId(10L)).thenReturn(List.of(staffAssignment));
 
         service.archiveCohort(auth("admin@example.com"), 10L);
 
@@ -293,7 +299,7 @@ class AssignmentManagementServiceTest {
         staleMembership.end(admin, NOW.minusSeconds(60));
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
         when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
-        when(memberships.findActiveByCohortId(10L)).thenReturn(List.of(staleMembership));
+        when(memberships.lockActiveByCohortId(10L)).thenReturn(List.of(staleMembership));
 
         assertStatus(() -> service.archiveCohort(auth("admin@example.com"), 10L),
                 HttpStatus.CONFLICT);
@@ -324,6 +330,25 @@ class AssignmentManagementServiceTest {
     }
 
     @Test
+    void cohortMutationLocksCohortBeforeRecheckingScopeAndLockingPatient() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var cohort = cohort(10L, "Pilot", coordinator);
+        var authentication = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+        when(accessControl.canManageCohortMemberships(authentication, 10L)).thenReturn(true);
+        when(patientProfiles.lockById(40L)).thenReturn(Optional.of(patientProfile(40L, patient)));
+
+        service.addPatientToCohort(authentication, 10L, 40L);
+
+        var order = inOrder(cohorts, accessControl, patientProfiles);
+        order.verify(cohorts).lockById(10L);
+        order.verify(accessControl).canManageCohortMemberships(authentication, 10L);
+        order.verify(patientProfiles).lockById(40L);
+    }
+
+    @Test
     void membershipWriteRequiresManagerRoleAndCoordinatorScopeWithoutLeakingCohort() {
         var physician = user(3L, "physician@example.com", RoleName.PHYSICIAN);
         var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
@@ -331,6 +356,7 @@ class AssignmentManagementServiceTest {
         var coordinatorAuth = auth("coordinator@example.com");
         when(users.findByEmail("physician@example.com")).thenReturn(Optional.of(physician));
         when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort(10L, "Pilot", coordinator)));
         when(accessControl.canManageCohortMemberships(coordinatorAuth, 10L)).thenReturn(false);
 
         assertStatus(() -> service.addPatientToCohort(physicianAuth, 10L, 40L),
@@ -338,7 +364,7 @@ class AssignmentManagementServiceTest {
         assertStatus(() -> service.addPatientToCohort(coordinatorAuth, 10L, 40L),
                 HttpStatus.NOT_FOUND);
 
-        verifyNoInteractions(cohorts, patientProfiles, memberships);
+        verifyNoInteractions(patientProfiles, memberships);
     }
 
     @Test
@@ -391,9 +417,11 @@ class AssignmentManagementServiceTest {
         membership.setId(100L);
         var authentication = auth("coordinator@example.com");
         when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
-        when(memberships.findActiveById(100L)).thenReturn(Optional.of(membership));
-        when(accessControl.canManageCohortMemberships(authentication, 10L)).thenReturn(true);
         when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+        when(accessControl.canManageCohortMemberships(authentication, 10L)).thenReturn(true);
+        when(memberships.findActivePatientProfileId(10L, 100L)).thenReturn(Optional.of(40L));
+        when(patientProfiles.lockById(40L)).thenReturn(Optional.of(membership.getPatientProfile()));
+        when(memberships.findActiveByCohortIdAndId(10L, 100L)).thenReturn(Optional.of(membership));
 
         service.endMembership(authentication, 10L, 100L);
 
@@ -415,8 +443,10 @@ class AssignmentManagementServiceTest {
         inPath.setId(200L);
         var authentication = auth("coordinator@example.com");
         when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
-        when(memberships.findActiveById(100L)).thenReturn(Optional.of(mismatched));
-        when(memberships.findActiveById(200L)).thenReturn(Optional.of(inPath));
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(inPathCohort));
+        when(accessControl.canManageCohortMemberships(authentication, 10L))
+                .thenReturn(true, false);
+        when(memberships.findActivePatientProfileId(10L, 100L)).thenReturn(Optional.empty());
 
         assertStatus(() -> service.endMembership(authentication, 10L, 100L),
                 HttpStatus.NOT_FOUND);
@@ -425,7 +455,7 @@ class AssignmentManagementServiceTest {
 
         assertThat(mismatched.isActive()).isTrue();
         assertThat(inPath.isActive()).isTrue();
-        verify(cohorts, never()).lockById(any());
+        verify(cohorts, org.mockito.Mockito.times(2)).lockById(10L);
     }
 
     @Test
@@ -444,6 +474,7 @@ class AssignmentManagementServiceTest {
         var authentication = auth("coordinator@example.com");
         when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
         when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+        when(accessControl.canManageCohort(authentication, 10L)).thenReturn(true);
         when(staffProfiles.lockById(50L)).thenReturn(Optional.of(physicianProfile));
         when(staffProfiles.lockById(60L)).thenReturn(Optional.of(nutritionProfile));
         when(staffProfiles.lockById(70L)).thenReturn(Optional.of(coordinatorProfile));
@@ -483,6 +514,7 @@ class AssignmentManagementServiceTest {
     @Test
     void cohortStaffTargetMustBeEnabledAndHaveAllowedRole() {
         var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var cohort = cohort(10L, "Pilot", admin);
         var disabledPhysician = user(5L, "disabled@example.com", RoleName.PHYSICIAN);
         var disallowedRole = enabledUser(6L, "admin-role@example.com", RoleName.PHYSICIAN);
         var disallowedProfile = staffProfile(60L, disallowedRole);
@@ -490,6 +522,7 @@ class AssignmentManagementServiceTest {
         disallowedRole.addRole(RoleName.ADMIN);
         var authentication = auth("admin@example.com");
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
         when(staffProfiles.lockById(50L)).thenReturn(Optional.of(staffProfile(50L, disabledPhysician)));
         when(staffProfiles.lockById(60L)).thenReturn(Optional.of(disallowedProfile));
 
@@ -498,7 +531,7 @@ class AssignmentManagementServiceTest {
         assertStatus(() -> service.assignCohortStaff(authentication, 10L, 60L),
                 HttpStatus.NOT_FOUND);
 
-        verifyNoInteractions(cohorts, cohortStaffAssignments);
+        verifyNoInteractions(cohortStaffAssignments);
     }
 
     @Test
@@ -535,7 +568,9 @@ class AssignmentManagementServiceTest {
         assignment.setId(100L);
         var authentication = auth("coordinator@example.com");
         when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
-        when(cohortStaffAssignments.findActiveById(100L)).thenReturn(Optional.of(assignment));
+        when(accessControl.canManageCohort(authentication, 10L)).thenReturn(true);
+        when(cohortStaffAssignments.findActiveByCohortIdAndId(10L, 100L))
+                .thenReturn(Optional.of(assignment));
         when(accessControl.canManageCohortStaff(authentication, 10L, 50L)).thenReturn(true);
         when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
 
@@ -558,7 +593,9 @@ class AssignmentManagementServiceTest {
         var adminAuth = auth("admin@example.com");
         when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
-        when(cohortStaffAssignments.findActiveById(100L)).thenReturn(Optional.of(assignment));
+        when(accessControl.canManageCohort(coordinatorAuth, 10L)).thenReturn(true);
+        when(cohortStaffAssignments.findActiveByCohortIdAndId(10L, 100L))
+                .thenReturn(Optional.of(assignment));
         when(accessControl.canManageCohortStaff(adminAuth, 10L, 50L)).thenReturn(true);
         when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
 
@@ -584,8 +621,12 @@ class AssignmentManagementServiceTest {
         coordinatorAssignment.setId(200L);
         var authentication = auth("coordinator@example.com");
         when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
-        when(cohortStaffAssignments.findActiveById(100L)).thenReturn(Optional.of(mismatched));
-        when(cohortStaffAssignments.findActiveById(200L)).thenReturn(Optional.of(coordinatorAssignment));
+        when(accessControl.canManageCohort(authentication, 10L)).thenReturn(true);
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(pathCohort));
+        when(cohortStaffAssignments.findActiveByCohortIdAndId(10L, 100L))
+                .thenReturn(Optional.empty());
+        when(cohortStaffAssignments.findActiveByCohortIdAndId(10L, 200L))
+                .thenReturn(Optional.of(coordinatorAssignment));
 
         assertStatus(() -> service.endCohortStaffAssignment(authentication, 10L, 100L),
                 HttpStatus.NOT_FOUND);
@@ -594,7 +635,7 @@ class AssignmentManagementServiceTest {
 
         assertThat(mismatched.isActive()).isTrue();
         assertThat(coordinatorAssignment.isActive()).isTrue();
-        verify(cohorts, never()).lockById(any());
+        verify(cohorts, org.mockito.Mockito.times(2)).lockById(10L);
     }
 
     @Test
@@ -611,10 +652,6 @@ class AssignmentManagementServiceTest {
         var authentication = auth("admin@example.com");
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
         when(cohorts.lockById(10L)).thenReturn(Optional.of(archived));
-        when(staffProfiles.lockById(50L)).thenReturn(Optional.of(staffProfile(50L, physician)));
-        when(accessControl.canManageCohortStaff(authentication, 10L, 50L)).thenReturn(true);
-        when(memberships.findActiveById(100L)).thenReturn(Optional.of(membership));
-        when(cohortStaffAssignments.findActiveById(200L)).thenReturn(Optional.of(assignment));
 
         assertStatus(() -> service.addPatientToCohort(authentication, 10L, 40L),
                 HttpStatus.CONFLICT);
@@ -643,6 +680,8 @@ class AssignmentManagementServiceTest {
         var adminAuth = auth("admin@example.com");
         when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(staffProfiles.findByUserId(coordinator.getId()))
+                .thenReturn(Optional.of(staffProfile(11L, coordinator)));
         when(accessControl.canManageDirectExpertAssignments(coordinatorAuth, 40L)).thenReturn(false);
         when(accessControl.canManageDirectExpertAssignments(adminAuth, 40L)).thenReturn(true);
         when(patientProfiles.lockById(40L)).thenReturn(Optional.of(patientProfile));
@@ -654,6 +693,27 @@ class AssignmentManagementServiceTest {
 
         verify(directAssignments).save(argThat(row -> row.getPatientProfile().equals(patientProfile)
                 && row.getStaffProfile().equals(expertProfile) && row.getAssignedBy().equals(admin)));
+    }
+
+    @Test
+    void directMutationLocksPatientBeforeRecheckingCoordinatorScope() {
+        var coordinator = user(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var patient = enabledUser(4L, "patient@example.com", RoleName.PATIENT);
+        var physician = enabledUser(5L, "doctor@example.com", RoleName.PHYSICIAN);
+        var authentication = auth("coordinator@example.com");
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(staffProfiles.findByUserId(coordinator.getId()))
+                .thenReturn(Optional.of(staffProfile(11L, coordinator)));
+        when(patientProfiles.lockById(40L)).thenReturn(Optional.of(patientProfile(40L, patient)));
+        when(accessControl.canManageDirectExpertAssignments(authentication, 40L)).thenReturn(true);
+        when(staffProfiles.lockById(50L)).thenReturn(Optional.of(staffProfile(50L, physician)));
+
+        service.assignDirectExpert(authentication, 40L, 50L);
+
+        var order = inOrder(patientProfiles, accessControl, staffProfiles);
+        order.verify(patientProfiles).lockById(40L);
+        order.verify(accessControl).canManageDirectExpertAssignments(authentication, 40L);
+        order.verify(staffProfiles).lockById(50L);
     }
 
     @Test
@@ -712,7 +772,11 @@ class AssignmentManagementServiceTest {
                 100L, patientProfile(40L, patient), staffProfile(50L, physician), coordinator);
         var authentication = auth("coordinator@example.com");
         when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
-        when(directAssignments.findActiveById(100L)).thenReturn(Optional.of(assignment));
+        when(patientProfiles.lockById(40L)).thenReturn(Optional.of(assignment.getPatientProfile()));
+        when(staffProfiles.findByUserId(coordinator.getId()))
+                .thenReturn(Optional.of(staffProfile(11L, coordinator)));
+        when(directAssignments.findActiveByPatientProfileIdAndId(40L, 100L))
+                .thenReturn(Optional.of(assignment));
         when(accessControl.canManageDirectExpertAssignments(authentication, 40L)).thenReturn(true);
 
         service.endDirectExpertAssignment(authentication, 40L, 100L);
@@ -732,9 +796,15 @@ class AssignmentManagementServiceTest {
                 200L, patientProfile(40L, patient), staffProfile(50L, physician), coordinator);
         var authentication = auth("coordinator@example.com");
         when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
-        when(directAssignments.findActiveById(99L)).thenReturn(Optional.empty());
-        when(directAssignments.findActiveById(100L)).thenReturn(Optional.of(mismatched));
-        when(directAssignments.findActiveById(200L)).thenReturn(Optional.of(inPath));
+        when(patientProfiles.lockById(40L)).thenReturn(Optional.of(inPath.getPatientProfile()));
+        when(staffProfiles.findByUserId(coordinator.getId()))
+                .thenReturn(Optional.of(staffProfile(11L, coordinator)));
+        when(accessControl.canManageDirectExpertAssignments(authentication, 40L))
+                .thenReturn(true, true, false);
+        when(directAssignments.findActiveByPatientProfileIdAndId(40L, 99L))
+                .thenReturn(Optional.empty());
+        when(directAssignments.findActiveByPatientProfileIdAndId(40L, 100L))
+                .thenReturn(Optional.empty());
 
         assertStatus(() -> service.endDirectExpertAssignment(authentication, 40L, 99L),
                 HttpStatus.NOT_FOUND);
@@ -758,9 +828,11 @@ class AssignmentManagementServiceTest {
                 100L, patientProfile(40L, patient), staffProfile(50L, physician), coordinator);
         var authentication = auth("coordinator@example.com");
         when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
-        when(memberships.findActiveById(300L)).thenReturn(Optional.of(membership));
         when(accessControl.canManageCohortMemberships(authentication, 10L)).thenReturn(true);
         when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+        when(memberships.findActivePatientProfileId(10L, 300L)).thenReturn(Optional.of(40L));
+        when(patientProfiles.lockById(40L)).thenReturn(Optional.of(membership.getPatientProfile()));
+        when(memberships.findActiveByCohortIdAndId(10L, 300L)).thenReturn(Optional.of(membership));
 
         service.endMembership(authentication, 10L, 300L);
 
@@ -786,18 +858,19 @@ class AssignmentManagementServiceTest {
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
         when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
         when(staffProfiles.findByUserId(coordinator.getId())).thenReturn(Optional.of(coordinatorProfile));
-        when(patientProfiles.findAllEnabledPatientOptions()).thenReturn(List.of(
+        when(patientProfiles.findAllEnabledPatientOptions(any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(
                 new com.metabion.dto.PatientOptionResponse(40L, "patient@example.com"),
-                new com.metabion.dto.PatientOptionResponse(80L, "other@example.com")));
-        when(patientProfiles.findEnabledPatientOptionsForStaff(11L)).thenReturn(List.of(
-                new com.metabion.dto.PatientOptionResponse(40L, "patient@example.com")));
+                new com.metabion.dto.PatientOptionResponse(80L, "other@example.com"))));
+        when(patientProfiles.findEnabledPatientOptionsForStaff(
+                eq(11L), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(
+                        new com.metabion.dto.PatientOptionResponse(40L, "patient@example.com"))));
         when(cohorts.findAllForAdministration()).thenReturn(List.of(cohort));
         when(cohorts.findActiveForStaff(11L)).thenReturn(List.of(cohort));
-        when(memberships.findActiveByCohortId(10L)).thenReturn(List.of(membership));
-        when(directAssignments.findActiveByPatientProfileId(40L)).thenReturn(List.of(direct));
-        when(directAssignments.findActiveByPatientProfileId(80L)).thenReturn(List.of());
-        when(cohortStaffAssignments.findActiveAssignmentsForPatient(40L)).thenReturn(List.of(inherited));
-        when(cohortStaffAssignments.findActiveAssignmentsForPatient(80L)).thenReturn(List.of());
+        when(memberships.findActiveByPatientProfileIdIn(any())).thenReturn(List.of(membership));
+        when(directAssignments.findActiveByPatientProfileIdIn(any())).thenReturn(List.of(direct));
+        when(cohortStaffAssignments.findActiveByCohortIdIn(any())).thenReturn(List.of(inherited));
 
         var adminPage = service.directPage(adminAuth);
         var coordinatorPage = service.directPage(coordinatorAuth);
@@ -817,6 +890,67 @@ class AssignmentManagementServiceTest {
     }
 
     @Test
+    void directPageDoesNotExecutePerPatientAccessQueries() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(patientProfiles.findAllEnabledPatientOptions(any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(
+                        new com.metabion.dto.PatientOptionResponse(40L, "a@example.com"),
+                        new com.metabion.dto.PatientOptionResponse(41L, "b@example.com"))));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of());
+
+        service.directPage(auth("admin@example.com"));
+
+        verify(directAssignments, never()).findActiveByPatientProfileId(any());
+        verify(cohortStaffAssignments, never()).findActiveAssignmentsForPatient(any());
+        verify(directAssignments).findActiveByPatientProfileIdIn(any());
+        verify(memberships).findActiveByPatientProfileIdIn(any());
+    }
+
+    @Test
+    void defaultDirectPageIsBoundedToFiftyPatients() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var patients = java.util.stream.LongStream.rangeClosed(1, 51)
+                .mapToObj(id -> new com.metabion.dto.PatientOptionResponse(
+                        id, "patient-" + id + "@example.com"))
+                .toList();
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(patientProfiles.findAllEnabledPatientOptions(any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new PageImpl<>(patients.subList(0, 50), PageRequest.of(0, 50), 51));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of());
+
+        assertThat(service.directPage(auth("admin@example.com")).patients()).hasSize(50);
+    }
+
+    @Test
+    void directPageClampsOutOfRangeIndexAndReportsNavigationMetadata() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var lastPagePatients = java.util.stream.LongStream.rangeClosed(101, 120)
+                .mapToObj(id -> new com.metabion.dto.PatientOptionResponse(
+                        id, "patient-" + id + "@example.com"))
+                .toList();
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(patientProfiles.findAllEnabledPatientOptions(
+                argThat(pageable -> pageable != null
+                        && pageable.getPageNumber() == 7 && pageable.getPageSize() == 50)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(7, 50), 120));
+        when(patientProfiles.findAllEnabledPatientOptions(
+                argThat(pageable -> pageable != null
+                        && pageable.getPageNumber() == 2 && pageable.getPageSize() == 50)))
+                .thenReturn(new PageImpl<>(lastPagePatients, PageRequest.of(2, 50), 120));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of());
+
+        var page = service.directPage(auth("admin@example.com"), 7);
+
+        assertThat(page.pageIndex()).isEqualTo(2);
+        assertThat(page.totalPages()).isEqualTo(3);
+        assertThat(page.totalPatients()).isEqualTo(120);
+        assertThat(page.hasPrevious()).isTrue();
+        assertThat(page.hasNext()).isFalse();
+        assertThat(page.patients()).hasSize(20);
+    }
+
+    @Test
     void directPageFiltersEnabledExpertCandidatesForEachPatientPair() {
         var admin = user(2L, "admin@example.com", RoleName.ADMIN);
         var patientA = enabledUser(4L, "a@example.com", RoleName.PATIENT);
@@ -829,14 +963,12 @@ class AssignmentManagementServiceTest {
         var active = directAssignment(
                 100L, patientProfile(40L, patientA), staffProfile(50L, physician), admin);
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
-        when(patientProfiles.findAllEnabledPatientOptions()).thenReturn(List.of(
+        when(patientProfiles.findAllEnabledPatientOptions(any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(
                 new com.metabion.dto.PatientOptionResponse(40L, "a@example.com"),
-                new com.metabion.dto.PatientOptionResponse(100L, "b@example.com")));
+                new com.metabion.dto.PatientOptionResponse(100L, "b@example.com"))));
         when(cohorts.findAllForAdministration()).thenReturn(List.of());
-        when(directAssignments.findActiveByPatientProfileId(40L)).thenReturn(List.of(active));
-        when(directAssignments.findActiveByPatientProfileId(100L)).thenReturn(List.of());
-        when(cohortStaffAssignments.findActiveAssignmentsForPatient(40L)).thenReturn(List.of());
-        when(cohortStaffAssignments.findActiveAssignmentsForPatient(100L)).thenReturn(List.of());
+        when(directAssignments.findActiveByPatientProfileIdIn(any())).thenReturn(List.of(active));
         when(staffProfiles.findAllEnabledWithRoles()).thenReturn(List.of(
                 staffProfile(50L, physician), staffProfile(60L, nutritionist),
                 staffProfile(70L, coordinatorOnly), staffProfile(80L, disabledExpert),
@@ -874,8 +1006,9 @@ class AssignmentManagementServiceTest {
         when(cohorts.findActiveForStaff(11L)).thenReturn(List.of(cohort));
         when(memberships.findActiveByCohortId(10L)).thenReturn(List.of(member));
         when(cohortStaffAssignments.findActiveByCohortId(10L)).thenReturn(List.of(inherited));
-        when(directAssignments.findActiveByPatientProfileId(40L)).thenReturn(List.of(direct));
-        when(cohortStaffAssignments.findActiveAssignmentsForPatient(40L)).thenReturn(List.of(inherited));
+        when(directAssignments.findActiveByPatientProfileIdIn(any())).thenReturn(List.of(direct));
+        when(memberships.findActiveByPatientProfileIdIn(any())).thenReturn(List.of(member));
+        when(cohortStaffAssignments.findActiveByCohortIdIn(any())).thenReturn(List.of(inherited));
         when(patientProfiles.findAllEnabledPatientOptions()).thenReturn(List.of(
                 new com.metabion.dto.PatientOptionResponse(40L, "patient@example.com"),
                 new com.metabion.dto.PatientOptionResponse(80L, "other@example.com")));
@@ -895,6 +1028,27 @@ class AssignmentManagementServiceTest {
                 .containsOnly(COHORT);
         assertThat(page.careTeam()).extracting(access -> access.source()).containsOnly(COHORT);
         assertThat(page.patients().getFirst().email()).isEqualTo("patient@example.com");
+    }
+
+    @Test
+    void cohortPageDoesNotExecutePerPatientAccessQueries() {
+        var admin = user(2L, "admin@example.com", RoleName.ADMIN);
+        var cohort = cohort(10L, "Pilot", admin);
+        var patientA = enabledUser(4L, "a@example.com", RoleName.PATIENT);
+        var patientB = enabledUser(5L, "b@example.com", RoleName.PATIENT);
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of(cohort));
+        when(memberships.findActiveByCohortId(10L)).thenReturn(List.of(
+                membership(100L, patientProfile(40L, patientA), cohort, admin),
+                membership(101L, patientProfile(41L, patientB), cohort, admin)));
+        when(cohortStaffAssignments.findActiveByCohortId(10L)).thenReturn(List.of());
+
+        service.cohortPage(auth("admin@example.com"), 10L);
+
+        verify(directAssignments, never()).findActiveByPatientProfileId(any());
+        verify(cohortStaffAssignments, never()).findActiveAssignmentsForPatient(any());
+        verify(directAssignments).findActiveByPatientProfileIdIn(any());
+        verify(memberships).findActiveByPatientProfileIdIn(any());
     }
 
     @Test
@@ -953,8 +1107,6 @@ class AssignmentManagementServiceTest {
         when(cohorts.findAllForAdministration()).thenReturn(List.of(archived));
         when(memberships.findHistoryByCohortId(10L)).thenReturn(List.of(endedMembership));
         when(cohortStaffAssignments.findHistoryByCohortId(10L)).thenReturn(List.of(endedAssignment));
-        when(directAssignments.findActiveByPatientProfileId(40L)).thenReturn(List.of());
-        when(cohortStaffAssignments.findActiveAssignmentsForPatient(40L)).thenReturn(List.of());
 
         var page = service.cohortPage(auth("admin@example.com"), 10L);
 
@@ -963,6 +1115,18 @@ class AssignmentManagementServiceTest {
         assertThat(page.careTeam()).extracting(access -> access.assignmentId()).containsExactly(200L);
         assertThat(page.patientCandidates()).isEmpty();
         assertThat(page.staffCandidates()).isEmpty();
+        assertThat(page.patients().getFirst().direct()).isEmpty();
+        assertThat(page.patients().getFirst().inherited()).isEmpty();
+        assertThat(page.selected().archivedAt()).isEqualTo(NOW.minusSeconds(60));
+        assertThat(page.selected().archivedByEmail()).isEqualTo("admin@example.com");
+        assertThat(page.patients().getFirst().assignedAt()).isEqualTo(endedMembership.getAssignedAt());
+        assertThat(page.patients().getFirst().assignedByEmail()).isEqualTo("admin@example.com");
+        assertThat(page.patients().getFirst().endedAt()).isEqualTo(NOW.minusSeconds(60));
+        assertThat(page.patients().getFirst().endedByEmail()).isEqualTo("admin@example.com");
+        assertThat(page.careTeam().getFirst().endedAt()).isEqualTo(NOW.minusSeconds(60));
+        assertThat(page.careTeam().getFirst().endedByEmail()).isEqualTo("admin@example.com");
+        verifyNoInteractions(directAssignments);
+        verify(cohortStaffAssignments, never()).findActiveAssignmentsForPatient(any());
         verifyNoInteractions(patientProfiles);
         verify(staffProfiles, never()).findAllEnabledWithRoles();
     }

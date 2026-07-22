@@ -53,6 +53,12 @@
                       th:text="${cohortPage.selected().archived()} ? #{assignment.archived} : #{assignment.active}">
                     Active
                 </span>
+                <dl th:if="${cohortPage.selected().archived()}" class="assignment-history">
+                    <dt th:text="#{assignment.archivedAt}">Archived at</dt>
+                    <dd th:text="${cohortPage.selected().archivedAt()}">2026-07-18T10:00:00Z</dd>
+                    <dt th:text="#{assignment.archivedBy}">Archived by</dt>
+                    <dd th:text="${cohortPage.selected().archivedByEmail()}">admin@example.com</dd>
+                </dl>
 
                 <th:block th:if="${!cohortPage.selected().archived()}">
                     <form class="form"
@@ -92,31 +98,45 @@
                         <h2 th:text="#{assignment.patients}">Patients</h2>
                         <form class="form" th:if="${!cohortPage.selected().archived()}"
                               th:action="@{/app/assignment-management/cohorts/{id}/patients(id=${cohortPage.selected().id()})}"
+                              th:object="${patientSelection}"
                               method="post">
                             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                             <div class="field">
                                 <label th:text="#{assignment.addPatient}" for="patient-target">Add patient</label>
-                                <select id="patient-target" name="targetId" required>
+                                <select id="patient-target" th:field="*{targetId}" required>
                                     <option value="" th:text="#{assignment.choosePatient}">Choose patient</option>
                                     <option th:each="candidate : ${cohortPage.patientCandidates()}"
                                             th:value="${candidate.id()}" th:text="${candidate.email()}">patient@example.com</option>
                                 </select>
+                                <p class="error" th:if="${#fields.hasErrors('targetId')}"
+                                   th:errors="*{targetId}">Patient selection error</p>
                             </div>
                             <button type="submit" th:text="#{assignment.add}">Add</button>
                         </form>
 
                         <article th:each="patient : ${cohortPage.patients()}" class="assignment-patient">
                             <h3 th:text="${patient.email()}">patient@example.com</h3>
-                            <div>
+                            <dl th:if="${cohortPage.selected().archived()}" class="assignment-history">
+                                <dt th:text="#{assignment.assignedAt}">Assigned at</dt>
+                                <dd th:text="${patient.assignedAt()}">2026-07-18T09:00:00Z</dd>
+                                <dt th:text="#{assignment.assignedBy}">Assigned by</dt>
+                                <dd th:text="${patient.assignedByEmail()}">admin@example.com</dd>
+                                <dt th:text="#{assignment.endedAt}">Ended at</dt>
+                                <dd th:text="${patient.endedAt()}">2026-07-18T10:00:00Z</dd>
+                                <dt th:text="#{assignment.endedBy}">Ended by</dt>
+                                <dd th:text="${patient.endedByEmail()}">admin@example.com</dd>
+                            </dl>
+                            <div th:if="${!cohortPage.selected().archived()}">
                                 <strong th:text="#{assignment.direct}">Direct assignments</strong>
                                 <span th:each="access : ${patient.direct()}" th:text="${access.email()}">expert@example.com</span>
                             </div>
-                            <div>
+                            <div th:if="${!cohortPage.selected().archived()}">
                                 <strong th:text="#{assignment.inherited}">Access through cohort</strong>
                                 <span th:each="access : ${patient.inherited()}"
                                       th:text="${access.email() + ' · ' + access.cohortName()}">expert@example.com · Cohort</span>
                             </div>
-                            <a th:href="@{/app/assignment-management/direct}"
+                            <a th:if="${!cohortPage.selected().archived()}"
+                               th:href="@{/app/assignment-management/direct}"
                                th:text="#{assignment.manageCareTeam}">Manage care team</a>
                             <form th:if="${!cohortPage.selected().archived()}"
                                   th:action="@{/app/assignment-management/cohorts/{cohortId}/memberships/{membershipId}/end(
@@ -133,21 +153,34 @@
                         <h2 th:text="#{assignment.careTeam}">Care team</h2>
                         <form class="form" th:if="${!cohortPage.selected().archived()}"
                               th:action="@{/app/assignment-management/cohorts/{id}/staff(id=${cohortPage.selected().id()})}"
+                              th:object="${staffSelection}"
                               method="post">
                             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                             <div class="field">
                                 <label th:text="#{assignment.addStaff}" for="cohort-staff-target">Add staff member</label>
-                                <select id="cohort-staff-target" name="targetId" required>
+                                <select id="cohort-staff-target" th:field="*{targetId}" required>
                                     <option value="" th:text="#{assignment.chooseStaff}">Choose staff member</option>
                                     <option th:each="candidate : ${cohortPage.staffCandidates()}"
                                             th:value="${candidate.staffProfileId()}" th:text="${candidate.email()}">expert@example.com</option>
                                 </select>
+                                <p class="error" th:if="${#fields.hasErrors('targetId')}"
+                                   th:errors="*{targetId}">Staff selection error</p>
                             </div>
                             <button type="submit" th:text="#{assignment.add}">Add</button>
                         </form>
 
                         <article th:each="access : ${cohortPage.careTeam()}" class="assignment-staff">
                             <span th:text="${access.email()}">expert@example.com</span>
+                            <dl th:if="${cohortPage.selected().archived()}" class="assignment-history">
+                                <dt th:text="#{assignment.assignedAt}">Assigned at</dt>
+                                <dd th:text="${access.assignedAt()}">2026-07-18T09:00:00Z</dd>
+                                <dt th:text="#{assignment.assignedBy}">Assigned by</dt>
+                                <dd th:text="${access.assignedByEmail()}">admin@example.com</dd>
+                                <dt th:text="#{assignment.endedAt}">Ended at</dt>
+                                <dd th:text="${access.endedAt()}">2026-07-18T10:00:00Z</dd>
+                                <dt th:text="#{assignment.endedBy}">Ended by</dt>
+                                <dd th:text="${access.endedByEmail()}">admin@example.com</dd>
+                            </dl>
                             <form th:if="${!cohortPage.selected().archived() and (isAdmin or !access.roles().contains('COORDINATOR'))}"
                                   th:action="@{/app/assignment-management/cohorts/{cohortId}/staff-assignments/{assignmentId}/end(
                                       cohortId=${cohortPage.selected().id()}, assignmentId=${access.assignmentId()})}"
@@ -173,25 +206,32 @@
             </div>
             <div>
                 <strong th:text="#{assignment.inherited}">Access through cohort</strong>
-                <a th:each="access : ${patient.inherited()}"
+                <th:block th:each="access : ${patient.inherited()}">
+                <a th:if="${access.cohortManageable()}"
                    th:href="@{/app/assignment-management/cohorts/{id}(id=${access.cohortId()})}"
+                   th:attr="aria-label=#{assignment.manageCareTeam}"
                    th:text="${access.email() + ' · ' + access.cohortName()}">Expert · Cohort</a>
-                <a th:if="${!patient.inherited().isEmpty()}"
-                   th:href="@{/app/assignment-management}"
-                   th:text="#{assignment.manageCareTeam}">Manage care team</a>
+                <span th:if="${!access.cohortManageable()}"
+                      th:text="${access.email() + ' · ' + access.cohortName()}">Expert · Cohort</span>
+                </th:block>
             </div>
             <form class="form" th:action="@{/app/assignment-management/patients/{patientId}/direct-assignments(
-                    patientId=${patient.patientProfileId()})}" method="post">
+                    patientId=${patient.patientProfileId()})}" th:object="${staffSelection}" method="post">
                 <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <input type="hidden" name="page" th:value="${directPage.pageIndex()}">
                 <div class="field">
                     <label th:text="#{assignment.addDirectExpert}" th:for="${'direct-target-' + patient.patientProfileId()}">
                         Add direct expert
                     </label>
-                    <select th:id="${'direct-target-' + patient.patientProfileId()}" name="targetId" required>
+                    <select th:id="${'direct-target-' + patient.patientProfileId()}" th:field="*{targetId}" required>
                         <option value="" th:text="#{assignment.chooseExpert}">Choose expert</option>
                         <option th:each="candidate : ${patient.staffCandidates()}"
                                 th:value="${candidate.staffProfileId()}" th:text="${candidate.email()}">expert@example.com</option>
                     </select>
+                    <p class="error"
+                       th:if="${invalidDirectPatientId == patient.patientProfileId()
+                           and #fields.hasErrors('targetId')}"
+                       th:errors="*{targetId}">Expert selection error</p>
                 </div>
                 <button type="submit" th:text="#{assignment.add}">Add</button>
             </form>
@@ -204,6 +244,16 @@
                 <button type="submit" th:text="#{assignment.endAssignment}">End assignment</button>
             </form>
         </article>
+        <nav class="assignment-pagination" th:if="${directPage.totalPages() > 1}"
+             th:attr="aria-label=#{assignment.pagination}">
+            <a th:if="${directPage.hasPrevious()}"
+               th:href="@{/app/assignment-management/direct(page=${directPage.pageIndex() - 1})}"
+               th:text="#{assignment.previous}">Previous</a>
+            <span th:text="#{assignment.page(${directPage.pageIndex() + 1}, ${directPage.totalPages()})}">Page 1 of 2</span>
+            <a th:if="${directPage.hasNext()}"
+               th:href="@{/app/assignment-management/direct(page=${directPage.pageIndex() + 1})}"
+               th:text="#{assignment.next}">Next</a>
+        </nav>
     </section>
 </th:block>
 </html>

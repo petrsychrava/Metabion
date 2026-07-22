@@ -129,6 +129,12 @@ class AssignmentManagementWebControllerTest {
         mvc.perform(get("/app/assignment-management/cohorts/10").principal(authentication))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Archived")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("2026-07-18T12:00:00Z")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("archiver@example.com")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("first-assigner@example.com")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("second-assigner@example.com")))
+                .andExpect(result -> assertThat(org.springframework.util.StringUtils.countOccurrencesOf(
+                        result.getResponse().getContentAsString(), "patient@example.com")).isGreaterThanOrEqualTo(2))
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
                         "/app/assignment-management/cohorts/10/edit"))))
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
@@ -333,6 +339,25 @@ class AssignmentManagementWebControllerTest {
     }
 
     @Test
+    void directGetPassesRequestedPageToBoundedWorkspace() throws Exception {
+        stubAppShell();
+        var authentication = auth("admin@example.com", RoleName.ADMIN);
+        var page = new DirectPage(List.of(), 2, 4, 175);
+        when(assignments.directPage(same(authentication), eq(2))).thenReturn(page);
+
+        mvc.perform(get("/app/assignment-management/direct")
+                        .param("page", "2")
+                        .principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute("directPage", page))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Page 3 of 4")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("page=1")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("page=3")));
+
+        verify(assignments).directPage(same(authentication), eq(2));
+    }
+
+    @Test
     void successfulPostsDelegateExactlyOnceAndUsePostRedirectGet() throws Exception {
         stubMessages();
         var authentication = auth("admin@example.com", RoleName.ADMIN);
@@ -441,22 +466,74 @@ class AssignmentManagementWebControllerTest {
     }
 
     @Test
-    void selectionFormsRejectMissingTargetsWithoutMutation() throws Exception {
+    void selectionFormsRerenderLocalizedWorkspaceWithoutMutation() throws Exception {
+        stubAppShell();
         var authentication = auth("admin@example.com", RoleName.ADMIN);
+        when(assignments.cohortPage(same(authentication), eq(10L))).thenReturn(emptyCohortPage());
+        when(assignments.directPage(same(authentication))).thenReturn(new DirectPage(List.of()));
 
         mvc.perform(post("/app/assignment-management/cohorts/10/patients")
                         .principal(authentication))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(view().name("assignment-management"))
+                .andExpect(model().attributeHasFieldErrors("patientSelection", "targetId"));
         mvc.perform(post("/app/assignment-management/cohorts/10/staff")
                         .principal(authentication))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(view().name("assignment-management"))
+                .andExpect(model().attributeHasFieldErrors("staffSelection", "targetId"));
         mvc.perform(post("/app/assignment-management/patients/40/direct-assignments")
                         .principal(authentication))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(view().name("assignment-management"))
+                .andExpect(model().attributeHasFieldErrors("staffSelection", "targetId"));
 
         verify(assignments, never()).addPatientToCohort(any(), any(), any());
         verify(assignments, never()).assignCohortStaff(any(), any(), any());
         verify(assignments, never()).assignDirectExpert(any(), any(), any());
+    }
+
+    @Test
+    void invalidDirectSelectionRerendersItsPatientOnTheCurrentPage() throws Exception {
+        stubAppShell();
+        var authentication = auth("admin@example.com", RoleName.ADMIN);
+        var page = new DirectPage(List.of(), 2, 3, 120);
+        when(assignments.directPage(same(authentication), eq(2))).thenReturn(page);
+
+        mvc.perform(post("/app/assignment-management/patients/40/direct-assignments")
+                        .principal(authentication)
+                        .param("page", "2"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("assignment-management"))
+                .andExpect(model().attributeHasFieldErrors("staffSelection", "targetId"))
+                .andExpect(model().attribute("invalidDirectPatientId", 40L))
+                .andExpect(model().attribute(
+                        "directPage", org.hamcrest.Matchers.sameInstance(page)));
+
+        verify(assignments).directPage(same(authentication), eq(2));
+        verify(assignments, never()).assignDirectExpert(any(), any(), any());
+    }
+
+    @Test
+    void inheritedCohortOutsideCurrentScopeIsRenderedWithoutLink() throws Exception {
+        stubAppShell();
+        var authentication = auth("coordinator@example.com", RoleName.COORDINATOR);
+        var visible = new CohortItem(10L, "Visible", null, false,
+                "admin@example.com", Instant.EPOCH);
+        var hiddenInherited = new ExpertAccess(30L, 60L, "nutrition@example.com",
+                List.of("NUTRITION_SPECIALIST"), AccessSource.COHORT, 99L, "Hidden",
+                false, null, null, null, null);
+        var page = new DirectPage(List.of(new DirectPatient(
+                70L, "patient@example.com", List.of(visible), List.of(),
+                List.of(hiddenInherited), List.of())));
+        when(assignments.directPage(same(authentication))).thenReturn(page);
+
+        mvc.perform(get("/app/assignment-management/direct").principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "nutrition@example.com · Hidden")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "href=\"/app/assignment-management/cohorts/99\""))));
     }
 
     @Test
@@ -517,8 +594,24 @@ class AssignmentManagementWebControllerTest {
 
     private static CohortPage archivedCohortPage() {
         var archived = new CohortItem(10L, "Pilot cohort", "Pilot notes", true,
-                "admin@example.com", Instant.EPOCH);
-        return new CohortPage(List.of(archived), archived, List.of(), List.of(), List.of(), List.of());
+                "admin@example.com", Instant.EPOCH,
+                "archiver@example.com", Instant.parse("2026-07-18T12:00:00Z"));
+        var firstInterval = new PatientRow(
+                40L, 70L, "patient@example.com", List.of(), List.of(),
+                Instant.parse("2026-07-01T08:00:00Z"), "first-assigner@example.com",
+                Instant.parse("2026-07-05T09:00:00Z"), "first-ender@example.com");
+        var secondInterval = new PatientRow(
+                41L, 70L, "patient@example.com", List.of(), List.of(),
+                Instant.parse("2026-07-10T08:00:00Z"), "second-assigner@example.com",
+                Instant.parse("2026-07-18T12:00:00Z"), "archiver@example.com");
+        var historicalStaff = new ExpertAccess(
+                80L, 90L, "doctor@example.com", List.of("PHYSICIAN"),
+                AccessSource.COHORT, 10L, "Pilot cohort", true,
+                Instant.parse("2026-07-02T08:00:00Z"), "staff-assigner@example.com",
+                Instant.parse("2026-07-18T12:00:00Z"), "archiver@example.com");
+        return new CohortPage(
+                List.of(archived), archived, List.of(firstInterval, secondInterval),
+                List.of(historicalStaff), List.of(), List.of());
     }
 
     private static DirectPage directPage() {
