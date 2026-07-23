@@ -142,6 +142,13 @@ class PatientAppFacadeTest {
     }
 
     @Test
+    void latestOnboardingDelegatesToOnboardingService() {
+        facade.latestOnboarding(authentication, "default");
+
+        verify(onboarding).getLatestForCurrentPatient(authentication, "default");
+    }
+
+    @Test
     void delegatesLaboratoryOperationsToLaboratoryServices() {
         var save = mock(LabResultSetRequest.class);
         var removal = mock(LabResultRemovalRequest.class);

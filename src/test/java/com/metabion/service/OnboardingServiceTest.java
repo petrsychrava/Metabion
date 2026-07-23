@@ -290,6 +290,79 @@ class OnboardingServiceTest {
     }
 
     @Test
+    void ownSubmissionLookupReturnsPatientViewForOwner() {
+        var patientUser = user(21L, "owner@example.com", RoleName.PATIENT);
+        var patientProfile = patientProfile(10L, patientUser);
+        when(users.findByEmail("owner@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(21L)).thenReturn(Optional.of(patientProfile));
+        when(submissions.findById(55L)).thenReturn(Optional.of(validSubmission()));
+
+        var response = service.getOwnSubmissionById(auth("owner@example.com"), 55L);
+
+        assertThat(response.diagnosisType()).isEqualTo(IbdDiagnosisType.CROHNS_DISEASE);
+        assertThat(response.reviewStatus()).isEqualTo(OnboardingReviewStatus.REVIEWED);
+        assertThat(response.reviewedByEmail()).isNull();
+        assertThat(response.reviewedAt()).isNull();
+        assertThat(response.reviewNotes()).isNull();
+    }
+
+    @Test
+    void ownSubmissionLookupRejectsForeignSubmission() {
+        var patientUser = user(22L, "intruder@example.com", RoleName.PATIENT);
+        var patientProfile = patientProfile(220L, patientUser);
+        when(users.findByEmail("intruder@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(22L)).thenReturn(Optional.of(patientProfile));
+        when(submissions.findById(55L)).thenReturn(Optional.of(validSubmission()));
+
+        assertThatThrownBy(() -> service.getOwnSubmissionById(auth("intruder@example.com"), 55L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("404 NOT_FOUND")
+                .hasMessageContaining("Onboarding submission not found");
+    }
+
+    @Test
+    void ownSubmissionLookupRejectsMissingSubmission() {
+        var patientUser = user(23L, "missing@example.com", RoleName.PATIENT);
+        var patientProfile = patientProfile(230L, patientUser);
+        when(users.findByEmail("missing@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(23L)).thenReturn(Optional.of(patientProfile));
+        when(submissions.findById(55L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getOwnSubmissionById(auth("missing@example.com"), 55L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("404 NOT_FOUND")
+                .hasMessageContaining("Onboarding submission not found");
+    }
+
+    @Test
+    void ownSubmissionLookupRejectsNonPatient() {
+        var doctor = user(24L, "doctor-read@example.com", RoleName.PHYSICIAN);
+        when(users.findByEmail("doctor-read@example.com")).thenReturn(Optional.of(doctor));
+
+        assertThatThrownBy(() -> service.getOwnSubmissionById(auth("doctor-read@example.com"), 55L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403 FORBIDDEN");
+        verify(submissions, never()).findById(any());
+    }
+
+    @Test
+    void latestForCurrentPatientStripsReviewInternals() {
+        var patientUser = user(25L, "latest@example.com", RoleName.PATIENT);
+        var patientProfile = patientProfile(10L, patientUser);
+        when(users.findByEmail("latest@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(25L)).thenReturn(Optional.of(patientProfile));
+        when(submissions.findFirstByPatientProfileIdAndOnboardingContextOrderByVersionDesc(10L, "default"))
+                .thenReturn(Optional.of(validSubmission()));
+
+        var response = service.getLatestForCurrentPatient(auth("latest@example.com"), "default");
+
+        assertThat(response.reviewStatus()).isEqualTo(OnboardingReviewStatus.REVIEWED);
+        assertThat(response.reviewedByEmail()).isNull();
+        assertThat(response.reviewedAt()).isNull();
+        assertThat(response.reviewNotes()).isNull();
+    }
+
+    @Test
     void patientHistoryIsLimitedToCurrentPatientProfile() {
         var patientUser = user(2L, "history-patient@example.com", RoleName.PATIENT);
         var patientProfile = patientProfile(20L, patientUser);
