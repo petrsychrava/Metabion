@@ -115,6 +115,21 @@ class OnboardingControllerTest {
     }
 
     @Test
+    void patientCanReadOwnSubmissionById() throws Exception {
+        mvc.perform(get("/api/onboarding/submissions/55")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk());
+
+        verify(onboardingService).getOwnSubmissionById(any(), eq(55L));
+    }
+
+    @Test
+    void unauthenticatedSubmissionDetailIsUnauthorized() throws Exception {
+        mvc.perform(get("/api/onboarding/submissions/55"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void clinicalUserCanReviewWithCsrf() throws Exception {
         var request = new OnboardingReviewRequest(OnboardingReviewStatus.REVIEWED, "ok");
 

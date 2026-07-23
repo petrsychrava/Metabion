@@ -46,6 +46,12 @@ public class OnboardingController {
         return onboardingService.listHistoryForCurrentPatient(authentication, context);
     }
 
+    @GetMapping("/api/onboarding/submissions/{id}")
+    public OnboardingSubmissionResponse ownSubmission(@PathVariable Long id,
+                                                      Authentication authentication) {
+        return onboardingService.getOwnSubmissionById(authentication, id);
+    }
+
     @GetMapping("/api/clinical/onboarding/submissions")
     public List<OnboardingSubmissionSummaryResponse> reviewList(
             @RequestParam(required = false) String context,
