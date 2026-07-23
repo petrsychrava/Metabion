@@ -19,53 +19,192 @@
             <span th:text="#{onboarding.status}">status</span>
             <strong th:text="${#messages.msg('enum.onboardingReviewStatus.' + latest.reviewStatus().name())}">PENDING_REVIEW</strong>
         </p>
+        <p class="muted" th:text="#{onboarding.patient.latestSubmitted(${latest.submittedAt()})}">Submitted</p>
     </section>
 
     <section class="panel app-panel">
-        <h2 th:text="#{onboarding.patient.submitBaseline}">Submit baseline</h2>
-        <form class="form" th:action="@{/app/onboarding}" th:object="${onboardingForm}" method="post">
+        <h2 th:text="${latest == null ? #messages.msg('onboarding.patient.submitBaseline') : #messages.msg('onboarding.patient.submitUpdatedBaseline')}">Submit baseline</h2>
+        <p class="muted" th:text="#{onboarding.patient.introduction}">This takes about 5 minutes. Required answers are marked. You can skip recent lab results and submit once when you are ready.</p>
+        <p class="muted" th:text="#{onboarding.patient.noDraft}">Your answers are not saved until you submit the baseline.</p>
+        <form class="form onboarding-progressive-form" data-onboarding-form
+              th:action="@{/app/onboarding}" th:object="${onboardingForm}" method="post"
+              th:attr="data-status-not-started=#{onboarding.status.notStarted},
+                       data-status-in-progress=#{onboarding.status.inProgress},
+                       data-status-complete=#{onboarding.status.complete},
+                       data-status-needs-attention=#{onboarding.status.needsAttention},
+                       data-status-optional=#{onboarding.status.optional},
+                       data-status-added=#{onboarding.status.added},
+                       data-required-progress-template=#{onboarding.requiredProgress}">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-            <label class="field"><span th:text="#{onboarding.context}">Context</span> <input th:field="*{onboardingContext}"></label>
-            <label class="field"><span th:text="#{onboarding.diagnosis}">Diagnosis</span>
-                <select th:field="*{diagnosisType}" required>
-                    <option value="" th:text="#{onboarding.select}">Select</option>
-                    <option th:each="option : ${diagnosisTypes}" th:value="${option}" th:text="${#messages.msg('enum.ibdDiagnosisType.' + option.name())}"></option>
-                </select>
-            </label>
-            <p class="error" th:if="${#fields.hasErrors('diagnosisType')}" th:errors="*{diagnosisType}">Diagnosis error</p>
-            <label class="field"><span th:text="#{onboarding.diagnosisYear}">Diagnosis year</span> <input type="number" th:field="*{diagnosisYear}"></label>
-            <label class="field"><span th:text="#{onboarding.diseaseLocation}">Disease location</span> <input th:field="*{diseaseLocation}"></label>
-            <label class="field"><span th:text="#{onboarding.diseaseBehavior}">Disease behavior</span> <input th:field="*{diseaseBehavior}"></label>
-            <label class="field"><span th:text="#{onboarding.activityEstimate}">Activity estimate</span>
-                <select th:field="*{activityEstimate}" required>
-                    <option value="" th:text="#{onboarding.select}">Select</option>
-                    <option th:each="option : ${activityOptions}" th:value="${option}" th:text="${#messages.msg('enum.diseaseActivityEstimate.' + option.name())}"></option>
-                </select>
-            </label>
-            <p class="error" th:if="${#fields.hasErrors('activityEstimate')}" th:errors="*{activityEstimate}">Activity error</p>
-            <label class="field"><span th:text="#{onboarding.currentMedications}">Current medications</span> <textarea th:field="*{currentMedications}"></textarea></label>
-            <label class="field"><span th:text="#{onboarding.steroidUse}">Steroid use</span>
-                <select th:field="*{steroidUse}" required>
-                    <option value="" th:text="#{onboarding.select}">Select</option>
-                    <option th:each="option : ${steroidOptions}" th:value="${option}" th:text="${#messages.msg('enum.steroidUse.' + option.name())}"></option>
-                </select>
-            </label>
-            <p class="error" th:if="${#fields.hasErrors('steroidUse')}" th:errors="*{steroidUse}">Steroid use error</p>
-            <label class="field"><span th:text="#{onboarding.advancedTherapyExposure}">Advanced therapy exposure</span>
-                <select th:field="*{advancedTherapyExposure}" required>
-                    <option value="" th:text="#{onboarding.select}">Select</option>
-                    <option th:each="option : ${advancedTherapyOptions}" th:value="${option}" th:text="${#messages.msg('enum.advancedTherapyExposure.' + option.name())}"></option>
-                </select>
-            </label>
-            <p class="error" th:if="${#fields.hasErrors('advancedTherapyExposure')}" th:errors="*{advancedTherapyExposure}">Advanced therapy error</p>
-            <label class="field"><span th:text="#{onboarding.medicationNotes}">Medication notes</span> <textarea th:field="*{medicationNotes}"></textarea></label>
-            <label class="field"><span th:text="#{onboarding.labsCollectedAt}">Labs collected at</span> <input type="date" th:field="*{labsCollectedAt}"></label>
-            <label class="field"><span th:text="#{onboarding.crpMgL}">CRP mg/L</span> <input type="number" step="0.01" th:field="*{crpMgL}"></label>
-            <label class="field"><span th:text="#{onboarding.fecalCalprotectinUgG}">Fecal calprotectin ug/g</span> <input type="number" step="0.01" th:field="*{fecalCalprotectinUgG}"></label>
-            <label class="field"><span th:text="#{onboarding.hemoglobinGDl}">Hemoglobin g/dL</span> <input type="number" step="0.1" th:field="*{hemoglobinGDl}"></label>
-            <label class="field"><span th:text="#{onboarding.albuminGDl}">Albumin g/dL</span> <input type="number" step="0.1" th:field="*{albuminGDl}"></label>
-            <label class="field"><span th:text="#{onboarding.labNotes}">Lab notes</span> <textarea th:field="*{labNotes}"></textarea></label>
-            <button type="submit" th:text="#{onboarding.patient.submitBaseline}">Submit baseline</button>
+            <input type="hidden" th:field="*{onboardingContext}">
+
+            <section id="onboarding-errors" class="error-summary" role="alert" tabindex="-1"
+                     th:if="${#fields.hasAnyErrors()}">
+                <h2 th:text="#{validation.summaryTitle}">Please fix the highlighted fields</h2>
+                <ul>
+                    <li th:each="error : ${onboardingBindingErrors}">
+                        <a th:href="${error.href()}" th:id="${error.errorId()}"
+                           th:attr="data-error-target-id=${error.targetId()}"
+                           th:text="${error.message()}">Field error</a>
+                    </li>
+                </ul>
+            </section>
+            <p id="onboarding-live" class="visually-hidden" aria-live="polite" aria-atomic="true"></p>
+
+            <details id="condition-section" class="onboarding-section" data-section="condition" open>
+                <summary class="onboarding-section-summary">
+                    <span class="onboarding-section-title" th:text="#{onboarding.condition.section}">About your condition</span>
+                    <span class="requirement-badge" th:text="#{onboarding.required}">Required</span>
+                    <span class="section-status" data-section-status role="status" aria-live="polite" aria-atomic="true"></span>
+                </summary>
+                <div class="onboarding-section-body">
+                    <label class="field"><span><span th:text="#{onboarding.diagnosis}">Diagnosis</span> <span class="field-requirement" th:text="#{onboarding.required}">Required</span></span>
+                        <select id="diagnosisType" th:field="*{diagnosisType}" required data-required-field="true"
+                                th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('diagnosisType') ? 'true' : null},
+                                         aria-describedby=${onboardingBindingErrorIds.get('diagnosisType')}">
+                            <option value="" th:text="#{onboarding.select}">Select</option>
+                            <option th:each="option : ${diagnosisTypes}" th:value="${option}" th:text="${#messages.msg('enum.ibdDiagnosisType.' + option.name())}"></option>
+                        </select>
+                    </label>
+                    <label class="field"><span><span th:text="#{onboarding.diagnosisYear}">Diagnosis year</span> <span class="field-requirement" th:text="#{onboarding.optional}">Optional</span></span>
+                        <input type="number" id="diagnosisYear" th:field="*{diagnosisYear}"
+                               th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('diagnosisYear') ? 'true' : null},
+                                        aria-describedby=${onboardingBindingErrorIds.get('diagnosisYear')}">
+                    </label>
+                    <label class="field"><span><span th:text="#{onboarding.diseaseLocation}">Disease location</span> <span class="field-requirement" th:text="#{onboarding.optional}">Optional</span></span>
+                        <input id="diseaseLocation" th:field="*{diseaseLocation}"
+                               th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('diseaseLocation') ? 'true' : null},
+                                        aria-describedby=${onboardingBindingErrorIds.get('diseaseLocation')}">
+                    </label>
+                    <p class="hint" th:text="#{onboarding.diseaseLocation.hint}">For example ileum, colon, or ileocolon.</p>
+                    <label class="field"><span><span th:text="#{onboarding.diseaseBehavior}">Disease behavior</span> <span class="field-requirement" th:text="#{onboarding.optional}">Optional</span></span>
+                        <input id="diseaseBehavior" th:field="*{diseaseBehavior}"
+                               th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('diseaseBehavior') ? 'true' : null},
+                                        aria-describedby=${onboardingBindingErrorIds.get('diseaseBehavior')}">
+                    </label>
+                    <p class="hint" th:text="#{onboarding.diseaseBehavior.hint}">For example inflammatory, stricturing, or penetrating.</p>
+                    <label class="field"><span><span th:text="#{onboarding.activityEstimate}">Activity estimate</span> <span class="field-requirement" th:text="#{onboarding.required}">Required</span></span>
+                        <select id="activityEstimate" th:field="*{activityEstimate}" required data-required-field="true"
+                                th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('activityEstimate') ? 'true' : null},
+                                         aria-describedby=${onboardingBindingErrorIds.get('activityEstimate')}">
+                            <option value="" th:text="#{onboarding.select}">Select</option>
+                            <option th:each="option : ${activityOptions}" th:value="${option}" th:text="${#messages.msg('enum.diseaseActivityEstimate.' + option.name())}"></option>
+                        </select>
+                    </label>
+                </div>
+            </details>
+
+            <details id="treatment-section" class="onboarding-section" data-section="treatment"
+                     th:open="${onboardingBindingErrorIds.containsKey('currentMedications')
+                             or onboardingBindingErrorIds.containsKey('steroidUse')
+                             or onboardingBindingErrorIds.containsKey('advancedTherapyExposure')
+                             or onboardingBindingErrorIds.containsKey('medicationNotes')}">
+                <summary class="onboarding-section-summary">
+                    <span class="onboarding-section-title" th:text="#{onboarding.treatment.section}">Current treatment</span>
+                    <span class="requirement-badge" th:text="#{onboarding.required}">Required</span>
+                    <span class="section-status" data-section-status role="status" aria-live="polite" aria-atomic="true"></span>
+                </summary>
+                <div class="onboarding-section-body">
+                    <label class="field"><span><span th:text="#{onboarding.currentMedications}">Current medications</span> <span class="field-requirement" th:text="#{onboarding.optional}">Optional</span></span>
+                        <textarea id="currentMedications" th:field="*{currentMedications}"
+                                  th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('currentMedications') ? 'true' : null},
+                                           aria-describedby=${onboardingBindingErrorIds.get('currentMedications')}"></textarea>
+                    </label>
+                    <label class="field"><span><span th:text="#{onboarding.steroidUse}">Steroid use</span> <span class="field-requirement" th:text="#{onboarding.required}">Required</span></span>
+                        <select id="steroidUse" th:field="*{steroidUse}" required data-required-field="true"
+                                th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('steroidUse') ? 'true' : null},
+                                         aria-describedby=${onboardingBindingErrorIds.get('steroidUse')}">
+                            <option value="" th:text="#{onboarding.select}">Select</option>
+                            <option th:each="option : ${steroidOptions}" th:value="${option}" th:text="${#messages.msg('enum.steroidUse.' + option.name())}"></option>
+                        </select>
+                    </label>
+                    <label class="field"><span><span th:text="#{onboarding.advancedTherapyExposure}">Advanced therapy exposure</span> <span class="field-requirement" th:text="#{onboarding.required}">Required</span></span>
+                        <select id="advancedTherapyExposure" th:field="*{advancedTherapyExposure}" required data-required-field="true"
+                                th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('advancedTherapyExposure') ? 'true' : null},
+                                         aria-describedby=${onboardingBindingErrorIds.get('advancedTherapyExposure')}">
+                            <option value="" th:text="#{onboarding.select}">Select</option>
+                            <option th:each="option : ${advancedTherapyOptions}" th:value="${option}" th:text="${#messages.msg('enum.advancedTherapyExposure.' + option.name())}"></option>
+                        </select>
+                    </label>
+                    <p class="hint" th:text="#{onboarding.advancedTherapyExposure.hint}">Advanced therapy includes biologic medicines and small molecules.</p>
+                    <label class="field"><span><span th:text="#{onboarding.medicationNotes}">Medication notes</span> <span class="field-requirement" th:text="#{onboarding.optional}">Optional</span></span>
+                        <textarea id="medicationNotes" th:field="*{medicationNotes}"
+                                  th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('medicationNotes') ? 'true' : null},
+                                           aria-describedby=${onboardingBindingErrorIds.get('medicationNotes')}"></textarea>
+                    </label>
+                </div>
+            </details>
+
+            <details id="labs-section" class="onboarding-section" data-section="labs"
+                     th:with="labsShown=${onboardingForm.labsCollectedAt() != null
+                                       or onboardingForm.crpMgL() != null
+                                       or onboardingForm.fecalCalprotectinUgG() != null
+                                       or onboardingForm.hemoglobinGDl() != null
+                                       or onboardingForm.albuminGDl() != null
+                                       or onboardingBindingErrorIds.containsKey('labsCollectedAt')
+                                       or onboardingBindingErrorIds.containsKey('crpMgL')
+                                       or onboardingBindingErrorIds.containsKey('fecalCalprotectinUgG')
+                                       or onboardingBindingErrorIds.containsKey('hemoglobinGDl')
+                                       or onboardingBindingErrorIds.containsKey('albuminGDl')
+                                       or onboardingBindingErrorIds.containsKey('labNotes')}"
+                     th:open="${onboardingBindingErrorIds.containsKey('labsCollectedAt')
+                             or onboardingBindingErrorIds.containsKey('crpMgL')
+                             or onboardingBindingErrorIds.containsKey('fecalCalprotectinUgG')
+                             or onboardingBindingErrorIds.containsKey('hemoglobinGDl')
+                             or onboardingBindingErrorIds.containsKey('albuminGDl')
+                             or onboardingBindingErrorIds.containsKey('labNotes')}">
+                <summary class="onboarding-section-summary">
+                    <span class="onboarding-section-title" th:text="#{onboarding.labs.section}">Recent lab results</span>
+                    <span class="requirement-badge" th:text="#{onboarding.optional}">Optional</span>
+                    <span class="section-status" data-section-status role="status" aria-live="polite" aria-atomic="true"></span>
+                </summary>
+                <div class="onboarding-section-body">
+                    <fieldset class="onboarding-lab-choice" data-labs-choice>
+                        <legend th:text="#{onboarding.labs.question}">Do you have recent lab results to add?</legend>
+                        <label><input type="radio" name="includeLabs" value="false" checked th:checked="${!labsShown}"> <span th:text="#{onboarding.labs.no}">Not now</span></label>
+                        <label><input type="radio" name="includeLabs" value="true" th:checked="${labsShown}"> <span th:text="#{onboarding.labs.yes}">Yes, add results</span></label>
+                    </fieldset>
+                    <div data-lab-fields hidden th:hidden="${!labsShown}">
+                        <label class="field"><span><span th:text="#{onboarding.labsCollectedAt}">Labs collected at</span> <span class="field-requirement" th:text="#{onboarding.optional}">Optional</span></span>
+                            <input type="date" id="labsCollectedAt" th:field="*{labsCollectedAt}"
+                                   th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('labsCollectedAt') ? 'true' : null},
+                                            aria-describedby=${onboardingBindingErrorIds.get('labsCollectedAt')}">
+                        </label>
+                        <p class="hint" th:text="#{onboarding.labs.dateHint}">Add the date the samples were collected when you enter a result.</p>
+                        <label class="field"><span><span th:text="#{onboarding.crpMgL}">CRP mg/L</span> <span class="field-requirement" th:text="#{onboarding.optional}">Optional</span></span>
+                            <input type="number" step="0.01" id="crpMgL" th:field="*{crpMgL}"
+                                   th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('crpMgL') ? 'true' : null},
+                                            aria-describedby=${onboardingBindingErrorIds.get('crpMgL')}">
+                        </label>
+                        <label class="field"><span><span th:text="#{onboarding.fecalCalprotectinUgG}">Fecal calprotectin ug/g</span> <span class="field-requirement" th:text="#{onboarding.optional}">Optional</span></span>
+                            <input type="number" step="0.01" id="fecalCalprotectinUgG" th:field="*{fecalCalprotectinUgG}"
+                                   th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('fecalCalprotectinUgG') ? 'true' : null},
+                                            aria-describedby=${onboardingBindingErrorIds.get('fecalCalprotectinUgG')}">
+                        </label>
+                        <label class="field"><span><span th:text="#{onboarding.hemoglobinGDl}">Hemoglobin g/dL</span> <span class="field-requirement" th:text="#{onboarding.optional}">Optional</span></span>
+                            <input type="number" step="0.1" id="hemoglobinGDl" th:field="*{hemoglobinGDl}"
+                                   th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('hemoglobinGDl') ? 'true' : null},
+                                            aria-describedby=${onboardingBindingErrorIds.get('hemoglobinGDl')}">
+                        </label>
+                        <label class="field"><span><span th:text="#{onboarding.albuminGDl}">Albumin g/dL</span> <span class="field-requirement" th:text="#{onboarding.optional}">Optional</span></span>
+                            <input type="number" step="0.1" id="albuminGDl" th:field="*{albuminGDl}"
+                                   th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('albuminGDl') ? 'true' : null},
+                                            aria-describedby=${onboardingBindingErrorIds.get('albuminGDl')}">
+                        </label>
+                        <label class="field"><span><span th:text="#{onboarding.labNotes}">Lab notes</span> <span class="field-requirement" th:text="#{onboarding.optional}">Optional</span></span>
+                            <textarea id="labNotes" th:field="*{labNotes}"
+                                      th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('labNotes') ? 'true' : null},
+                                               aria-describedby=${onboardingBindingErrorIds.get('labNotes')}"></textarea>
+                        </label>
+                    </div>
+                </div>
+            </details>
+
+            <div class="onboarding-actions" data-onboarding-actions>
+                <p data-required-progress></p>
+                <button type="submit" th:text="${latest == null ? #messages.msg('onboarding.patient.submitBaseline') : #messages.msg('onboarding.patient.submitUpdatedBaseline')}">Submit baseline</button>
+            </div>
+            <script th:src="@{/js/onboarding.js}" defer></script>
         </form>
     </section>
 </th:block>

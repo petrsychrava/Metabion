@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
 import org.springframework.session.FindByIndexNameSessionRepository;
@@ -24,9 +25,11 @@ import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
@@ -195,6 +198,138 @@ class WebOnboardingControllerTest {
                 .andExpect(content().string(containsString("Education library")))
                 .andExpect(content().string(containsString("Latest baseline")))
                 .andExpect(content().string(containsString("must not be null")));
+    }
+
+    @Test
+    void invalidDiagnosisYearAddsAResolvableOnboardingErrorTarget() throws Exception {
+        mvc.perform(post("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("onboardingContext", "default")
+                        .param("diagnosisType", "CROHNS_DISEASE")
+                        .param("diagnosisYear", "1899")
+                        .param("activityEstimate", "MILD")
+                        .param("steroidUse", "NONE")
+                        .param("advancedTherapyExposure", "NEVER_USED"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("onboarding"))
+                .andExpect(model().attributeExists("onboardingBindingErrors"))
+                .andExpect(model().attributeExists("onboardingBindingErrorIds"));
+    }
+
+    @Test
+    void labValuesWithoutCollectionDateAddAnErrorTargetForTheLabDate() throws Exception {
+        mvc.perform(post("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("onboardingContext", "default")
+                        .param("diagnosisType", "CROHNS_DISEASE")
+                        .param("activityEstimate", "MILD")
+                        .param("steroidUse", "NONE")
+                        .param("advancedTherapyExposure", "NEVER_USED")
+                        .param("crpMgL", "4.2"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("onboarding"))
+                .andExpect(model().attributeExists("onboardingBindingErrors"))
+                .andExpect(model().attributeExists("onboardingBindingErrorIds"));
+    }
+
+    @Test
+    void onboardingPageRendersProgressiveSectionsAndKeepsContextHidden() throws Exception {
+        String response = mvc.perform(get("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(response)
+                .contains("data-onboarding-form")
+                .contains("data-section=\"condition\"")
+                .contains("data-section=\"treatment\"")
+                .contains("data-section=\"labs\"")
+                .contains("name=\"onboardingContext\"")
+                .doesNotContain(">Context<")
+                .contains("Do you have recent lab results to add?");
+    }
+
+    @Test
+    void invalidOnboardingRendersFocusableErrorSummaryAndAriaLinks() throws Exception {
+        String response = mvc.perform(post("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("onboardingContext", "default"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(response)
+                .contains("id=\"onboarding-errors\"")
+                .contains("role=\"alert\"")
+                .contains("data-error-target-id=\"diagnosisType\"")
+                .contains("aria-invalid=\"true\"");
+    }
+
+    @Test
+    void onboardingPageRendersProgressiveSectionsInCzech() throws Exception {
+        when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
+
+        String response = mvc.perform(get("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(response)
+                .contains("O vašem onemocnění")
+                .contains("Chcete přidat nedávné laboratorní výsledky?")
+                .contains("Povinné");
+    }
+
+    @Test
+    void onboardingScriptManagesOptionalLabsAndNativeInvalidFocus() throws Exception {
+        String script = new ClassPathResource("static/js/onboarding.js")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(script)
+                .contains("const form = document.querySelector('[data-onboarding-form]');")
+                .contains("labFields.hidden = !includeLabs;")
+                .contains("element.disabled = !includeLabs;")
+                .contains("element.value = '';")
+                .contains("form.addEventListener('invalid', (event) => {")
+                .contains("invalidControl.closest('details[data-section]')?.setAttribute('open', '');")
+                .contains("target?.closest('details[data-section]')?.setAttribute('open', '');");
+    }
+
+    @Test
+    void onboardingPageRendersProgressiveFormHooksAndScript() throws Exception {
+        String response = mvc.perform(get("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(response)
+                .contains("data-onboarding-form")
+                .contains("data-labs-choice")
+                .contains("data-lab-fields")
+                .contains("data-required-progress")
+                .contains("data-required-field=\"true\"")
+                .contains("/js/onboarding.js");
+    }
+
+    @Test
+    void invalidOnboardingWithLabDataKeepsLabFieldsVisible() throws Exception {
+        String response = mvc.perform(post("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("onboardingContext", "default")
+                        .param("diagnosisType", "CROHNS_DISEASE")
+                        .param("activityEstimate", "MILD")
+                        .param("steroidUse", "NONE")
+                        .param("advancedTherapyExposure", "NEVER_USED")
+                        .param("crpMgL", "4.2"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(response)
+                .contains("data-lab-fields")
+                .doesNotContain("data-lab-fields hidden");
     }
 
     @Test
