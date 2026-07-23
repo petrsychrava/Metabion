@@ -148,6 +148,22 @@ class OnboardingServiceTest {
     }
 
     @Test
+    void patientViewStripsReviewInternalsButKeepsSubmittedData() {
+        var submission = validSubmission();
+
+        var response = OnboardingSubmissionResponse.from(submission).toPatientView();
+
+        assertThat(response.reviewStatus()).isEqualTo(OnboardingReviewStatus.REVIEWED);
+        assertThat(response.reviewedByEmail()).isNull();
+        assertThat(response.reviewedAt()).isNull();
+        assertThat(response.reviewNotes()).isNull();
+        assertThat(response.diagnosisType()).isEqualTo(IbdDiagnosisType.CROHNS_DISEASE);
+        assertThat(response.currentMedications()).isEqualTo("Mesalamine");
+        assertThat(response.crpMgL()).isEqualByComparingTo("4.2");
+        assertThat(response.version()).isEqualTo(2);
+    }
+
+    @Test
     void submissionSummaryResponseMapsSummaryFields() {
         var submission = validSubmission();
 

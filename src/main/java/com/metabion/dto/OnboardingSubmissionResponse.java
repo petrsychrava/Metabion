@@ -83,6 +83,40 @@ public record OnboardingSubmissionResponse(
                 submission.getReviewNotes());
     }
 
+    public OnboardingSubmissionResponse toPatientView() {
+        return new OnboardingSubmissionResponse(
+                id,
+                patientProfileId,
+                patientEmail,
+                onboardingContext,
+                version,
+                createdAt,
+                submittedAt,
+                dateOfBirth,
+                sex,
+                countryRegion,
+                timezone,
+                diagnosisType,
+                diagnosisYear,
+                diseaseLocation,
+                diseaseBehavior,
+                activityEstimate,
+                currentMedications,
+                steroidUse,
+                advancedTherapyExposure,
+                medicationNotes,
+                labsCollectedAt,
+                crpMgL,
+                fecalCalprotectinUgG,
+                hemoglobinGDl,
+                albuminGDl,
+                labNotes,
+                reviewStatus,
+                null,
+                null,
+                null);
+    }
+
     private static Long patientProfileId(PatientProfile patientProfile) {
         return patientProfile == null ? null : patientProfile.getId();
     }
