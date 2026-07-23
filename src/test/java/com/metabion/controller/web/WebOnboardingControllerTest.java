@@ -143,6 +143,27 @@ class WebOnboardingControllerTest {
     }
 
     @Test
+    void patientHistoryRowsLinkToSubmissionDetail() throws Exception {
+        when(onboardingService.listHistoryForCurrentPatient(any(), eq("default")))
+                .thenReturn(java.util.List.of(summaryResponse()));
+
+        mvc.perform(get("/app/onboarding/history")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("href=\"/app/onboarding/99\"")));
+    }
+
+    @Test
+    void latestBaselinePanelLinksToSubmissionDetail() throws Exception {
+        when(onboardingService.getLatestForCurrentPatient(any(), eq("default"))).thenReturn(fullSubmissionResponse());
+
+        mvc.perform(get("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("href=\"/app/onboarding/99\"")));
+    }
+
+    @Test
     void patientSubmissionDetailRendersOwnDataWithoutReviewInternals() throws Exception {
         when(onboardingService.getOwnSubmissionById(any(), eq(99L))).thenReturn(reviewedSubmissionResponse());
 

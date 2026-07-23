@@ -20,6 +20,7 @@
             <strong th:text="${#messages.msg('enum.onboardingReviewStatus.' + latest.reviewStatus().name())}">PENDING_REVIEW</strong>
         </p>
         <p class="muted" th:text="#{onboarding.patient.latestSubmitted(${latest.submittedAt()})}">Submitted</p>
+        <p><a th:href="@{/app/onboarding/{id}(id=${latest.id()})}" th:text="#{onboarding.patient.viewDetails}">View details</a></p>
     </section>
 
     <section class="panel app-panel">
