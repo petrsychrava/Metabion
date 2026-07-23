@@ -92,6 +92,13 @@ public class WebOnboardingController {
         return "onboarding-history";
     }
 
+    @GetMapping("/app/onboarding/{id}")
+    public String submissionDetail(@PathVariable Long id, Authentication authentication, Model model) {
+        model.addAttribute("submission", onboardingService.getOwnSubmissionById(authentication, id));
+        addAppShell(model, authentication, "/app/onboarding/history");
+        return "onboarding-detail";
+    }
+
     @GetMapping("/app/clinical/onboarding")
     public String clinicalList(@RequestParam(required = false) String context,
                                @RequestParam(required = false) OnboardingReviewStatus status,

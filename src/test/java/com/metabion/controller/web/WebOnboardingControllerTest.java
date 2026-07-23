@@ -143,6 +143,83 @@ class WebOnboardingControllerTest {
     }
 
     @Test
+    void patientHistoryRowsLinkToSubmissionDetail() throws Exception {
+        when(onboardingService.listHistoryForCurrentPatient(any(), eq("default")))
+                .thenReturn(java.util.List.of(summaryResponse()));
+
+        mvc.perform(get("/app/onboarding/history")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("href=\"/app/onboarding/99\"")));
+    }
+
+    @Test
+    void latestBaselinePanelLinksToSubmissionDetail() throws Exception {
+        when(onboardingService.getLatestForCurrentPatient(any(), eq("default"))).thenReturn(fullSubmissionResponse());
+
+        mvc.perform(get("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("href=\"/app/onboarding/99\"")));
+    }
+
+    @Test
+    void patientSubmissionDetailRendersOwnDataWithoutReviewInternals() throws Exception {
+        when(onboardingService.getOwnSubmissionById(any(), eq(99L))).thenReturn(reviewedSubmissionResponse());
+
+        mvc.perform(get("/app/onboarding/99")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("onboarding-detail"))
+                .andExpect(content().string(containsString("1990-01-01")))
+                .andExpect(content().string(containsString("Europe/Prague")))
+                .andExpect(content().string(containsString("Ileocolonic")))
+                .andExpect(content().string(containsString("Mesalamine")))
+                .andExpect(content().string(containsString("4.2")))
+                .andExpect(content().string(containsString("Recent outpatient labs")))
+                .andExpect(content().string(not(containsString("Confidential reviewer note"))))
+                .andExpect(content().string(not(containsString("reviewer@example.com"))))
+                .andExpect(content().string(not(containsString("2026-06-01"))))
+                .andExpect(content().string(not(containsString("Review notes"))));
+    }
+
+    @Test
+    void patientSubmissionDetailRequiresAuthentication() throws Exception {
+        mvc.perform(get("/app/onboarding/99"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+    }
+
+    @Test
+    void patientSubmissionDetailNotFoundRendersWebError() throws Exception {
+        doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Onboarding submission not found"))
+                .when(onboardingService).getOwnSubmissionById(any(), eq(99L));
+
+        mvc.perform(get("/app/onboarding/99")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isNotFound())
+                .andExpect(view().name("result"))
+                .andExpect(content().string(containsString("Page not found")));
+    }
+
+    @Test
+    void patientSubmissionDetailRendersInCzech() throws Exception {
+        when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
+        when(onboardingService.getOwnSubmissionById(any(), eq(99L))).thenReturn(fullSubmissionResponse());
+
+        mvc.perform(get("/app/onboarding/99")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("onboarding-detail"))
+                .andExpect(content().string(containsString("lang=\"cs\"")))
+                .andExpect(content().string(containsString("Detail vstupního dotazníku")))
+                .andExpect(content().string(containsString("Zpět")))
+                .andExpect(content().string(containsString("Datum narození")))
+                .andExpect(content().string(containsString("Crohnova choroba")))
+                .andExpect(content().string(containsString("Mírná")));
+    }
+
+    @Test
     void patientOnboardingPageDoesNotRenderPatientProfileFields() throws Exception {
         when(onboardingService.getLatestForCurrentPatient(any(), eq("default"))).thenReturn(fullSubmissionResponse());
 
@@ -493,6 +570,40 @@ class WebOnboardingControllerTest {
                 null,
                 null,
                 null);
+    }
+
+    private OnboardingSubmissionResponse reviewedSubmissionResponse() {
+        return new OnboardingSubmissionResponse(
+                99L,
+                10L,
+                "patient@example.com",
+                "study-a",
+                2,
+                Instant.parse("2026-05-31T11:00:00Z"),
+                Instant.parse("2026-05-31T12:00:00Z"),
+                LocalDate.of(1990, 1, 1),
+                Sex.FEMALE,
+                "CZ",
+                "Europe/Prague",
+                IbdDiagnosisType.CROHNS_DISEASE,
+                2018,
+                "Ileocolonic",
+                "Inflammatory",
+                DiseaseActivityEstimate.MILD,
+                "Mesalamine",
+                SteroidUse.NONE,
+                AdvancedTherapyExposure.NEVER_USED,
+                "Stable regimen",
+                LocalDate.of(2026, 5, 20),
+                new BigDecimal("4.2"),
+                new BigDecimal("120"),
+                new BigDecimal("13.8"),
+                new BigDecimal("4.3"),
+                "Recent outpatient labs",
+                OnboardingReviewStatus.REVIEWED,
+                "reviewer@example.com",
+                Instant.parse("2026-06-01T08:00:00Z"),
+                "Confidential reviewer note");
     }
 
     private OnboardingSubmissionSummaryResponse summaryResponse() {

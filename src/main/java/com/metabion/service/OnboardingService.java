@@ -62,7 +62,7 @@ public class OnboardingService {
         var nextVersion = submissions.maxVersion(patient.getId(), context) + 1;
         var submission = new OnboardingSubmission(patient, context, nextVersion);
         copyRequest(request, submission);
-        return OnboardingSubmissionResponse.from(submissions.save(submission));
+        return OnboardingSubmissionResponse.from(submissions.save(submission)).toPatientView();
     }
 
     public OnboardingSubmissionResponse getLatestForCurrentPatient(Authentication authentication, String context) {
@@ -70,9 +70,19 @@ public class OnboardingService {
         return submissions.findFirstByPatientProfileIdAndOnboardingContextOrderByVersionDesc(
                         patient.getId(),
                         normalizeContext(context))
-                .map(OnboardingSubmissionResponse::from)
+                .map(submission -> OnboardingSubmissionResponse.from(submission).toPatientView())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Onboarding submission not found"));
+    }
+
+    public OnboardingSubmissionResponse getOwnSubmissionById(Authentication authentication, long submissionId) {
+        var patient = currentPatientProfile(authentication);
+        var submission = submissionOrNotFound(submissionId);
+        if (!submission.getPatientProfile().getId().equals(patient.getId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Onboarding submission not found");
+        }
+        return OnboardingSubmissionResponse.from(submission).toPatientView();
     }
 
     public List<OnboardingSubmissionSummaryResponse> listHistoryForCurrentPatient(Authentication authentication,

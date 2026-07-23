@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
+import static org.springframework.http.HttpStatus.NOT_FOUND;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -112,6 +113,31 @@ class OnboardingControllerTest {
 
         verify(onboardingService).getLatestForCurrentPatient(any(), eq("default"));
         verify(onboardingService).listHistoryForCurrentPatient(any(), eq("default"));
+    }
+
+    @Test
+    void patientCanReadOwnSubmissionById() throws Exception {
+        mvc.perform(get("/api/onboarding/submissions/55")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk());
+
+        verify(onboardingService).getOwnSubmissionById(any(), eq(55L));
+    }
+
+    @Test
+    void unauthenticatedSubmissionDetailIsUnauthorized() throws Exception {
+        mvc.perform(get("/api/onboarding/submissions/55"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void submissionDetailNotFoundReturns404() throws Exception {
+        doThrow(new ResponseStatusException(NOT_FOUND, "Onboarding submission not found"))
+                .when(onboardingService).getOwnSubmissionById(any(), eq(55L));
+
+        mvc.perform(get("/api/onboarding/submissions/55")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isNotFound());
     }
 
     @Test
