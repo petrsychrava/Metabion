@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -20,6 +21,9 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.access.AccessDeniedHandlerImpl;
+import org.springframework.security.web.access.RequestMatcherDelegatingAccessDeniedHandler;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.context.SecurityContextRepository;
@@ -28,6 +32,10 @@ import org.springframework.security.web.servlet.util.matcher.PathPatternRequestM
 import com.metabion.domain.RoleName;
 import com.metabion.repository.UserRepository;
 import jakarta.servlet.http.HttpServletResponse;
+
+import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Configuration
 @EnableWebSecurity
@@ -124,6 +132,12 @@ public class SecurityConfig {
                                            SecurityContextRepository securityContextRepository) throws Exception {
         var loginEntryPoint = new LoginUrlAuthenticationEntryPoint("/login");
         var unauthorizedEntryPoint = new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED);
+        var apiRequestMatcher = PathPatternRequestMatcher.pathPattern("/api/**");
+        var apiUnauthorizedEntryPoint =
+                (org.springframework.security.web.AuthenticationEntryPoint) (request, response, ex) ->
+                        writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "unauthorized");
+        var apiAccessDeniedHandler = (AccessDeniedHandler) (request, response, ex) ->
+                writeJsonError(response, HttpServletResponse.SC_FORBIDDEN, "forbidden");
         var mcpUnauthorizedEntryPoint = (org.springframework.security.web.AuthenticationEntryPoint) (request, response, authException) -> {
             response.setHeader("WWW-Authenticate", bearerChallenge(oauthProperties));
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
@@ -137,6 +151,7 @@ public class SecurityConfig {
                         PathPatternRequestMatcher.pathPattern("/api/mcp"))
                 .addEntryPointFor(mcpUnauthorizedEntryPoint,
                         PathPatternRequestMatcher.pathPattern("/api/mcp/**"))
+                .addEntryPointFor(apiUnauthorizedEntryPoint, apiRequestMatcher)
                 .defaultEntryPoint(unauthorizedEntryPoint)
                 .build();
 
@@ -182,6 +197,9 @@ public class SecurityConfig {
                         .requestMatchers("/app", "/app/**", "/logout").authenticated()
                         .requestMatchers("/api/auth/logout").authenticated()
                         .requestMatchers(MCP_ENDPOINTS).authenticated()
+                        .requestMatchers("/api/cohorts", "/api/cohorts/**",
+                                "/api/patients", "/api/patients/**")
+                            .hasAnyRole("COORDINATOR", "ADMIN")
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().denyAll()
                 )
@@ -197,7 +215,10 @@ public class SecurityConfig {
                                         .ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
                 )
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint(authenticationEntryPoint))
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(new RequestMatcherDelegatingAccessDeniedHandler(
+                                new LinkedHashMap<>(Map.of(apiRequestMatcher, apiAccessDeniedHandler)),
+                                new AccessDeniedHandlerImpl())))
                 .addFilterBefore(mcpLocalhostFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(patientBearerTokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
@@ -217,5 +238,12 @@ public class SecurityConfig {
         return "Bearer resource_metadata=\""
                 + oauthProperties.issuer()
                 + "/.well-known/oauth-protected-resource\"";
+    }
+
+    private static void writeJsonError(HttpServletResponse response, int status, String error)
+            throws IOException {
+        response.setStatus(status);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.getWriter().write("{\"error\":\"" + error + "\"}");
     }
 }
