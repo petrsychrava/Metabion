@@ -36,6 +36,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -479,6 +480,42 @@ class SecurityConfigTest {
     void static_css_is_public() throws Exception {
         mvc.perform(get("/css/app.css"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void anonymousAssignmentApiRequestReturnsJsonUnauthorized() throws Exception {
+        mvc.perform(get("/api/cohorts"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("unauthorized"));
+    }
+
+    @Test
+    void nonManagerRolesGetJsonForbiddenOnAssignmentApi() throws Exception {
+        for (var role : List.of(RoleName.PATIENT, RoleName.PHYSICIAN, RoleName.NUTRITION_SPECIALIST)) {
+            mvc.perform(get("/api/cohorts")
+                            .with(user(role.name().toLowerCase() + "@example.com").roles(role.name())))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.error").value("forbidden"));
+        }
+    }
+
+    @Test
+    void assignmentApiMutationWithoutCsrfReturnsJsonForbidden() throws Exception {
+        mvc.perform(post("/api/cohorts")
+                        .with(user("admin@example.com").roles(RoleName.ADMIN.name()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Pilot\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("forbidden"));
+    }
+
+    @Test
+    void anonymousMutationWithoutCsrfReturnsJsonForbidden() throws Exception {
+        mvc.perform(post("/api/cohorts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Pilot\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("forbidden"));
     }
 
     private static PatientAccessToken patientToken() {

@@ -7,6 +7,12 @@ import com.metabion.domain.PatientExpertAssignment;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.StaffProfile;
 import com.metabion.domain.User;
+import com.metabion.dto.PatientOptionResponse;
+import com.metabion.dto.assignment.AssignmentManagementApi.AssignmentResponse;
+import com.metabion.dto.assignment.AssignmentManagementApi.CohortDetailResponse;
+import com.metabion.dto.assignment.AssignmentManagementApi.MembershipResponse;
+import com.metabion.dto.assignment.AssignmentManagementApi.PatientAssignmentRow;
+import com.metabion.dto.assignment.AssignmentManagementApi.PatientsPageResponse;
 import com.metabion.dto.assignment.AssignmentManagementForms.CohortForm;
 import com.metabion.dto.assignment.AssignmentManagementView.AccessSource;
 import com.metabion.dto.assignment.AssignmentManagementView.CohortItem;
@@ -46,6 +52,8 @@ import java.util.stream.Collectors;
 public class AssignmentManagementService {
 
     private static final int DIRECT_PAGE_SIZE = 50;
+    private static final int DEFAULT_PAGE_SIZE = 50;
+    private static final int MAX_PAGE_SIZE = 200;
 
     private final UserRepository users;
     private final PatientProfileRepository patientProfiles;
@@ -102,7 +110,7 @@ public class AssignmentManagementService {
     }
 
     @Transactional
-    public void updateCohort(Authentication authentication, Long cohortId, CohortForm form) {
+    public CohortItem updateCohort(Authentication authentication, Long cohortId, CohortForm form) {
         var actor = requireAssignmentManager(authentication);
         var cohort = lockedCohort(cohortId);
         if (!actor.hasRole(RoleName.ADMIN)
@@ -112,6 +120,7 @@ public class AssignmentManagementService {
         requireActiveCohort(cohort, "Archived cohort cannot be edited");
         requireForm(form);
         cohort.edit(normalizeName(form.name()), normalizeDescription(form.description()));
+        return cohortItem(cohort);
     }
 
     @Transactional
@@ -140,9 +149,9 @@ public class AssignmentManagementService {
     }
 
     @Transactional
-    public void addPatientToCohort(Authentication authentication,
-                                   Long cohortId,
-                                   Long patientProfileId) {
+    public MembershipResponse addPatientToCohort(Authentication authentication,
+                                                 Long cohortId,
+                                                 Long patientProfileId) {
         var actor = requireAssignmentManager(authentication);
         var cohort = lockedCohort(cohortId);
         if (!actor.hasRole(RoleName.ADMIN)
@@ -157,8 +166,10 @@ public class AssignmentManagementService {
             throw conflict("Patient is already assigned to cohort");
         }
         try {
-            memberships.save(new PatientCohortMembership(patient, cohort, actor));
+            var membership = new PatientCohortMembership(patient, cohort, actor);
+            memberships.save(membership);
             memberships.flush();
+            return new MembershipResponse(membership.getId());
         } catch (DataIntegrityViolationException exception) {
             throw conflict("Patient is already assigned to cohort");
         }
@@ -183,9 +194,9 @@ public class AssignmentManagementService {
     }
 
     @Transactional
-    public void assignCohortStaff(Authentication authentication,
-                                  Long cohortId,
-                                  Long staffProfileId) {
+    public AssignmentResponse assignCohortStaff(Authentication authentication,
+                                                Long cohortId,
+                                                Long staffProfileId) {
         var actor = requireAssignmentManager(authentication);
         var cohort = lockedCohort(cohortId);
         if (!actor.hasRole(RoleName.ADMIN)
@@ -205,8 +216,10 @@ public class AssignmentManagementService {
             throw conflict("Staff member is already assigned to cohort");
         }
         try {
-            cohortStaffAssignments.save(new CohortStaffAssignment(cohort, target, actor));
+            var assignment = new CohortStaffAssignment(cohort, target, actor);
+            cohortStaffAssignments.save(assignment);
             cohortStaffAssignments.flush();
+            return new AssignmentResponse(assignment.getId());
         } catch (DataIntegrityViolationException exception) {
             throw conflict("Staff member is already assigned to cohort");
         }
@@ -235,9 +248,9 @@ public class AssignmentManagementService {
     }
 
     @Transactional
-    public void assignDirectExpert(Authentication authentication,
-                                   Long patientProfileId,
-                                   Long staffProfileId) {
+    public AssignmentResponse assignDirectExpert(Authentication authentication,
+                                                 Long patientProfileId,
+                                                 Long staffProfileId) {
         var actor = requireAssignmentManager(authentication);
         var patient = patientProfiles.lockById(patientProfileId)
                 .filter(profile -> profile.getUser().isEnabled())
@@ -253,8 +266,10 @@ public class AssignmentManagementService {
             throw conflict("Expert is already directly assigned to patient");
         }
         try {
-            directAssignments.save(new PatientExpertAssignment(patient, target, actor));
+            var assignment = new PatientExpertAssignment(patient, target, actor);
+            directAssignments.save(assignment);
             directAssignments.flush();
+            return new AssignmentResponse(assignment.getId());
         } catch (DataIntegrityViolationException exception) {
             throw conflict("Expert is already directly assigned to patient");
         }
@@ -365,7 +380,7 @@ public class AssignmentManagementService {
                 .filter(cohort -> !cohort.isArchived())
                 .map(Cohort::getId)
                 .collect(Collectors.toUnmodifiableSet());
-        var patientIds = patientOptions.stream().map(com.metabion.dto.PatientOptionResponse::id).toList();
+        var patientIds = patientOptions.stream().map(PatientOptionResponse::id).toList();
         var access = accessForPatients(patientIds, manageableCohortIds);
         var directCandidateBase = staffProfiles.findAllEnabledWithRoles().stream()
                 .filter(this::eligibleDirectExpert)
@@ -387,6 +402,115 @@ public class AssignmentManagementService {
         }).toList();
         return new DirectPage(
                 patients, pageIndex, patientPage.getTotalPages(), patientPage.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public CohortDetailResponse cohortDetail(Authentication authentication, Long cohortId) {
+        var actor = requireAssignmentManager(authentication);
+        var visibleCohorts = visibleCohorts(actor);
+        var selected = visibleCohorts.stream()
+                .filter(cohort -> cohort.getId().equals(cohortId))
+                .findFirst()
+                .orElseThrow(() -> notFound("Cohort not found"));
+        var selectedId = selected.getId();
+        var cohortMemberships = selected.isArchived()
+                ? memberships.findHistoryByCohortId(selectedId)
+                : memberships.findActiveByCohortId(selectedId);
+        var staffAssignments = selected.isArchived()
+                ? cohortStaffAssignments.findHistoryByCohortId(selectedId)
+                : cohortStaffAssignments.findActiveByCohortId(selectedId);
+        if (selected.isArchived()) {
+            var patients = cohortMemberships.stream().map(this::historicalPatientRow).toList();
+            var careTeam = staffAssignments.stream()
+                    .map(assignment -> cohortAccess(assignment, true, true))
+                    .toList();
+            return new CohortDetailResponse(cohortItem(selected), patients, careTeam);
+        }
+        var patientIds = cohortMemberships.stream()
+                .map(row -> row.getPatientProfile().getId())
+                .toList();
+        var manageableCohortIds = visibleCohorts.stream()
+                .filter(cohort -> !cohort.isArchived())
+                .map(Cohort::getId)
+                .collect(Collectors.toUnmodifiableSet());
+        var access = accessForPatients(patientIds, manageableCohortIds);
+        var patients = cohortMemberships.stream()
+                .map(membership -> patientRow(membership, access))
+                .toList();
+        var careTeam = staffAssignments.stream()
+                .map(assignment -> cohortAccess(assignment, true, false))
+                .toList();
+        return new CohortDetailResponse(cohortItem(selected), patients, careTeam);
+    }
+
+    @Transactional(readOnly = true)
+    public PatientsPageResponse scopedPatients(Authentication authentication,
+                                               int requestedPage,
+                                               int requestedSize) {
+        var actor = requireAssignmentManager(authentication);
+        Long coordinatorProfileId = actor.hasRole(RoleName.ADMIN)
+                ? null
+                : requireCoordinatorProfileId(actor);
+        var size = clampPageSize(requestedSize);
+        var pageIndex = Math.max(0, requestedPage);
+        var patientPage = patientPage(actor, coordinatorProfileId, pageIndex, size);
+        if (patientPage.getTotalPages() == 0) {
+            pageIndex = 0;
+        } else if (pageIndex >= patientPage.getTotalPages()) {
+            pageIndex = patientPage.getTotalPages() - 1;
+            patientPage = patientPage(actor, coordinatorProfileId, pageIndex, size);
+        }
+        var patientOptions = patientPage.getContent();
+        var visibleCohorts = actor.hasRole(RoleName.ADMIN)
+                ? cohorts.findAllForAdministration()
+                : cohorts.findActiveForStaff(coordinatorProfileId);
+        var manageableCohortIds = visibleCohorts.stream()
+                .filter(cohort -> !cohort.isArchived())
+                .map(Cohort::getId)
+                .collect(Collectors.toUnmodifiableSet());
+        var patientIds = patientOptions.stream().map(PatientOptionResponse::id).toList();
+        var access = accessForPatients(patientIds, manageableCohortIds);
+        var staffCandidates = staffProfiles.findAllEnabledWithRoles().stream()
+                .filter(this::eligibleDirectExpert)
+                .map(this::staffOption)
+                .toList();
+        var patients = patientOptions.stream()
+                .map(patient -> new PatientAssignmentRow(
+                        patient.id(), patient.email(),
+                        access.cohortsByPatient().getOrDefault(patient.id(), List.of()),
+                        access.directByPatient().getOrDefault(patient.id(), List.of()),
+                        access.inheritedByPatient().getOrDefault(patient.id(), List.of())))
+                .toList();
+        return new PatientsPageResponse(
+                patients, staffCandidates, pageIndex, size,
+                patientPage.getTotalPages(), patientPage.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public List<PatientOptionResponse> patientCandidates(Authentication authentication,
+                                                         Long cohortId) {
+        var actor = requireAssignmentManager(authentication);
+        var cohort = requireVisibleActiveCohort(actor, cohortId);
+        var activePatientIds = memberships.findActiveByCohortId(cohort.getId()).stream()
+                .map(row -> row.getPatientProfile().getId())
+                .collect(Collectors.toSet());
+        return patientProfiles.findAllEnabledPatientOptions().stream()
+                .filter(candidate -> !activePatientIds.contains(candidate.id()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<StaffOption> staffCandidates(Authentication authentication, Long cohortId) {
+        var actor = requireAssignmentManager(authentication);
+        var cohort = requireVisibleActiveCohort(actor, cohortId);
+        var activeStaffIds = cohortStaffAssignments.findActiveByCohortId(cohort.getId()).stream()
+                .map(row -> row.getStaffProfile().getId())
+                .collect(Collectors.toSet());
+        return staffProfiles.findAllEnabledWithRoles().stream()
+                .filter(profile -> eligibleCohortStaff(actor, profile))
+                .filter(profile -> !activeStaffIds.contains(profile.getId()))
+                .map(this::staffOption)
+                .toList();
     }
 
     private Cohort lockedCohort(Long cohortId) {
@@ -416,12 +540,33 @@ public class AssignmentManagementService {
                 : cohorts.findActiveForStaff(requireCoordinatorProfileId(actor));
     }
 
-    private Page<com.metabion.dto.PatientOptionResponse> patientPage(
+    private Page<PatientOptionResponse> patientPage(
             User actor, Long coordinatorProfileId, int pageIndex) {
-        var pageable = PageRequest.of(pageIndex, DIRECT_PAGE_SIZE);
+        return patientPage(actor, coordinatorProfileId, pageIndex, DIRECT_PAGE_SIZE);
+    }
+
+    private Page<PatientOptionResponse> patientPage(
+            User actor, Long coordinatorProfileId, int pageIndex, int size) {
+        var pageable = PageRequest.of(pageIndex, size);
         return actor.hasRole(RoleName.ADMIN)
                 ? patientProfiles.findAllEnabledPatientOptions(pageable)
                 : patientProfiles.findEnabledPatientOptionsForStaff(coordinatorProfileId, pageable);
+    }
+
+    private Cohort requireVisibleActiveCohort(User actor, Long cohortId) {
+        var cohort = visibleCohorts(actor).stream()
+                .filter(candidate -> candidate.getId().equals(cohortId))
+                .findFirst()
+                .orElseThrow(() -> notFound("Cohort not found"));
+        requireActiveCohort(cohort);
+        return cohort;
+    }
+
+    private static int clampPageSize(int requestedSize) {
+        if (requestedSize < 1) {
+            return DEFAULT_PAGE_SIZE;
+        }
+        return Math.min(requestedSize, MAX_PAGE_SIZE);
     }
 
     private PatientAccess accessForPatients(Collection<Long> patientIds,

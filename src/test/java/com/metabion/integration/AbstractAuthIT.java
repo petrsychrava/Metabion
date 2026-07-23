@@ -192,6 +192,14 @@ abstract class AbstractAuthIT {
             return exchange(path, "POST", body, extraHeaders);
         }
 
+        ResponseEntity<String> putWithHeaders(String path, Object body, Map<String, String> extraHeaders) {
+            return exchange(path, "PUT", body, extraHeaders);
+        }
+
+        ResponseEntity<String> deleteWithHeaders(String path, Map<String, String> extraHeaders) {
+            return exchange(path, "DELETE", null, extraHeaders);
+        }
+
         ResponseEntity<String> postFormWithHeaders(String path, Map<String, String> form, Map<String, String> extraHeaders) {
             return exchangeForm(path, "POST", form, extraHeaders);
         }

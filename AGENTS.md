@@ -8,7 +8,7 @@ The implemented product areas are:
 
 - Patient registration, email verification, login/logout, password recovery, and session management.
 - Role-based access for patients, nutrition specialists, physicians, coordinators, and administrators.
-- Staff invitations, patient onboarding submissions, clinical review, cohorts, and staff/patient assignments.
+- Staff invitations, patient onboarding submissions, clinical review, cohorts, and staff/patient assignments, exposed through the Thymeleaf workspace and a session-authenticated REST API (`/api/cohorts`, `/api/patients`, `GET /api/csrf`).
 - Daily diet logs, meals, deviations, glucose/ketone measurements, photo upload/storage, and clinical views.
 - Symptom questionnaires, daily check-ins, scoring, patient/clinical trends, and SVG trend rendering.
 - Versioned and localized education content with authoring, review, approval, publishing, and patient completion tracking.

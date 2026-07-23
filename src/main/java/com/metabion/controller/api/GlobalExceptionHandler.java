@@ -11,12 +11,15 @@ import jakarta.persistence.OptimisticLockException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mail.MailException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
@@ -73,6 +76,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ValidationException.class)
     public ResponseEntity<Map<String, String>> validation(ValidationException e) {
         return ResponseEntity.badRequest().body(Map.of("error", "validation_failed"));
+    }
+
+    @ExceptionHandler({
+            HttpMessageNotReadableException.class,
+            MissingServletRequestParameterException.class,
+            MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<Map<String, String>> unreadableRequest(Exception e) {
+        return ResponseEntity.badRequest().body(Map.of("error", "request_failed"));
     }
 
     @ExceptionHandler(MailException.class)
