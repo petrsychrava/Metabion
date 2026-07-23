@@ -7,6 +7,8 @@ import com.metabion.domain.PatientExpertAssignment;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.StaffProfile;
 import com.metabion.domain.User;
+import com.metabion.dto.assignment.AssignmentManagementApi.AssignmentResponse;
+import com.metabion.dto.assignment.AssignmentManagementApi.MembershipResponse;
 import com.metabion.dto.assignment.AssignmentManagementForms.CohortForm;
 import com.metabion.dto.assignment.AssignmentManagementView.AccessSource;
 import com.metabion.dto.assignment.AssignmentManagementView.CohortItem;
@@ -102,7 +104,7 @@ public class AssignmentManagementService {
     }
 
     @Transactional
-    public void updateCohort(Authentication authentication, Long cohortId, CohortForm form) {
+    public CohortItem updateCohort(Authentication authentication, Long cohortId, CohortForm form) {
         var actor = requireAssignmentManager(authentication);
         var cohort = lockedCohort(cohortId);
         if (!actor.hasRole(RoleName.ADMIN)
@@ -112,6 +114,7 @@ public class AssignmentManagementService {
         requireActiveCohort(cohort, "Archived cohort cannot be edited");
         requireForm(form);
         cohort.edit(normalizeName(form.name()), normalizeDescription(form.description()));
+        return cohortItem(cohort);
     }
 
     @Transactional
@@ -140,9 +143,9 @@ public class AssignmentManagementService {
     }
 
     @Transactional
-    public void addPatientToCohort(Authentication authentication,
-                                   Long cohortId,
-                                   Long patientProfileId) {
+    public MembershipResponse addPatientToCohort(Authentication authentication,
+                                                 Long cohortId,
+                                                 Long patientProfileId) {
         var actor = requireAssignmentManager(authentication);
         var cohort = lockedCohort(cohortId);
         if (!actor.hasRole(RoleName.ADMIN)
@@ -157,8 +160,10 @@ public class AssignmentManagementService {
             throw conflict("Patient is already assigned to cohort");
         }
         try {
-            memberships.save(new PatientCohortMembership(patient, cohort, actor));
+            var membership = new PatientCohortMembership(patient, cohort, actor);
+            memberships.save(membership);
             memberships.flush();
+            return new MembershipResponse(membership.getId());
         } catch (DataIntegrityViolationException exception) {
             throw conflict("Patient is already assigned to cohort");
         }
@@ -183,9 +188,9 @@ public class AssignmentManagementService {
     }
 
     @Transactional
-    public void assignCohortStaff(Authentication authentication,
-                                  Long cohortId,
-                                  Long staffProfileId) {
+    public AssignmentResponse assignCohortStaff(Authentication authentication,
+                                                Long cohortId,
+                                                Long staffProfileId) {
         var actor = requireAssignmentManager(authentication);
         var cohort = lockedCohort(cohortId);
         if (!actor.hasRole(RoleName.ADMIN)
@@ -205,8 +210,10 @@ public class AssignmentManagementService {
             throw conflict("Staff member is already assigned to cohort");
         }
         try {
-            cohortStaffAssignments.save(new CohortStaffAssignment(cohort, target, actor));
+            var assignment = new CohortStaffAssignment(cohort, target, actor);
+            cohortStaffAssignments.save(assignment);
             cohortStaffAssignments.flush();
+            return new AssignmentResponse(assignment.getId());
         } catch (DataIntegrityViolationException exception) {
             throw conflict("Staff member is already assigned to cohort");
         }
@@ -235,9 +242,9 @@ public class AssignmentManagementService {
     }
 
     @Transactional
-    public void assignDirectExpert(Authentication authentication,
-                                   Long patientProfileId,
-                                   Long staffProfileId) {
+    public AssignmentResponse assignDirectExpert(Authentication authentication,
+                                                 Long patientProfileId,
+                                                 Long staffProfileId) {
         var actor = requireAssignmentManager(authentication);
         var patient = patientProfiles.lockById(patientProfileId)
                 .filter(profile -> profile.getUser().isEnabled())
@@ -253,8 +260,10 @@ public class AssignmentManagementService {
             throw conflict("Expert is already directly assigned to patient");
         }
         try {
-            directAssignments.save(new PatientExpertAssignment(patient, target, actor));
+            var assignment = new PatientExpertAssignment(patient, target, actor);
+            directAssignments.save(assignment);
             directAssignments.flush();
+            return new AssignmentResponse(assignment.getId());
         } catch (DataIntegrityViolationException exception) {
             throw conflict("Expert is already directly assigned to patient");
         }

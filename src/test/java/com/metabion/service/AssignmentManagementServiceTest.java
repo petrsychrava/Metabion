@@ -1192,6 +1192,84 @@ class AssignmentManagementServiceTest {
         verifyNoInteractions(memberships, directAssignments, cohortStaffAssignments, patientProfiles);
     }
 
+    @Test
+    void addPatientToCohortReturnsCreatedMembershipId() {
+        var admin = enabledUser(1L, "admin@example.com", RoleName.ADMIN);
+        var cohort = cohort(10L, "Pilot", admin);
+        var patient = patientProfile(20L, enabledUser(2L, "patient@example.com", RoleName.PATIENT));
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+        when(patientProfiles.lockById(20L)).thenReturn(Optional.of(patient));
+        when(memberships.existsActiveMembership(20L, 10L)).thenReturn(false);
+        when(memberships.save(any(PatientCohortMembership.class))).thenAnswer(invocation -> {
+            PatientCohortMembership saved = invocation.getArgument(0);
+            saved.setId(55L);
+            return saved;
+        });
+
+        var response = service.addPatientToCohort(auth("admin@example.com"), 10L, 20L);
+
+        assertThat(response.membershipId()).isEqualTo(55L);
+    }
+
+    @Test
+    void assignCohortStaffReturnsCreatedAssignmentId() {
+        var admin = enabledUser(1L, "admin@example.com", RoleName.ADMIN);
+        var cohort = cohort(10L, "Pilot", admin);
+        var physician = staffProfile(30L, enabledUser(3L, "physician@example.com", RoleName.PHYSICIAN));
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+        when(staffProfiles.lockById(30L)).thenReturn(Optional.of(physician));
+        when(accessControl.canManageCohortStaff(any(), eq(10L), eq(30L))).thenReturn(true);
+        when(cohortStaffAssignments.existsActiveAssignment(10L, 30L)).thenReturn(false);
+        when(cohortStaffAssignments.save(any(CohortStaffAssignment.class))).thenAnswer(invocation -> {
+            CohortStaffAssignment saved = invocation.getArgument(0);
+            saved.setId(56L);
+            return saved;
+        });
+
+        var response = service.assignCohortStaff(auth("admin@example.com"), 10L, 30L);
+
+        assertThat(response.assignmentId()).isEqualTo(56L);
+    }
+
+    @Test
+    void assignDirectExpertReturnsCreatedAssignmentId() {
+        var admin = enabledUser(1L, "admin@example.com", RoleName.ADMIN);
+        var patient = patientProfile(20L, enabledUser(2L, "patient@example.com", RoleName.PATIENT));
+        var nutritionist = staffProfile(31L,
+                enabledUser(4L, "nutrition@example.com", RoleName.NUTRITION_SPECIALIST));
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(patientProfiles.lockById(20L)).thenReturn(Optional.of(patient));
+        when(accessControl.canManageDirectExpertAssignments(any(), eq(20L))).thenReturn(true);
+        when(staffProfiles.lockById(31L)).thenReturn(Optional.of(nutritionist));
+        when(directAssignments.existsActiveAssignment(20L, 31L)).thenReturn(false);
+        when(directAssignments.save(any(PatientExpertAssignment.class))).thenAnswer(invocation -> {
+            PatientExpertAssignment saved = invocation.getArgument(0);
+            saved.setId(57L);
+            return saved;
+        });
+
+        var response = service.assignDirectExpert(auth("admin@example.com"), 20L, 31L);
+
+        assertThat(response.assignmentId()).isEqualTo(57L);
+    }
+
+    @Test
+    void updateCohortReturnsUpdatedCohortItem() {
+        var admin = enabledUser(1L, "admin@example.com", RoleName.ADMIN);
+        var cohort = cohort(10L, "Old name", admin);
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(cohorts.lockById(10L)).thenReturn(Optional.of(cohort));
+
+        var updated = service.updateCohort(
+                auth("admin@example.com"), 10L, new CohortForm("New name", "Notes"));
+
+        assertThat(updated.id()).isEqualTo(10L);
+        assertThat(updated.name()).isEqualTo("New name");
+        assertThat(updated.description()).isEqualTo("Notes");
+    }
+
     private static void assertStatus(Runnable operation, HttpStatus expected) {
         assertThatThrownBy(operation::run)
                 .isInstanceOfSatisfying(ResponseStatusException.class,
