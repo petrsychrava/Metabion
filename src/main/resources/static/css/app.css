@@ -910,18 +910,21 @@ a {
     font-weight: 700;
 }
 
-.daily-check-in-form {
+.daily-check-in-form,
+.onboarding-progressive-form {
     gap: 20px;
 }
 
-.daily-check-in-form .daily-check-in-section {
+.daily-check-in-form .daily-check-in-section,
+.onboarding-progressive-form .onboarding-section {
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--panel);
     overflow: clip;
 }
 
-.daily-check-in-form .daily-check-in-section-summary {
+.daily-check-in-form .daily-check-in-section-summary,
+.onboarding-progressive-form .onboarding-section-summary {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -930,13 +933,16 @@ a {
     font-weight: 700;
 }
 
-.daily-check-in-form .daily-check-in-section-title {
+.daily-check-in-form .daily-check-in-section-title,
+.onboarding-progressive-form .onboarding-section-title {
     font-size: 1.25rem;
 }
 
 .daily-check-in-form .requirement-badge,
 .daily-check-in-form .section-status,
-.daily-check-in-form .unit-pill {
+.daily-check-in-form .unit-pill,
+.onboarding-progressive-form .requirement-badge,
+.onboarding-progressive-form .section-status {
     display: inline-flex;
     align-items: center;
     width: fit-content;
@@ -948,11 +954,13 @@ a {
     font-size: 0.85rem;
 }
 
-.daily-check-in-form .section-status {
+.daily-check-in-form .section-status,
+.onboarding-progressive-form .section-status {
     margin-left: auto;
 }
 
-.daily-check-in-form .daily-check-in-section-body {
+.daily-check-in-form .daily-check-in-section-body,
+.onboarding-progressive-form .onboarding-section-body {
     display: grid;
     gap: 16px;
     padding: 0 18px 18px;
@@ -1016,23 +1024,27 @@ a {
     border-radius: 8px;
 }
 
-.daily-check-in-form .error-summary {
+.daily-check-in-form .error-summary,
+.onboarding-progressive-form .error-summary {
     border: 2px solid var(--error);
     border-radius: 8px;
     padding: 16px;
 }
 
-.daily-check-in-form .error-summary h2 {
+.daily-check-in-form .error-summary h2,
+.onboarding-progressive-form .error-summary h2 {
     margin-bottom: 8px;
 }
 
-.daily-check-in-form .field-requirement {
+.daily-check-in-form .field-requirement,
+.onboarding-progressive-form .field-requirement {
     color: var(--muted);
     font-size: 0.85rem;
     font-weight: 500;
 }
 
-.daily-check-in-form .daily-check-in-actions {
+.daily-check-in-form .daily-check-in-actions,
+.onboarding-progressive-form .onboarding-actions {
     position: sticky;
     bottom: 0;
     z-index: 10;
@@ -1047,26 +1059,51 @@ a {
     box-shadow: var(--card-shadow);
 }
 
-.daily-check-in-form .daily-check-in-actions p {
+.daily-check-in-form .daily-check-in-actions p,
+.onboarding-progressive-form .onboarding-actions p {
     margin: 0;
+}
+
+.onboarding-progressive-form .onboarding-lab-choice {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.onboarding-progressive-form .onboarding-lab-grid,
+.onboarding-progressive-form [data-lab-fields] {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.onboarding-progressive-form [data-lab-fields][hidden] {
+    display: none;
 }
 
 @media (max-width: 520px) {
     .daily-check-in-form .daily-check-in-section-summary,
     .daily-check-in-form .meal-card-header,
-    .daily-check-in-form .daily-check-in-actions {
+    .daily-check-in-form .daily-check-in-actions,
+    .onboarding-progressive-form .onboarding-section-summary,
+    .onboarding-progressive-form .onboarding-actions {
         align-items: stretch;
         flex-direction: column;
     }
 
-    .daily-check-in-form .section-status {
+    .daily-check-in-form .section-status,
+    .onboarding-progressive-form .section-status {
         margin-left: 0;
     }
 
     .daily-check-in-form .meal-card,
     .daily-check-in-form .measurement-card,
     .daily-check-in-form .daily-check-in-section-summary,
-    .daily-check-in-form .daily-check-in-section-body {
+    .daily-check-in-form .daily-check-in-section-body,
+    .onboarding-progressive-form .onboarding-section-summary,
+    .onboarding-progressive-form .onboarding-section-body {
         padding-left: 14px;
         padding-right: 14px;
     }

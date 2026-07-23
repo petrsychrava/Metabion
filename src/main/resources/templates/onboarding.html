@@ -59,7 +59,7 @@
                 </summary>
                 <div class="onboarding-section-body">
                     <label class="field"><span><span th:text="#{onboarding.diagnosis}">Diagnosis</span> <span class="field-requirement" th:text="#{onboarding.required}">Required</span></span>
-                        <select id="diagnosisType" th:field="*{diagnosisType}" required
+                        <select id="diagnosisType" th:field="*{diagnosisType}" required data-required-field="true"
                                 th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('diagnosisType') ? 'true' : null},
                                          aria-describedby=${onboardingBindingErrorIds.get('diagnosisType')}">
                             <option value="" th:text="#{onboarding.select}">Select</option>
@@ -84,7 +84,7 @@
                     </label>
                     <p class="hint" th:text="#{onboarding.diseaseBehavior.hint}">For example inflammatory, stricturing, or penetrating.</p>
                     <label class="field"><span><span th:text="#{onboarding.activityEstimate}">Activity estimate</span> <span class="field-requirement" th:text="#{onboarding.required}">Required</span></span>
-                        <select id="activityEstimate" th:field="*{activityEstimate}" required
+                        <select id="activityEstimate" th:field="*{activityEstimate}" required data-required-field="true"
                                 th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('activityEstimate') ? 'true' : null},
                                          aria-describedby=${onboardingBindingErrorIds.get('activityEstimate')}">
                             <option value="" th:text="#{onboarding.select}">Select</option>
@@ -111,7 +111,7 @@
                                            aria-describedby=${onboardingBindingErrorIds.get('currentMedications')}"></textarea>
                     </label>
                     <label class="field"><span><span th:text="#{onboarding.steroidUse}">Steroid use</span> <span class="field-requirement" th:text="#{onboarding.required}">Required</span></span>
-                        <select id="steroidUse" th:field="*{steroidUse}" required
+                        <select id="steroidUse" th:field="*{steroidUse}" required data-required-field="true"
                                 th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('steroidUse') ? 'true' : null},
                                          aria-describedby=${onboardingBindingErrorIds.get('steroidUse')}">
                             <option value="" th:text="#{onboarding.select}">Select</option>
@@ -119,7 +119,7 @@
                         </select>
                     </label>
                     <label class="field"><span><span th:text="#{onboarding.advancedTherapyExposure}">Advanced therapy exposure</span> <span class="field-requirement" th:text="#{onboarding.required}">Required</span></span>
-                        <select id="advancedTherapyExposure" th:field="*{advancedTherapyExposure}" required
+                        <select id="advancedTherapyExposure" th:field="*{advancedTherapyExposure}" required data-required-field="true"
                                 th:attr="aria-invalid=${onboardingBindingErrorIds.containsKey('advancedTherapyExposure') ? 'true' : null},
                                          aria-describedby=${onboardingBindingErrorIds.get('advancedTherapyExposure')}">
                             <option value="" th:text="#{onboarding.select}">Select</option>
