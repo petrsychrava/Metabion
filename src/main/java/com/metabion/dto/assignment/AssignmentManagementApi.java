@@ -19,6 +19,8 @@ public final class AssignmentManagementApi {
 
     public record AssignmentResponse(Long assignmentId) {}
 
+    public record CsrfTokenResponse(String token, String headerName) {}
+
     public record CohortDetailResponse(CohortItem cohort, List<PatientRow> patients,
                                        List<ExpertAccess> careTeam) {}
 
