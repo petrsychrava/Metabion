@@ -8,7 +8,7 @@ The implemented product areas are:
 
 - Patient registration, email verification, login/logout, password recovery, and session management.
 - Role-based access for patients, nutrition specialists, physicians, coordinators, and administrators.
-- Staff invitations, patient onboarding submissions, clinical review, cohorts, and staff/patient assignments, exposed through the Thymeleaf workspace and a session-authenticated REST API (`/api/cohorts`, `/api/patients`, `GET /api/csrf`).
+- Staff invitations, patient onboarding submissions, clinical review, cohorts, and staff/patient assignments, exposed through the Thymeleaf workspace and a session-authenticated REST API (`/api/cohorts`, `/api/patients`).
 - Daily diet logs, meals, deviations, glucose/ketone measurements, photo upload/storage, and clinical views.
 - Symptom questionnaires, daily check-ins, scoring, patient/clinical trends, and SVG trend rendering.
 - Versioned and localized education content with authoring, review, approval, publishing, and patient completion tracking.
@@ -140,6 +140,7 @@ Security-sensitive changes require focused tests and careful review.
 
 - Preserve session-based authentication for the web application and regular REST API unless explicitly asked to change it.
 - Keep CSRF enabled. Existing exclusions are deliberately narrow for public auth/OAuth endpoints and bearer-authenticated MCP requests; do not broaden them casually.
+- Treat `GET /api/csrf` as cross-cutting infrastructure for authenticated, same-origin REST clients. Keep the bootstrap endpoint role-neutral unless the application-wide security model explicitly changes.
 - Keep login, registration, and password-recovery responses generic where required to prevent account enumeration.
 - Maintain dummy-BCrypt timing equalization for unknown users and the existing lockout/rate-limit behavior.
 - Verification, reset, patient access, authorization-code, and refresh-token credentials must be generated securely and stored only in hashed form where the flow permits.
