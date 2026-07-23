@@ -27,6 +27,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
@@ -229,6 +230,54 @@ class WebOnboardingControllerTest {
                 .andExpect(view().name("onboarding"))
                 .andExpect(model().attributeExists("onboardingBindingErrors"))
                 .andExpect(model().attributeExists("onboardingBindingErrorIds"));
+    }
+
+    @Test
+    void onboardingPageRendersProgressiveSectionsAndKeepsContextHidden() throws Exception {
+        String response = mvc.perform(get("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(response)
+                .contains("data-onboarding-form")
+                .contains("data-section=\"condition\"")
+                .contains("data-section=\"treatment\"")
+                .contains("data-section=\"labs\"")
+                .contains("name=\"onboardingContext\"")
+                .doesNotContain(">Context<")
+                .contains("Do you have recent lab results to add?");
+    }
+
+    @Test
+    void invalidOnboardingRendersFocusableErrorSummaryAndAriaLinks() throws Exception {
+        String response = mvc.perform(post("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("onboardingContext", "default"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(response)
+                .contains("id=\"onboarding-errors\"")
+                .contains("role=\"alert\"")
+                .contains("data-error-target-id=\"diagnosisType\"")
+                .contains("aria-invalid=\"true\"");
+    }
+
+    @Test
+    void onboardingPageRendersProgressiveSectionsInCzech() throws Exception {
+        when(userPreferenceService.currentLanguagePreference(any())).thenReturn(LanguagePreference.CS);
+
+        String response = mvc.perform(get("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(response)
+                .contains("O vašem onemocnění")
+                .contains("Chcete přidat nedávné laboratorní výsledky?")
+                .contains("Povinné");
     }
 
     @Test
