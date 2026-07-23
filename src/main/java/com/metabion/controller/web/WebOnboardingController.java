@@ -16,6 +16,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,6 +24,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @Controller
 public class WebOnboardingController {
@@ -49,6 +55,7 @@ public class WebOnboardingController {
         model.addAttribute("latest", latest);
         addOptions(model);
         addAppShell(model, authentication, "/app/onboarding");
+        addOnboardingDefaults(model);
         return "onboarding";
     }
 
@@ -60,6 +67,9 @@ public class WebOnboardingController {
                          RedirectAttributes redirectAttributes) {
         addOptions(model);
         if (bindingResult.hasErrors()) {
+            var bindingErrors = bindingErrorViews(bindingResult);
+            model.addAttribute("onboardingBindingErrors", bindingErrors);
+            model.addAttribute("onboardingBindingErrorIds", bindingErrorIdsByTarget(bindingErrors));
             model.addAttribute("context", form.onboardingContext());
             addAppShell(model, authentication, "/app/onboarding");
             var latest = latestOrNull(authentication, form.onboardingContext());
@@ -67,6 +77,7 @@ public class WebOnboardingController {
             return "onboarding";
         }
         onboardingService.submitWebForCurrentPatient(authentication, form);
+        addOnboardingDefaults(model);
         redirectAttributes.addAttribute("context", OnboardingService.normalizeContext(form.onboardingContext()));
         return "redirect:/app/onboarding";
     }
@@ -160,6 +171,52 @@ public class WebOnboardingController {
         model.addAttribute("appMenuItems", appMenuCatalog.sidebarItems(authentication));
         model.addAttribute("activePath", activePath);
         model.addAttribute("themePreference", userPreferenceService.currentThemePreference(authentication));
+    }
+
+    private List<OnboardingBindingError> bindingErrorViews(BindingResult bindingResult) {
+        var errors = bindingResult.getAllErrors();
+        var views = new ArrayList<OnboardingBindingError>(errors.size());
+        for (int index = 0; index < errors.size(); index++) {
+            var error = errors.get(index);
+            var field = error instanceof FieldError fieldError ? fieldError.getField() : null;
+            views.add(new OnboardingBindingError(
+                    bindingErrorTargetId(field),
+                    "onboarding-error-" + index,
+                    error.getDefaultMessage()));
+        }
+        return views;
+    }
+
+    private Map<String, String> bindingErrorIdsByTarget(List<OnboardingBindingError> errors) {
+        var ids = new LinkedHashMap<String, String>();
+        for (var error : errors) {
+            ids.merge(error.targetId(), error.errorId(), (existing, next) -> existing + " " + next);
+        }
+        return ids;
+    }
+
+    private String bindingErrorTargetId(String field) {
+        if (field == null) return "onboarding-errors";
+        return switch (field) {
+            case "diagnosisYearPlausible", "diagnosisYear" -> "diagnosisYear";
+            case "labsCollectedAtPresentWhenLabValuesSupplied", "labsCollectedAt" -> "labsCollectedAt";
+            default -> field;
+        };
+    }
+
+    private void addOnboardingDefaults(Model model) {
+        if (!model.containsAttribute("onboardingBindingErrors")) {
+            model.addAttribute("onboardingBindingErrors", List.of());
+        }
+        if (!model.containsAttribute("onboardingBindingErrorIds")) {
+            model.addAttribute("onboardingBindingErrorIds", Map.of());
+        }
+    }
+
+    public record OnboardingBindingError(String targetId, String errorId, String message) {
+        public String href() {
+            return "#" + targetId;
+        }
     }
 
     private OnboardingSubmissionResponse latestOrNull(Authentication authentication, String context) {

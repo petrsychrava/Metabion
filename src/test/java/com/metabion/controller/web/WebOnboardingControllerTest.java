@@ -198,6 +198,40 @@ class WebOnboardingControllerTest {
     }
 
     @Test
+    void invalidDiagnosisYearAddsAResolvableOnboardingErrorTarget() throws Exception {
+        mvc.perform(post("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("onboardingContext", "default")
+                        .param("diagnosisType", "CROHNS_DISEASE")
+                        .param("diagnosisYear", "1899")
+                        .param("activityEstimate", "MILD")
+                        .param("steroidUse", "NONE")
+                        .param("advancedTherapyExposure", "NEVER_USED"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("onboarding"))
+                .andExpect(model().attributeExists("onboardingBindingErrors"))
+                .andExpect(model().attributeExists("onboardingBindingErrorIds"));
+    }
+
+    @Test
+    void labValuesWithoutCollectionDateAddAnErrorTargetForTheLabDate() throws Exception {
+        mvc.perform(post("/app/onboarding")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .param("onboardingContext", "default")
+                        .param("diagnosisType", "CROHNS_DISEASE")
+                        .param("activityEstimate", "MILD")
+                        .param("steroidUse", "NONE")
+                        .param("advancedTherapyExposure", "NEVER_USED")
+                        .param("crpMgL", "4.2"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("onboarding"))
+                .andExpect(model().attributeExists("onboardingBindingErrors"))
+                .andExpect(model().attributeExists("onboardingBindingErrorIds"));
+    }
+
+    @Test
     void patientSubmitRedirectPreservesNormalizedContext() throws Exception {
         mvc.perform(post("/app/onboarding")
                         .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
