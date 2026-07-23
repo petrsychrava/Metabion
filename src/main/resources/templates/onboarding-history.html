@@ -20,7 +20,7 @@
             </tr></thead>
             <tbody>
             <tr th:each="submission : ${submissions}">
-                <td th:text="${submission.version()}">1</td>
+                <td><a th:href="@{/app/onboarding/{id}(id=${submission.id()})}" th:text="${submission.version()}">1</a></td>
                 <td th:text="${submission.onboardingContext()}">default</td>
                 <td th:text="${submission.submittedAt()}">date</td>
                 <td th:text="${#messages.msg('enum.onboardingReviewStatus.' + submission.reviewStatus().name())}">PENDING_REVIEW</td>

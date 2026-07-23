@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: appShell(#{onboarding.detail.pageTitle}, ${activePath}, ~{::content})}">
+<th:block th:fragment="content">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Metabion</p>
+            <h1 th:text="#{onboarding.detail.title}">Onboarding detail</h1>
+        </div>
+        <a class="button-link secondary" th:href="@{/app/onboarding/history(context=${submission.onboardingContext()})}"
+           th:text="#{onboarding.back}">Back</a>
+    </header>
+    <section class="panel app-panel">
+        <p class="muted">
+            <span th:text="#{onboarding.version}">Version</span>
+            <strong th:text="${submission.version()}">1</strong>,
+            <span th:text="#{onboarding.contextLower}">context</span>
+            <strong th:text="${submission.onboardingContext()}">default</strong>,
+            <span th:text="#{onboarding.submittedLower}">submitted</span>
+            <strong th:text="${submission.submittedAt()}">date</strong>,
+            <span th:text="#{onboarding.status}">status</span>
+            <strong th:text="${#messages.msg('enum.onboardingReviewStatus.' + submission.reviewStatus().name())}">PENDING_REVIEW</strong>
+        </p>
+        <dl class="details">
+            <dt th:text="#{onboarding.dateOfBirth}">Date of birth</dt><dd th:text="${submission.dateOfBirth()}">1990-01-01</dd>
+            <dt th:text="#{onboarding.sex}">Sex</dt><dd th:text="${#messages.msg('enum.sex.' + submission.sex().name())}">FEMALE</dd>
+            <dt th:text="#{onboarding.countryRegion}">Country/region</dt><dd th:text="${submission.countryRegion()}">CZ</dd>
+            <dt th:text="#{onboarding.timezone}">Timezone</dt><dd th:text="${submission.timezone()}">Europe/Prague</dd>
+            <dt th:text="#{onboarding.diagnosis}">Diagnosis</dt><dd th:text="${#messages.msg('enum.ibdDiagnosisType.' + submission.diagnosisType().name())}">CROHNS_DISEASE</dd>
+            <dt th:text="#{onboarding.diagnosisYear}">Diagnosis year</dt><dd th:text="${submission.diagnosisYear()} ?: #{onboarding.notProvided}">2018</dd>
+            <dt th:text="#{onboarding.diseaseLocation}">Disease location</dt><dd th:text="${submission.diseaseLocation()} ?: #{onboarding.notProvided}">Ileocolonic</dd>
+            <dt th:text="#{onboarding.diseaseBehavior}">Disease behavior</dt><dd th:text="${submission.diseaseBehavior()} ?: #{onboarding.notProvided}">Inflammatory</dd>
+            <dt th:text="#{onboarding.activity}">Activity</dt><dd th:text="${#messages.msg('enum.diseaseActivityEstimate.' + submission.activityEstimate().name())}">MILD</dd>
+            <dt th:text="#{onboarding.medications}">Medications</dt><dd th:text="${submission.currentMedications()} ?: #{onboarding.notProvided}">Mesalamine</dd>
+            <dt th:text="#{onboarding.steroidUse}">Steroid use</dt><dd th:text="${#messages.msg('enum.steroidUse.' + submission.steroidUse().name())}">NONE</dd>
+            <dt th:text="#{onboarding.advancedTherapyExposure}">Advanced therapy exposure</dt><dd th:text="${#messages.msg('enum.advancedTherapyExposure.' + submission.advancedTherapyExposure().name())}">NEVER_USED</dd>
+            <dt th:text="#{onboarding.medicationNotes}">Medication notes</dt><dd th:text="${submission.medicationNotes()} ?: #{onboarding.notProvided}">Stable regimen</dd>
+            <dt th:text="#{onboarding.labsCollected}">Labs collected</dt><dd th:text="${submission.labsCollectedAt()} ?: #{onboarding.notProvided}">2026-05-20</dd>
+            <dt th:text="#{onboarding.crpMgL}">CRP mg/L</dt><dd th:text="${submission.crpMgL()} ?: #{onboarding.notProvided}">4.2</dd>
+            <dt th:text="#{onboarding.fecalCalprotectinUgG}">Fecal calprotectin ug/g</dt><dd th:text="${submission.fecalCalprotectinUgG()} ?: #{onboarding.notProvided}">120</dd>
+            <dt th:text="#{onboarding.hemoglobinGDl}">Hemoglobin g/dL</dt><dd th:text="${submission.hemoglobinGDl()} ?: #{onboarding.notProvided}">13.8</dd>
+            <dt th:text="#{onboarding.albuminGDl}">Albumin g/dL</dt><dd th:text="${submission.albuminGDl()} ?: #{onboarding.notProvided}">4.3</dd>
+            <dt th:text="#{onboarding.labNotes}">Lab notes</dt><dd th:text="${submission.labNotes()} ?: #{onboarding.notProvided}">Recent outpatient labs</dd>
+        </dl>
+    </section>
+</th:block>
+</html>
