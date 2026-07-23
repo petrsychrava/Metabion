@@ -1,11 +1,17 @@
 package com.metabion.service;
 
 import com.metabion.config.PatientAccessTokenAuthentication;
+import com.metabion.domain.AdvancedTherapyExposure;
+import com.metabion.domain.DiseaseActivityEstimate;
+import com.metabion.domain.IbdDiagnosisType;
+import com.metabion.domain.OnboardingReviewStatus;
 import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessToken;
 import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
+import com.metabion.domain.Sex;
+import com.metabion.domain.SteroidUse;
 import com.metabion.domain.User;
 import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.dto.DailyDietLogResponse;
@@ -15,6 +21,7 @@ import com.metabion.dto.LabResultSetRequest;
 import com.metabion.dto.LabResultSetResponse;
 import com.metabion.dto.LabTestDefinitionResponse;
 import com.metabion.dto.LabTrendResponse;
+import com.metabion.dto.OnboardingSubmissionResponse;
 import com.metabion.dto.PatientProfileForm;
 import com.metabion.dto.SymptomQuestionnaireResponse;
 import com.metabion.repository.PatientProfileRepository;
@@ -25,6 +32,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -143,8 +151,14 @@ class PatientAppFacadeTest {
 
     @Test
     void latestOnboardingDelegatesToOnboardingService() {
-        facade.latestOnboarding(authentication, "default");
+        var response = patientViewSubmissionResponse();
+        when(onboarding.getLatestForCurrentPatient(authentication, "default")).thenReturn(response);
 
+        var result = facade.latestOnboarding(authentication, "default");
+
+        assertThat(result).isSameAs(response);
+        assertThat(result.reviewedByEmail()).isNull();
+        assertThat(result.reviewStatus()).isNotNull();
         verify(onboarding).getLatestForCurrentPatient(authentication, "default");
     }
 
@@ -183,6 +197,40 @@ class PatientAppFacadeTest {
         verify(labCatalog).listActive();
         verify(labResults).getForCurrentPatient(authentication, 7L);
         verify(labResults).listForCurrentPatient(authentication, from, to);
+    }
+
+    private static OnboardingSubmissionResponse patientViewSubmissionResponse() {
+        return new OnboardingSubmissionResponse(
+                99L,
+                10L,
+                "patient@example.com",
+                "default",
+                2,
+                Instant.parse("2026-05-31T11:00:00Z"),
+                Instant.parse("2026-05-31T12:00:00Z"),
+                LocalDate.of(1990, 1, 1),
+                Sex.FEMALE,
+                "CZ",
+                "Europe/Prague",
+                IbdDiagnosisType.CROHNS_DISEASE,
+                2018,
+                "Ileocolonic",
+                "Inflammatory",
+                DiseaseActivityEstimate.MILD,
+                "Mesalamine",
+                SteroidUse.NONE,
+                AdvancedTherapyExposure.NEVER_USED,
+                "Stable regimen",
+                LocalDate.of(2026, 5, 20),
+                new BigDecimal("4.2"),
+                new BigDecimal("120"),
+                new BigDecimal("13.8"),
+                new BigDecimal("4.3"),
+                "Recent outpatient labs",
+                OnboardingReviewStatus.REVIEWED,
+                null,
+                null,
+                null);
     }
 
     private static PatientAccessToken token() {

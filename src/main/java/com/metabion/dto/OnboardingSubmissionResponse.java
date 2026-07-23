@@ -112,6 +112,7 @@ public record OnboardingSubmissionResponse(
                 albuminGDl,
                 labNotes,
                 reviewStatus,
+                // reviewedByEmail, reviewedAt, reviewNotes stripped
                 null,
                 null,
                 null);

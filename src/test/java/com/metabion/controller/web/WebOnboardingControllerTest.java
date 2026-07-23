@@ -179,6 +179,7 @@ class WebOnboardingControllerTest {
                 .andExpect(content().string(containsString("Recent outpatient labs")))
                 .andExpect(content().string(not(containsString("Confidential reviewer note"))))
                 .andExpect(content().string(not(containsString("reviewer@example.com"))))
+                .andExpect(content().string(not(containsString("2026-06-01"))))
                 .andExpect(content().string(not(containsString("Review notes"))));
     }
 
