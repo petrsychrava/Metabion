@@ -109,7 +109,9 @@ Responses reuse the lean records from `AssignmentManagementView`: `CohortItem`, 
 - `AssignStaffRequest(@NotNull Long staffProfileId)`
 - `MembershipResponse(Long membershipId)` — returned when a membership is created
 - `AssignmentResponse(Long assignmentId)` — returned when a cohort staff or direct expert assignment is created
-- `CsrfTokenResponse(String token, String headerName)`
+
+`CsrfTokenResponse(String token, String headerName)` is a cross-cutting API DTO in
+`com.metabion.dto`, not an assignment-management DTO.
 
 Explicit request field names (`patientProfileId`, `staffProfileId`) replace the opaque `SelectionForm.targetId` at the API boundary.
 
