@@ -8,6 +8,8 @@ import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.StaffProfile;
 import com.metabion.domain.User;
+import com.metabion.dto.PatientOptionResponse;
+import com.metabion.dto.assignment.AssignmentManagementView.StaffOption;
 import com.metabion.repository.CohortRepository;
 import com.metabion.repository.CohortStaffAssignmentRepository;
 import com.metabion.repository.PatientCohortMembershipRepository;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -1268,6 +1271,157 @@ class AssignmentManagementServiceTest {
         assertThat(updated.id()).isEqualTo(10L);
         assertThat(updated.name()).isEqualTo("New name");
         assertThat(updated.description()).isEqualTo("Notes");
+    }
+
+    @Test
+    void cohortDetailReturnsActiveCohortForAssignedCoordinator() {
+        var coordinator = enabledUser(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var coordinatorProfile = staffProfile(11L, coordinator);
+        var cohort = cohort(10L, "Pilot", coordinator);
+        var patient = patientProfile(20L, enabledUser(2L, "patient@example.com", RoleName.PATIENT));
+        var membership = membership(40L, patient, cohort, coordinator);
+        var physician = staffProfile(30L, enabledUser(3L, "physician@example.com", RoleName.PHYSICIAN));
+        var staffAssignment = cohortAssignment(50L, cohort, physician, coordinator);
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(staffProfiles.findByUserId(coordinator.getId())).thenReturn(Optional.of(coordinatorProfile));
+        when(cohorts.findActiveForStaff(11L)).thenReturn(List.of(cohort));
+        when(memberships.findActiveByCohortId(10L)).thenReturn(List.of(membership));
+        when(cohortStaffAssignments.findActiveByCohortId(10L)).thenReturn(List.of(staffAssignment));
+        when(directAssignments.findActiveByPatientProfileIdIn(List.of(20L))).thenReturn(List.of());
+        when(memberships.findActiveByPatientProfileIdIn(List.of(20L))).thenReturn(List.of(membership));
+        when(cohortStaffAssignments.findActiveByCohortIdIn(any())).thenReturn(List.of(staffAssignment));
+
+        var detail = service.cohortDetail(auth("coordinator@example.com"), 10L);
+
+        assertThat(detail.cohort().name()).isEqualTo("Pilot");
+        assertThat(detail.patients()).hasSize(1);
+        assertThat(detail.patients().getFirst().membershipId()).isEqualTo(40L);
+        assertThat(detail.careTeam()).hasSize(1);
+    }
+
+    @Test
+    void cohortDetailIsNotFoundOutsideCoordinatorScope() {
+        var coordinator = enabledUser(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var coordinatorProfile = staffProfile(11L, coordinator);
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(staffProfiles.findByUserId(coordinator.getId())).thenReturn(Optional.of(coordinatorProfile));
+        when(cohorts.findActiveForStaff(11L)).thenReturn(List.of());
+
+        assertStatus(() -> service.cohortDetail(auth("coordinator@example.com"), 10L),
+                HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void archivedCohortDetailReturnsHistoricalRows() {
+        var admin = enabledUser(1L, "admin@example.com", RoleName.ADMIN);
+        var cohort = cohort(10L, "Pilot", admin);
+        cohort.archive(admin, NOW);
+        var patient = patientProfile(20L, enabledUser(2L, "patient@example.com", RoleName.PATIENT));
+        var membership = membership(40L, patient, cohort, admin);
+        membership.end(admin, NOW);
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of(cohort));
+        when(memberships.findHistoryByCohortId(10L)).thenReturn(List.of(membership));
+        when(cohortStaffAssignments.findHistoryByCohortId(10L)).thenReturn(List.of());
+
+        var detail = service.cohortDetail(auth("admin@example.com"), 10L);
+
+        assertThat(detail.cohort().archived()).isTrue();
+        assertThat(detail.patients()).hasSize(1);
+        assertThat(detail.patients().getFirst().direct()).isEmpty();
+        assertThat(detail.patients().getFirst().inherited()).isEmpty();
+        assertThat(detail.patients().getFirst().endedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void scopedPatientsClampsSizeAndReturnsPageLevelCandidates() {
+        var admin = enabledUser(1L, "admin@example.com", RoleName.ADMIN);
+        var patientOption = new PatientOptionResponse(20L, "patient@example.com");
+        var physician = staffProfile(30L, enabledUser(3L, "physician@example.com", RoleName.PHYSICIAN));
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(patientProfiles.findAllEnabledPatientOptions(PageRequest.of(0, 200)))
+                .thenReturn(new PageImpl<>(List.of(patientOption), PageRequest.of(0, 200), 1));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of());
+        when(directAssignments.findActiveByPatientProfileIdIn(List.of(20L))).thenReturn(List.of());
+        when(memberships.findActiveByPatientProfileIdIn(List.of(20L))).thenReturn(List.of());
+        when(staffProfiles.findAllEnabledWithRoles()).thenReturn(List.of(physician));
+
+        var page = service.scopedPatients(auth("admin@example.com"), 0, 500);
+
+        assertThat(page.size()).isEqualTo(200);
+        assertThat(page.patients()).hasSize(1);
+        assertThat(page.patients().getFirst().patientProfileId()).isEqualTo(20L);
+        assertThat(page.staffCandidates())
+                .extracting(StaffOption::staffProfileId).containsExactly(30L);
+    }
+
+    @Test
+    void scopedPatientsEmptyResultReturnsZeroPages() {
+        var admin = enabledUser(1L, "admin@example.com", RoleName.ADMIN);
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(patientProfiles.findAllEnabledPatientOptions(PageRequest.of(0, 50)))
+                .thenReturn(Page.empty(PageRequest.of(0, 50)));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of());
+        when(staffProfiles.findAllEnabledWithRoles()).thenReturn(List.of());
+
+        var page = service.scopedPatients(auth("admin@example.com"), -5, 0);
+
+        assertThat(page.pageIndex()).isEqualTo(0);
+        assertThat(page.size()).isEqualTo(50);
+        assertThat(page.totalPages()).isEqualTo(0);
+        assertThat(page.totalPatients()).isEqualTo(0);
+        assertThat(page.patients()).isEmpty();
+    }
+
+    @Test
+    void patientCandidatesExcludeEnrolledPatients() {
+        var admin = enabledUser(1L, "admin@example.com", RoleName.ADMIN);
+        var cohort = cohort(10L, "Pilot", admin);
+        var enrolled = patientProfile(20L, enabledUser(2L, "enrolled@example.com", RoleName.PATIENT));
+        var membership = membership(40L, enrolled, cohort, admin);
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of(cohort));
+        when(memberships.findActiveByCohortId(10L)).thenReturn(List.of(membership));
+        when(patientProfiles.findAllEnabledPatientOptions()).thenReturn(List.of(
+                new PatientOptionResponse(20L, "enrolled@example.com"),
+                new PatientOptionResponse(21L, "free@example.com")));
+
+        var candidates = service.patientCandidates(auth("admin@example.com"), 10L);
+
+        assertThat(candidates).extracting(PatientOptionResponse::id).containsExactly(21L);
+    }
+
+    @Test
+    void coordinatorStaffCandidatesExcludeCoordinators() {
+        var coordinator = enabledUser(1L, "coordinator@example.com", RoleName.COORDINATOR);
+        var coordinatorProfile = staffProfile(11L, coordinator);
+        var cohort = cohort(10L, "Pilot", coordinator);
+        var physician = staffProfile(30L, enabledUser(3L, "physician@example.com", RoleName.PHYSICIAN));
+        var otherCoordinator = staffProfile(31L,
+                enabledUser(4L, "other@example.com", RoleName.COORDINATOR));
+        when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
+        when(staffProfiles.findByUserId(coordinator.getId())).thenReturn(Optional.of(coordinatorProfile));
+        when(cohorts.findActiveForStaff(11L)).thenReturn(List.of(cohort));
+        when(cohortStaffAssignments.findActiveByCohortId(10L)).thenReturn(List.of());
+        when(staffProfiles.findAllEnabledWithRoles()).thenReturn(List.of(physician, otherCoordinator));
+
+        var candidates = service.staffCandidates(auth("coordinator@example.com"), 10L);
+
+        assertThat(candidates).extracting(StaffOption::staffProfileId).containsExactly(30L);
+    }
+
+    @Test
+    void archivedCohortRejectsCandidateQueries() {
+        var admin = enabledUser(1L, "admin@example.com", RoleName.ADMIN);
+        var cohort = cohort(10L, "Pilot", admin);
+        cohort.archive(admin, NOW);
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(cohorts.findAllForAdministration()).thenReturn(List.of(cohort));
+
+        assertStatus(() -> service.patientCandidates(auth("admin@example.com"), 10L),
+                HttpStatus.CONFLICT);
+        assertStatus(() -> service.staffCandidates(auth("admin@example.com"), 10L),
+                HttpStatus.CONFLICT);
     }
 
     private static void assertStatus(Runnable operation, HttpStatus expected) {
