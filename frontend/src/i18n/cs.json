@@ -1,0 +1,42 @@
+{
+  "app": { "title": "Metabion" },
+  "nav": {
+    "dashboard": "Přehled", "dietLogs": "Denníky stravy", "checkIns": "Kontroly",
+    "trends": "Trendy", "labs": "Laboratoř", "onboarding": "Onboarding",
+    "education": "Vzdělávání", "account": "Účet", "logout": "Odhlásit se"
+  },
+  "auth": {
+    "login": "Přihlásit se", "register": "Vytvořit účet", "email": "E-mail", "password": "Heslo",
+    "forgotPassword": "Zapomenuté heslo?", "resetPassword": "Obnovit heslo",
+    "newPassword": "Nové heslo", "sendResetLink": "Odeslat odkaz",
+    "resetLinkSent": "Pokud účet s tímto e-mailem existuje, byl odeslán odkaz pro obnovu.",
+    "registered": "Účet vytvořen. Zkontrolujte e-mail s ověřovacím odkazem.",
+    "verified": "E-mail ověřen. Nyní se můžete přihlásit.",
+    "passwordReset": "Heslo změněno. Nyní se můžete přihlásit.",
+    "mfaRequired": "Tento účet vyžaduje vícefaktorové ověření, které zatím není v této aplikaci dostupné. Použijte hlavní webovou aplikaci.",
+    "noAccount": "Nemáte účet?", "haveAccount": "Již máte účet?"
+  },
+  "staffNotice": {
+    "title": "Oblast pro personál",
+    "body": "Tato aplikace je určena pacientům. Použijte hlavní aplikaci pro personál.",
+    "openStaffApp": "Otevřít aplikaci pro personál"
+  },
+  "errors": {
+    "invalid_credentials": "Neplatný e-mail nebo heslo.",
+    "invalid_token": "Tento odkaz je neplatný nebo vypršel.",
+    "validation_failed": "Zkontrolujte zvýrazněná pole.",
+    "unauthorized": "Přihlaste se znovu.",
+    "forbidden": "K tomuto nemáte přístup.",
+    "not_found": "Nenalezeno.",
+    "conflict": "Záznam byl mezitím změněn. Načtěte znovu a zkuste to znovu.",
+    "mail_unavailable": "E-mailová služba je dočasně nedostupná. Zkuste to později.",
+    "request_failed": "Něco se nepovedlo. Zkuste to znovu.",
+    "network": "Server je nedostupný. Zkontrolujte připojení."
+  },
+  "common": {
+    "save": "Uložit", "saved": "Uloženo.", "cancel": "Zrušit", "delete": "Smazat",
+    "loading": "Načítání…", "today": "Dnes", "from": "Od", "to": "Do",
+    "apply": "Použít", "yes": "Ano", "no": "Ne", "back": "Zpět", "add": "Přidat",
+    "remove": "Odebrat", "close": "Zavřít", "copy": "Kopírovat", "copied": "Zkopírováno"
+  }
+}

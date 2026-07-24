@@ -1,0 +1,42 @@
+{
+  "app": { "title": "Metabion" },
+  "nav": {
+    "dashboard": "Dashboard", "dietLogs": "Diet logs", "checkIns": "Check-ins",
+    "trends": "Trends", "labs": "Labs", "onboarding": "Onboarding",
+    "education": "Education", "account": "Account", "logout": "Log out"
+  },
+  "auth": {
+    "login": "Log in", "register": "Create account", "email": "Email", "password": "Password",
+    "forgotPassword": "Forgot password?", "resetPassword": "Reset password",
+    "newPassword": "New password", "sendResetLink": "Send reset link",
+    "resetLinkSent": "If an account exists for this email, a reset link has been sent.",
+    "registered": "Account created. Check your email for a verification link.",
+    "verified": "Email verified. You can log in now.",
+    "passwordReset": "Password changed. You can log in now.",
+    "mfaRequired": "This account requires multi-factor authentication, which is not yet available in this app. Please use the main web application.",
+    "noAccount": "No account yet?", "haveAccount": "Already registered?"
+  },
+  "staffNotice": {
+    "title": "Staff area",
+    "body": "This app is for patients. Please use the main staff application.",
+    "openStaffApp": "Open staff application"
+  },
+  "errors": {
+    "invalid_credentials": "Invalid email or password.",
+    "invalid_token": "This link is invalid or has expired.",
+    "validation_failed": "Please check the highlighted fields.",
+    "unauthorized": "Please log in again.",
+    "forbidden": "You do not have access to this.",
+    "not_found": "Not found.",
+    "conflict": "This record was changed elsewhere. Reload and try again.",
+    "mail_unavailable": "Email service is temporarily unavailable. Try again later.",
+    "request_failed": "Something went wrong. Please try again.",
+    "network": "Cannot reach the server. Check your connection."
+  },
+  "common": {
+    "save": "Save", "saved": "Saved.", "cancel": "Cancel", "delete": "Delete",
+    "loading": "Loading…", "today": "Today", "from": "From", "to": "To",
+    "apply": "Apply", "yes": "Yes", "no": "No", "back": "Back", "add": "Add",
+    "remove": "Remove", "close": "Close", "copy": "Copy", "copied": "Copied"
+  }
+}
