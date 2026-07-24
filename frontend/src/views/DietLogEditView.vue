@@ -37,6 +37,7 @@ const deviations = reactive<DeviationRequest[]>([])
 const photoReferences = reactive<(PhotoUploadReferenceRequest & { contentUrl?: string })[]>([])
 const measurements = reactive<DailyMeasurementEntryRequest[]>([])
 const loading = ref(true)
+const loadFailed = ref(false)
 const saved = ref(false)
 
 const adherenceOptions: DietAdherenceLevel[] = ['FULL', 'MOSTLY', 'PARTIAL', 'LOW', 'NOT_FOLLOWED']
@@ -84,7 +85,14 @@ onMounted(async () => {
       notes: m.notes ?? '',
     })))
   } catch (e) {
-    if (!(e instanceof ApiError && e.status === 404)) throw e
+    if (e instanceof ApiError && e.status === 404) {
+      // no entry for this date yet — start blank
+    } else {
+      // Load failed: show the error and withhold the editor so a blind save
+      // cannot wipe the day's existing data (the save is a replacing upsert).
+      capture(e)
+      loadFailed.value = true
+    }
   } finally {
     loading.value = false
   }
@@ -131,6 +139,7 @@ async function save() {
   <section>
     <h1 class="text-2xl font-semibold">{{ t('dietLog.title') }} — {{ logDate }}</h1>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
+    <p v-else-if="loadFailed" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
     <div v-else class="mt-4 space-y-6">
       <p v-if="message" class="rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
       <p v-if="saved" class="rounded bg-green-50 p-3 text-sm text-green-700">{{ t('common.saved') }}</p>

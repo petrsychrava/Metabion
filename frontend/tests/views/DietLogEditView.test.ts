@@ -59,4 +59,16 @@ describe('DietLogEditView', () => {
     expect(received!.meals[0].foodDescription).toBe('Eggs and avocado')
     expect(wrapper.text()).toContain(en.common.saved)
   })
+
+  it('shows an error and withholds the editor when loading fails (non-404)', async () => {
+    server.use(
+      http.get('/api/diet-logs/2026-07-24', () => HttpResponse.json({ error: 'request_failed' }, { status: 500 })),
+    )
+    const router = makeRouter()
+    await router.push('/diet-logs/2026-07-24')
+    const wrapper = mount(DietLogEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.request_failed)
+    expect(wrapper.find('[data-testid="save"]').exists()).toBe(false)
+  })
 })
