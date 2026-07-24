@@ -7,14 +7,23 @@ import ResetPasswordView from '@/views/ResetPasswordView.vue'
 import VerifyEmailView from '@/views/VerifyEmailView.vue'
 import StaffNoticeView from '@/views/StaffNoticeView.vue'
 import DashboardView from '@/views/DashboardView.vue'
+import AppShell from '@/components/AppShell.vue'
 
 export const routes: RouteRecordRaw[] = [
-  { path: '/', component: DashboardView, meta: { requiresAuth: true } },
   { path: '/login', component: LoginView },
   { path: '/register', component: RegisterView },
   { path: '/forgot-password', component: ForgotPasswordView },
   { path: '/reset-password', component: ResetPasswordView },
   { path: '/verify', component: VerifyEmailView },
+  {
+    path: '/',
+    component: AppShell,
+    meta: { requiresAuth: true },
+    children: [
+      { path: '', component: DashboardView, meta: { requiresAuth: true } },
+      // Later tasks insert feature child routes here (paths without leading '/').
+    ],
+  },
   { path: '/staff-notice', component: StaffNoticeView, meta: { requiresAuth: true, allowStaff: true } },
   { path: '/:pathMatch(.*)*', component: () => import('@/views/NotFoundView.vue'), meta: { requiresAuth: true } },
 ]

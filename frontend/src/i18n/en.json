@@ -33,6 +33,15 @@
     "request_failed": "Something went wrong. Please try again.",
     "network": "Cannot reach the server. Check your connection."
   },
+  "dashboard": {
+    "title": "Today",
+    "dietLog": "Diet log",
+    "checkIn": "Symptom check-in",
+    "dietLogDone": "Filled in",
+    "dietLogOpen": "Not filled in yet",
+    "checkInDone": "Filled in",
+    "checkInOpen": "Not filled in yet"
+  },
   "common": {
     "save": "Save", "saved": "Saved.", "cancel": "Cancel", "delete": "Delete",
     "loading": "Loading…", "today": "Today", "from": "From", "to": "To",

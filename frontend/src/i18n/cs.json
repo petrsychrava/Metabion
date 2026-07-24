@@ -33,6 +33,15 @@
     "request_failed": "Něco se nepovedlo. Zkuste to znovu.",
     "network": "Server je nedostupný. Zkontrolujte připojení."
   },
+  "dashboard": {
+    "title": "Dnes",
+    "dietLog": "Denník stravy",
+    "checkIn": "Kontrola příznaků",
+    "dietLogDone": "Vyplněno",
+    "dietLogOpen": "Zatím nevyplněno",
+    "checkInDone": "Vyplněno",
+    "checkInOpen": "Zatím nevyplněno"
+  },
   "common": {
     "save": "Uložit", "saved": "Uloženo.", "cancel": "Zrušit", "delete": "Smazat",
     "loading": "Načítání…", "today": "Dnes", "from": "Od", "to": "Do",
