@@ -114,6 +114,11 @@
     "score": "Score",
     "FlareState": { "NO_FLARE": "No flare", "SUSPECTED_FLARE": "Suspected flare", "ACTIVE_FLARE": "Active flare" }
   },
+  "trends": {
+    "symptomScore": "Symptom score",
+    "glucose": "Glucose",
+    "ketones": "Ketones"
+  },
   "enums": {
     "DietAdherenceLevel": { "FULL": "Full", "MOSTLY": "Mostly", "PARTIAL": "Partial", "LOW": "Low", "NOT_FOLLOWED": "Not followed" },
     "AppetiteLevel": { "LOW": "Low", "NORMAL": "Normal", "HIGH": "High", "VARIABLE": "Variable" },

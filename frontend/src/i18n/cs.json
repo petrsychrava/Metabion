@@ -114,6 +114,11 @@
     "score": "Skóre",
     "FlareState": { "NO_FLARE": "Bez vzplanutí", "SUSPECTED_FLARE": "Podezření na vzplanutí", "ACTIVE_FLARE": "Aktivní vzplanutí" }
   },
+  "trends": {
+    "symptomScore": "Skóre příznaků",
+    "glucose": "Glukóza",
+    "ketones": "Ketony"
+  },
   "enums": {
     "DietAdherenceLevel": { "FULL": "Plné", "MOSTLY": "Převážně", "PARTIAL": "Částečné", "LOW": "Nízké", "NOT_FOLLOWED": "Nedodržováno" },
     "AppetiteLevel": { "LOW": "Nízká", "NORMAL": "Normální", "HIGH": "Vysoká", "VARIABLE": "Měnlivá" },
