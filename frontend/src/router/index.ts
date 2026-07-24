@@ -10,6 +10,7 @@ import DashboardView from '@/views/DashboardView.vue'
 import AccountProfileView from '@/views/AccountProfileView.vue'
 import AccessTokensView from '@/views/AccessTokensView.vue'
 import DietLogEditView from '@/views/DietLogEditView.vue'
+import DietLogHistoryView from '@/views/DietLogHistoryView.vue'
 import AppShell from '@/components/AppShell.vue'
 
 export const routes: RouteRecordRaw[] = [
@@ -26,6 +27,7 @@ export const routes: RouteRecordRaw[] = [
       { path: '', component: DashboardView, meta: { requiresAuth: true } },
       { path: 'account', component: AccountProfileView, meta: { requiresAuth: true } },
       { path: 'account/access-tokens', component: AccessTokensView, meta: { requiresAuth: true } },
+      { path: 'diet-logs', component: DietLogHistoryView, meta: { requiresAuth: true } },
       { path: 'diet-logs/:date', component: DietLogEditView, meta: { requiresAuth: true } },
       // Later tasks insert feature child routes here (paths without leading '/').
     ],
