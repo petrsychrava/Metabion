@@ -106,6 +106,14 @@
     "measurementCount": "Měření",
     "open": "Otevřít"
   },
+  "checkIn": {
+    "title": "Kontrola příznaků",
+    "flareState": "Stav vzplanutí",
+    "notes": "Poznámky",
+    "history": "Minulé kontroly",
+    "score": "Skóre",
+    "FlareState": { "NO_FLARE": "Bez vzplanutí", "SUSPECTED_FLARE": "Podezření na vzplanutí", "ACTIVE_FLARE": "Aktivní vzplanutí" }
+  },
   "enums": {
     "DietAdherenceLevel": { "FULL": "Plné", "MOSTLY": "Převážně", "PARTIAL": "Částečné", "LOW": "Nízké", "NOT_FOLLOWED": "Nedodržováno" },
     "AppetiteLevel": { "LOW": "Nízká", "NORMAL": "Normální", "HIGH": "Vysoká", "VARIABLE": "Měnlivá" },

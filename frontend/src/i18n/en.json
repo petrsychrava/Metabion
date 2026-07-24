@@ -106,6 +106,14 @@
     "measurementCount": "Measurements",
     "open": "Open"
   },
+  "checkIn": {
+    "title": "Symptom check-in",
+    "flareState": "Flare state",
+    "notes": "Notes",
+    "history": "Past check-ins",
+    "score": "Score",
+    "FlareState": { "NO_FLARE": "No flare", "SUSPECTED_FLARE": "Suspected flare", "ACTIVE_FLARE": "Active flare" }
+  },
   "enums": {
     "DietAdherenceLevel": { "FULL": "Full", "MOSTLY": "Mostly", "PARTIAL": "Partial", "LOW": "Low", "NOT_FOLLOWED": "Not followed" },
     "AppetiteLevel": { "LOW": "Low", "NORMAL": "Normal", "HIGH": "High", "VARIABLE": "Variable" },
