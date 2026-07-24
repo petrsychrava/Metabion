@@ -47,5 +47,35 @@
     "loading": "Načítání…", "today": "Dnes", "from": "Od", "to": "Do",
     "apply": "Použít", "yes": "Ano", "no": "Ne", "back": "Zpět", "add": "Přidat",
     "remove": "Odebrat", "close": "Zavřít", "copy": "Kopírovat", "copied": "Zkopírováno"
+  },
+  "account": {
+    "profileTitle": "Profil",
+    "dateOfBirth": "Datum narození",
+    "sex": "Pohlaví",
+    "countryRegion": "Země / region",
+    "timezone": "Časové pásmo",
+    "tokensTitle": "Přístupové tokeny",
+    "tokensIntro": "Tokeny umožňují externím nástrojům (například AI asistentům) přístup k vašim datům s vámi zvolenými oprávněními.",
+    "displayLabel": "Popisek",
+    "clientType": "Typ klienta",
+    "expiresInDays": "Platnost (dní)",
+    "scopes": "Oprávnění",
+    "issue": "Vystavit token",
+    "tokenCreatedTitle": "Token vytvořen — zkopírujte si ho",
+    "tokenCreatedWarning": "Token se zobrazí pouze jednou. Uložte si ho na bezpečné místo.",
+    "lastUsed": "Naposledy použit",
+    "never": "nikdy",
+    "expiresAt": "Platí do",
+    "createdAt": "Vytvořen",
+    "revoke": "Zrušit",
+    "revokeConfirm": "Opravdu zrušit tento token? Klienti, kteří ho používají, okamžitě ztratí přístup.",
+    "confirm": "Potvrdit",
+    "noTokens": "Zatím žádné tokeny."
+  },
+  "sex": {
+    "FEMALE": "Žena",
+    "MALE": "Muž",
+    "INTERSEX": "Intersex",
+    "PREFER_NOT_TO_SAY": "Nechci uvádět"
   }
 }

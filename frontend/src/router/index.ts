@@ -7,6 +7,8 @@ import ResetPasswordView from '@/views/ResetPasswordView.vue'
 import VerifyEmailView from '@/views/VerifyEmailView.vue'
 import StaffNoticeView from '@/views/StaffNoticeView.vue'
 import DashboardView from '@/views/DashboardView.vue'
+import AccountProfileView from '@/views/AccountProfileView.vue'
+import AccessTokensView from '@/views/AccessTokensView.vue'
 import AppShell from '@/components/AppShell.vue'
 
 export const routes: RouteRecordRaw[] = [
@@ -21,6 +23,8 @@ export const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
     children: [
       { path: '', component: DashboardView, meta: { requiresAuth: true } },
+      { path: 'account', component: AccountProfileView, meta: { requiresAuth: true } },
+      { path: 'account/access-tokens', component: AccessTokensView, meta: { requiresAuth: true } },
       // Later tasks insert feature child routes here (paths without leading '/').
     ],
   },

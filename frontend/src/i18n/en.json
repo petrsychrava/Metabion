@@ -47,5 +47,35 @@
     "loading": "Loading…", "today": "Today", "from": "From", "to": "To",
     "apply": "Apply", "yes": "Yes", "no": "No", "back": "Back", "add": "Add",
     "remove": "Remove", "close": "Close", "copy": "Copy", "copied": "Copied"
+  },
+  "account": {
+    "profileTitle": "Profile",
+    "dateOfBirth": "Date of birth",
+    "sex": "Sex",
+    "countryRegion": "Country / region",
+    "timezone": "Timezone",
+    "tokensTitle": "Access tokens",
+    "tokensIntro": "Tokens let external tools (for example AI assistants) access your data with the scopes you choose.",
+    "displayLabel": "Label",
+    "clientType": "Client type",
+    "expiresInDays": "Expires in (days)",
+    "scopes": "Scopes",
+    "issue": "Issue token",
+    "tokenCreatedTitle": "Token created — copy it now",
+    "tokenCreatedWarning": "This is the only time the token is shown. Store it somewhere safe.",
+    "lastUsed": "Last used",
+    "never": "never",
+    "expiresAt": "Expires",
+    "createdAt": "Created",
+    "revoke": "Revoke",
+    "revokeConfirm": "Revoke this token? Clients using it will lose access immediately.",
+    "confirm": "Confirm",
+    "noTokens": "No tokens yet."
+  },
+  "sex": {
+    "FEMALE": "Female",
+    "MALE": "Male",
+    "INTERSEX": "Intersex",
+    "PREFER_NOT_TO_SAY": "Prefer not to say"
   }
 }
