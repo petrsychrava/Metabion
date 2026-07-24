@@ -77,5 +77,43 @@
     "MALE": "Muž",
     "INTERSEX": "Intersex",
     "PREFER_NOT_TO_SAY": "Nechci uvádět"
+  },
+  "dietLog": {
+    "title": "Denník stravy",
+    "adherence": "Dodržování diety",
+    "appetite": "Chuť k jídlu",
+    "notes": "Poznámky",
+    "meals": "Jídla",
+    "addMeal": "Přidat jídlo",
+    "mealType": "Typ jídla",
+    "foodDescription": "Popis jídla",
+    "deviations": "Odchylky",
+    "addDeviation": "Přidat odchylku",
+    "deviationCategory": "Kategorie",
+    "deviationSeverity": "Závažnost",
+    "measurements": "Měření",
+    "addMeasurement": "Přidat měření",
+    "measurementType": "Typ",
+    "measurementValue": "Hodnota",
+    "measurementUnit": "Jednotka",
+    "measurementContext": "Kontext",
+    "measuredAt": "Změřeno",
+    "photos": "Fotografie",
+    "photoCaption": "Popisek (nepovinný)",
+    "history": "Historie",
+    "mealCount": "Jídla",
+    "deviationCount": "Odchylky",
+    "measurementCount": "Měření",
+    "open": "Otevřít"
+  },
+  "enums": {
+    "DietAdherenceLevel": { "FULL": "Plné", "MOSTLY": "Převážně", "PARTIAL": "Částečné", "LOW": "Nízké", "NOT_FOLLOWED": "Nedodržováno" },
+    "AppetiteLevel": { "LOW": "Nízká", "NORMAL": "Normální", "HIGH": "Vysoká", "VARIABLE": "Měnlivá" },
+    "MealType": { "BREAKFAST": "Snídaně", "LUNCH": "Oběd", "DINNER": "Večeře", "SNACK": "Svačina", "DRINK": "Nápoj", "OTHER": "Jiné" },
+    "DietDeviationCategory": { "EXCESS_CARBS": "Přebytek sacharidů", "NON_PROTOCOL_FOOD": "Potravina mimo protokol", "MISSED_MEAL": "Vynechané jídlo", "DINING_OUT": "Stravování venku", "ALCOHOL": "Alkohol", "GI_TOLERANCE": "GI tolerance", "OTHER": "Jiné" },
+    "DietDeviationSeverity": { "MINOR": "Mírná", "MODERATE": "Střední", "MAJOR": "Závažná" },
+    "MeasurementType": { "GLUCOSE": "Glukóza", "KETONE": "Ketony" },
+    "MeasurementUnit": { "MMOL_L": "mmol/L", "MG_DL": "mg/dL" },
+    "MeasurementContext": { "FASTING": "Nalačno", "PRE_MEAL": "Před jídlem", "POST_MEAL": "Po jídle", "BEDTIME": "Před spaním", "SYMPTOMS": "Příznaky", "OTHER": "Jiné" }
   }
 }

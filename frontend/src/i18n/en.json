@@ -77,5 +77,43 @@
     "MALE": "Male",
     "INTERSEX": "Intersex",
     "PREFER_NOT_TO_SAY": "Prefer not to say"
+  },
+  "dietLog": {
+    "title": "Diet log",
+    "adherence": "Diet adherence",
+    "appetite": "Appetite",
+    "notes": "Notes",
+    "meals": "Meals",
+    "addMeal": "Add meal",
+    "mealType": "Meal type",
+    "foodDescription": "Food description",
+    "deviations": "Deviations",
+    "addDeviation": "Add deviation",
+    "deviationCategory": "Category",
+    "deviationSeverity": "Severity",
+    "measurements": "Measurements",
+    "addMeasurement": "Add measurement",
+    "measurementType": "Type",
+    "measurementValue": "Value",
+    "measurementUnit": "Unit",
+    "measurementContext": "Context",
+    "measuredAt": "Measured at",
+    "photos": "Photos",
+    "photoCaption": "Caption (optional)",
+    "history": "History",
+    "mealCount": "Meals",
+    "deviationCount": "Deviations",
+    "measurementCount": "Measurements",
+    "open": "Open"
+  },
+  "enums": {
+    "DietAdherenceLevel": { "FULL": "Full", "MOSTLY": "Mostly", "PARTIAL": "Partial", "LOW": "Low", "NOT_FOLLOWED": "Not followed" },
+    "AppetiteLevel": { "LOW": "Low", "NORMAL": "Normal", "HIGH": "High", "VARIABLE": "Variable" },
+    "MealType": { "BREAKFAST": "Breakfast", "LUNCH": "Lunch", "DINNER": "Dinner", "SNACK": "Snack", "DRINK": "Drink", "OTHER": "Other" },
+    "DietDeviationCategory": { "EXCESS_CARBS": "Excess carbs", "NON_PROTOCOL_FOOD": "Non-protocol food", "MISSED_MEAL": "Missed meal", "DINING_OUT": "Dining out", "ALCOHOL": "Alcohol", "GI_TOLERANCE": "GI tolerance", "OTHER": "Other" },
+    "DietDeviationSeverity": { "MINOR": "Minor", "MODERATE": "Moderate", "MAJOR": "Major" },
+    "MeasurementType": { "GLUCOSE": "Glucose", "KETONE": "Ketones" },
+    "MeasurementUnit": { "MMOL_L": "mmol/L", "MG_DL": "mg/dL" },
+    "MeasurementContext": { "FASTING": "Fasting", "PRE_MEAL": "Before meal", "POST_MEAL": "After meal", "BEDTIME": "Bedtime", "SYMPTOMS": "Symptoms", "OTHER": "Other" }
   }
 }
