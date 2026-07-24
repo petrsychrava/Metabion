@@ -1,14 +1,21 @@
 import { createRouter, createWebHistory, type Router, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import LoginView from '@/views/LoginView.vue'
+import RegisterView from '@/views/RegisterView.vue'
+import ForgotPasswordView from '@/views/ForgotPasswordView.vue'
+import ResetPasswordView from '@/views/ResetPasswordView.vue'
+import VerifyEmailView from '@/views/VerifyEmailView.vue'
 import StaffNoticeView from '@/views/StaffNoticeView.vue'
 import DashboardView from '@/views/DashboardView.vue'
 
 export const routes: RouteRecordRaw[] = [
   { path: '/', component: DashboardView, meta: { requiresAuth: true } },
   { path: '/login', component: LoginView },
+  { path: '/register', component: RegisterView },
+  { path: '/forgot-password', component: ForgotPasswordView },
+  { path: '/reset-password', component: ResetPasswordView },
+  { path: '/verify', component: VerifyEmailView },
   { path: '/staff-notice', component: StaffNoticeView, meta: { requiresAuth: true, allowStaff: true } },
-  // Later tasks insert their feature routes here.
   { path: '/:pathMatch(.*)*', component: () => import('@/views/NotFoundView.vue'), meta: { requiresAuth: true } },
 ]
 

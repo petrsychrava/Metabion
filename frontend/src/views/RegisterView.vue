@@ -1,30 +1,22 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/api/auth'
 import { useApiError } from '@/composables/useApiError'
+import FieldError from '@/components/FieldError.vue'
 
 const { t } = useI18n()
-const auth = useAuthStore()
-const router = useRouter()
-const route = useRoute()
-const { message, capture } = useApiError()
-
+const { message, fieldErrors, capture } = useApiError()
 const email = ref('')
 const password = ref('')
+const done = ref(false)
 const submitting = ref(false)
 
 async function submit() {
   submitting.value = true
   try {
-    const res = await auth.login(email.value, password.value)
-    if (res.status === 'MFA_REQUIRED') {
-      message.value = t('auth.mfaRequired')
-      return
-    }
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
-    await router.push(redirect)
+    await authApi.register(email.value, password.value)
+    done.value = true
   } catch (e) {
     capture(e)
   } finally {
@@ -35,27 +27,29 @@ async function submit() {
 
 <template>
   <main class="mx-auto max-w-sm p-8">
-    <h1 class="text-2xl font-semibold">{{ t('auth.login') }}</h1>
-    <form class="mt-6 space-y-4" @submit.prevent="submit">
+    <h1 class="text-2xl font-semibold">{{ t('auth.register') }}</h1>
+    <p v-if="done" class="mt-6 rounded bg-green-50 p-3 text-sm text-green-700">{{ t('auth.registered') }}</p>
+    <form v-else class="mt-6 space-y-4" @submit.prevent="submit">
       <p v-if="message" class="rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
       <div>
         <label class="block text-sm font-medium" for="email">{{ t('auth.email') }}</label>
         <input id="email" v-model="email" type="email" required autocomplete="email"
                class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+        <FieldError :message="fieldErrors.email" />
       </div>
       <div>
         <label class="block text-sm font-medium" for="password">{{ t('auth.password') }}</label>
-        <input id="password" v-model="password" type="password" required autocomplete="current-password"
-               class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+        <input id="password" v-model="password" type="password" required minlength="12" maxlength="72"
+               autocomplete="new-password" class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+        <FieldError :message="fieldErrors.password" />
       </div>
       <button type="submit" :disabled="submitting"
               class="w-full rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">
-        {{ t('auth.login') }}
+        {{ t('auth.register') }}
       </button>
     </form>
-    <div class="mt-4 flex justify-between text-sm">
-      <router-link to="/forgot-password" class="text-blue-600">{{ t('auth.forgotPassword') }}</router-link>
-      <router-link to="/register" class="text-blue-600">{{ t('auth.register') }}</router-link>
-    </div>
+    <p class="mt-4 text-sm">
+      <router-link to="/login" class="text-blue-600">{{ t('auth.haveAccount') }}</router-link>
+    </p>
   </main>
 </template>
