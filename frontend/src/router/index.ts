@@ -14,6 +14,9 @@ import DietLogHistoryView from '@/views/DietLogHistoryView.vue'
 import CheckInEditView from '@/views/CheckInEditView.vue'
 import CheckInListView from '@/views/CheckInListView.vue'
 import TrendsView from '@/views/TrendsView.vue'
+import LabResultSetsView from '@/views/LabResultSetsView.vue'
+import LabResultSetEditView from '@/views/LabResultSetEditView.vue'
+import LabTrendsView from '@/views/LabTrendsView.vue'
 import AppShell from '@/components/AppShell.vue'
 
 export const routes: RouteRecordRaw[] = [
@@ -35,6 +38,10 @@ export const routes: RouteRecordRaw[] = [
       { path: 'check-ins', component: CheckInListView, meta: { requiresAuth: true } },
       { path: 'check-ins/:date', component: CheckInEditView, meta: { requiresAuth: true } },
       { path: 'trends', component: TrendsView, meta: { requiresAuth: true } },
+      { path: 'labs', component: LabResultSetsView, meta: { requiresAuth: true } },
+      { path: 'labs/new', component: LabResultSetEditView, meta: { requiresAuth: true } },
+      { path: 'labs/trends', component: LabTrendsView, meta: { requiresAuth: true } },
+      { path: 'labs/:id', component: LabResultSetEditView, meta: { requiresAuth: true } },
       // Later tasks insert feature child routes here (paths without leading '/').
     ],
   },
