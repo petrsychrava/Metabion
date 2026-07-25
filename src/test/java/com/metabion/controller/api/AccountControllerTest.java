@@ -3,6 +3,7 @@ package com.metabion.controller.api;
 import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.Sex;
+import com.metabion.domain.ThemePreference;
 import com.metabion.dto.PatientProfileForm;
 import com.metabion.service.SecurityService;
 import com.metabion.service.UserPreferenceService;
@@ -201,6 +202,78 @@ class AccountControllerTest {
                         .content("""
                                 {
                                   "language": "KLINGON"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void patientCanReadThemePreference() throws Exception {
+        when(userPreferenceService.currentThemePreference(any())).thenReturn(ThemePreference.DARK);
+
+        mvc.perform(get("/api/account/preferences/theme")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.theme").value("DARK"));
+
+        verify(userPreferenceService).currentThemePreference(any());
+    }
+
+    @Test
+    void patientCanUpdateThemePreferenceWithCsrf() throws Exception {
+        mvc.perform(put("/api/account/preferences/theme")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "theme": "DARK"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ok"));
+
+        verify(userPreferenceService).updateThemePreference(any(),
+                argThat(preference -> preference == ThemePreference.DARK));
+    }
+
+    @Test
+    void themePreferenceRequiresAuthentication() throws Exception {
+        mvc.perform(get("/api/account/preferences/theme"))
+                .andExpect(status().isUnauthorized());
+
+        mvc.perform(put("/api/account/preferences/theme")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "theme": "DARK"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void missingThemeReturnsValidationError() throws Exception {
+        mvc.perform(put("/api/account/preferences/theme")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("validation_failed"))
+                .andExpect(jsonPath("$.fields.theme").exists());
+    }
+
+    @Test
+    void unknownThemeReturnsBadRequest() throws Exception {
+        mvc.perform(put("/api/account/preferences/theme")
+                        .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "theme": "SEPIA"
                                 }
                                 """))
                 .andExpect(status().isBadRequest());
