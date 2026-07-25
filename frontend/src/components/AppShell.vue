@@ -38,7 +38,8 @@ async function logout() {
         <nav class="flex flex-1 flex-wrap gap-3 text-sm">
           <router-link v-for="link in links" :key="link.to" :to="link.to"
                        class="text-gray-700 hover:text-blue-700"
-                       active-class="font-semibold text-blue-700">
+                       :active-class="link.to === '/' ? '' : 'font-semibold text-blue-700'"
+                       exact-active-class="font-semibold text-blue-700">
             {{ link.label }}
           </router-link>
         </nav>

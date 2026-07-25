@@ -6,7 +6,7 @@ import { useApiError } from '@/composables/useApiError'
 import type { DailyDietLogSummary } from '@/types/api'
 
 const { t } = useI18n()
-const { message, capture } = useApiError()
+const { message, capture, clear } = useApiError()
 
 function iso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -22,6 +22,7 @@ const logs = ref<DailyDietLogSummary[]>([])
 const loading = ref(true)
 
 async function load() {
+  clear()
   loading.value = true
   try {
     logs.value = await dietLogApi.list(from.value, to.value)

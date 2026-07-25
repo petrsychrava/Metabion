@@ -89,6 +89,7 @@
     "foodDescription": "Popis jídla",
     "deviations": "Odchylky",
     "addDeviation": "Přidat odchylku",
+    "addMealFirst": "Nejprve přidejte jídlo, abyste mohli připojit odchylky nebo fotografie.",
     "deviationCategory": "Kategorie",
     "deviationSeverity": "Závažnost",
     "measurements": "Měření",

@@ -6,7 +6,7 @@ import { useApiError } from '@/composables/useApiError'
 import type { SymptomCheckInResponse } from '@/types/api'
 
 const { t } = useI18n()
-const { message, capture } = useApiError()
+const { message, capture, clear } = useApiError()
 
 function iso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -22,6 +22,7 @@ const checkIns = ref<SymptomCheckInResponse[]>([])
 const loading = ref(true)
 
 async function load() {
+  clear()
   loading.value = true
   try {
     checkIns.value = await symptomApi.listCheckIns(from.value, to.value)

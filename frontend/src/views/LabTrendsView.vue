@@ -27,7 +27,11 @@ const trend = ref<LabTrendResponse | null>(null)
 const loading = ref(false)
 
 onMounted(async () => {
-  tests.value = await labApi.listTests()
+  try {
+    tests.value = await labApi.listTests()
+  } catch (e) {
+    capture(e)
+  }
 })
 
 async function load() {

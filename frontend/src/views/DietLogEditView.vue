@@ -69,13 +69,20 @@ onMounted(async () => {
     notes.value = log.notes ?? ''
     meals.push(...log.meals.map((m) => ({ mealType: m.mealType, foodDescription: m.foodDescription ?? '', notes: m.notes ?? '' })))
     const mealIndexById = new Map(log.meals.map((m, idx) => [m.id, idx]))
+    // Legacy rows may carry a null or dangling mealId; a null mealIndex would
+    // fail the next save, so fall back to the first meal while meals exist.
+    const toMealIndex = (mealId: number | null): number | null => {
+      if (meals.length === 0) return null
+      if (mealId == null) return 0
+      return mealIndexById.get(mealId) ?? 0
+    }
     deviations.push(...log.deviations.map((d) => ({
-      mealIndex: d.mealId == null ? null : mealIndexById.get(d.mealId) ?? null,
+      mealIndex: toMealIndex(d.mealId),
       deviationCategory: d.deviationCategory,
       severity: d.severity,
       notes: d.notes ?? '',
     })))
-    photoReferences.push(...log.photoReferences.map((p) => ({ mealIndex: null, uploadId: p.id, caption: p.caption ?? '', contentUrl: p.contentUrl })))
+    photoReferences.push(...log.photoReferences.map((p) => ({ mealIndex: toMealIndex(p.mealId), uploadId: p.id, caption: p.caption ?? '', contentUrl: p.contentUrl })))
     measurements.push(...log.measurements.map((m) => ({
       measurementType: m.measurementType,
       value: m.value,
@@ -102,16 +109,36 @@ function addMeal() {
   meals.push({ mealType: 'BREAKFAST', foodDescription: '', notes: '' })
 }
 
+function removeMeal(i: number) {
+  meals.splice(i, 1)
+  for (let j = deviations.length - 1; j >= 0; j--) {
+    const mi = deviations[j].mealIndex
+    if (mi === i) deviations.splice(j, 1)
+    else if (mi != null && mi > i) deviations[j].mealIndex = mi - 1
+  }
+  for (let j = photoReferences.length - 1; j >= 0; j--) {
+    const mi = photoReferences[j].mealIndex
+    if (mi === i) photoReferences.splice(j, 1)
+    else if (mi != null && mi > i) photoReferences[j].mealIndex = mi - 1
+  }
+}
+
 function addDeviation() {
-  deviations.push({ mealIndex: null, deviationCategory: 'OTHER', severity: 'MINOR', notes: '' })
+  deviations.push({ mealIndex: meals.length - 1, deviationCategory: 'OTHER', severity: 'MINOR', notes: '' })
 }
 
 function addMeasurement() {
   measurements.push({ measurementType: 'GLUCOSE', value: 5.0, unit: 'MMOL_L', measuredAt: nowLocalIsoMinute(), context: 'FASTING', notes: '' })
 }
 
+function onMeasuredAtInput(m: DailyMeasurementEntryRequest, event: Event) {
+  const value = (event.target as HTMLInputElement).value
+  if (!value) return
+  m.measuredAt = new Date(value).toISOString()
+}
+
 function onPhotoUploaded(photo: DietLogPhotoUploadResponse) {
-  photoReferences.push({ mealIndex: null, uploadId: photo.uploadId, caption: '', contentUrl: photo.contentUrl })
+  photoReferences.push({ mealIndex: meals.length - 1, uploadId: photo.uploadId, caption: '', contentUrl: photo.contentUrl })
 }
 
 async function save() {
@@ -179,16 +206,21 @@ async function save() {
           </select>
           <input v-model="meal.foodDescription" :data-testid="`meal-desc-${i}`" type="text" maxlength="500"
                  :placeholder="t('dietLog.foodDescription')" class="rounded border border-gray-300 px-2 py-1" />
-          <button class="text-sm text-red-600" @click="meals.splice(i, 1)">{{ t('common.remove') }}</button>
+          <button class="text-sm text-red-600" @click="removeMeal(i)">{{ t('common.remove') }}</button>
         </div>
       </div>
 
       <div class="rounded border bg-white p-4">
         <div class="flex items-center justify-between">
           <h2 class="font-medium">{{ t('dietLog.deviations') }}</h2>
-          <button class="rounded border px-3 py-1 text-sm" @click="addDeviation">{{ t('dietLog.addDeviation') }}</button>
+          <button data-testid="add-deviation" class="rounded border px-3 py-1 text-sm" :disabled="meals.length === 0"
+                  @click="addDeviation">{{ t('dietLog.addDeviation') }}</button>
         </div>
-        <div v-for="(dev, i) in deviations" :key="i" class="mt-3 grid gap-2 border-t pt-3 sm:grid-cols-[1fr_8rem_1fr_auto]">
+        <p v-if="meals.length === 0" class="mt-2 text-sm text-gray-500">{{ t('dietLog.addMealFirst') }}</p>
+        <div v-for="(dev, i) in deviations" :key="i" class="mt-3 grid gap-2 border-t pt-3 sm:grid-cols-[10rem_1fr_8rem_1fr_auto]">
+          <select v-model="dev.mealIndex" :data-testid="`dev-meal-${i}`" class="rounded border border-gray-300 px-2 py-1">
+            <option v-for="(meal, mi) in meals" :key="mi" :value="mi">#{{ mi + 1 }} {{ t(`enums.MealType.${meal.mealType}`) }}</option>
+          </select>
           <select v-model="dev.deviationCategory" class="rounded border border-gray-300 px-2 py-1">
             <option v-for="o in deviationCategoryOptions" :key="o" :value="o">{{ t(`enums.DietDeviationCategory.${o}`) }}</option>
           </select>
@@ -220,7 +252,7 @@ async function save() {
             </select>
             <input :value="toLocalInputValue(m.measuredAt)" type="datetime-local"
                    class="rounded border border-gray-300 px-2 py-1"
-                   @input="m.measuredAt = new Date(($event.target as HTMLInputElement).value).toISOString()" />
+                   @input="onMeasuredAtInput(m, $event)" />
           </div>
           <button class="text-sm text-red-600" @click="measurements.splice(i, 1)">{{ t('common.remove') }}</button>
         </div>
@@ -228,10 +260,15 @@ async function save() {
 
       <div class="rounded border bg-white p-4">
         <h2 class="font-medium">{{ t('dietLog.photos') }}</h2>
-        <PhotoUpload class="mt-2" @uploaded="onPhotoUploaded" />
+        <PhotoUpload v-if="meals.length > 0" class="mt-2" @uploaded="onPhotoUploaded" />
+        <p v-else class="mt-2 text-sm text-gray-500">{{ t('dietLog.addMealFirst') }}</p>
         <div class="mt-3 flex flex-wrap gap-3">
           <figure v-for="(p, i) in photoReferences" :key="p.uploadId" class="w-32">
             <img :src="p.contentUrl" :alt="p.caption ?? ''" class="h-24 w-32 rounded border object-cover" />
+            <select v-model="p.mealIndex" :data-testid="`photo-meal-${i}`"
+                    class="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-xs">
+              <option v-for="(meal, mi) in meals" :key="mi" :value="mi">#{{ mi + 1 }} {{ t(`enums.MealType.${meal.mealType}`) }}</option>
+            </select>
             <input v-model="p.caption" type="text" maxlength="500" :placeholder="t('dietLog.photoCaption')"
                    class="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-xs" />
             <button class="mt-1 text-xs text-red-600" @click="photoReferences.splice(i, 1)">{{ t('common.remove') }}</button>

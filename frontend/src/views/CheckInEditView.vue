@@ -58,6 +58,12 @@ onMounted(async () => {
   }
 })
 
+// v-model.number keeps the raw '' when a typed value is cleared; coerce it
+// back to null so the payload matches the numeric DTO fields.
+function numOrNull(v: number | null | '' | undefined): number | null {
+  return v === '' || v === undefined ? null : v
+}
+
 async function save() {
   clear()
   saved.value = false
@@ -68,7 +74,7 @@ async function save() {
       questionId: question.id,
       optionId: answers[question.id].optionId,
       answerText: question.answerType === 'TEXT' ? answers[question.id].answerText || null : null,
-      answerNumeric: question.answerType === 'NUMERIC' ? answers[question.id].answerNumeric : null,
+      answerNumeric: question.answerType === 'NUMERIC' ? numOrNull(answers[question.id].answerNumeric) : null,
     }))
     .filter((a) => a.optionId !== null || a.answerText !== null || a.answerNumeric !== null)
   try {

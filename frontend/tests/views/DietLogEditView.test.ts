@@ -60,6 +60,75 @@ describe('DietLogEditView', () => {
     expect(wrapper.text()).toContain(en.common.saved)
   })
 
+  it('saves a deviation with the index of its meal, never null', async () => {
+    let received: DailyDietLogRequest | null = null
+    server.use(
+      http.get('/api/diet-logs/2026-07-24', () => HttpResponse.json({ error: 'not_found' }, { status: 404 })),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/diet-logs', async ({ request }) => {
+        received = (await request.json()) as DailyDietLogRequest
+        return HttpResponse.json({ id: 1, logDate: '2026-07-24' })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/diet-logs/2026-07-24')
+    const wrapper = mount(DietLogEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="add-deviation"]').attributes()).toHaveProperty('disabled')
+    await wrapper.find('[data-testid="add-meal"]').trigger('click')
+    await wrapper.find('[data-testid="add-deviation"]').trigger('click')
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await flushPromises()
+
+    expect(received).not.toBeNull()
+    expect(received!.deviations).toHaveLength(1)
+    expect(received!.deviations[0].mealIndex).toBe(0)
+  })
+
+  it('maps loaded photo references to their meal index on re-save', async () => {
+    let received: DailyDietLogRequest | null = null
+    server.use(
+      http.get('/api/diet-logs/2026-07-24', () => HttpResponse.json({
+        id: 1,
+        patientProfileId: 1,
+        patientEmail: 'p@example.com',
+        logDate: '2026-07-24',
+        adherenceLevel: 'FULL',
+        appetiteLevel: 'NORMAL',
+        notes: null,
+        metadata: null,
+        createdAt: '2026-07-24T08:00:00Z',
+        updatedAt: '2026-07-24T08:00:00Z',
+        meals: [{ id: 5, mealType: 'BREAKFAST', foodDescription: 'Eggs', notes: null, sortOrder: 0 }],
+        deviations: [],
+        photoReferences: [{
+          id: 9, mealId: 5, originalFilename: 'eggs.jpg', contentType: 'image/jpeg',
+          sizeBytes: 100, caption: null, contentUrl: '/api/diet-photos/9/content', sortOrder: 0,
+        }],
+        measurements: [],
+      })),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/diet-logs', async ({ request }) => {
+        received = (await request.json()) as DailyDietLogRequest
+        return HttpResponse.json({ id: 1, logDate: '2026-07-24' })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/diet-logs/2026-07-24')
+    const wrapper = mount(DietLogEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="photo-meal-0"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await flushPromises()
+
+    expect(received).not.toBeNull()
+    expect(received!.photoReferences).toHaveLength(1)
+    expect(received!.photoReferences[0].uploadId).toBe(9)
+    expect(received!.photoReferences[0].mealIndex).toBe(0)
+  })
+
   it('shows an error and withholds the editor when loading fails (non-404)', async () => {
     server.use(
       http.get('/api/diet-logs/2026-07-24', () => HttpResponse.json({ error: 'request_failed' }, { status: 500 })),

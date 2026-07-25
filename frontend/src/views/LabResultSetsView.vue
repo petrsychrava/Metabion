@@ -6,7 +6,7 @@ import { useApiError } from '@/composables/useApiError'
 import type { LabResultSetResponse } from '@/types/api'
 
 const { t } = useI18n()
-const { message, capture } = useApiError()
+const { message, capture, clear } = useApiError()
 
 function iso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -25,6 +25,7 @@ const removalReason = ref('')
 const removalDone = ref(false)
 
 async function load() {
+  clear()
   loading.value = true
   try {
     sets.value = await labApi.listResultSets(from.value, to.value)

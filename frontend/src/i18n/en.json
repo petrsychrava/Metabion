@@ -89,6 +89,7 @@
     "foodDescription": "Food description",
     "deviations": "Deviations",
     "addDeviation": "Add deviation",
+    "addMealFirst": "Add a meal first to attach deviations or photos.",
     "deviationCategory": "Category",
     "deviationSeverity": "Severity",
     "measurements": "Measurements",

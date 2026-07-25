@@ -31,8 +31,13 @@ const copied = ref(false)
 const pendingRevoke = ref<PatientAccessTokenSummary | null>(null)
 
 async function load() {
-  tokens.value = await accessTokenApi.list()
-  loading.value = false
+  try {
+    tokens.value = await accessTokenApi.list()
+  } catch (e) {
+    capture(e)
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(load)

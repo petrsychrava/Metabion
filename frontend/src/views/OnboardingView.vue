@@ -60,13 +60,19 @@ onMounted(async () => {
   }
 })
 
+// v-model.number keeps the raw '' when a typed value is cleared; coerce it
+// back to null so the payload matches the numeric DTO fields.
+function numOrNull(v: number | null | '' | undefined): number | null {
+  return v === '' || v === undefined ? null : v
+}
+
 async function submit() {
   clear()
   saved.value = false
   try {
     await onboardingApi.submit({
       diagnosisType: form.diagnosisType,
-      diagnosisYear: form.diagnosisYear,
+      diagnosisYear: numOrNull(form.diagnosisYear),
       diseaseLocation: form.diseaseLocation || undefined,
       diseaseBehavior: form.diseaseBehavior || undefined,
       activityEstimate: form.activityEstimate,
@@ -75,10 +81,10 @@ async function submit() {
       advancedTherapyExposure: form.advancedTherapyExposure,
       medicationNotes: form.medicationNotes || undefined,
       labsCollectedAt: form.labsCollectedAt || null,
-      crpMgL: form.crpMgL,
-      fecalCalprotectinUgG: form.fecalCalprotectinUgG,
-      hemoglobinGDl: form.hemoglobinGDl,
-      albuminGDl: form.albuminGDl,
+      crpMgL: numOrNull(form.crpMgL),
+      fecalCalprotectinUgG: numOrNull(form.fecalCalprotectinUgG),
+      hemoglobinGDl: numOrNull(form.hemoglobinGDl),
+      albuminGDl: numOrNull(form.albuminGDl),
       labNotes: form.labNotes || undefined,
     })
     saved.value = true

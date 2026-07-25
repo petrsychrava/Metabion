@@ -4,8 +4,10 @@ import { useI18n } from 'vue-i18n'
 import { ApiError } from '@/api/http'
 import { dietLogApi } from '@/api/dietLogs'
 import { symptomApi } from '@/api/symptoms'
+import { useApiError } from '@/composables/useApiError'
 
 const { t } = useI18n()
+const { message, capture } = useApiError()
 const dietLogDone = ref(false)
 const checkInDone = ref(false)
 const loading = ref(true)
@@ -21,7 +23,9 @@ async function exists(fetcher: () => Promise<unknown>): Promise<boolean> {
     return true
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) return false
-    throw e
+    // Non-404 failure: report it and treat the item as not done instead of hanging.
+    capture(e)
+    return false
   }
 }
 
@@ -39,6 +43,7 @@ onMounted(async () => {
   <section>
     <h1 class="text-2xl font-semibold">{{ t('dashboard.title') }}</h1>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
+    <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
     <div v-else class="mt-4 grid gap-4 sm:grid-cols-2">
       <router-link :to="`/diet-logs/${todayIso()}`" class="rounded border bg-white p-4 hover:border-blue-400">
         <h2 class="font-medium">{{ t('dashboard.dietLog') }}</h2>

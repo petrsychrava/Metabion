@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ApiError } from '@/api/http'
 import { labApi } from '@/api/labs'
@@ -10,6 +10,7 @@ import type { LabResultRequest, LabResultSetResponse, LabTestDefinition } from '
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const { message, fieldErrors, capture, clear } = useApiError()
 
 const id = computed(() => (route.params.id ? Number(route.params.id) : null))
@@ -59,14 +60,25 @@ async function reload() {
 }
 
 onMounted(async () => {
-  tests.value = await labApi.listTests()
-  await loadExisting()
-  loading.value = false
+  try {
+    tests.value = await labApi.listTests()
+    await loadExisting()
+  } catch (e) {
+    capture(e)
+  } finally {
+    loading.value = false
+  }
 })
 
 function onTestChange(result: LabResultRequest) {
   const def = tests.value.find((d) => d.code === result.testCode)
   if (def) result.unit = def.canonicalUnit
+}
+
+// v-model.number keeps the raw '' when a typed value is cleared; coerce it
+// back to null so the payload matches the numeric DTO fields.
+function numOrNull(v: number | null | '' | undefined): number | null {
+  return v === '' || v === undefined ? null : v
 }
 
 async function save() {
@@ -79,12 +91,21 @@ async function save() {
       version: isNew.value ? null : version.value,
       collectionDate: collectionDate.value,
       notes: notes.value || undefined,
-      results,
+      results: results.map((r) => ({
+        ...r,
+        value: numOrNull(r.value) as number,
+        referenceLower: numOrNull(r.referenceLower),
+        referenceUpper: numOrNull(r.referenceUpper),
+      })),
     }
     if (isNew.value) {
-      await labApi.createResultSet(payload)
+      const res = await labApi.createResultSet(payload)
+      version.value = res.version
+      // Switch into edit mode so a second Save updates instead of duplicating.
+      await router.replace(`/labs/${res.id}`)
     } else {
-      await labApi.updateResultSet(id.value!, payload)
+      const res = await labApi.updateResultSet(id.value!, payload)
+      version.value = res.version
     }
     saved.value = true
   } catch (e) {

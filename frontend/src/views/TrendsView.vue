@@ -7,7 +7,7 @@ import LineChart from '@/components/LineChart.vue'
 import type { DailyTrendResponse } from '@/types/api'
 
 const { t } = useI18n()
-const { message, capture } = useApiError()
+const { message, capture, clear } = useApiError()
 
 function iso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -23,6 +23,7 @@ const trend = ref<DailyTrendResponse | null>(null)
 const loading = ref(true)
 
 async function load() {
+  clear()
   loading.value = true
   try {
     trend.value = await symptomApi.dailyTrend(from.value, to.value)

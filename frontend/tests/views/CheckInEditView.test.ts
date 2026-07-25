@@ -87,6 +87,35 @@ describe('CheckInEditView', () => {
     expect(received!.answers).toContainEqual({ questionId: 102, optionId: null, answerText: null, answerNumeric: 4 })
   })
 
+  it('sends null instead of an empty string when a numeric answer is typed then cleared', async () => {
+    let received: SymptomCheckInRequest | null = null
+    server.use(
+      http.get('/api/symptom-questionnaires/active', () => HttpResponse.json(questionnaire)),
+      http.get('/api/symptom-check-ins/2026-07-24', () => HttpResponse.json({ error: 'not_found' }, { status: 404 })),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/symptom-check-ins', async ({ request }) => {
+        received = (await request.json()) as SymptomCheckInRequest
+        return HttpResponse.json({ id: 1 })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/check-ins/2026-07-24')
+    const wrapper = mount(CheckInEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.findAll('input[type="radio"]')[1].setValue(true)
+    const numeric = wrapper.find('input[type="number"]')
+    await numeric.setValue(4)
+    await numeric.setValue('')
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await flushPromises()
+
+    expect(received).not.toBeNull()
+    const cleared = received!.answers.find((a) => a.questionId === 102)
+    expect(cleared?.answerNumeric ?? null).toBeNull()
+    expect(JSON.stringify(received!.answers)).not.toContain('""')
+  })
+
   it('shows an error and withholds the editor when the existing check-in fails to load (non-404)', async () => {
     server.use(
       http.get('/api/symptom-questionnaires/active', () => HttpResponse.json(questionnaire)),

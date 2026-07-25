@@ -16,10 +16,15 @@ const loading = ref(true)
 const openLesson = ref<string | null>(null)
 
 async function load() {
-  module.value = await educationApi.getModule(moduleSlug)
-  loading.value = false
-  if (openLesson.value === null) {
-    openLesson.value = module.value.lessons[0]?.lessonSlug ?? null
+  try {
+    module.value = await educationApi.getModule(moduleSlug)
+    if (openLesson.value === null) {
+      openLesson.value = module.value.lessons[0]?.lessonSlug ?? null
+    }
+  } catch (e) {
+    capture(e)
+  } finally {
+    loading.value = false
   }
 }
 

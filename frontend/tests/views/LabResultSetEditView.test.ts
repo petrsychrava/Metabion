@@ -72,6 +72,33 @@ describe('LabResultSetEditView', () => {
     expect((received!.results as unknown[]).length).toBe(1)
   })
 
+  it('sends the incremented version on a back-to-back save after a successful update', async () => {
+    const receivedVersions: unknown[] = []
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/lab-result-sets/3', () => HttpResponse.json(existing)),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/lab-result-sets/3', async ({ request }) => {
+        const body = (await request.json()) as { version: number }
+        receivedVersions.push(body.version)
+        return HttpResponse.json({ ...existing, version: body.version + 1 })
+      }),
+    )
+    const router = await makeRouter('/labs/3')
+    const wrapper = mount(LabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.common.saved)
+
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await flushPromises()
+
+    expect(receivedVersions).toEqual([2, 3])
+    expect(wrapper.find('[data-testid="reload"]').exists()).toBe(false)
+  })
+
   it('shows conflict message and reload button on 409', async () => {
     server.use(
       http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
