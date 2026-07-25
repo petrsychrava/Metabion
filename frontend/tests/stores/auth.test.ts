@@ -3,9 +3,14 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { server } from '../msw/server'
 import { useAuthStore } from '@/stores/auth'
+import { i18n, LOCALE_STORAGE_KEY } from '@/i18n'
 
 describe('auth store', () => {
-  beforeEach(() => setActivePinia(createPinia()))
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+    i18n.global.locale.value = 'en'
+  })
 
   it('fetchMe sets authenticated identity', async () => {
     server.use(http.get('/api/auth/me', () => HttpResponse.json({ email: 'p@example.com', roles: ['PATIENT'] })))
@@ -53,5 +58,28 @@ describe('auth store', () => {
     expect(auth.status).toBe('anonymous')
     expect(auth.email).toBeNull()
     expect(auth.roles).toEqual([])
+  })
+
+  it('login applies the persisted language preference', async () => {
+    server.use(
+      http.post('/api/auth/login', () => HttpResponse.json({ status: 'AUTHENTICATED', email: 'p@example.com', roles: ['PATIENT'], challengeId: null, methods: null })),
+      http.get('/api/account/preferences/language', () => HttpResponse.json({ language: 'CS' })),
+    )
+    const auth = useAuthStore()
+    await auth.login('p@example.com', 'password-123')
+    expect(i18n.global.locale.value).toBe('cs')
+    expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('cs')
+  })
+
+  it('login still succeeds when the preference fetch fails', async () => {
+    server.use(
+      http.post('/api/auth/login', () => HttpResponse.json({ status: 'AUTHENTICATED', email: 'p@example.com', roles: ['PATIENT'], challengeId: null, methods: null })),
+      http.get('/api/account/preferences/language', () => new HttpResponse(null, { status: 500 })),
+    )
+    const auth = useAuthStore()
+    const res = await auth.login('p@example.com', 'password-123')
+    expect(res.status).toBe('AUTHENTICATED')
+    expect(auth.status).toBe('authenticated')
+    expect(i18n.global.locale.value).toBe('en')
   })
 })

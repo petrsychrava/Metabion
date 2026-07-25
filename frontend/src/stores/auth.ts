@@ -1,7 +1,9 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { authApi } from '@/api/auth'
+import { accountApi } from '@/api/account'
 import { ApiError, resetCsrfToken } from '@/api/http'
+import { setLocale } from '@/i18n'
 import type { LoginResponse } from '@/types/api'
 
 export type AuthStatus = 'unknown' | 'authenticated' | 'anonymous'
@@ -15,12 +17,23 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => status.value === 'authenticated')
   const isPatient = computed(() => roles.value.includes('PATIENT'))
 
+  /** Best-effort sync of the persisted language preference; failures never break auth flows. */
+  async function syncLanguagePreference(): Promise<void> {
+    try {
+      const pref = await accountApi.getLanguagePreference()
+      setLocale(pref.language === 'CS' ? 'cs' : 'en')
+    } catch {
+      // Keep the current locale when the preference cannot be fetched.
+    }
+  }
+
   async function fetchMe(): Promise<void> {
     try {
       const me = await authApi.me()
       email.value = me.email
       roles.value = me.roles
       status.value = 'authenticated'
+      await syncLanguagePreference()
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         email.value = null
@@ -43,6 +56,7 @@ export const useAuthStore = defineStore('auth', () => {
     email.value = res.email
     roles.value = res.roles
     status.value = 'authenticated'
+    await syncLanguagePreference()
     return res
   }
 

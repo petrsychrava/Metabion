@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { setLocale, type AppLocale } from '@/i18n'
+import { accountApi } from '@/api/account'
 
 const { t, locale } = useI18n()
 const auth = useAuthStore()
@@ -20,8 +21,14 @@ const links = computed(() => [
   { to: '/account', label: t('nav.account') },
 ])
 
-function switchLocale(event: Event) {
-  setLocale((event.target as HTMLSelectElement).value as AppLocale)
+async function switchLocale(event: Event) {
+  const next = (event.target as HTMLSelectElement).value as AppLocale
+  setLocale(next)
+  try {
+    await accountApi.updateLanguagePreference(next === 'cs' ? 'CS' : 'EN')
+  } catch {
+    // Preference persistence is best-effort; the local choice still applies.
+  }
 }
 
 async function logout() {

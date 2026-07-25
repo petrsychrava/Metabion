@@ -10,6 +10,9 @@ export const accountApi = {
   getProfile: () => apiFetch<PatientProfile>('/api/account/profile'),
   updateProfile: (profile: PatientProfile) =>
     apiFetch<{ status: string }>('/api/account/profile', { method: 'PUT', body: profile }),
+  getLanguagePreference: () => apiFetch<{ language: 'EN' | 'CS' }>('/api/account/preferences/language'),
+  updateLanguagePreference: (language: 'EN' | 'CS') =>
+    apiFetch<{ status: string }>('/api/account/preferences/language', { method: 'PUT', body: { language } }),
 }
 
 export const accessTokenApi = {
