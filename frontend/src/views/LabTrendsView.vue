@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { labApi } from '@/api/labs'
 import { useApiError } from '@/composables/useApiError'
+import { dateRangeError } from '@/utils/dateRange'
 import LineChart from '@/components/LineChart.vue'
 import type { LabTestDefinition, LabTrendResponse } from '@/types/api'
 
@@ -36,6 +37,11 @@ onMounted(async () => {
 
 async function load() {
   if (!selectedTest.value) return
+  const rangeError = dateRangeError(from.value, to.value)
+  if (rangeError) {
+    message.value = t(`errors.date_range_${rangeError === 'too_long' ? 'too_long' : 'invalid'}`)
+    return
+  }
   loading.value = true
   try {
     trend.value = await labApi.trend(selectedTest.value, from.value, to.value)

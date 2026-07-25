@@ -31,7 +31,9 @@
     "conflict": "This record was changed elsewhere. Reload and try again.",
     "mail_unavailable": "Email service is temporarily unavailable. Try again later.",
     "request_failed": "Something went wrong. Please try again.",
-    "network": "Cannot reach the server. Check your connection."
+    "network": "Cannot reach the server. Check your connection.",
+    "date_range_invalid": "The start date must be on or before the end date.",
+    "date_range_too_long": "The date range cannot exceed 370 days."
   },
   "dashboard": {
     "title": "Today",

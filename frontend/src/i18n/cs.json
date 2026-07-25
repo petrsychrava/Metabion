@@ -31,7 +31,9 @@
     "conflict": "Záznam byl mezitím změněn. Načtěte znovu a zkuste to znovu.",
     "mail_unavailable": "E-mailová služba je dočasně nedostupná. Zkuste to později.",
     "request_failed": "Něco se nepovedlo. Zkuste to znovu.",
-    "network": "Server je nedostupný. Zkontrolujte připojení."
+    "network": "Server je nedostupný. Zkontrolujte připojení.",
+    "date_range_invalid": "Počáteční datum nesmí být po koncovém datu.",
+    "date_range_too_long": "Časové rozmezí nesmí být delší než 370 dnů."
   },
   "dashboard": {
     "title": "Dnes",

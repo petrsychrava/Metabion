@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { symptomApi } from '@/api/symptoms'
 import { useApiError } from '@/composables/useApiError'
+import { dateRangeError } from '@/utils/dateRange'
 import LineChart from '@/components/LineChart.vue'
 import type { DailyTrendResponse } from '@/types/api'
 
@@ -24,6 +25,11 @@ const loading = ref(true)
 
 async function load() {
   clear()
+  const rangeError = dateRangeError(from.value, to.value)
+  if (rangeError) {
+    message.value = t(`errors.date_range_${rangeError === 'too_long' ? 'too_long' : 'invalid'}`)
+    return
+  }
   loading.value = true
   try {
     trend.value = await symptomApi.dailyTrend(from.value, to.value)

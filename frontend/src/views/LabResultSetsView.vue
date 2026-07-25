@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { labApi } from '@/api/labs'
 import { useApiError } from '@/composables/useApiError'
+import { dateRangeError } from '@/utils/dateRange'
 import type { LabResultSetResponse } from '@/types/api'
 
 const { t } = useI18n()
@@ -26,6 +27,11 @@ const removalDone = ref(false)
 
 async function load() {
   clear()
+  const rangeError = dateRangeError(from.value, to.value)
+  if (rangeError) {
+    message.value = t(`errors.date_range_${rangeError === 'too_long' ? 'too_long' : 'invalid'}`)
+    return
+  }
   loading.value = true
   try {
     sets.value = await labApi.listResultSets(from.value, to.value)

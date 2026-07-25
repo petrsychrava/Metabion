@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { dietLogApi } from '@/api/dietLogs'
 import { useApiError } from '@/composables/useApiError'
+import { dateRangeError } from '@/utils/dateRange'
 import type { DailyDietLogSummary } from '@/types/api'
 
 const { t } = useI18n()
@@ -23,6 +24,11 @@ const loading = ref(true)
 
 async function load() {
   clear()
+  const rangeError = dateRangeError(from.value, to.value)
+  if (rangeError) {
+    message.value = t(`errors.date_range_${rangeError === 'too_long' ? 'too_long' : 'invalid'}`)
+    return
+  }
   loading.value = true
   try {
     logs.value = await dietLogApi.list(from.value, to.value)
