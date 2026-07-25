@@ -166,6 +166,16 @@
     "therapy": { "NEVER_USED": "Never used", "CURRENT": "Current", "PAST": "Past", "UNKNOWN": "Unknown" },
     "reviewStatus": { "PENDING_REVIEW": "Pending review", "REVIEWED": "Reviewed", "NEEDS_FOLLOW_UP": "Needs follow-up" }
   },
+  "education": {
+    "title": "Education",
+    "lessons": "Lessons",
+    "lessonCount": "{count} lessons",
+    "completedCount": "{done} of {count} completed",
+    "completedBadge": "Completed",
+    "markComplete": "Mark as completed",
+    "markIncomplete": "Mark as not completed",
+    "backToModules": "All modules"
+  },
   "enums": {
     "DietAdherenceLevel": { "FULL": "Full", "MOSTLY": "Mostly", "PARTIAL": "Partial", "LOW": "Low", "NOT_FOLLOWED": "Not followed" },
     "AppetiteLevel": { "LOW": "Low", "NORMAL": "Normal", "HIGH": "High", "VARIABLE": "Variable" },

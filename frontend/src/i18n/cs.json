@@ -166,6 +166,16 @@
     "therapy": { "NEVER_USED": "Nikdy", "CURRENT": "Aktuální", "PAST": "V minulosti", "UNKNOWN": "Neznámé" },
     "reviewStatus": { "PENDING_REVIEW": "Čeká na posouzení", "REVIEWED": "Posouzeno", "NEEDS_FOLLOW_UP": "Vyžaduje doplnění" }
   },
+  "education": {
+    "title": "Vzdělávání",
+    "lessons": "Lekce",
+    "lessonCount": "{count} lekcí",
+    "completedCount": "{done} z {count} dokončeno",
+    "completedBadge": "Dokončeno",
+    "markComplete": "Označit jako dokončené",
+    "markIncomplete": "Označit jako nedokončené",
+    "backToModules": "Všechny moduly"
+  },
   "enums": {
     "DietAdherenceLevel": { "FULL": "Plné", "MOSTLY": "Převážně", "PARTIAL": "Částečné", "LOW": "Nízké", "NOT_FOLLOWED": "Nedodržováno" },
     "AppetiteLevel": { "LOW": "Nízká", "NORMAL": "Normální", "HIGH": "Vysoká", "VARIABLE": "Měnlivá" },

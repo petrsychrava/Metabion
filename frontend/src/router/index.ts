@@ -18,6 +18,8 @@ import LabResultSetsView from '@/views/LabResultSetsView.vue'
 import LabResultSetEditView from '@/views/LabResultSetEditView.vue'
 import LabTrendsView from '@/views/LabTrendsView.vue'
 import OnboardingView from '@/views/OnboardingView.vue'
+import EducationListView from '@/views/EducationListView.vue'
+import EducationModuleView from '@/views/EducationModuleView.vue'
 import AppShell from '@/components/AppShell.vue'
 
 export const routes: RouteRecordRaw[] = [
@@ -44,6 +46,8 @@ export const routes: RouteRecordRaw[] = [
       { path: 'labs/trends', component: LabTrendsView, meta: { requiresAuth: true } },
       { path: 'labs/:id', component: LabResultSetEditView, meta: { requiresAuth: true } },
       { path: 'onboarding', component: OnboardingView, meta: { requiresAuth: true } },
+      { path: 'education', component: EducationListView, meta: { requiresAuth: true } },
+      { path: 'education/:moduleSlug', component: EducationModuleView, meta: { requiresAuth: true } },
       // Later tasks insert feature child routes here (paths without leading '/').
     ],
   },
