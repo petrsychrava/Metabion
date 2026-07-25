@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ApiError } from '@/api/http'
 import { onboardingApi } from '@/api/onboarding'
@@ -9,12 +9,14 @@ import type {
   AdvancedTherapyExposure,
   DiseaseActivityEstimate,
   IbdDiagnosisType,
+  OnboardingSubmissionResponse,
   OnboardingSubmissionSummary,
   SteroidUse,
 } from '@/types/api'
 
 const { t } = useI18n()
 const { message, fieldErrors, capture, clear } = useApiError()
+const { message: detailMessage, capture: captureDetail, clear: clearDetail } = useApiError()
 
 const diagnosisTypes: IbdDiagnosisType[] = ['CROHNS_DISEASE', 'ULCERATIVE_COLITIS', 'IBD_UNCLASSIFIED']
 const activityEstimates: DiseaseActivityEstimate[] = ['REMISSION', 'MILD', 'MODERATE', 'SEVERE', 'UNKNOWN']
@@ -43,6 +45,63 @@ const history = ref<OnboardingSubmissionSummary[]>([])
 const loading = ref(true)
 const saved = ref(false)
 const showForm = ref(false)
+
+const openId = ref<number | null>(null)
+const openDetail = ref<OnboardingSubmissionResponse | null>(null)
+const detailLoading = ref(false)
+const detailCache = new Map<number, OnboardingSubmissionResponse>()
+
+async function toggleDetail(id: number) {
+  clearDetail()
+  if (openId.value === id) {
+    openId.value = null
+    openDetail.value = null
+    return
+  }
+  openId.value = id
+  openDetail.value = detailCache.get(id) ?? null
+  if (openDetail.value) return
+  detailLoading.value = true
+  try {
+    const detail = await onboardingApi.get(id)
+    detailCache.set(id, detail)
+    if (openId.value === id) openDetail.value = detail
+  } catch (e) {
+    captureDetail(e)
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function orNotProvided(v: string | number | null | undefined): string {
+  return v === null || v === undefined || v === '' ? t('onboarding.notProvided') : String(v)
+}
+
+const detailRows = computed<[string, string][]>(() => {
+  const d = openDetail.value
+  if (!d) return []
+  return [
+    [t('account.dateOfBirth'), orNotProvided(d.dateOfBirth)],
+    [t('account.sex'), d.sex ? t(`sex.${d.sex}`) : t('onboarding.notProvided')],
+    [t('account.countryRegion'), orNotProvided(d.countryRegion)],
+    [t('account.timezone'), orNotProvided(d.timezone)],
+    [t('onboarding.diagnosisType'), t(`onboarding.diagnosis.${d.diagnosisType}`)],
+    [t('onboarding.diagnosisYear'), orNotProvided(d.diagnosisYear)],
+    [t('onboarding.diseaseLocation'), orNotProvided(d.diseaseLocation)],
+    [t('onboarding.diseaseBehavior'), orNotProvided(d.diseaseBehavior)],
+    [t('onboarding.activityEstimate'), t(`onboarding.activity.${d.activityEstimate}`)],
+    [t('onboarding.currentMedications'), orNotProvided(d.currentMedications)],
+    [t('onboarding.steroidUse'), t(`onboarding.steroid.${d.steroidUse}`)],
+    [t('onboarding.advancedTherapy'), t(`onboarding.therapy.${d.advancedTherapyExposure}`)],
+    [t('onboarding.medicationNotes'), orNotProvided(d.medicationNotes)],
+    [t('onboarding.labsCollectedAt'), orNotProvided(d.labsCollectedAt)],
+    ['CRP (mg/L)', orNotProvided(d.crpMgL)],
+    [`${t('onboarding.calprotectin')} (µg/g)`, orNotProvided(d.fecalCalprotectinUgG)],
+    [`${t('onboarding.hemoglobin')} (g/dL)`, orNotProvided(d.hemoglobinGDl)],
+    [`${t('onboarding.albumin')} (g/dL)`, orNotProvided(d.albuminGDl)],
+    [t('labs.notes'), orNotProvided(d.labNotes)],
+  ]
+})
 
 onMounted(async () => {
   try {
@@ -107,10 +166,33 @@ async function submit() {
       <div v-if="history.length > 0" class="mt-4">
         <h2 class="font-medium">{{ t('onboarding.history') }}</h2>
         <ul class="mt-2 space-y-2">
-          <li v-for="s in history" :key="s.id" class="rounded border bg-white p-3 text-sm">
-            v{{ s.version }} · {{ s.submittedAt.slice(0, 10) }} ·
-            {{ t(`onboarding.diagnosis.${s.diagnosisType}`) }} ·
-            {{ t(`onboarding.reviewStatus.${s.reviewStatus}`) }}
+          <li v-for="s in history" :key="s.id" class="rounded border bg-white text-sm">
+            <button type="button" :data-testid="`history-item-${s.id}`"
+                    class="flex w-full items-center justify-between p-3 text-left"
+                    @click="toggleDetail(s.id)">
+              <span>
+                v{{ s.version }} · {{ s.submittedAt.slice(0, 10) }} ·
+                {{ t(`onboarding.diagnosis.${s.diagnosisType}`) }} ·
+                {{ t(`onboarding.reviewStatus.${s.reviewStatus}`) }}
+              </span>
+              <span class="text-gray-400">{{ openId === s.id ? '−' : '+' }}</span>
+            </button>
+            <div v-if="openId === s.id" :data-testid="`history-detail-${s.id}`" class="border-t p-3">
+              <p v-if="detailMessage" class="rounded bg-red-50 p-3 text-sm text-red-700">{{ detailMessage }}</p>
+              <p v-else-if="detailLoading || !openDetail">{{ t('common.loading') }}</p>
+              <template v-else>
+                <p class="text-gray-600">
+                  v{{ openDetail.version }} · {{ openDetail.submittedAt.slice(0, 10) }} ·
+                  {{ t(`onboarding.reviewStatus.${openDetail.reviewStatus}`) }}
+                </p>
+                <dl class="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(auto,12rem)_1fr]">
+                  <template v-for="[label, value] in detailRows" :key="label">
+                    <dt class="font-medium">{{ label }}</dt>
+                    <dd>{{ value }}</dd>
+                  </template>
+                </dl>
+              </template>
+            </div>
           </li>
         </ul>
         <button class="mt-3 rounded border px-3 py-1 text-sm" @click="showForm = !showForm">

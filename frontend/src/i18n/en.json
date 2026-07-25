@@ -148,6 +148,7 @@
   },
   "onboarding": {
     "history": "Previous submissions",
+    "notProvided": "Not provided",
     "newSubmission": "New submission",
     "diagnosisType": "Diagnosis",
     "diagnosisYear": "Diagnosis year",

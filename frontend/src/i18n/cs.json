@@ -148,6 +148,7 @@
   },
   "onboarding": {
     "history": "Předchozí odeslání",
+    "notProvided": "Neuvedeno",
     "newSubmission": "Nové odeslání",
     "diagnosisType": "Diagnóza",
     "diagnosisYear": "Rok diagnózy",
