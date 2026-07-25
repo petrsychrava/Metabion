@@ -7,7 +7,7 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 import { server } from '../msw/server'
 import CheckInEditView from '@/views/CheckInEditView.vue'
 import en from '@/i18n/en.json'
-import type { SymptomCheckInRequest, SymptomQuestionnaire } from '@/types/api'
+import type { SymptomCheckInRequest, SymptomCheckInResponse, SymptomQuestionnaire } from '@/types/api'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
@@ -127,5 +127,58 @@ describe('CheckInEditView', () => {
     await flushPromises()
     expect(wrapper.text()).toContain(en.errors.request_failed)
     expect(wrapper.find('[data-testid="save"]').exists()).toBe(false)
+  })
+
+  it('renders a read-only summary without a save button for a retired questionnaire version', async () => {
+    const retiredCheckIn: SymptomCheckInResponse = {
+      id: 5,
+      patientProfileId: 1,
+      questionnaireVersionId: 999,
+      checkInDate: '2026-07-24',
+      flareState: 'SUSPECTED_FLARE',
+      totalSymptomScore: 7,
+      notes: 'Felt bloated',
+      answers: [
+        {
+          questionId: 101, questionStableKey: 'pain', label: 'Abdominal pain (old wording)',
+          answerType: 'SINGLE_CHOICE', optionId: 1002, optionStableKey: 'severe', optionLabel: 'Severe',
+          answerText: null, answerNumeric: null, numericScore: 3,
+        },
+        {
+          questionId: 102, questionStableKey: 'stools', label: 'Stool count',
+          answerType: 'NUMERIC', optionId: null, optionStableKey: null, optionLabel: null,
+          answerText: null, answerNumeric: 4, numericScore: 1,
+        },
+      ],
+      createdAt: '2026-07-24T08:00:00',
+      updatedAt: '2026-07-24T08:00:00',
+    }
+    let posted = false
+    server.use(
+      http.get('/api/symptom-questionnaires/active', () => HttpResponse.json(questionnaire)),
+      http.get('/api/symptom-check-ins/2026-07-24', () => HttpResponse.json(retiredCheckIn)),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/symptom-check-ins', () => {
+        posted = true
+        return HttpResponse.json({ id: 1 })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/check-ins/2026-07-24')
+    const wrapper = mount(CheckInEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    const notice = wrapper.find('[data-testid="retired-notice"]')
+    expect(notice.exists()).toBe(true)
+    expect(notice.text()).toBe(en.checkIn.retiredVersionNotice)
+    expect(wrapper.text()).toContain('Abdominal pain (old wording)')
+    expect(wrapper.text()).toContain('Severe')
+    expect(wrapper.text()).toContain('Stool count')
+    expect(wrapper.text()).toContain('4')
+    expect(wrapper.text()).toContain('Felt bloated')
+    expect(wrapper.text()).toContain('7')
+    expect(wrapper.text()).toContain(en.checkIn.FlareState.SUSPECTED_FLARE)
+    expect(wrapper.find('[data-testid="save"]').exists()).toBe(false)
+    expect(posted).toBe(false)
   })
 })

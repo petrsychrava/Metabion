@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { symptomApi } from '@/api/symptoms'
 import { useApiError } from '@/composables/useApiError'
 import { dateRangeError } from '@/utils/dateRange'
+import { convertGlucose } from '@/utils/glucose'
 import LineChart from '@/components/LineChart.vue'
 import type { DailyTrendResponse } from '@/types/api'
 
@@ -49,11 +50,13 @@ const symptomDataset = computed(() => [
 ])
 
 function measurementData(kind: 'glucoseMeasurements' | 'ketoneMeasurements') {
-  // Average per day when multiple measurements exist.
+  // Average per day when multiple measurements exist. The backend returns each
+  // glucose point in its own unit, so normalize to the trend unit first.
   return trend.value?.days.map((d) => {
     const points = d[kind]
     if (points.length === 0) return null
-    return points.reduce((sum, p) => sum + p.value, 0) / points.length
+    const target = trend.value!.glucoseUnit
+    return points.reduce((sum, p) => sum + (kind === 'glucoseMeasurements' ? convertGlucose(p.value, p.unit, target) : p.value), 0) / points.length
   }) ?? []
 }
 </script>

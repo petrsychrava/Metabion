@@ -115,6 +115,7 @@
     "notes": "Poznámky",
     "history": "Minulé kontroly",
     "score": "Skóre",
+    "retiredVersionNotice": "Tato kontrola byla vyplněna ve starší verzi dotazníku a nelze ji již upravit.",
     "FlareState": { "NO_FLARE": "Bez vzplanutí", "SUSPECTED_FLARE": "Podezření na vzplanutí", "ACTIVE_FLARE": "Aktivní vzplanutí" }
   },
   "trends": {

@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { ApiError } from '@/api/http'
 import { symptomApi } from '@/api/symptoms'
 import { useApiError } from '@/composables/useApiError'
-import type { AnswerRequest, FlareState, SymptomQuestionnaire } from '@/types/api'
+import type { AnswerRequest, FlareState, SymptomCheckInResponse, SymptomQuestionnaire } from '@/types/api'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -15,6 +15,9 @@ const checkInDate = computed(() => route.params.date as string)
 const flareOptions: FlareState[] = ['NO_FLARE', 'SUSPECTED_FLARE', 'ACTIVE_FLARE']
 
 const questionnaire = ref<SymptomQuestionnaire | null>(null)
+// Set when the stored check-in belongs to a retired questionnaire version:
+// the backend rejects edits, so only a read-only summary is shown.
+const retiredCheckIn = ref<SymptomCheckInResponse | null>(null)
 const flareState = ref<FlareState>('NO_FLARE')
 const notes = ref('')
 // questionId -> partial answer state
@@ -43,6 +46,8 @@ onMounted(async () => {
           }
         }
       }
+    } else {
+      retiredCheckIn.value = existing
     }
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) {
@@ -97,6 +102,20 @@ async function save() {
     <h1 class="text-2xl font-semibold">{{ t('checkIn.title') }} — {{ checkInDate }}</h1>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
     <p v-else-if="loadFailed" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
+    <div v-else-if="retiredCheckIn" class="mt-4 space-y-4">
+      <p data-testid="retired-notice" class="rounded bg-amber-50 p-3 text-sm text-amber-800">{{ t('checkIn.retiredVersionNotice') }}</p>
+      <div class="space-y-2 rounded border bg-white p-4">
+        <p><span class="font-medium">{{ t('checkIn.flareState') }}:</span> {{ t(`checkIn.FlareState.${retiredCheckIn.flareState}`) }}</p>
+        <p v-if="retiredCheckIn.totalSymptomScore !== null">
+          <span class="font-medium">{{ t('checkIn.score') }}:</span> {{ retiredCheckIn.totalSymptomScore }}
+        </p>
+        <p v-if="retiredCheckIn.notes"><span class="font-medium">{{ t('checkIn.notes') }}:</span> {{ retiredCheckIn.notes }}</p>
+      </div>
+      <div v-for="a in retiredCheckIn.answers" :key="a.questionId" class="rounded border bg-white p-4">
+        <p class="font-medium">{{ a.label }}</p>
+        <p class="mt-1 text-sm">{{ a.optionLabel ?? a.answerText ?? a.answerNumeric }}</p>
+      </div>
+    </div>
     <div v-else-if="questionnaire" class="mt-4 space-y-6">
       <p v-if="message" class="rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
       <p v-if="saved" class="rounded bg-green-50 p-3 text-sm text-green-700">{{ t('common.saved') }}</p>

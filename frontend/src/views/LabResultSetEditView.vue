@@ -32,7 +32,10 @@ function newResult(): LabResultRequest {
 
 async function loadExisting() {
   if (id.value === null) {
-    collectionDate.value = new Date().toISOString().slice(0, 10)
+    // Browser-local date: toISOString() is UTC and can land on "tomorrow"
+    // for UTC- evening users, which the backend @PastOrPresent rejects.
+    const d = new Date()
+    collectionDate.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     return
   }
   const set: LabResultSetResponse = await labApi.getResultSet(id.value)

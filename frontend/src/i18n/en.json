@@ -115,6 +115,7 @@
     "notes": "Notes",
     "history": "Past check-ins",
     "score": "Score",
+    "retiredVersionNotice": "This check-in was recorded with an older questionnaire version and can no longer be edited.",
     "FlareState": { "NO_FLARE": "No flare", "SUSPECTED_FLARE": "Suspected flare", "ACTIVE_FLARE": "Active flare" }
   },
   "trends": {
