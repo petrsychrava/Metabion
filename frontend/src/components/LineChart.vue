@@ -9,6 +9,7 @@ export default {
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { isDark } from '@/theme'
 import {
   CategoryScale,
   Chart as ChartJS,
@@ -38,11 +39,19 @@ const chartData = computed(() => ({
   })),
 }))
 
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  scales: { y: { beginAtZero: true } },
-}
+const chartOptions = computed(() => {
+  const text = isDark.value ? '#d1d5db' : '#4b5563'
+  const grid = isDark.value ? '#374151' : '#e5e7eb'
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { ticks: { color: text }, grid: { color: grid } },
+      y: { beginAtZero: true, ticks: { color: text }, grid: { color: grid } },
+    },
+    plugins: { legend: { labels: { color: text } } },
+  }
+})
 </script>
 
 <template>
