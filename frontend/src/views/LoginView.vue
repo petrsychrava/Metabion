@@ -37,16 +37,16 @@ async function submit() {
   <main class="mx-auto max-w-sm p-8">
     <h1 class="text-2xl font-semibold">{{ t('auth.login') }}</h1>
     <form class="mt-6 space-y-4" @submit.prevent="submit">
-      <p v-if="message" class="rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
+      <p v-if="message" class="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
       <div>
         <label class="block text-sm font-medium" for="email">{{ t('auth.email') }}</label>
         <input id="email" v-model="email" type="email" required autocomplete="email"
-               class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+               class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
       </div>
       <div>
         <label class="block text-sm font-medium" for="password">{{ t('auth.password') }}</label>
         <input id="password" v-model="password" type="password" required autocomplete="current-password"
-               class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+               class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
       </div>
       <button type="submit" :disabled="submitting"
               class="w-full rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">
@@ -54,8 +54,8 @@ async function submit() {
       </button>
     </form>
     <div class="mt-4 flex justify-between text-sm">
-      <router-link to="/forgot-password" class="text-blue-600">{{ t('auth.forgotPassword') }}</router-link>
-      <router-link to="/register" class="text-blue-600">{{ t('auth.register') }}</router-link>
+      <router-link to="/forgot-password" class="text-blue-600 dark:text-blue-400">{{ t('auth.forgotPassword') }}</router-link>
+      <router-link to="/register" class="text-blue-600 dark:text-blue-400">{{ t('auth.register') }}</router-link>
     </div>
   </main>
 </template>

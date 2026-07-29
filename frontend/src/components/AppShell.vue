@@ -50,30 +50,30 @@ async function logout() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <header class="border-b bg-white">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <header class="border-b bg-white dark:border-gray-700 dark:bg-gray-800">
       <div class="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3">
         <span class="text-lg font-semibold">{{ t('app.title') }}</span>
         <nav class="flex flex-1 flex-wrap gap-3 text-sm">
           <router-link v-for="link in links" :key="link.to" :to="link.to"
-                       class="text-gray-700 hover:text-blue-700"
-                       :active-class="link.to === '/' ? '' : 'font-semibold text-blue-700'"
-                       exact-active-class="font-semibold text-blue-700">
+                       class="text-gray-700 hover:text-blue-700 dark:text-gray-300 dark:hover:text-blue-300"
+                       :active-class="link.to === '/' ? '' : 'font-semibold text-blue-700 dark:text-blue-300'"
+                       exact-active-class="font-semibold text-blue-700 dark:text-blue-300">
             {{ link.label }}
           </router-link>
         </nav>
-        <select :value="locale" class="rounded border border-gray-300 px-2 py-1 text-sm" @change="switchLocale">
+        <select :value="locale" class="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800" @change="switchLocale">
           <option value="en">EN</option>
           <option value="cs">CS</option>
         </select>
         <select v-model="theme" :aria-label="t('theme.label')"
-                class="rounded border border-gray-300 px-2 py-1 text-sm"
+                class="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800"
                 @change="switchTheme">
           <option value="SYSTEM">{{ t('theme.system') }}</option>
           <option value="LIGHT">{{ t('theme.light') }}</option>
           <option value="DARK">{{ t('theme.dark') }}</option>
         </select>
-        <button class="text-sm text-gray-700 hover:text-blue-700" @click="logout">{{ t('nav.logout') }}</button>
+        <button class="text-sm text-gray-700 hover:text-blue-700 dark:text-gray-300 dark:hover:text-blue-300" @click="logout">{{ t('nav.logout') }}</button>
       </div>
     </header>
     <main class="mx-auto max-w-5xl px-4 py-6">

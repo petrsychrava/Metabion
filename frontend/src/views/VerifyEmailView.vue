@@ -28,9 +28,9 @@ onMounted(async () => {
   <main class="mx-auto max-w-sm p-8">
     <p v-if="loading">{{ t('common.loading') }}</p>
     <template v-else>
-      <p v-if="verified" class="rounded bg-green-50 p-3 text-sm text-green-700">{{ t('auth.verified') }}</p>
-      <p v-else class="rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
-      <router-link to="/login" class="mt-4 inline-block text-blue-600">{{ t('auth.login') }}</router-link>
+      <p v-if="verified" class="rounded bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">{{ t('auth.verified') }}</p>
+      <p v-else class="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
+      <router-link to="/login" class="mt-4 inline-block text-blue-600 dark:text-blue-400">{{ t('auth.login') }}</router-link>
     </template>
   </main>
 </template>
