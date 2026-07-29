@@ -3,8 +3,10 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ApiError } from '@/api/http'
+import { accountApi } from '@/api/account'
 import { dietLogApi } from '@/api/dietLogs'
 import { useApiError } from '@/composables/useApiError'
+import { instantWithinDate } from '@/utils/patientTimezone'
 import FieldError from '@/components/FieldError.vue'
 import PhotoUpload from '@/components/PhotoUpload.vue'
 import type {
@@ -42,6 +44,9 @@ const measurements = reactive<DailyMeasurementEntryRequest[]>([])
 const loading = ref(true)
 const loadFailed = ref(false)
 const saved = ref(false)
+// Backend validates measuredAt against the log date's day in the patient
+// timezone; null falls back to browser-local semantics.
+const patientTimezone = ref<string | null>(null)
 
 const adherenceOptions: DietAdherenceLevel[] = ['FULL', 'MOSTLY', 'PARTIAL', 'LOW', 'NOT_FOLLOWED']
 const appetiteOptions: AppetiteLevel[] = ['LOW', 'NORMAL', 'HIGH', 'VARIABLE']
@@ -52,10 +57,13 @@ const measurementTypeOptions: MeasurementType[] = ['GLUCOSE', 'KETONE']
 const measurementUnitOptions: MeasurementUnit[] = ['MMOL_L', 'MG_DL']
 const measurementContextOptions: MeasurementContext[] = ['FASTING', 'PRE_MEAL', 'POST_MEAL', 'BEDTIME', 'SYMPTOMS', 'OTHER']
 
-function nowLocalIsoMinute(): string {
-  const d = new Date()
-  d.setSeconds(0, 0)
-  return d.toISOString()
+function unitOptionsFor(type: MeasurementType): MeasurementUnit[] {
+  // The backend only accepts MMOL_L for ketone measurements.
+  return type === 'KETONE' ? ['MMOL_L'] : measurementUnitOptions
+}
+
+function onMeasurementTypeChange(m: DailyMeasurementEntryRequest) {
+  if (m.measurementType === 'KETONE') m.unit = 'MMOL_L'
 }
 
 function toLocalInputValue(iso: string): string {
@@ -65,6 +73,9 @@ function toLocalInputValue(iso: string): string {
 }
 
 onMounted(async () => {
+  accountApi.getProfile()
+    .then((p) => { patientTimezone.value = p.timezone })
+    .catch(() => { /* keep the browser-local fallback */ })
   try {
     const log = await dietLogApi.get(logDate.value)
     adherenceLevel.value = log.adherenceLevel
@@ -133,7 +144,9 @@ function addDeviation() {
 }
 
 function addMeasurement() {
-  measurements.push({ measurementType: 'GLUCOSE', value: 5.0, unit: 'MMOL_L', measuredAt: nowLocalIsoMinute(), context: 'FASTING', notes: '' })
+  // Default into the edited log's day — "now" only when editing today's log —
+  // otherwise the replacing save is rejected by MeasurementValidator.
+  measurements.push({ measurementType: 'GLUCOSE', value: 5.0, unit: 'MMOL_L', measuredAt: instantWithinDate(logDate.value, patientTimezone.value), context: 'FASTING', notes: '' })
 }
 
 function onMeasuredAtInput(m: DailyMeasurementEntryRequest, event: Event) {
@@ -242,15 +255,16 @@ async function save() {
       <div class="rounded border bg-white p-4 dark:bg-gray-800">
         <div class="flex items-center justify-between">
           <h2 class="font-medium">{{ t('dietLog.measurements') }}</h2>
-          <button class="rounded border px-3 py-1 text-sm" @click="addMeasurement">{{ t('dietLog.addMeasurement') }}</button>
+          <button data-testid="add-measurement" class="rounded border px-3 py-1 text-sm" @click="addMeasurement">{{ t('dietLog.addMeasurement') }}</button>
         </div>
         <div v-for="(m, i) in measurements" :key="i" class="mt-3 grid gap-2 border-t pt-3 sm:grid-cols-[8rem_6rem_7rem_1fr_auto]">
-          <select v-model="m.measurementType" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
+          <select v-model="m.measurementType" :data-testid="`measurement-type-${i}`" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"
+                  @change="onMeasurementTypeChange(m)">
             <option v-for="o in measurementTypeOptions" :key="o" :value="o">{{ t(`enums.MeasurementType.${o}`) }}</option>
           </select>
           <input v-model.number="m.value" type="number" step="0.1" min="0" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
-          <select v-model="m.unit" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
-            <option v-for="o in measurementUnitOptions" :key="o" :value="o">{{ t(`enums.MeasurementUnit.${o}`) }}</option>
+          <select v-model="m.unit" :data-testid="`measurement-unit-${i}`" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
+            <option v-for="o in unitOptionsFor(m.measurementType)" :key="o" :value="o">{{ t(`enums.MeasurementUnit.${o}`) }}</option>
           </select>
           <div class="flex gap-2">
             <select v-model="m.context" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">

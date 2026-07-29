@@ -14,6 +14,17 @@ function todayIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+function todayInZone(timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const get = (type: string) => parts.find((p) => p.type === type)?.value
+  return `${get('year')}-${get('month')}-${get('day')}`
+}
+
 describe('DashboardView', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
@@ -32,6 +43,26 @@ describe('DashboardView', () => {
     server.use(
       http.get(`/api/diet-logs/${todayIso()}`, () => HttpResponse.json({ id: 1, logDate: todayIso() })),
       http.get(`/api/symptom-check-ins/${todayIso()}`, () => HttpResponse.json({ id: 2, checkInDate: todayIso() })),
+    )
+    const wrapper = mount(DashboardView, { global: { plugins: [createPinia(), i18n] } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="diet-log-status"]').text()).toContain(en.dashboard.dietLogDone)
+    expect(wrapper.find('[data-testid="check-in-status"]').text()).toContain(en.dashboard.checkInDone)
+  })
+
+  it('derives today from the patient profile timezone', async () => {
+    const today = todayInZone('Pacific/Kiritimati')
+    server.use(
+      http.get('/api/account/profile', () => HttpResponse.json({
+        dateOfBirth: '1990-01-01',
+        sex: 'PREFER_NOT_TO_SAY',
+        countryRegion: 'CZ',
+        timezone: 'Pacific/Kiritimati',
+      })),
+      // Only the Kiritimati-date endpoints exist; a browser-local date would
+      // hit unhandled routes and the statuses would stay "open".
+      http.get(`/api/diet-logs/${today}`, () => HttpResponse.json({ id: 1, logDate: today })),
+      http.get(`/api/symptom-check-ins/${today}`, () => HttpResponse.json({ id: 2, checkInDate: today })),
     )
     const wrapper = mount(DashboardView, { global: { plugins: [createPinia(), i18n] } })
     await flushPromises()
