@@ -13,6 +13,7 @@ The implemented product areas are:
 - Symptom questionnaires, daily check-ins, scoring, patient/clinical trends, and SVG trend rendering.
 - Versioned and localized education content with authoring, review, approval, publishing, and patient completion tracking.
 - Theme, language, and glucose-unit preferences.
+- A patient-facing single-page application in `frontend/` (Vue 3 + TypeScript + Vite) covering patient flows — auth, dashboard, diet logs, symptom check-ins, trends, labs, onboarding, education, and account/access-token management — session-authenticated against the REST API.
 - Scoped patient access tokens and a patient-facing MCP tool server.
 - A custom OAuth 2.0 authorization-code flow with PKCE, dynamic client registration, client metadata discovery, rotating refresh tokens, and token-family reuse revocation for MCP clients.
 - An MFA extension point through `MfaChallengeService`; the default implementation remains a no-op.
@@ -27,6 +28,7 @@ Metabion/
 ├── settings.gradle
 ├── AGENTS.md
 ├── plans/                         # Historical auth plans and current auth architecture notes
+├── frontend/                      # Patient SPA (Vue 3 + TS + Vite); own package.json, see frontend/README.md
 ├── src/
 │   ├── main/
 │   │   ├── java/com/metabion/
@@ -71,7 +73,7 @@ Use the Gradle wrapper rather than a system Gradle installation.
 
 Jacoco HTML output is generated under `build/reports/jacoco/test/html/`. Local startup expects PostgreSQL and uses environment-driven database and mail settings; the default datasource URL is `jdbc:postgresql://localhost:5432/metabion`.
 
-The root `package.json` does not define a frontend build or usable test workflow. Do not substitute `npm test` for Gradle verification.
+The root `package.json` is a stub and stays untouched. The patient SPA lives in `frontend/` (Vue 3 + TypeScript + Vite, session-authenticated against the same backend via the Vite dev proxy on :5173 → :8080); its commands are `npm run dev|test|typecheck|build` run from `frontend/` — see `frontend/README.md`. Do not substitute `npm test` for Gradle verification of the backend.
 
 ## Technology Stack
 

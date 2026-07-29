@@ -1,6 +1,8 @@
 package com.metabion.controller.api;
 
+import com.metabion.dto.LanguagePreferenceRequest;
 import com.metabion.dto.PatientProfileForm;
+import com.metabion.dto.ThemePreferenceRequest;
 import com.metabion.service.UserPreferenceService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
@@ -29,6 +31,30 @@ public class AccountController {
     public Map<String, String> updatePatientProfile(@Valid @RequestBody PatientProfileForm form,
                                                     Authentication authentication) {
         preferences.updatePatientProfile(authentication, form);
+        return Map.of("status", "ok");
+    }
+
+    @GetMapping("/api/account/preferences/language")
+    public Map<String, String> languagePreference(Authentication authentication) {
+        return Map.of("language", preferences.currentLanguagePreference(authentication).name());
+    }
+
+    @PutMapping("/api/account/preferences/language")
+    public Map<String, String> updateLanguagePreference(@Valid @RequestBody LanguagePreferenceRequest request,
+                                                        Authentication authentication) {
+        preferences.updateLanguagePreference(authentication, request.language());
+        return Map.of("status", "ok");
+    }
+
+    @GetMapping("/api/account/preferences/theme")
+    public Map<String, String> themePreference(Authentication authentication) {
+        return Map.of("theme", preferences.currentThemePreference(authentication).name());
+    }
+
+    @PutMapping("/api/account/preferences/theme")
+    public Map<String, String> updateThemePreference(@Valid @RequestBody ThemePreferenceRequest request,
+                                                     Authentication authentication) {
+        preferences.updateThemePreference(authentication, request.theme());
         return Map.of("status", "ok");
     }
 }
