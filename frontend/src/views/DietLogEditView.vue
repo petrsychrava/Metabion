@@ -6,7 +6,7 @@ import { ApiError } from '@/api/http'
 import { accountApi } from '@/api/account'
 import { dietLogApi } from '@/api/dietLogs'
 import { useApiError } from '@/composables/useApiError'
-import { instantWithinDate } from '@/utils/patientTimezone'
+import { formatForDateTimeInput, instantWithinDate, parseDateTimeInput } from '@/utils/patientTimezone'
 import FieldError from '@/components/FieldError.vue'
 import PhotoUpload from '@/components/PhotoUpload.vue'
 import type {
@@ -66,10 +66,10 @@ function onMeasurementTypeChange(m: DailyMeasurementEntryRequest) {
   if (m.measurementType === 'KETONE') m.unit = 'MMOL_L'
 }
 
+// The control shows and edits wall time in the patient timezone so the visible
+// date stays consistent with the log's patient-timezone day.
 function toLocalInputValue(iso: string): string {
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return formatForDateTimeInput(iso, patientTimezone.value)
 }
 
 onMounted(async () => {
@@ -152,7 +152,7 @@ function addMeasurement() {
 function onMeasuredAtInput(m: DailyMeasurementEntryRequest, event: Event) {
   const value = (event.target as HTMLInputElement).value
   if (!value) return
-  m.measuredAt = new Date(value).toISOString()
+  m.measuredAt = parseDateTimeInput(value, patientTimezone.value)
 }
 
 function onPhotoUploaded(photo: DietLogPhotoUploadResponse) {

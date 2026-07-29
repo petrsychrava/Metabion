@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { educationApi } from '@/api/education'
 import { useApiError } from '@/composables/useApiError'
 import type { EducationLesson, EducationModuleDetail } from '@/types/api'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const { message, capture } = useApiError()
 
@@ -29,6 +29,8 @@ async function load() {
 }
 
 onMounted(load)
+// Lesson content is localized server-side; refetch after a language switch.
+watch(locale, load)
 
 async function toggleLesson(lesson: EducationLesson) {
   try {

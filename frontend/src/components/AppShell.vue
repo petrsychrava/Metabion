@@ -44,8 +44,14 @@ async function switchTheme() {
 }
 
 async function logout() {
-  await auth.logout()
-  await router.push('/login')
+  try {
+    await auth.logout()
+  } catch {
+    // Local auth state is already cleared; a failed request must not strand the
+    // user on an authenticated page. The server session expires on its own.
+  } finally {
+    await router.push('/login')
+  }
 }
 </script>
 

@@ -74,4 +74,18 @@ describe('AppShell', () => {
     expect(localStorage.getItem('metabion.theme')).toBe('DARK')
     expect(document.documentElement.classList.contains('dark')).toBe(true)
   })
+
+  it('navigates to login even when the logout request fails', async () => {
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/auth/logout', () => HttpResponse.json({ error: 'request_failed' }, { status: 500 })),
+    )
+    const router = makeRouter()
+    await router.push('/')
+    const wrapper = mount(AppShell, { global: { plugins: [createPinia(), makeI18n(), router] } })
+    // The shell's only button is the logout button.
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/login')
+  })
 })

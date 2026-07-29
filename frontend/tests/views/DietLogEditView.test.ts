@@ -217,6 +217,59 @@ describe('DietLogEditView', () => {
     expect(received!.measurements[0].measuredAt).toBe('2026-07-24T12:00:00.000Z')
   })
 
+  it('displays and edits measuredAt in the patient timezone', async () => {
+    let received: DailyDietLogRequest | null = null
+    server.use(
+      http.get('/api/account/profile', () => HttpResponse.json({
+        dateOfBirth: '1990-01-01',
+        sex: 'PREFER_NOT_TO_SAY',
+        countryRegion: 'CZ',
+        timezone: 'Pacific/Kiritimati', // UTC+14
+      })),
+      http.get('/api/diet-logs/2026-07-24', () => HttpResponse.json({
+        id: 1,
+        patientProfileId: 1,
+        patientEmail: 'p@example.com',
+        logDate: '2026-07-24',
+        adherenceLevel: 'FULL',
+        appetiteLevel: 'NORMAL',
+        notes: null,
+        metadata: null,
+        createdAt: '2026-07-24T08:00:00Z',
+        updatedAt: '2026-07-24T08:00:00Z',
+        meals: [],
+        deviations: [],
+        photoReferences: [],
+        measurements: [{
+          id: 7, patientProfileId: 1, dailyDietLogId: 1,
+          measurementType: 'GLUCOSE', value: 5.2, unit: 'MMOL_L',
+          measuredAt: '2026-07-24T07:00:00Z', context: 'FASTING',
+          notes: null, metadata: null, createdAt: '2026-07-24T07:00:00Z',
+        }],
+      })),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/diet-logs', async ({ request }) => {
+        received = (await request.json()) as DailyDietLogRequest
+        return HttpResponse.json({ id: 1, logDate: '2026-07-24' })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/diet-logs/2026-07-24')
+    const wrapper = mount(DietLogEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    // 07:00Z reads as 21:00 the same day in Kiritimati (UTC+14).
+    const input = wrapper.find('input[type="datetime-local"]')
+    expect((input.element as HTMLInputElement).value).toBe('2026-07-24T21:00')
+
+    // Editing re-interprets the wall time in the patient timezone: 08:00 local = 18:00Z the previous day.
+    await input.setValue('2026-07-24T08:00')
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await flushPromises()
+    expect(received).not.toBeNull()
+    expect(received!.measurements[0].measuredAt).toBe('2026-07-23T18:00:00.000Z')
+  })
+
   it('restricts ketone measurements to MMOL_L', async () => {
     server.use(
       http.get('/api/diet-logs/2026-07-24', () => HttpResponse.json({ error: 'not_found' }, { status: 404 })),

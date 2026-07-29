@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { educationApi } from '@/api/education'
 import { useApiError } from '@/composables/useApiError'
 import type { EducationModuleSummary } from '@/types/api'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { message, capture } = useApiError()
 const modules = ref<EducationModuleSummary[]>([])
 const loading = ref(true)
 
-onMounted(async () => {
+async function load() {
   try {
     modules.value = await educationApi.listModules()
   } catch (e) {
@@ -18,7 +18,11 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(load)
+// Module titles/summaries are localized server-side; refetch after a language switch.
+watch(locale, load)
 </script>
 
 <template>

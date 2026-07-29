@@ -85,3 +85,67 @@ export function instantWithinDate(dateIso: string, timezone: string | null): str
   noon.setSeconds(0, 0)
   return noon.toISOString()
 }
+
+/** Wall-clock reading of an ISO instant in `timezone` as a datetime-local input value. */
+function zonedDateTimeInputValue(iso: string, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date(iso))
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${get('year')}-${get('month')}-${get('day')}T${pad(Number(get('hour')) % 24)}:${get('minute')}`
+}
+
+/** UTC instant whose wall-clock reading in `timezone` matches a datetime-local input value. */
+function zonedDateTimeInputToUtc(value: string, timezone: string): Date {
+  const guess = new Date(`${value}:00Z`)
+  // The zone offset is evaluated at the guess first, then refined at the
+  // candidate, so wall times near a DST transition resolve with the offset
+  // that actually applies at the resulting instant. During the repeated
+  // autumn hour the later occurrence wins; that instant is still valid.
+  let candidate = guess.getTime() - (wallClockMillis(guess, timezone) - guess.getTime())
+  candidate = guess.getTime() - (wallClockMillis(new Date(candidate), timezone) - candidate)
+  return new Date(candidate)
+}
+
+function browserDateTimeInputValue(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/**
+ * Formats an ISO instant for a datetime-local input in the patient timezone, so
+ * the visible date stays consistent with the log's patient-timezone day.
+ * Without a known timezone, falls back to browser-local semantics.
+ */
+export function formatForDateTimeInput(iso: string, timezone: string | null): string {
+  if (timezone) {
+    try {
+      return zonedDateTimeInputValue(iso, timezone)
+    } catch {
+      // Unknown/invalid zone id — fall through to browser-local formatting.
+    }
+  }
+  return browserDateTimeInputValue(iso)
+}
+
+/**
+ * Parses a datetime-local input value back to an ISO instant, interpreting the
+ * wall-clock reading in the patient timezone. Without a known timezone, falls
+ * back to browser-local semantics.
+ */
+export function parseDateTimeInput(value: string, timezone: string | null): string {
+  if (timezone) {
+    try {
+      return zonedDateTimeInputToUtc(value, timezone).toISOString()
+    } catch {
+      // Unknown/invalid zone id — fall through to browser-local parsing.
+    }
+  }
+  return new Date(value).toISOString()
+}

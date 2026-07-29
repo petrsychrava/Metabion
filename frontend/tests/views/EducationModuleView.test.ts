@@ -7,8 +7,9 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 import { server } from '../msw/server'
 import EducationModuleView from '@/views/EducationModuleView.vue'
 import en from '@/i18n/en.json'
+import cs from '@/i18n/cs.json'
 
-const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
+const i18n = createI18n({ legacy: false, locale: 'en', messages: { en, cs } })
 
 const moduleDetail = {
   moduleSlug: 'ibd-basics',
@@ -81,5 +82,27 @@ describe('EducationModuleView', () => {
     await toggle.trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-testid="lesson-toggle-what-is-ibd"]').text()).toContain(en.education.markIncomplete)
+  })
+
+  it('refetches localized content when the locale changes', async () => {
+    let czech = false
+    server.use(
+      http.get('/api/education/modules/ibd-basics', () =>
+        HttpResponse.json(czech
+          ? { ...moduleDetail, contentLanguage: 'CS', title: 'Základy IBD' }
+          : moduleDetail),
+      ),
+    )
+    const router = makeRouter()
+    await router.push('/education/ibd-basics')
+    const wrapper = mount(EducationModuleView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('IBD Basics')
+
+    czech = true
+    i18n.global.locale.value = 'cs'
+    await flushPromises()
+    expect(wrapper.text()).toContain('Základy IBD')
+    i18n.global.locale.value = 'en'
   })
 })
