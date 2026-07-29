@@ -4,7 +4,8 @@
   "nav": {
     "dashboard": "Přehled", "dietLogs": "Denníky stravy", "checkIns": "Kontroly",
     "trends": "Trendy", "labs": "Laboratoř", "onboarding": "Onboarding",
-    "education": "Vzdělávání", "account": "Účet", "logout": "Odhlásit se"
+    "education": "Vzdělávání", "account": "Účet", "logout": "Odhlásit se",
+    "language": "Jazyk"
   },
   "auth": {
     "login": "Přihlásit se", "register": "Vytvořit účet", "email": "E-mail", "password": "Heslo",

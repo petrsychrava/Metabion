@@ -27,6 +27,8 @@ describe('LineChart', () => {
     const line = wrapper.findComponent({ name: 'Line' })
     expect(line.props('data').labels).toEqual(['2026-07-01', '2026-07-02'])
     expect(line.props('data').datasets[0].data).toEqual([3, null])
+    expect(line.props('options').scales.y.ticks.color).toBe('#4b5563')
+    expect(line.props('options').scales.y.grid.color).toBe('#e5e7eb')
   })
 
   it('adapts grid and tick colors to the dark theme', () => {

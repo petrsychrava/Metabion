@@ -51,7 +51,7 @@ describe('AppShell', () => {
     const router = makeRouter()
     await router.push('/')
     const wrapper = mount(AppShell, { global: { plugins: [createPinia(), makeI18n(), router] } })
-    await wrapper.find('select').setValue('cs')
+    await wrapper.find('select[aria-label="Language"]').setValue('cs')
     await flushPromises()
     expect(putBody).toEqual({ language: 'CS' })
   })

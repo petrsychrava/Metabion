@@ -107,6 +107,18 @@ describe('auth store', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(true)
   })
 
+  it('fetchMe applies the persisted theme preference', async () => {
+    server.use(
+      http.get('/api/auth/me', () => HttpResponse.json({ email: 'p@example.com', roles: ['PATIENT'] })),
+      http.get('/api/account/preferences/theme', () => HttpResponse.json({ theme: 'DARK' })),
+    )
+    const { THEME_STORAGE_KEY } = await import('@/theme')
+    const auth = useAuthStore()
+    await auth.fetchMe()
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('DARK')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+  })
+
   it('login still succeeds when the theme preference fetch fails', async () => {
     server.use(
       http.post('/api/auth/login', () => HttpResponse.json({ status: 'AUTHENTICATED', email: 'p@example.com', roles: ['PATIENT'], challengeId: null, methods: null })),

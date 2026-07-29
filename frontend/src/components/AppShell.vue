@@ -62,7 +62,8 @@ async function logout() {
             {{ link.label }}
           </router-link>
         </nav>
-        <select :value="locale" class="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800" @change="switchLocale">
+        <select :value="locale" :aria-label="t('nav.language')"
+                class="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800" @change="switchLocale">
           <option value="en">EN</option>
           <option value="cs">CS</option>
         </select>

@@ -4,7 +4,8 @@
   "nav": {
     "dashboard": "Dashboard", "dietLogs": "Diet logs", "checkIns": "Check-ins",
     "trends": "Trends", "labs": "Labs", "onboarding": "Onboarding",
-    "education": "Education", "account": "Account", "logout": "Log out"
+    "education": "Education", "account": "Account", "logout": "Log out",
+    "language": "Language"
   },
   "auth": {
     "login": "Log in", "register": "Create account", "email": "Email", "password": "Password",
