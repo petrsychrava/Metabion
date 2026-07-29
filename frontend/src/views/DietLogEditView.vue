@@ -166,23 +166,23 @@ async function save() {
   <section>
     <h1 class="text-2xl font-semibold">{{ t('dietLog.title') }} — {{ logDate }}</h1>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
-    <p v-else-if="loadFailed" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
+    <p v-else-if="loadFailed" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
     <div v-else class="mt-4 space-y-6">
-      <p v-if="message" class="rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
-      <p v-if="saved" class="rounded bg-green-50 p-3 text-sm text-green-700">{{ t('common.saved') }}</p>
+      <p v-if="message" class="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
+      <p v-if="saved" class="rounded bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">{{ t('common.saved') }}</p>
 
-      <div class="grid gap-4 rounded border bg-white p-4 sm:grid-cols-2">
+      <div class="grid gap-4 rounded border bg-white p-4 dark:bg-gray-800 sm:grid-cols-2">
         <div>
           <label class="block text-sm font-medium" for="adherence">{{ t('dietLog.adherence') }}</label>
           <select id="adherence" v-model="adherenceLevel" data-testid="adherence"
-                  class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+                  class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800">
             <option v-for="o in adherenceOptions" :key="o" :value="o">{{ t(`enums.DietAdherenceLevel.${o}`) }}</option>
           </select>
           <FieldError :message="fieldErrors.adherenceLevel" />
         </div>
         <div>
           <label class="block text-sm font-medium" for="appetite">{{ t('dietLog.appetite') }}</label>
-          <select id="appetite" v-model="appetiteLevel" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+          <select id="appetite" v-model="appetiteLevel" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800">
             <option v-for="o in appetiteOptions" :key="o" :value="o">{{ t(`enums.AppetiteLevel.${o}`) }}</option>
           </select>
           <FieldError :message="fieldErrors.appetiteLevel" />
@@ -190,88 +190,88 @@ async function save() {
         <div class="sm:col-span-2">
           <label class="block text-sm font-medium" for="notes">{{ t('dietLog.notes') }}</label>
           <textarea id="notes" v-model="notes" maxlength="1000" rows="2"
-                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
           <FieldError :message="fieldErrors.notes" />
         </div>
       </div>
 
-      <div class="rounded border bg-white p-4">
+      <div class="rounded border bg-white p-4 dark:bg-gray-800">
         <div class="flex items-center justify-between">
           <h2 class="font-medium">{{ t('dietLog.meals') }}</h2>
           <button data-testid="add-meal" class="rounded border px-3 py-1 text-sm" @click="addMeal">{{ t('dietLog.addMeal') }}</button>
         </div>
         <div v-for="(meal, i) in meals" :key="i" :data-testid="`meal-row-${i}`" class="mt-3 grid gap-2 border-t pt-3 sm:grid-cols-[10rem_1fr_auto]">
-          <select v-model="meal.mealType" class="rounded border border-gray-300 px-2 py-1">
+          <select v-model="meal.mealType" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
             <option v-for="o in mealTypeOptions" :key="o" :value="o">{{ t(`enums.MealType.${o}`) }}</option>
           </select>
           <input v-model="meal.foodDescription" :data-testid="`meal-desc-${i}`" type="text" maxlength="500"
-                 :placeholder="t('dietLog.foodDescription')" class="rounded border border-gray-300 px-2 py-1" />
-          <button class="text-sm text-red-600" @click="removeMeal(i)">{{ t('common.remove') }}</button>
+                 :placeholder="t('dietLog.foodDescription')" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+          <button class="text-sm text-red-600 dark:text-red-400" @click="removeMeal(i)">{{ t('common.remove') }}</button>
         </div>
       </div>
 
-      <div class="rounded border bg-white p-4">
+      <div class="rounded border bg-white p-4 dark:bg-gray-800">
         <div class="flex items-center justify-between">
           <h2 class="font-medium">{{ t('dietLog.deviations') }}</h2>
           <button data-testid="add-deviation" class="rounded border px-3 py-1 text-sm" :disabled="meals.length === 0"
                   @click="addDeviation">{{ t('dietLog.addDeviation') }}</button>
         </div>
-        <p v-if="meals.length === 0" class="mt-2 text-sm text-gray-500">{{ t('dietLog.addMealFirst') }}</p>
+        <p v-if="meals.length === 0" class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ t('dietLog.addMealFirst') }}</p>
         <div v-for="(dev, i) in deviations" :key="i" class="mt-3 grid gap-2 border-t pt-3 sm:grid-cols-[10rem_1fr_8rem_1fr_auto]">
-          <select v-model="dev.mealIndex" :data-testid="`dev-meal-${i}`" class="rounded border border-gray-300 px-2 py-1">
+          <select v-model="dev.mealIndex" :data-testid="`dev-meal-${i}`" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
             <option v-for="(meal, mi) in meals" :key="mi" :value="mi">#{{ mi + 1 }} {{ t(`enums.MealType.${meal.mealType}`) }}</option>
           </select>
-          <select v-model="dev.deviationCategory" class="rounded border border-gray-300 px-2 py-1">
+          <select v-model="dev.deviationCategory" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
             <option v-for="o in deviationCategoryOptions" :key="o" :value="o">{{ t(`enums.DietDeviationCategory.${o}`) }}</option>
           </select>
-          <select v-model="dev.severity" class="rounded border border-gray-300 px-2 py-1">
+          <select v-model="dev.severity" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
             <option v-for="o in deviationSeverityOptions" :key="o" :value="o">{{ t(`enums.DietDeviationSeverity.${o}`) }}</option>
           </select>
           <input v-model="dev.notes" type="text" maxlength="1000" :placeholder="t('dietLog.notes')"
-                 class="rounded border border-gray-300 px-2 py-1" />
-          <button class="text-sm text-red-600" @click="deviations.splice(i, 1)">{{ t('common.remove') }}</button>
+                 class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+          <button class="text-sm text-red-600 dark:text-red-400" @click="deviations.splice(i, 1)">{{ t('common.remove') }}</button>
         </div>
       </div>
 
-      <div class="rounded border bg-white p-4">
+      <div class="rounded border bg-white p-4 dark:bg-gray-800">
         <div class="flex items-center justify-between">
           <h2 class="font-medium">{{ t('dietLog.measurements') }}</h2>
           <button class="rounded border px-3 py-1 text-sm" @click="addMeasurement">{{ t('dietLog.addMeasurement') }}</button>
         </div>
         <div v-for="(m, i) in measurements" :key="i" class="mt-3 grid gap-2 border-t pt-3 sm:grid-cols-[8rem_6rem_7rem_1fr_auto]">
-          <select v-model="m.measurementType" class="rounded border border-gray-300 px-2 py-1">
+          <select v-model="m.measurementType" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
             <option v-for="o in measurementTypeOptions" :key="o" :value="o">{{ t(`enums.MeasurementType.${o}`) }}</option>
           </select>
-          <input v-model.number="m.value" type="number" step="0.1" min="0" class="rounded border border-gray-300 px-2 py-1" />
-          <select v-model="m.unit" class="rounded border border-gray-300 px-2 py-1">
+          <input v-model.number="m.value" type="number" step="0.1" min="0" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+          <select v-model="m.unit" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
             <option v-for="o in measurementUnitOptions" :key="o" :value="o">{{ t(`enums.MeasurementUnit.${o}`) }}</option>
           </select>
           <div class="flex gap-2">
-            <select v-model="m.context" class="rounded border border-gray-300 px-2 py-1">
+            <select v-model="m.context" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
               <option v-for="o in measurementContextOptions" :key="o" :value="o">{{ t(`enums.MeasurementContext.${o}`) }}</option>
             </select>
             <input :value="toLocalInputValue(m.measuredAt)" type="datetime-local"
-                   class="rounded border border-gray-300 px-2 py-1"
+                   class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"
                    @input="onMeasuredAtInput(m, $event)" />
           </div>
-          <button class="text-sm text-red-600" @click="measurements.splice(i, 1)">{{ t('common.remove') }}</button>
+          <button class="text-sm text-red-600 dark:text-red-400" @click="measurements.splice(i, 1)">{{ t('common.remove') }}</button>
         </div>
       </div>
 
-      <div class="rounded border bg-white p-4">
+      <div class="rounded border bg-white p-4 dark:bg-gray-800">
         <h2 class="font-medium">{{ t('dietLog.photos') }}</h2>
         <PhotoUpload v-if="meals.length > 0" class="mt-2" @uploaded="onPhotoUploaded" />
-        <p v-else class="mt-2 text-sm text-gray-500">{{ t('dietLog.addMealFirst') }}</p>
+        <p v-else class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ t('dietLog.addMealFirst') }}</p>
         <div class="mt-3 flex flex-wrap gap-3">
           <figure v-for="(p, i) in photoReferences" :key="p.uploadId" class="w-32">
             <img :src="p.contentUrl" :alt="p.caption ?? ''" class="h-24 w-32 rounded border object-cover" />
             <select v-model="p.mealIndex" :data-testid="`photo-meal-${i}`"
-                    class="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-xs">
+                    class="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800">
               <option v-for="(meal, mi) in meals" :key="mi" :value="mi">#{{ mi + 1 }} {{ t(`enums.MealType.${meal.mealType}`) }}</option>
             </select>
             <input v-model="p.caption" type="text" maxlength="500" :placeholder="t('dietLog.photoCaption')"
-                   class="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-xs" />
-            <button class="mt-1 text-xs text-red-600" @click="photoReferences.splice(i, 1)">{{ t('common.remove') }}</button>
+                   class="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800" />
+            <button class="mt-1 text-xs text-red-600 dark:text-red-400" @click="photoReferences.splice(i, 1)">{{ t('common.remove') }}</button>
           </figure>
         </div>
       </div>

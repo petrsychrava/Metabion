@@ -60,23 +60,23 @@ async function load() {
     <h1 class="text-2xl font-semibold">{{ t('labs.trendTitle') }}</h1>
     <div class="mt-4 flex flex-wrap items-end gap-3">
       <label class="text-sm">{{ t('labs.selectTest') }}
-        <select v-model="selectedTest" class="ml-1 rounded border border-gray-300 px-2 py-1">
+        <select v-model="selectedTest" class="ml-1 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
           <option value="" disabled>—</option>
           <option v-for="def in tests" :key="def.code" :value="def.code">{{ def.label }}</option>
         </select>
       </label>
       <label class="text-sm">{{ t('common.from') }}
-        <input v-model="from" type="date" class="ml-1 rounded border border-gray-300 px-2 py-1" />
+        <input v-model="from" type="date" class="ml-1 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
       </label>
       <label class="text-sm">{{ t('common.to') }}
-        <input v-model="to" type="date" class="ml-1 rounded border border-gray-300 px-2 py-1" />
+        <input v-model="to" type="date" class="ml-1 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
       </label>
       <button class="rounded bg-blue-600 px-3 py-1 text-sm text-white" @click="load">{{ t('common.apply') }}</button>
     </div>
 
-    <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
+    <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
-    <div v-else-if="trend" class="mt-6 rounded border bg-white p-4">
+    <div v-else-if="trend" class="mt-6 rounded border bg-white p-4 dark:bg-gray-800">
       <h2 class="mb-2 font-medium">{{ trend.label }} ({{ trend.canonicalUnit }})</h2>
       <LineChart :labels="labels" :datasets="[{ label: trend.label, data: values }]" />
     </div>

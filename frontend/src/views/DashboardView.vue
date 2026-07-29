@@ -43,17 +43,17 @@ onMounted(async () => {
   <section>
     <h1 class="text-2xl font-semibold">{{ t('dashboard.title') }}</h1>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
-    <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
+    <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
     <div v-else class="mt-4 grid gap-4 sm:grid-cols-2">
-      <router-link :to="`/diet-logs/${todayIso()}`" class="rounded border bg-white p-4 hover:border-blue-400">
+      <router-link :to="`/diet-logs/${todayIso()}`" class="rounded border bg-white p-4 hover:border-blue-400 dark:bg-gray-800">
         <h2 class="font-medium">{{ t('dashboard.dietLog') }}</h2>
-        <p data-testid="diet-log-status" class="mt-1 text-sm" :class="dietLogDone ? 'text-green-700' : 'text-amber-700'">
+        <p data-testid="diet-log-status" class="mt-1 text-sm" :class="dietLogDone ? 'text-green-700 dark:text-green-300' : 'text-amber-700 dark:text-amber-300'">
           {{ dietLogDone ? t('dashboard.dietLogDone') : t('dashboard.dietLogOpen') }}
         </p>
       </router-link>
-      <router-link :to="`/check-ins/${todayIso()}`" class="rounded border bg-white p-4 hover:border-blue-400">
+      <router-link :to="`/check-ins/${todayIso()}`" class="rounded border bg-white p-4 hover:border-blue-400 dark:bg-gray-800">
         <h2 class="font-medium">{{ t('dashboard.checkIn') }}</h2>
-        <p data-testid="check-in-status" class="mt-1 text-sm" :class="checkInDone ? 'text-green-700' : 'text-amber-700'">
+        <p data-testid="check-in-status" class="mt-1 text-sm" :class="checkInDone ? 'text-green-700 dark:text-green-300' : 'text-amber-700 dark:text-amber-300'">
           {{ checkInDone ? t('dashboard.checkInDone') : t('dashboard.checkInOpen') }}
         </p>
       </router-link>

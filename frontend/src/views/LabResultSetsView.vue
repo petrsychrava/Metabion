@@ -64,25 +64,25 @@ async function confirmRemoval() {
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-semibold">{{ t('labs.title') }}</h1>
       <div class="flex gap-3 text-sm">
-        <router-link to="/labs/trends" class="text-blue-600">{{ t('labs.trendTitle') }}</router-link>
+        <router-link to="/labs/trends" class="text-blue-600 dark:text-blue-400">{{ t('labs.trendTitle') }}</router-link>
         <router-link to="/labs/new" class="rounded bg-blue-600 px-3 py-1 text-white">{{ t('labs.newResultSet') }}</router-link>
       </div>
     </div>
 
     <div class="mt-4 flex flex-wrap items-end gap-3">
       <label class="text-sm">{{ t('common.from') }}
-        <input v-model="from" type="date" class="ml-1 rounded border border-gray-300 px-2 py-1" />
+        <input v-model="from" type="date" class="ml-1 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
       </label>
       <label class="text-sm">{{ t('common.to') }}
-        <input v-model="to" type="date" class="ml-1 rounded border border-gray-300 px-2 py-1" />
+        <input v-model="to" type="date" class="ml-1 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
       </label>
       <button class="rounded bg-blue-600 px-3 py-1 text-sm text-white" @click="load">{{ t('common.apply') }}</button>
     </div>
 
-    <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
-    <p v-if="removalDone" class="mt-4 rounded bg-green-50 p-3 text-sm text-green-700">{{ t('labs.removalRequested') }}</p>
+    <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
+    <p v-if="removalDone" class="mt-4 rounded bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">{{ t('labs.removalRequested') }}</p>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
-    <table v-else class="mt-4 w-full border-collapse bg-white text-sm">
+    <table v-else class="mt-4 w-full border-collapse bg-white text-sm dark:bg-gray-800">
       <thead>
         <tr class="border-b text-left">
           <th class="p-2">{{ t('labs.collectionDate') }}</th>
@@ -98,8 +98,8 @@ async function confirmRemoval() {
           <td class="p-2">{{ set.confirmationStatus === 'CONFIRMED' ? t('labs.confirmed') : t('labs.unconfirmed') }}</td>
           <td class="p-2 text-right">
             <template v-if="set.createdByCurrentPatient">
-              <router-link :to="`/labs/${set.id}`" class="mr-3 text-blue-600">{{ t('labs.edit') }}</router-link>
-              <button class="text-red-600" @click="removalTarget = set; removalDone = false">{{ t('labs.requestRemoval') }}</button>
+              <router-link :to="`/labs/${set.id}`" class="mr-3 text-blue-600 dark:text-blue-400">{{ t('labs.edit') }}</router-link>
+              <button class="text-red-600 dark:text-red-400" @click="removalTarget = set; removalDone = false">{{ t('labs.requestRemoval') }}</button>
             </template>
           </td>
         </tr>
@@ -107,11 +107,11 @@ async function confirmRemoval() {
     </table>
 
     <div v-if="removalTarget" class="fixed inset-0 flex items-center justify-center bg-black/40">
-      <div class="w-full max-w-sm rounded bg-white p-6">
+      <div class="w-full max-w-sm rounded bg-white p-6 dark:bg-gray-800">
         <h2 class="font-medium">{{ t('labs.requestRemoval') }}</h2>
         <label class="mt-3 block text-sm">{{ t('labs.removalReason') }}
           <input v-model="removalReason" type="text" maxlength="500"
-                 class="mt-1 w-full rounded border border-gray-300 px-2 py-1" />
+                 class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
         </label>
         <div class="mt-4 flex justify-end gap-2">
           <button class="rounded border px-3 py-1 text-sm" @click="removalTarget = null">{{ t('common.cancel') }}</button>

@@ -127,46 +127,46 @@ async function save() {
     <h1 class="text-2xl font-semibold">{{ isNew ? t('labs.newResultSet') : t('labs.edit') }}</h1>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
     <div v-else class="mt-4 space-y-4">
-      <p v-if="message" class="rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
-      <p v-if="saved" class="rounded bg-green-50 p-3 text-sm text-green-700">{{ t('common.saved') }}</p>
+      <p v-if="message" class="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
+      <p v-if="saved" class="rounded bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">{{ t('common.saved') }}</p>
       <button v-if="conflict" data-testid="reload" class="rounded border px-3 py-1 text-sm" @click="reload">
         {{ t('labs.reload') }}
       </button>
 
-      <div class="grid gap-4 rounded border bg-white p-4 sm:grid-cols-2">
+      <div class="grid gap-4 rounded border bg-white p-4 dark:bg-gray-800 sm:grid-cols-2">
         <div>
           <label class="block text-sm font-medium" for="colDate">{{ t('labs.collectionDate') }}</label>
           <input id="colDate" v-model="collectionDate" type="date" required
-                 class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+                 class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
           <FieldError :message="fieldErrors.collectionDate" />
         </div>
         <div>
           <label class="block text-sm font-medium" for="notes">{{ t('labs.notes') }}</label>
           <input id="notes" v-model="notes" type="text" maxlength="2000"
-                 class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+                 class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
         </div>
       </div>
 
-      <div class="rounded border bg-white p-4">
+      <div class="rounded border bg-white p-4 dark:bg-gray-800">
         <div class="flex items-center justify-between">
           <h2 class="font-medium">{{ t('labs.results') }}</h2>
           <button data-testid="add-result" class="rounded border px-3 py-1 text-sm"
                   @click="results.push(newResult())">{{ t('labs.addResult') }}</button>
         </div>
         <div v-for="(r, i) in results" :key="i" class="mt-3 grid gap-2 border-t pt-3 sm:grid-cols-[1fr_6rem_6rem_6rem_6rem_auto]">
-          <select v-model="r.testCode" class="rounded border border-gray-300 px-2 py-1" @change="onTestChange(r)">
+          <select v-model="r.testCode" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" @change="onTestChange(r)">
             <option v-for="def in tests" :key="def.code" :value="def.code">{{ def.label }}</option>
           </select>
           <input v-model.number="r.value" :data-testid="`result-value-${i}`" type="number" step="any" min="0"
-                 class="rounded border border-gray-300 px-2 py-1" />
-          <select v-model="r.unit" class="rounded border border-gray-300 px-2 py-1">
+                 class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+          <select v-model="r.unit" class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
             <option v-for="u in tests.find((d) => d.code === r.testCode)?.allowedUnits ?? [r.unit]" :key="u" :value="u">{{ u }}</option>
           </select>
           <input v-model.number="r.referenceLower" type="number" step="any" min="0" :placeholder="t('labs.referenceLower')"
-                 class="rounded border border-gray-300 px-2 py-1" />
+                 class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
           <input v-model.number="r.referenceUpper" type="number" step="any" min="0" :placeholder="t('labs.referenceUpper')"
-                 class="rounded border border-gray-300 px-2 py-1" />
-          <button class="text-sm text-red-600" @click="results.splice(i, 1)">{{ t('common.remove') }}</button>
+                 class="rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+          <button class="text-sm text-red-600 dark:text-red-400" @click="results.splice(i, 1)">{{ t('common.remove') }}</button>
         </div>
       </div>
 
