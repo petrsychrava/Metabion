@@ -5,11 +5,23 @@ import { server } from '../msw/server'
 import { useAuthStore } from '@/stores/auth'
 import { i18n, LOCALE_STORAGE_KEY } from '@/i18n'
 
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  configurable: true,
+  value: (query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }),
+})
+
 describe('auth store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
     i18n.global.locale.value = 'en'
+    document.documentElement.classList.remove('dark')
   })
 
   it('fetchMe sets authenticated identity', async () => {
@@ -81,5 +93,30 @@ describe('auth store', () => {
     expect(res.status).toBe('AUTHENTICATED')
     expect(auth.status).toBe('authenticated')
     expect(i18n.global.locale.value).toBe('en')
+  })
+
+  it('login applies the persisted theme preference', async () => {
+    server.use(
+      http.post('/api/auth/login', () => HttpResponse.json({ status: 'AUTHENTICATED', email: 'p@example.com', roles: ['PATIENT'], challengeId: null, methods: null })),
+      http.get('/api/account/preferences/theme', () => HttpResponse.json({ theme: 'DARK' })),
+    )
+    const { THEME_STORAGE_KEY } = await import('@/theme')
+    const auth = useAuthStore()
+    await auth.login('p@example.com', 'password-123')
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('DARK')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+  })
+
+  it('login still succeeds when the theme preference fetch fails', async () => {
+    server.use(
+      http.post('/api/auth/login', () => HttpResponse.json({ status: 'AUTHENTICATED', email: 'p@example.com', roles: ['PATIENT'], challengeId: null, methods: null })),
+      http.get('/api/account/preferences/theme', () => new HttpResponse(null, { status: 500 })),
+    )
+    const { THEME_STORAGE_KEY } = await import('@/theme')
+    const auth = useAuthStore()
+    const res = await auth.login('p@example.com', 'password-123')
+    expect(res.status).toBe('AUTHENTICATED')
+    expect(auth.status).toBe('authenticated')
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBeNull()
   })
 })

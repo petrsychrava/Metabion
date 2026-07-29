@@ -4,6 +4,7 @@ import { authApi } from '@/api/auth'
 import { accountApi } from '@/api/account'
 import { ApiError, resetCsrfToken } from '@/api/http'
 import { setLocale } from '@/i18n'
+import { setTheme } from '@/theme'
 import type { LoginResponse } from '@/types/api'
 
 export type AuthStatus = 'unknown' | 'authenticated' | 'anonymous'
@@ -27,6 +28,16 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /** Best-effort sync of the persisted theme preference; failures never break auth flows. */
+  async function syncThemePreference(): Promise<void> {
+    try {
+      const pref = await accountApi.getThemePreference()
+      setTheme(pref.theme)
+    } catch {
+      // Keep the current theme when the preference cannot be fetched.
+    }
+  }
+
   async function fetchMe(): Promise<void> {
     try {
       const me = await authApi.me()
@@ -34,6 +45,7 @@ export const useAuthStore = defineStore('auth', () => {
       roles.value = me.roles
       status.value = 'authenticated'
       await syncLanguagePreference()
+      await syncThemePreference()
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         email.value = null
@@ -57,6 +69,7 @@ export const useAuthStore = defineStore('auth', () => {
     roles.value = res.roles
     status.value = 'authenticated'
     await syncLanguagePreference()
+    await syncThemePreference()
     return res
   }
 
