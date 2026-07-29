@@ -1,4 +1,5 @@
 import { apiFetch } from './http'
+import type { ThemePreference } from '@/theme'
 import type {
   IssuePatientAccessTokenRequest,
   IssuePatientAccessTokenResponse,
@@ -13,6 +14,9 @@ export const accountApi = {
   getLanguagePreference: () => apiFetch<{ language: 'EN' | 'CS' }>('/api/account/preferences/language'),
   updateLanguagePreference: (language: 'EN' | 'CS') =>
     apiFetch<{ status: string }>('/api/account/preferences/language', { method: 'PUT', body: { language } }),
+  getThemePreference: () => apiFetch<{ theme: ThemePreference }>('/api/account/preferences/theme'),
+  updateThemePreference: (theme: ThemePreference) =>
+    apiFetch<{ status: string }>('/api/account/preferences/theme', { method: 'PUT', body: { theme } }),
 }
 
 export const accessTokenApi = {
