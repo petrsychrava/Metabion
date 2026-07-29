@@ -38,7 +38,10 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): voi
 async function ensureCsrf(): Promise<CsrfState> {
   if (!csrf) {
     const res = await fetch('/api/csrf', { credentials: 'same-origin' })
-    if (!res.ok) throw new ApiError(res.status, 'unauthorized')
+    if (!res.ok) {
+      if (res.status === 401) unauthorizedHandler?.()
+      throw new ApiError(res.status, 'unauthorized')
+    }
     csrf = (await res.json()) as CsrfState
   }
   return csrf

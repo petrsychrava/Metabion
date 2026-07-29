@@ -32,6 +32,9 @@ const logDate = computed(() => route.params.date as string)
 const adherenceLevel = ref<DietAdherenceLevel>('FULL')
 const appetiteLevel = ref<AppetiteLevel>('NORMAL')
 const notes = ref('')
+// Carried through untouched: metadata is set by REST/MCP clients and would be
+// wiped by the replacing save if the editor dropped it.
+const logMetadata = ref<string | null>(null)
 const meals = reactive<MealRequest[]>([])
 const deviations = reactive<DeviationRequest[]>([])
 const photoReferences = reactive<(PhotoUploadReferenceRequest & { contentUrl?: string })[]>([])
@@ -67,6 +70,7 @@ onMounted(async () => {
     adherenceLevel.value = log.adherenceLevel
     appetiteLevel.value = log.appetiteLevel
     notes.value = log.notes ?? ''
+    logMetadata.value = log.metadata
     meals.push(...log.meals.map((m) => ({ mealType: m.mealType, foodDescription: m.foodDescription ?? '', notes: m.notes ?? '' })))
     const mealIndexById = new Map(log.meals.map((m, idx) => [m.id, idx]))
     // Legacy rows may carry a null or dangling mealId; a null mealIndex would
@@ -90,6 +94,7 @@ onMounted(async () => {
       measuredAt: m.measuredAt,
       context: m.context,
       notes: m.notes ?? '',
+      metadata: m.metadata ?? undefined,
     })))
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) {
@@ -150,6 +155,7 @@ async function save() {
       adherenceLevel: adherenceLevel.value,
       appetiteLevel: appetiteLevel.value,
       notes: notes.value || undefined,
+      metadata: logMetadata.value ?? undefined,
       meals,
       deviations,
       photoReferences: photoReferences.map(({ contentUrl: _contentUrl, ...rest }) => rest),

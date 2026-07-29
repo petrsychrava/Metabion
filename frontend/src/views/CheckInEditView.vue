@@ -27,37 +27,41 @@ const loadFailed = ref(false)
 const saved = ref(false)
 
 onMounted(async () => {
-  const q = await symptomApi.activeQuestionnaire()
-  questionnaire.value = q
-  for (const question of q.questions) {
-    answers[question.id] = { optionId: null, answerText: '', answerNumeric: null }
-  }
   try {
-    const existing = await symptomApi.getCheckIn(checkInDate.value)
-    if (existing.questionnaireVersionId === q.versionId) {
-      flareState.value = existing.flareState
-      notes.value = existing.notes ?? ''
-      for (const a of existing.answers) {
-        if (answers[a.questionId]) {
-          answers[a.questionId] = {
-            optionId: a.optionId,
-            answerText: a.answerText ?? '',
-            answerNumeric: a.answerNumeric,
+    const q = await symptomApi.activeQuestionnaire()
+    questionnaire.value = q
+    for (const question of q.questions) {
+      answers[question.id] = { optionId: null, answerText: '', answerNumeric: null }
+    }
+    try {
+      const existing = await symptomApi.getCheckIn(checkInDate.value)
+      if (existing.questionnaireVersionId === q.versionId) {
+        flareState.value = existing.flareState
+        notes.value = existing.notes ?? ''
+        for (const a of existing.answers) {
+          if (answers[a.questionId]) {
+            answers[a.questionId] = {
+              optionId: a.optionId,
+              answerText: a.answerText ?? '',
+              answerNumeric: a.answerNumeric,
+            }
           }
         }
+      } else {
+        retiredCheckIn.value = existing
       }
-    } else {
-      retiredCheckIn.value = existing
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) {
+        // no entry for this date yet — start blank
+      } else {
+        throw e
+      }
     }
   } catch (e) {
-    if (e instanceof ApiError && e.status === 404) {
-      // no entry for this date yet — start blank
-    } else {
-      // Load failed: show the error and withhold the editor so a blind save
-      // cannot wipe the day's existing data (the save is a replacing upsert).
-      capture(e)
-      loadFailed.value = true
-    }
+    // Load failed: show the error and withhold the editor so a blind save
+    // cannot wipe the day's existing data (the save is a replacing upsert).
+    capture(e)
+    loadFailed.value = true
   } finally {
     loading.value = false
   }

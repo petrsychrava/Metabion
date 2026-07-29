@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { server } from '../msw/server'
-import { ApiError, apiFetch } from '@/api/http'
+import { ApiError, apiFetch, resetCsrfToken } from '@/api/http'
 
 describe('apiFetch', () => {
   it('returns parsed JSON for GET', async () => {
@@ -68,6 +68,23 @@ describe('apiFetch', () => {
     await apiFetch('/api/auth/me').catch(() => undefined)
     expect(called).toBe(1)
     setUnauthorizedHandler(null)
+  })
+
+  it('invokes the unauthorized handler when the CSRF bootstrap returns 401', async () => {
+    const { setUnauthorizedHandler } = await import('@/api/http')
+    resetCsrfToken()
+    let called = 0
+    setUnauthorizedHandler(() => { called++ })
+    server.use(
+      http.get('/api/csrf', () => new HttpResponse(null, { status: 401 })),
+      http.post('/api/x', () => HttpResponse.json({ status: 'ok' })),
+    )
+    const err = (await apiFetch('/api/x', { method: 'POST', body: {} }).catch((e) => e)) as ApiError
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err.status).toBe(401)
+    expect(called).toBe(1)
+    setUnauthorizedHandler(null)
+    resetCsrfToken()
   })
 
   it('sends FormData without Content-Type override', async () => {

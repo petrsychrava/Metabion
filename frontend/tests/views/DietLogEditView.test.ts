@@ -129,6 +129,50 @@ describe('DietLogEditView', () => {
     expect(received!.photoReferences[0].mealIndex).toBe(0)
   })
 
+  it('preserves log and measurement metadata on re-save', async () => {
+    let received: DailyDietLogRequest | null = null
+    server.use(
+      http.get('/api/diet-logs/2026-07-24', () => HttpResponse.json({
+        id: 1,
+        patientProfileId: 1,
+        patientEmail: 'p@example.com',
+        logDate: '2026-07-24',
+        adherenceLevel: 'FULL',
+        appetiteLevel: 'NORMAL',
+        notes: null,
+        metadata: '{"source":"mcp"}',
+        createdAt: '2026-07-24T08:00:00Z',
+        updatedAt: '2026-07-24T08:00:00Z',
+        meals: [{ id: 5, mealType: 'BREAKFAST', foodDescription: 'Eggs', notes: null, sortOrder: 0 }],
+        deviations: [],
+        photoReferences: [],
+        measurements: [{
+          id: 7, patientProfileId: 1, dailyDietLogId: 1,
+          measurementType: 'GLUCOSE', value: 5.2, unit: 'MMOL_L',
+          measuredAt: '2026-07-24T07:00:00Z', context: 'FASTING',
+          notes: null, metadata: '{"device":"dexcom"}', createdAt: '2026-07-24T07:00:00Z',
+        }],
+      })),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/diet-logs', async ({ request }) => {
+        received = (await request.json()) as DailyDietLogRequest
+        return HttpResponse.json({ id: 1, logDate: '2026-07-24' })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/diet-logs/2026-07-24')
+    const wrapper = mount(DietLogEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await flushPromises()
+
+    expect(received).not.toBeNull()
+    expect(received!.metadata).toBe('{"source":"mcp"}')
+    expect(received!.measurements).toHaveLength(1)
+    expect(received!.measurements[0].metadata).toBe('{"device":"dexcom"}')
+  })
+
   it('shows an error and withholds the editor when loading fails (non-404)', async () => {
     server.use(
       http.get('/api/diet-logs/2026-07-24', () => HttpResponse.json({ error: 'request_failed' }, { status: 500 })),

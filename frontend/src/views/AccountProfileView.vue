@@ -14,6 +14,7 @@ const countryRegion = ref('')
 const timezone = ref('')
 const saved = ref(false)
 const loading = ref(true)
+const loadFailed = ref(false)
 
 const sexOptions: Sex[] = ['FEMALE', 'MALE', 'INTERSEX', 'PREFER_NOT_TO_SAY']
 
@@ -24,6 +25,11 @@ onMounted(async () => {
     sex.value = p.sex
     countryRegion.value = p.countryRegion
     timezone.value = p.timezone
+  } catch (e) {
+    // Load failed: show the error and withhold the form so a blind save
+    // cannot overwrite the stored profile with blank defaults.
+    capture(e)
+    loadFailed.value = true
   } finally {
     loading.value = false
   }
@@ -49,6 +55,7 @@ async function submit() {
   <section class="max-w-md">
     <h1 class="text-2xl font-semibold">{{ t('account.profileTitle') }}</h1>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
+    <p v-else-if="loadFailed" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
     <form v-else class="mt-4 space-y-4" @submit.prevent="submit">
       <p v-if="message" class="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
       <p v-if="saved" class="rounded bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">{{ t('common.saved') }}</p>

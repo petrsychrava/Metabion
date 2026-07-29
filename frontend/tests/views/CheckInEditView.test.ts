@@ -116,6 +116,19 @@ describe('CheckInEditView', () => {
     expect(JSON.stringify(received!.answers)).not.toContain('""')
   })
 
+  it('shows an error and withholds the editor when the active questionnaire fails to load', async () => {
+    server.use(
+      http.get('/api/symptom-questionnaires/active', () => HttpResponse.json({ error: 'request_failed' }, { status: 500 })),
+    )
+    const router = makeRouter()
+    await router.push('/check-ins/2026-07-24')
+    const wrapper = mount(CheckInEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.request_failed)
+    expect(wrapper.text()).not.toContain(en.common.loading)
+    expect(wrapper.find('[data-testid="save"]').exists()).toBe(false)
+  })
+
   it('shows an error and withholds the editor when the existing check-in fails to load (non-404)', async () => {
     server.use(
       http.get('/api/symptom-questionnaires/active', () => HttpResponse.json(questionnaire)),
