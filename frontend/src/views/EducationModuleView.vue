@@ -46,24 +46,24 @@ async function toggleLesson(lesson: EducationLesson) {
 
 <template>
   <section class="max-w-3xl">
-    <router-link to="/education" class="text-sm text-blue-600">← {{ t('education.backToModules') }}</router-link>
+    <router-link to="/education" class="text-sm text-blue-600 dark:text-blue-400">← {{ t('education.backToModules') }}</router-link>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
     <template v-else-if="module">
       <h1 class="mt-2 text-2xl font-semibold">{{ module.title }}</h1>
-      <p v-if="module.summary" class="mt-1 text-gray-600">{{ module.summary }}</p>
-      <p class="mt-1 text-sm text-gray-500">
+      <p v-if="module.summary" class="mt-1 text-gray-600 dark:text-gray-400">{{ module.summary }}</p>
+      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
         {{ t('education.completedCount', { done: module.completedLessonCount ?? 0, count: module.lessonCount }) }}
       </p>
-      <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
+      <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
 
       <h2 class="mt-6 font-medium">{{ t('education.lessons') }}</h2>
       <div class="mt-2 space-y-2">
-        <div v-for="lesson in module.lessons" :key="lesson.lessonSlug" class="rounded border bg-white">
+        <div v-for="lesson in module.lessons" :key="lesson.lessonSlug" class="rounded border bg-white dark:bg-gray-800">
           <button class="flex w-full items-center justify-between p-4 text-left"
                   @click="openLesson = openLesson === lesson.lessonSlug ? null : lesson.lessonSlug">
             <span>
               {{ lesson.title }}
-              <span v-if="lesson.completed" class="ml-2 rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">
+              <span v-if="lesson.completed" class="ml-2 rounded bg-green-100 px-2 py-0.5 text-xs text-green-700 dark:bg-green-900 dark:text-green-300">
                 {{ t('education.completedBadge') }}
               </span>
             </span>

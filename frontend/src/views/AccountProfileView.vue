@@ -50,17 +50,17 @@ async function submit() {
     <h1 class="text-2xl font-semibold">{{ t('account.profileTitle') }}</h1>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
     <form v-else class="mt-4 space-y-4" @submit.prevent="submit">
-      <p v-if="message" class="rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
-      <p v-if="saved" class="rounded bg-green-50 p-3 text-sm text-green-700">{{ t('common.saved') }}</p>
+      <p v-if="message" class="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
+      <p v-if="saved" class="rounded bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">{{ t('common.saved') }}</p>
       <div>
         <label class="block text-sm font-medium" for="dob">{{ t('account.dateOfBirth') }}</label>
         <input id="dob" v-model="dateOfBirth" type="date" required
-               class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+               class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
         <FieldError :message="fieldErrors.dateOfBirth" />
       </div>
       <div>
         <label class="block text-sm font-medium" for="sex">{{ t('account.sex') }}</label>
-        <select id="sex" v-model="sex" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+        <select id="sex" v-model="sex" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800">
           <option v-for="s in sexOptions" :key="s" :value="s">{{ t(`sex.${s}`) }}</option>
         </select>
         <FieldError :message="fieldErrors.sex" />
@@ -68,19 +68,19 @@ async function submit() {
       <div>
         <label class="block text-sm font-medium" for="country">{{ t('account.countryRegion') }}</label>
         <input id="country" v-model="countryRegion" type="text" required maxlength="100"
-               class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+               class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
         <FieldError :message="fieldErrors.countryRegion" />
       </div>
       <div>
         <label class="block text-sm font-medium" for="tz">{{ t('account.timezone') }}</label>
         <input id="tz" v-model="timezone" type="text" required maxlength="100" placeholder="Europe/Prague"
-               class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+               class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
         <FieldError :message="fieldErrors.timezone" />
       </div>
       <button type="submit" class="rounded bg-blue-600 px-4 py-2 text-white">{{ t('common.save') }}</button>
     </form>
     <p class="mt-6 text-sm">
-      <router-link to="/account/access-tokens" class="text-blue-600">{{ t('account.tokensTitle') }}</router-link>
+      <router-link to="/account/access-tokens" class="text-blue-600 dark:text-blue-400">{{ t('account.tokensTitle') }}</router-link>
     </p>
   </section>
 </template>

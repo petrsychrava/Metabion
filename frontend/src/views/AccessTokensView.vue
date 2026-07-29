@@ -85,14 +85,14 @@ function formatInstant(iso: string | null): string {
 <template>
   <section class="max-w-2xl">
     <h1 class="text-2xl font-semibold">{{ t('account.tokensTitle') }}</h1>
-    <p class="mt-1 text-sm text-gray-600">{{ t('account.tokensIntro') }}</p>
+    <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ t('account.tokensIntro') }}</p>
 
-    <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
+    <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
 
-    <div v-if="plainToken" class="mt-4 rounded border border-amber-400 bg-amber-50 p-4">
+    <div v-if="plainToken" class="mt-4 rounded border border-amber-400 bg-amber-50 p-4 dark:bg-amber-950 dark:border-amber-700">
       <h2 class="font-medium">{{ t('account.tokenCreatedTitle') }}</h2>
-      <p class="mt-1 text-sm text-amber-800">{{ t('account.tokenCreatedWarning') }}</p>
-      <code data-testid="plain-token" class="mt-2 block break-all rounded bg-white p-2 text-sm">{{ plainToken }}</code>
+      <p class="mt-1 text-sm text-amber-800 dark:text-amber-200">{{ t('account.tokenCreatedWarning') }}</p>
+      <code data-testid="plain-token" class="mt-2 block break-all rounded bg-white p-2 text-sm dark:bg-gray-800">{{ plainToken }}</code>
       <div class="mt-2 flex gap-2">
         <button class="rounded bg-blue-600 px-3 py-1 text-sm text-white" @click="copyToken">
           {{ copied ? t('common.copied') : t('common.copy') }}
@@ -101,23 +101,23 @@ function formatInstant(iso: string | null): string {
       </div>
     </div>
 
-    <form class="mt-6 space-y-3 rounded border bg-white p-4" @submit.prevent="issue">
+    <form class="mt-6 space-y-3 rounded border bg-white p-4 dark:bg-gray-800" @submit.prevent="issue">
       <div>
         <label class="block text-sm font-medium" for="label">{{ t('account.displayLabel') }}</label>
         <input id="label" v-model="displayLabel" data-testid="display-label" type="text" required maxlength="120"
-               class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+               class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-sm font-medium" for="ctype">{{ t('account.clientType') }}</label>
-          <select id="ctype" v-model="clientType" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+          <select id="ctype" v-model="clientType" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800">
             <option v-for="c in CLIENT_TYPES" :key="c" :value="c">{{ c }}</option>
           </select>
         </div>
         <div>
           <label class="block text-sm font-medium" for="days">{{ t('account.expiresInDays') }}</label>
           <input id="days" v-model.number="expiresInDays" type="number" min="1" max="90" required
-                 class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+                 class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
         </div>
       </div>
       <fieldset>
@@ -132,27 +132,27 @@ function formatInstant(iso: string | null): string {
     </form>
 
     <p v-if="loading" class="mt-6">{{ t('common.loading') }}</p>
-    <p v-else-if="tokens.length === 0" class="mt-6 text-sm text-gray-600">{{ t('account.noTokens') }}</p>
+    <p v-else-if="tokens.length === 0" class="mt-6 text-sm text-gray-600 dark:text-gray-400">{{ t('account.noTokens') }}</p>
     <ul v-else class="mt-6 space-y-3">
-      <li v-for="token in tokens" :key="token.tokenId" class="rounded border bg-white p-4">
+      <li v-for="token in tokens" :key="token.tokenId" class="rounded border bg-white p-4 dark:bg-gray-800">
         <div class="flex items-start justify-between">
           <div>
-            <p class="font-medium">{{ token.displayLabel }} <span class="text-sm text-gray-500">({{ token.clientType }})</span></p>
-            <p class="mt-1 text-sm text-gray-600">
+            <p class="font-medium">{{ token.displayLabel }} <span class="text-sm text-gray-500 dark:text-gray-400">({{ token.clientType }})</span></p>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
               {{ t('account.createdAt') }}: {{ formatInstant(token.createdAt) }} ·
               {{ t('account.expiresAt') }}: {{ formatInstant(token.expiresAt) }} ·
               {{ t('account.lastUsed') }}: {{ formatInstant(token.lastUsedAt) }}
             </p>
-            <p class="mt-1 text-xs text-gray-500">{{ token.scopes.join(', ') }}</p>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ token.scopes.join(', ') }}</p>
           </div>
-          <button :data-testid="`revoke-${token.tokenId}`" class="text-sm text-red-600"
+          <button :data-testid="`revoke-${token.tokenId}`" class="text-sm text-red-600 dark:text-red-400"
                   @click="pendingRevoke = token">{{ t('account.revoke') }}</button>
         </div>
       </li>
     </ul>
 
     <div v-if="pendingRevoke" class="fixed inset-0 flex items-center justify-center bg-black/40">
-      <div class="w-full max-w-sm rounded bg-white p-6">
+      <div class="w-full max-w-sm rounded bg-white p-6 dark:bg-gray-800">
         <p class="text-sm">{{ t('account.revokeConfirm') }}</p>
         <div class="mt-4 flex justify-end gap-2">
           <button class="rounded border px-3 py-1 text-sm" @click="pendingRevoke = null">{{ t('common.cancel') }}</button>

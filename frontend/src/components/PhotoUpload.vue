@@ -30,7 +30,7 @@ async function onFile(event: Event) {
 <template>
   <div>
     <input type="file" accept="image/*" :disabled="uploading" data-testid="photo-input" @change="onFile" />
-    <p v-if="uploading" class="text-sm text-gray-500">{{ t('common.loading') }}</p>
-    <p v-if="message" class="text-sm text-red-600">{{ message }}</p>
+    <p v-if="uploading" class="text-sm text-gray-500 dark:text-gray-400">{{ t('common.loading') }}</p>
+    <p v-if="message" class="text-sm text-red-600 dark:text-red-400">{{ message }}</p>
   </div>
 </template>

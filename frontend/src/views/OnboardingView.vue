@@ -160,13 +160,13 @@ async function submit() {
     <h1 class="text-2xl font-semibold">{{ t('nav.onboarding') }}</h1>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
     <template v-else>
-      <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{{ message }}</p>
-      <p v-if="saved" class="mt-4 rounded bg-green-50 p-3 text-sm text-green-700">{{ t('common.saved') }}</p>
+      <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
+      <p v-if="saved" class="mt-4 rounded bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">{{ t('common.saved') }}</p>
 
       <div v-if="history.length > 0" class="mt-4">
         <h2 class="font-medium">{{ t('onboarding.history') }}</h2>
         <ul class="mt-2 space-y-2">
-          <li v-for="s in history" :key="s.id" class="rounded border bg-white text-sm">
+          <li v-for="s in history" :key="s.id" class="rounded border bg-white text-sm dark:bg-gray-800">
             <button type="button" :data-testid="`history-item-${s.id}`"
                     class="flex w-full items-center justify-between p-3 text-left"
                     @click="toggleDetail(s.id)">
@@ -178,10 +178,10 @@ async function submit() {
               <span class="text-gray-400">{{ openId === s.id ? '−' : '+' }}</span>
             </button>
             <div v-if="openId === s.id" :data-testid="`history-detail-${s.id}`" class="border-t p-3">
-              <p v-if="detailMessage" class="rounded bg-red-50 p-3 text-sm text-red-700">{{ detailMessage }}</p>
+              <p v-if="detailMessage" class="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ detailMessage }}</p>
               <p v-else-if="detailLoading || !openDetail">{{ t('common.loading') }}</p>
               <template v-else>
-                <p class="text-gray-600">
+                <p class="text-gray-600 dark:text-gray-400">
                   v{{ openDetail.version }} · {{ openDetail.submittedAt.slice(0, 10) }} ·
                   {{ t(`onboarding.reviewStatus.${openDetail.reviewStatus}`) }}
                 </p>
@@ -200,45 +200,45 @@ async function submit() {
         </button>
       </div>
 
-      <form v-if="showForm" class="mt-4 space-y-4 rounded border bg-white p-4" @submit.prevent="submit">
+      <form v-if="showForm" class="mt-4 space-y-4 rounded border bg-white p-4 dark:bg-gray-800" @submit.prevent="submit">
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label class="block text-sm font-medium">{{ t('onboarding.diagnosisType') }}</label>
-            <select v-model="form.diagnosisType" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+            <select v-model="form.diagnosisType" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800">
               <option v-for="d in diagnosisTypes" :key="d" :value="d">{{ t(`onboarding.diagnosis.${d}`) }}</option>
             </select>
           </div>
           <div>
             <label class="block text-sm font-medium">{{ t('onboarding.diagnosisYear') }}</label>
             <input v-model.number="form.diagnosisYear" type="number" min="1900" :max="new Date().getFullYear()"
-                   class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+                   class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
             <FieldError :message="fieldErrors.diagnosisYear" />
           </div>
           <div>
             <label class="block text-sm font-medium">{{ t('onboarding.diseaseLocation') }}</label>
             <input v-model="form.diseaseLocation" type="text" maxlength="120"
-                   class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+                   class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
           </div>
           <div>
             <label class="block text-sm font-medium">{{ t('onboarding.diseaseBehavior') }}</label>
             <input v-model="form.diseaseBehavior" type="text" maxlength="120"
-                   class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+                   class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
           </div>
           <div>
             <label class="block text-sm font-medium">{{ t('onboarding.activityEstimate') }}</label>
-            <select v-model="form.activityEstimate" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+            <select v-model="form.activityEstimate" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800">
               <option v-for="a in activityEstimates" :key="a" :value="a">{{ t(`onboarding.activity.${a}`) }}</option>
             </select>
           </div>
           <div>
             <label class="block text-sm font-medium">{{ t('onboarding.steroidUse') }}</label>
-            <select v-model="form.steroidUse" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+            <select v-model="form.steroidUse" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800">
               <option v-for="s in steroidUses" :key="s" :value="s">{{ t(`onboarding.steroid.${s}`) }}</option>
             </select>
           </div>
           <div>
             <label class="block text-sm font-medium">{{ t('onboarding.advancedTherapy') }}</label>
-            <select v-model="form.advancedTherapyExposure" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+            <select v-model="form.advancedTherapyExposure" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800">
               <option v-for="x in therapyExposures" :key="x" :value="x">{{ t(`onboarding.therapy.${x}`) }}</option>
             </select>
           </div>
@@ -246,39 +246,39 @@ async function submit() {
         <div>
           <label class="block text-sm font-medium">{{ t('onboarding.currentMedications') }}</label>
           <textarea v-model="form.currentMedications" rows="2" maxlength="1000"
-                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
         </div>
         <div>
           <label class="block text-sm font-medium">{{ t('onboarding.medicationNotes') }}</label>
           <textarea v-model="form.medicationNotes" rows="2" maxlength="1000"
-                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
         </div>
 
         <fieldset class="rounded border p-3">
           <legend class="px-1 text-sm font-medium">{{ t('onboarding.labs') }}</legend>
           <div class="grid gap-3 sm:grid-cols-2">
             <label class="text-sm">{{ t('onboarding.labsCollectedAt') }}
-              <input v-model="form.labsCollectedAt" type="date" class="mt-1 w-full rounded border border-gray-300 px-2 py-1" />
+              <input v-model="form.labsCollectedAt" type="date" class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
             </label>
             <label class="text-sm">CRP (mg/L)
               <input v-model.number="form.crpMgL" type="number" step="any" min="0" max="500"
-                     class="mt-1 w-full rounded border border-gray-300 px-2 py-1" />
+                     class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
             </label>
             <label class="text-sm">{{ t('onboarding.calprotectin') }} (µg/g)
               <input v-model.number="form.fecalCalprotectinUgG" type="number" step="any" min="0" max="10000"
-                     class="mt-1 w-full rounded border border-gray-300 px-2 py-1" />
+                     class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
             </label>
             <label class="text-sm">{{ t('onboarding.hemoglobin') }} (g/dL)
               <input v-model.number="form.hemoglobinGDl" type="number" step="any" min="0" max="25"
-                     class="mt-1 w-full rounded border border-gray-300 px-2 py-1" />
+                     class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
             </label>
             <label class="text-sm">{{ t('onboarding.albumin') }} (g/dL)
               <input v-model.number="form.albuminGDl" type="number" step="any" min="0" max="10"
-                     class="mt-1 w-full rounded border border-gray-300 px-2 py-1" />
+                     class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
             </label>
           </div>
           <textarea v-model="form.labNotes" rows="2" maxlength="1000" :placeholder="t('labs.notes')"
-                    class="mt-3 w-full rounded border border-gray-300 px-3 py-2" />
+                    class="mt-3 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
         </fieldset>
 
         <button type="submit" class="rounded bg-blue-600 px-6 py-2 text-white">{{ t('common.save') }}</button>
