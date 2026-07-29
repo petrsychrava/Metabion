@@ -1,5 +1,6 @@
 {
   "app": { "title": "Metabion" },
+  "theme": { "label": "Theme", "system": "System", "light": "Light", "dark": "Dark" },
   "nav": {
     "dashboard": "Dashboard", "dietLogs": "Diet logs", "checkIns": "Check-ins",
     "trends": "Trends", "labs": "Labs", "onboarding": "Onboarding",

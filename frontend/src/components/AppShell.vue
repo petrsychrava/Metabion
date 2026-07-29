@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { setLocale, type AppLocale } from '@/i18n'
+import { setTheme, currentTheme, type ThemePreference } from '@/theme'
 import { accountApi } from '@/api/account'
 
 const { t, locale } = useI18n()
@@ -31,6 +32,17 @@ async function switchLocale(event: Event) {
   }
 }
 
+const theme = ref<ThemePreference>(currentTheme())
+
+async function switchTheme() {
+  setTheme(theme.value)
+  try {
+    await accountApi.updateThemePreference(theme.value)
+  } catch {
+    // Preference persistence is best-effort; the local choice still applies.
+  }
+}
+
 async function logout() {
   await auth.logout()
   await router.push('/login')
@@ -53,6 +65,13 @@ async function logout() {
         <select :value="locale" class="rounded border border-gray-300 px-2 py-1 text-sm" @change="switchLocale">
           <option value="en">EN</option>
           <option value="cs">CS</option>
+        </select>
+        <select v-model="theme" :aria-label="t('theme.label')"
+                class="rounded border border-gray-300 px-2 py-1 text-sm"
+                @change="switchTheme">
+          <option value="SYSTEM">{{ t('theme.system') }}</option>
+          <option value="LIGHT">{{ t('theme.light') }}</option>
+          <option value="DARK">{{ t('theme.dark') }}</option>
         </select>
         <button class="text-sm text-gray-700 hover:text-blue-700" @click="logout">{{ t('nav.logout') }}</button>
       </div>
