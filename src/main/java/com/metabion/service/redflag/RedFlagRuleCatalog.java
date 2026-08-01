@@ -118,7 +118,10 @@ public class RedFlagRuleCatalog {
                         && condition.getOperator() != RedFlagComparisonOperator.EQ) {
             throw invalid();
         }
-        if (condition.getLookbackDays() > MAX_LOOKBACK_DAYS
+        if ((condition.getLookbackDays() == 0
+                && condition.getSourceType() != triggerSource
+                && condition.getSourceType() != RedFlagSourceType.PATIENT_PROFILE)
+                || condition.getLookbackDays() > MAX_LOOKBACK_DAYS
                 || (condition.getLookbackDays() > 0
                 && (triggerSource != RedFlagSourceType.LAB_RESULT_SET
                 || condition.getSourceType() != RedFlagSourceType.SYMPTOM_CHECK_IN
