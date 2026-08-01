@@ -100,6 +100,30 @@ class PatientAccessTokenServiceTest {
     }
 
     @Test
+    void issueForCurrentPatientRoundTripsRedFlagReadScopeWithoutAddingOthers() {
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+        when(tokens.save(any())).thenAnswer(invocation -> {
+            var token = invocation.getArgument(0, PatientAccessToken.class);
+            ReflectionTestUtils.setField(token, "id", 51L);
+            return token;
+        });
+        var auth = new TestingAuthenticationToken("patient@example.com", "password", RoleName.PATIENT.authority());
+        auth.setAuthenticated(true);
+
+        var response = service.issueForCurrentPatient(auth, new IssuePatientAccessTokenRequest(
+                PatientAccessClientType.MCP_CODEX,
+                "Codex red flags",
+                30,
+                Set.of("patient:red-flags:read")));
+
+        assertThat(response.scopes()).containsExactly("patient:red-flags:read");
+
+        var captor = ArgumentCaptor.forClass(PatientAccessToken.class);
+        verify(tokens).save(captor.capture());
+        assertThat(captor.getValue().scopes()).containsExactly(PatientAccessTokenScope.PATIENT_RED_FLAG_READ);
+    }
+
+    @Test
     void authenticateRejectsExpiredToken() {
         var token = token("expired", Instant.parse("2026-07-03T10:00:00Z"));
         when(tokens.findByTokenHash(PatientAccessTokenService.sha256Hex("plain"))).thenReturn(Optional.of(token));

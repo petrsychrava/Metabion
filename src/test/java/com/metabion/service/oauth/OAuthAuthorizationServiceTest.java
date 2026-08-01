@@ -182,6 +182,30 @@ class OAuthAuthorizationServiceTest {
     }
 
     @Test
+    void authorizationGrantsOnlyRequestedRedFlagReadScopeWithoutAddingOtherAllowedScopes() {
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+        when(codes.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        var request = new OAuthAuthorizationRequest("code", "codex", REDIRECT_URI,
+                "patient:profile:read patient:red-flags:read", "state-123", CHALLENGE, "S256", RESOURCE);
+        var redFlagProperties = new OAuthAuthorizationProperties("http://localhost:8080", RESOURCE,
+                Duration.ofMinutes(5), Duration.ofHours(1),
+                new OAuthAuthorizationProperties.ClientMetadataProperties(true, Duration.ofSeconds(2), 32768),
+                Map.of("codex", new OAuthAuthorizationProperties.RegisteredClient("Codex", "native",
+                        List.of(REDIRECT_URI),
+                        List.of("patient:profile:read", "patient:red-flags:read", "patient:trend:read"),
+                        List.of("authorization_code"))));
+        service = serviceWith(redFlagProperties,
+                new OAuthClientResolver(redFlagProperties, clientId -> Optional.empty(), emptyRegisteredClients()));
+
+        service.approve(request, auth());
+
+        var captor = ArgumentCaptor.forClass(OAuthAuthorizationCode.class);
+        verify(codes).save(captor.capture());
+        assertThat(captor.getValue().scopes())
+                .containsExactlyInAnyOrder("patient:profile:read", "patient:red-flags:read");
+    }
+
+    @Test
     void denyValidatesRedirectAndPreservesState() {
         var denied = service.deny(request("S256"));
 
@@ -236,7 +260,10 @@ class OAuthAuthorizationServiceTest {
 
     @Test
     void authorizationCodeOnlyClientReceivesAccessTokenWithoutRefreshFamily() {
-        var authorizationCode = authorizationCode("plain-code", NOW.plus(Duration.ofMinutes(5)));
+        var authorizationCode = authorizationCode(
+                "plain-code",
+                NOW.plus(Duration.ofMinutes(5)),
+                Set.of("patient:profile:read", "patient:red-flags:read"));
         when(codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("plain-code")))
                 .thenReturn(Optional.of(authorizationCode));
         when(patientAccessTokens.issueForPatient(
@@ -244,7 +271,7 @@ class OAuthAuthorizationServiceTest {
                 PatientAccessClientType.MCP_CODEX,
                 "Codex",
                 Duration.ofHours(1),
-                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ, PatientAccessTokenScope.PATIENT_RED_FLAG_READ),
                 RESOURCE))
                 .thenReturn(new IssuePatientAccessTokenResponse(
                         99L,
@@ -252,7 +279,7 @@ class OAuthAuthorizationServiceTest {
                         PatientAccessClientType.MCP_CODEX,
                         "Codex",
                         NOW.plus(Duration.ofHours(1)),
-                        Set.of("patient:profile:read")));
+                        Set.of("patient:profile:read", "patient:red-flags:read")));
 
         var response = service.exchange(
                 "authorization_code",
@@ -266,12 +293,13 @@ class OAuthAuthorizationServiceTest {
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.tokenType()).isEqualTo("Bearer");
         assertThat(response.expiresIn()).isEqualTo(3600);
-        assertThat(response.scope()).isEqualTo("patient:profile:read");
+        assertThat(response.scope()).isEqualTo("patient:profile:read patient:red-flags:read");
         assertThat(response.refreshToken()).isNull();
         verify(refreshTokens, never()).issueInitial(any(), any(), any(), any(), any(), any());
         verify(patientAccessTokens).issueForPatient(
                 patient, PatientAccessClientType.MCP_CODEX, "Codex", Duration.ofHours(1),
-                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ), RESOURCE);
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ, PatientAccessTokenScope.PATIENT_RED_FLAG_READ),
+                RESOURCE);
         verify(codes).findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("plain-code"));
         verify(codes, never()).findByCodeHash(any());
     }
@@ -507,13 +535,18 @@ class OAuthAuthorizationServiceTest {
     void refreshRotatesCredentialAndIssuesFamilyBoundAccessToken() {
         when(refreshTokens.refreshGrant("old-refresh", "codex", RESOURCE)).thenReturn(
                 com.metabion.dto.oauth.OAuthRefreshGrantResult.success(
-                        new OAuthTokenResponse("new-access", "Bearer", 3600, "patient:profile:read", "new-refresh")));
+                        new OAuthTokenResponse(
+                                "new-access",
+                                "Bearer",
+                                3600,
+                                "patient:profile:read patient:red-flags:read",
+                                "new-refresh")));
 
         var response = service.refresh("old-refresh", "codex", RESOURCE);
 
         assertThat(response.accessToken()).isEqualTo("new-access");
         assertThat(response.expiresIn()).isEqualTo(3600);
-        assertThat(response.scope()).isEqualTo("patient:profile:read");
+        assertThat(response.scope()).isEqualTo("patient:profile:read patient:red-flags:read");
         assertThat(response.refreshToken()).isEqualTo("new-refresh");
     }
 
@@ -578,6 +611,10 @@ class OAuthAuthorizationServiceTest {
     }
 
     private OAuthAuthorizationCode authorizationCode(String plainCode, Instant expiresAt) {
+        return authorizationCode(plainCode, expiresAt, Set.of("patient:profile:read"));
+    }
+
+    private OAuthAuthorizationCode authorizationCode(String plainCode, Instant expiresAt, Set<String> scopes) {
         return new OAuthAuthorizationCode(
                 PatientAccessTokenService.sha256Hex(plainCode),
                 patient,
@@ -587,7 +624,7 @@ class OAuthAuthorizationServiceTest {
                 RESOURCE,
                 CHALLENGE,
                 "S256",
-                Set.of("patient:profile:read"),
+                scopes,
                 NOW.minusSeconds(60),
                 expiresAt);
     }
