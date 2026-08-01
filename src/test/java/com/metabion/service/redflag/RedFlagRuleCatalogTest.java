@@ -177,6 +177,10 @@ class RedFlagRuleCatalogTest {
                         rows -> replaceCondition(rows.getFirst(), condition(1L, RedFlagSourceType.PATIENT_PROFILE,
                                 "patient.sex", RedFlagComparisonOperator.EQ,
                                 null, "MALE", 7, 1))),
+                invalid("symptom lookback exceeds resolver window", RedFlagSourceType.LAB_RESULT_SET,
+                        rows -> replaceCondition(rows.getFirst(), condition(1L, RedFlagSourceType.SYMPTOM_CHECK_IN,
+                                "symptom.flare_state", RedFlagComparisonOperator.EQ,
+                                null, "ACTIVE_FLARE", 8, 1))),
                 invalid("duplicate group order", RedFlagSourceType.SYMPTOM_CHECK_IN,
                         rows -> replaceGroups(rows.getFirst(), List.of(
                                 group(1L, "G1", 1, List.of(validSymptomCondition())),

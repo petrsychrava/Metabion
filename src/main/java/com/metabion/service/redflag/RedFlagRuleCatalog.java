@@ -20,6 +20,7 @@ import java.util.Set;
 public class RedFlagRuleCatalog {
 
     private static final String INVALID_MESSAGE = "Active red-flag catalogue is invalid";
+    private static final int MAX_LOOKBACK_DAYS = 7;
     private static final Map<RedFlagSourceType, Set<String>> REQUIRED_KEYS = Map.of(
             RedFlagSourceType.SYMPTOM_CHECK_IN, Set.of(
                     "SYM_SEVERE_ABDOMINAL_PAIN", "SYM_SIGNIFICANT_BLEEDING", "SYM_ACTIVE_FLARE",
@@ -117,10 +118,11 @@ public class RedFlagRuleCatalog {
                         && condition.getOperator() != RedFlagComparisonOperator.EQ) {
             throw invalid();
         }
-        if (condition.getLookbackDays() > 0
+        if (condition.getLookbackDays() > MAX_LOOKBACK_DAYS
+                || (condition.getLookbackDays() > 0
                 && (triggerSource != RedFlagSourceType.LAB_RESULT_SET
                 || condition.getSourceType() != RedFlagSourceType.SYMPTOM_CHECK_IN
-                || !definition.lookbackAllowed())) {
+                || !definition.lookbackAllowed()))) {
             throw invalid();
         }
         return new RedFlagRuleDefinition.Condition(
