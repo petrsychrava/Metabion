@@ -17,8 +17,8 @@ client can save data that triggers a red flag without receiving the outcome.
 
 - Expose current red flags and filtered, paginated red-flag history to
   authenticated patients.
-- Expose the same capabilities with full audit evidence to assigned clinical
-  staff and administrators.
+- Expose the same capabilities with clinically relevant rule-version and
+  matched-input evidence to assigned clinical staff and administrators.
 - Return the highest severity alongside the current flag snapshot.
 - Add patient MCP tools for current red flags and history.
 - Return the exact red-flag evaluation outcome from MCP symptom and laboratory
@@ -113,7 +113,8 @@ Use separate patient and clinical response assemblers:
 
 - the patient assembler produces the restricted patient response used by both
   patient REST and MCP;
-- the clinical assembler adds immutable rule and matched-input audit evidence.
+- the clinical assembler adds the rule version and structured matched-input
+  evidence needed to explain why the flag triggered.
 
 `PatientAppFacade` exposes the patient current/history queries and enriched
 write operations to `PatientMcpTools`. `PatientMcpTools` performs scope
@@ -147,21 +148,17 @@ The patient current response has this shape:
 When there are no current flags, `highestSeverity` is `null` and `flags`
 is empty.
 
-The clinical current response uses the same envelope. Each clinical flag adds:
-
-- `evaluationRunId`;
-- `sourceOperation`;
-- `ruleVersion`;
-- `matchedGroupKey`;
-- `matchedInputs` as a structured list of facts.
+The clinical current response uses the same envelope. Each clinical flag adds
+`ruleVersion` and `matchedInputs` as a structured list of facts.
 
 `matchedInputs` must be JSON objects and arrays in the wire response, not an
 escaped JSON string. Each fact retains the foundation's source type, source ID,
 fact key, observation date, decimal or text value, and unit.
 
-The patient and MCP projections never include rule version, matched group, or
-matched-input facts. The stable `ruleKey` is retained as a machine-readable
-code for client-side labeling.
+The patient and MCP projections never include rule version or matched-input
+facts. No public projection includes the internal evaluation-run ID, source
+operation, or matched-group key. The stable `ruleKey` is retained as a
+machine-readable code for client-side labeling.
 
 ### History
 
@@ -300,8 +297,8 @@ response is returned.
 ## Query and Persistence Flow
 
 Current and history repositories query trigger events joined to their
-evaluation run, rule version, stable rule, matched group, and successor run.
-They do not load all evaluation runs and filter them in memory.
+evaluation run, rule version, stable rule, and successor run. They do not load
+all evaluation runs and filter them in memory.
 
 Current queries require `evaluationRun.current = true`. History queries
 include current and superseded events and apply optional severity and
@@ -397,6 +394,8 @@ write tools without the new read scope.
 - Empty current and history responses are stable.
 - Patient and MCP projections omit audit-only fields.
 - Clinical projection parses structured matched inputs.
+- Clinical projection exposes rule version and matched inputs but omits
+  evaluation-run IDs, source operations, and matched-group keys.
 - Corrupt matched-input JSON fails generically without including the JSON in an
   exception message.
 - Date ranges use the target patient's timezone.
@@ -453,8 +452,8 @@ Final verification:
 
 - Patient REST returns a cohesive current snapshot and filtered, paginated
   trigger-event history.
-- Authorized clinical REST returns the same capabilities with structured audit
-  evidence.
+- Authorized clinical REST returns the same capabilities with rule-version and
+  structured matched-input evidence.
 - Public APIs never return successful no-match evaluation runs.
 - MCP exposes scoped current and history reads.
 - MCP symptom and laboratory writes return the exact evaluation outcome without
