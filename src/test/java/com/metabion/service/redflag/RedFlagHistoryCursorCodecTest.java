@@ -30,4 +30,14 @@ class RedFlagHistoryCursorCodecTest {
                     assertThat(error.getReason()).isEqualTo("invalid cursor");
                 });
     }
+
+    @Test
+    void rejectsExplicitBlankCursorButAllowsAbsentCursor() {
+        assertThat(codec.decode(null)).isEmpty();
+        assertThatThrownBy(() -> codec.decode(""))
+                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
+                    assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(error.getReason()).isEqualTo("invalid cursor");
+                });
+    }
 }

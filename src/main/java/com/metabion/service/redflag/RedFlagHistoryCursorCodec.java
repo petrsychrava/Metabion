@@ -21,7 +21,7 @@ public class RedFlagHistoryCursorCodec {
     }
 
     public Optional<Cursor> decode(String cursor) {
-        if (cursor == null || cursor.isBlank()) {
+        if (cursor == null) {
             return Optional.empty();
         }
         try {
