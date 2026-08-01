@@ -2,6 +2,7 @@ package com.metabion.service.redflag;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.metabion.domain.RedFlagSourceType;
+import com.metabion.exception.RedFlagSnapshotException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -10,6 +11,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -51,6 +53,27 @@ class RedFlagSnapshotSerializerTest {
                         + "\"observedOn\":\"2026-07-27\",\"decimalValue\":\"46.2\",\"textValue\":null,\"unit\":\"mg/L\"},"
                         + "{\"sourceType\":\"SYMPTOM_CHECK_IN\",\"sourceId\":9,\"factKey\":\"symptom.flare_state\","
                         + "\"observedOn\":\"2026-07-28\",\"decimalValue\":null,\"textValue\":\"ACTIVE_FLARE\",\"unit\":null}]}" );
+    }
+
+    @Test
+    void deserializesTypedMatchedInputs() {
+        var snapshot = serializer().deserialize(
+                "{\"facts\":[{\"sourceType\":\"LAB_RESULT_SET\",\"sourceId\":91,"
+                        + "\"factKey\":\"lab.CRP\",\"observedOn\":\"2026-07-28\","
+                        + "\"decimalValue\":\"312\",\"textValue\":null,\"unit\":\"mg/L\"}]}");
+
+        assertThat(snapshot.facts()).singleElement().satisfies(fact -> {
+            assertThat(fact.factKey()).isEqualTo("lab.CRP");
+            assertThat(fact.observedOn()).isEqualTo(LocalDate.of(2026, 7, 28));
+        });
+    }
+
+    @Test
+    void corruptSnapshotRaisesOnlySanitizedMessage() {
+        assertThatThrownBy(() -> serializer().deserialize("{patient-value"))
+                .isInstanceOfSatisfying(RedFlagSnapshotException.class,
+                        error -> assertThat(error.getMessage())
+                                .isEqualTo("Red-flag snapshot processing failed"));
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
