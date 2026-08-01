@@ -3,6 +3,7 @@ package com.metabion.service;
 import com.metabion.domain.*;
 import com.metabion.dto.*;
 import com.metabion.repository.*;
+import com.metabion.service.redflag.RedFlagEvaluationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,12 +36,13 @@ class LabResultServiceTest {
     @Mock private AccessControlService accessControl;
     @Mock private LabAuditService audit;
     @Mock private LabResponseAssembler responses;
+    @Mock private RedFlagEvaluationService redFlags;
     private LabResultService service;
 
     @BeforeEach
     void setUp() {
         service = new LabResultService(users, patientProfiles, resultSets, catalog, conversions,
-                accessControl, audit, responses, new DateRangeValidator(),
+                accessControl, audit, responses, new DateRangeValidator(), redFlags,
                 Clock.fixed(Instant.parse("2026-07-16T12:00:00Z"), java.time.ZoneOffset.UTC));
     }
 
@@ -62,7 +64,10 @@ class LabResultServiceTest {
         var response = service.saveForCurrentPatient(auth("patient@example.com"), request(null, null));
 
         assertThat(response.results()).singleElement().extracting(LabResultResponse::canonicalValue).isEqualTo(new BigDecimal("12.00"));
-        verify(audit).recordCreate(any(LabResultSet.class), eq(patientUser), any(Instant.class));
+        var ordered = inOrder(resultSets, audit, redFlags);
+        ordered.verify(resultSets).saveAndFlush(any(LabResultSet.class));
+        ordered.verify(audit).recordCreate(any(LabResultSet.class), eq(patientUser), any(Instant.class));
+        ordered.verify(redFlags).evaluateLab(any(LabResultSet.class));
     }
 
     @Test
@@ -79,6 +84,7 @@ class LabResultServiceTest {
         assertThatThrownBy(() -> service.updateForCurrentPatient(auth("patient@example.com"), 90L, request(90L, 0L)))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+        verifyNoInteractions(redFlags);
     }
 
     @Test
@@ -102,7 +108,31 @@ class LabResultServiceTest {
         when(responses.resultSet(set, clinician)).thenReturn(response);
 
         assertThat(service.updateForClinicalPatient(auth("clinician@example.com"), 10L, 90L, request(90L, 0L)).id()).isEqualTo(90L);
-        verify(audit).recordUpdate(eq(set), any(), eq(clinician), any());
+        var ordered = inOrder(resultSets, audit, redFlags);
+        ordered.verify(resultSets).flush();
+        ordered.verify(audit).recordUpdate(eq(set), any(), eq(clinician), any());
+        ordered.verify(redFlags).evaluateLab(set);
+    }
+
+    @Test
+    void patientRemovalFlushesAuditsAndEvaluatesRemovalOnce() {
+        var patient = mock(PatientProfile.class);
+        when(patient.getId()).thenReturn(10L);
+        var patientUser = user(1L, RoleName.PATIENT);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
+        when(patientProfiles.findByUserId(1L)).thenReturn(Optional.of(patient));
+        var set = new LabResultSet(patient, LocalDate.now(), null, LabResultSource.MANUAL,
+                LabResultConfirmationStatus.CONFIRMED, patientUser, Instant.EPOCH);
+        when(resultSets.findActiveById(90L)).thenReturn(Optional.of(set));
+
+        service.removeForCurrentPatient(auth("patient@example.com"), 90L,
+                new LabResultRemovalRequest(90L, 0L, "duplicate"));
+
+        var ordered = inOrder(resultSets, audit, redFlags);
+        ordered.verify(resultSets).flush();
+        ordered.verify(audit).recordRemoval(eq(set), any(), eq(patientUser), any());
+        ordered.verify(redFlags).evaluateLabRemoval(set);
+        verify(redFlags, never()).evaluateLab(any());
     }
 
     @Test
@@ -118,6 +148,7 @@ class LabResultServiceTest {
         assertThatThrownBy(() -> service.updateForCurrentPatient(auth("patient@example.com"), 90L, request(90L, 3L)))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+        verifyNoInteractions(redFlags);
     }
 
     @Test
@@ -143,6 +174,7 @@ class LabResultServiceTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
         verify(audit, never()).recordUpdate(any(), any(), any(), any());
+        verifyNoInteractions(redFlags);
     }
 
     @Test
@@ -158,6 +190,7 @@ class LabResultServiceTest {
         assertThatThrownBy(() -> service.saveForCurrentPatient(auth("patient@example.com"), malformed))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verifyNoInteractions(redFlags);
     }
 
     @Test
@@ -172,6 +205,7 @@ class LabResultServiceTest {
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
         verifyNoInteractions(resultSets);
+        verifyNoInteractions(redFlags);
     }
 
     @Test
@@ -185,6 +219,7 @@ class LabResultServiceTest {
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
         verifyNoInteractions(resultSets);
+        verifyNoInteractions(redFlags);
     }
 
     @Test
@@ -196,6 +231,7 @@ class LabResultServiceTest {
                 auth("coordinator@example.com"), 10L))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+        verifyNoInteractions(redFlags);
     }
 
     @Test
@@ -209,6 +245,7 @@ class LabResultServiceTest {
                 new LabResultRemovalRequest(90L, 0L, "x".repeat(501))));
 
         verifyNoInteractions(resultSets);
+        verifyNoInteractions(redFlags);
     }
 
     private static void assertBadRequest(org.assertj.core.api.ThrowableAssert.ThrowingCallable operation) {

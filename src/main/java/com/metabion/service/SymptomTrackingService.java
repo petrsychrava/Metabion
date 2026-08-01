@@ -15,6 +15,7 @@ import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.SymptomCheckInRepository;
 import com.metabion.repository.SymptomQuestionnaireVersionRepository;
 import com.metabion.repository.UserRepository;
+import com.metabion.service.redflag.RedFlagEvaluationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -44,19 +45,22 @@ public class SymptomTrackingService {
     private final SymptomCheckInRepository checkIns;
     private final AccessControlService accessControl;
     private final SymptomQuestionnaireAssembler assembler;
+    private final RedFlagEvaluationService redFlags;
 
     public SymptomTrackingService(UserRepository users,
                                   PatientProfileRepository patientProfiles,
                                   SymptomQuestionnaireVersionRepository versions,
                                   SymptomCheckInRepository checkIns,
                                   AccessControlService accessControl,
-                                  SymptomQuestionnaireAssembler assembler) {
+                                  SymptomQuestionnaireAssembler assembler,
+                                  RedFlagEvaluationService redFlags) {
         this.users = users;
         this.patientProfiles = patientProfiles;
         this.versions = versions;
         this.checkIns = checkIns;
         this.accessControl = accessControl;
         this.assembler = assembler;
+        this.redFlags = redFlags;
     }
 
     public SymptomQuestionnaireResponse activeQuestionnaire() {
@@ -112,7 +116,9 @@ public class SymptomTrackingService {
             totalScore = totalScore.add(answer.getNumericScore());
         }
         checkIn.setTotalSymptomScore(totalScore);
-        return assembler.checkIn(checkIns.save(checkIn));
+        var saved = checkIns.saveAndFlush(checkIn);
+        redFlags.evaluateSymptom(saved);
+        return assembler.checkIn(saved);
     }
 
     public SymptomCheckInResponse getCurrentPatientCheckIn(Authentication authentication, LocalDate date) {
