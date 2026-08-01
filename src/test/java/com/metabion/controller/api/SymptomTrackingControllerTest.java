@@ -109,7 +109,8 @@ class SymptomTrackingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(10))
                 .andExpect(jsonPath("$.flareState").value("NO_FLARE"))
-                .andExpect(jsonPath("$.totalSymptomScore").value(4.00));
+                .andExpect(jsonPath("$.totalSymptomScore").value(4.00))
+                .andExpect(jsonPath("$.redFlagOutcome").doesNotExist());
 
         verify(symptomTrackingService).saveForCurrentPatient(any(), any());
     }

@@ -78,10 +78,11 @@ class LabResultControllerTest {
         mvc.perform(post("/api/lab-result-sets")
                         .with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validCreateJson()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validCreateJson()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(90));
+                .andExpect(jsonPath("$.id").value(90))
+                .andExpect(jsonPath("$.redFlagOutcome").doesNotExist());
 
         verify(results).saveForCurrentPatient(any(), any());
     }
@@ -133,10 +134,13 @@ class LabResultControllerTest {
                 .andExpect(status().isOk());
         mvc.perform(put("/api/lab-result-sets/90").with(user("patient@example.com").roles(RoleName.PATIENT.name())).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content(validUpdateJson()))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.redFlagOutcome").doesNotExist());
         mvc.perform(post("/api/lab-result-sets/90/removal").with(user("patient@example.com").roles(RoleName.PATIENT.name())).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"resultSetId\":90,\"version\":1}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("removed"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("removed"))
+                .andExpect(jsonPath("$.redFlagOutcome").doesNotExist());
         mvc.perform(get("/api/lab-trends/HBA1C").with(user("patient@example.com").roles(RoleName.PATIENT.name()))
                         .param("from", "2026-06-01").param("to", "2026-06-10"))
                 .andExpect(status().isOk());
