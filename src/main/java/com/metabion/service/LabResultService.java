@@ -5,6 +5,7 @@ import com.metabion.dto.*;
 import com.metabion.repository.LabResultSetRepository;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
+import com.metabion.service.redflag.RedFlagEvaluationService;
 import jakarta.persistence.OptimisticLockException;
 import org.springframework.http.HttpStatus;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -33,16 +34,19 @@ public class LabResultService {
     private final LabAuditService audit;
     private final LabResponseAssembler responses;
     private final DateRangeValidator dateRanges;
+    private final RedFlagEvaluationService redFlags;
     private final Clock clock;
 
     public LabResultService(UserRepository users, PatientProfileRepository patientProfiles,
                             LabResultSetRepository resultSets, LabCatalogService catalog,
                             LabUnitConversionService conversions, AccessControlService accessControl,
                             LabAuditService audit, LabResponseAssembler responses,
-                            DateRangeValidator dateRanges, Clock clock) {
+                            DateRangeValidator dateRanges, RedFlagEvaluationService redFlags,
+                            Clock clock) {
         this.users = users; this.patientProfiles = patientProfiles; this.resultSets = resultSets;
         this.catalog = catalog; this.conversions = conversions; this.accessControl = accessControl;
-        this.audit = audit; this.responses = responses; this.dateRanges = dateRanges; this.clock = clock;
+        this.audit = audit; this.responses = responses; this.dateRanges = dateRanges;
+        this.redFlags = redFlags; this.clock = clock;
     }
 
     public LabResultSetResponse saveForCurrentPatient(Authentication authentication, LabResultSetRequest request) {
@@ -119,6 +123,7 @@ public class LabResultService {
         set.replaceResults(buildResults(set, request.results()), now);
         var saved = resultSets.saveAndFlush(set);
         audit.recordCreate(saved, actor, now);
+        redFlags.evaluateLab(saved);
         return responses.resultSet(saved, actor);
     }
     private LabResultSetResponse update(PatientProfile patient, User actor, Long id, LabResultSetRequest request, boolean enforceCreator) {
@@ -130,6 +135,7 @@ public class LabResultService {
         set.replaceResults(buildResults(set, request.results()), now);
         flushOrConflict();
         audit.recordUpdate(set, before, actor, now);
+        redFlags.evaluateLab(set);
         return responses.resultSet(set, actor);
     }
     private void remove(PatientProfile patient, User actor, Long id, LabResultRemovalRequest request, boolean enforceCreator) {
@@ -138,6 +144,7 @@ public class LabResultService {
         if (enforceCreator && !set.getCreatedByUser().getId().equals(actor.getId())) throw forbidden("Patient can only modify patient-created laboratory results");
         requireVersion(set, request.version()); var before = audit.snapshot(set); var now = Instant.now(clock);
         set.markRemoved(actor, trimToNull(request.reason()), now); flushOrConflict(); audit.recordRemoval(set, before, actor, now);
+        redFlags.evaluateLabRemoval(set);
     }
     private List<LabResult> buildResults(LabResultSet set, List<LabResultRequest> requests) {
         var seen = new HashSet<String>();

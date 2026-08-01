@@ -14,6 +14,7 @@ import com.metabion.repository.LabResultRepository;
 import com.metabion.repository.LabResultSetRepository;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
+import com.metabion.service.redflag.RedFlagEvaluationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -67,6 +68,7 @@ class LabResultServicePersistenceTest {
     @Autowired LabResultRepository results;
     @MockitoSpyBean LabResultAuditEventRepository auditEvents;
     @MockitoBean AccessControlService accessControl;
+    @MockitoBean RedFlagEvaluationService redFlags;
 
     private PatientProfile patient;
     private String email;
@@ -142,6 +144,21 @@ class LabResultServicePersistenceTest {
 
         assertThat(resultSets.count()).isZero();
         assertThat(results.count()).isZero();
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void redFlagEvaluationFailureRollsBackResultSetRowsAndAuditEvent() {
+        doThrow(new IllegalStateException("Red-flag evaluation failed"))
+                .when(redFlags).evaluateLab(any());
+
+        assertThatThrownBy(() -> service.saveForCurrentPatient(authentication(), request()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Red-flag evaluation failed");
+
+        assertThat(resultSets.count()).isZero();
+        assertThat(results.count()).isZero();
+        assertThat(auditEvents.count()).isZero();
     }
 
     private TestingAuthenticationToken authentication() {
