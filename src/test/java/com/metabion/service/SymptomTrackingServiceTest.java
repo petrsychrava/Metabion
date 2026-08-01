@@ -17,6 +17,7 @@ import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.SymptomCheckInRepository;
 import com.metabion.repository.SymptomQuestionnaireVersionRepository;
 import com.metabion.repository.UserRepository;
+import com.metabion.service.redflag.RedFlagEvaluationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +38,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,6 +51,7 @@ class SymptomTrackingServiceTest {
     @Mock SymptomQuestionnaireVersionRepository versions;
     @Mock SymptomCheckInRepository checkIns;
     @Mock AccessControlService accessControl;
+    @Mock RedFlagEvaluationService redFlags;
 
     SymptomTrackingService service;
     Authentication patientAuth;
@@ -63,7 +68,8 @@ class SymptomTrackingServiceTest {
                 versions,
                 checkIns,
                 accessControl,
-                new SymptomQuestionnaireAssembler());
+                new SymptomQuestionnaireAssembler(),
+                redFlags);
         patientAuth = new TestingAuthenticationToken("patient@example.com", "password");
         patientAuth.setAuthenticated(true);
         patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
@@ -77,7 +83,7 @@ class SymptomTrackingServiceTest {
         lenient().when(versions.findActiveVersionsByQuestionnaireStableKey("ibd-symptom-check-in"))
                 .thenReturn(List.of(activeVersion));
         lenient().when(checkIns.findByPatientProfileIdAndCheckInDate(any(), any())).thenReturn(Optional.empty());
-        lenient().when(checkIns.save(any())).thenAnswer(invocation -> {
+        lenient().when(checkIns.saveAndFlush(any())).thenAnswer(invocation -> {
             var checkIn = (SymptomCheckIn) invocation.getArgument(0);
             if (checkIn.getId() == null) {
                 ReflectionTestUtils.setField(checkIn, "id", 200L);
@@ -98,6 +104,7 @@ class SymptomTrackingServiceTest {
         assertThatThrownBy(() -> service.saveForCurrentPatient(patientAuth, request))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("required symptom answers are missing");
+        verifyNoInteractions(redFlags);
     }
 
     @Test
@@ -135,6 +142,29 @@ class SymptomTrackingServiceTest {
     }
 
     @Test
+    void saveForCurrentPatientEvaluatesCreatedCheckInOnce() {
+        service.saveForCurrentPatient(patientAuth,
+                completeRequest(LocalDate.of(2026, 6, 26), FlareState.NO_FLARE, "none"));
+
+        verify(redFlags).evaluateSymptom(any(SymptomCheckIn.class));
+        verifyNoMoreInteractions(redFlags);
+    }
+
+    @Test
+    void saveForCurrentPatientEvaluatesSameDayUpdateOnce() {
+        var date = LocalDate.of(2026, 6, 26);
+        var existing = new SymptomCheckIn(patientProfile, activeVersion, date, FlareState.SUSPECTED_FLARE);
+        ReflectionTestUtils.setField(existing, "id", 200L);
+        when(checkIns.findByPatientProfileIdAndCheckInDate(10L, date)).thenReturn(Optional.of(existing));
+
+        service.saveForCurrentPatient(patientAuth,
+                completeRequest(date, FlareState.ACTIVE_FLARE, "severe"));
+
+        verify(redFlags).evaluateSymptom(existing);
+        verifyNoMoreInteractions(redFlags);
+    }
+
+    @Test
     void weightedChoiceScoreIsStoredAsThePerAnswerContribution() {
         var version = activeVersionWithWeightedAbdominalPain(new BigDecimal("2.00"));
         when(versions.findActiveVersionsByQuestionnaireStableKey("ibd-symptom-check-in"))
@@ -161,6 +191,7 @@ class SymptomTrackingServiceTest {
                 completeRequest(tomorrow, FlareState.NO_FLARE, "none")))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("checkInDate cannot be in the future");
+        verifyNoInteractions(redFlags);
     }
 
     @Test
@@ -185,6 +216,7 @@ class SymptomTrackingServiceTest {
         assertThatThrownBy(() -> service.saveForCurrentPatient(patientAuth, request))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("questionnaireVersionId must reference the active IBD symptom questionnaire version");
+        verifyNoInteractions(redFlags);
     }
 
     @Test
@@ -211,6 +243,7 @@ class SymptomTrackingServiceTest {
         assertThat(existing.getAnswers()).hasSize(1);
         assertThat(existing.getAnswers().getFirst().getQuestionnaireVersion()).isSameAs(retiredVersion);
         assertThat(existing.getAnswers().getFirst().getAnswerNumeric()).isEqualByComparingTo("9");
+        verifyNoInteractions(redFlags);
     }
 
     @Test
@@ -233,6 +266,7 @@ class SymptomTrackingServiceTest {
         assertThatThrownBy(() -> service.saveForCurrentPatient(patientAuth, request))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("symptom-note requires a non-blank text answer");
+        verifyNoInteractions(redFlags);
     }
 
     private SymptomCheckInRequest completeRequest(LocalDate date, FlareState flareState, String painLevel) {
