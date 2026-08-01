@@ -95,6 +95,9 @@ public class RedFlagEvaluationService {
             List<RedFlagRuleDefinition> definitions,
             RedFlagEvaluationInput input) {
         var result = engine.evaluate(definitions, input);
+        if (operation == RedFlagSourceOperation.REMOVE) {
+            result = new RedFlagEvaluationResult(List.of(), null);
+        }
         var serializedMatches = result.matches().stream()
                 .map(match -> new SerializedMatch(match, serializer.serialize(match.matchedFacts())))
                 .toList();

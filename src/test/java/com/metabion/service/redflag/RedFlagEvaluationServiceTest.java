@@ -246,6 +246,39 @@ class RedFlagEvaluationServiceTest {
     }
 
     @Test
+    void removalDiscardsEngineMatchesAndSeverity() {
+        var input = input(RedFlagSourceType.LAB_RESULT_SET, LAB_ID, true);
+        var definition = new RedFlagRuleDefinition(
+                103L, "LAB_PROFILE_ONLY", 1,
+                RedFlagSourceType.LAB_RESULT_SET, RedFlagSeverity.EMERGENCY, List.of());
+        var profileFact = new RedFlagRuleMatch.MatchedFact(
+                RedFlagSourceType.PATIENT_PROFILE, PATIENT_ID, OBSERVED_ON,
+                new RedFlagFact("patient.sex", null, "FEMALE", null));
+        var match = new RedFlagRuleMatch(
+                definition, 203L, "PROFILE_ONLY", List.of(profileFact));
+        var definitions = List.of(definition);
+        when(catalog.activeFor(RedFlagSourceType.LAB_RESULT_SET)).thenReturn(definitions);
+        when(resolver.forLabRemoval(lab)).thenReturn(input);
+        when(engine.evaluate(definitions, input))
+                .thenReturn(new RedFlagEvaluationResult(List.of(match), RedFlagSeverity.EMERGENCY));
+        when(serializer.serialize(match.matchedFacts())).thenReturn("{}");
+        when(runs.findCurrentForUpdate(RedFlagSourceType.LAB_RESULT_SET, LAB_ID))
+                .thenReturn(Optional.empty());
+        when(runs.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(entityManager.getReference(RedFlagRuleVersion.class, 103L))
+                .thenReturn(mock(RedFlagRuleVersion.class));
+        when(entityManager.getReference(RedFlagRuleConditionGroup.class, 203L))
+                .thenReturn(mock(RedFlagRuleConditionGroup.class));
+
+        service.evaluateLabRemoval(lab);
+
+        var runCaptor = org.mockito.ArgumentCaptor.forClass(RedFlagEvaluationRun.class);
+        verify(runs, times(2)).saveAndFlush(runCaptor.capture());
+        assertThat(runCaptor.getAllValues().getFirst().getOverallSeverity()).isNull();
+        verifyNoInteractions(serializer, entityManager, events);
+    }
+
+    @Test
     void rejectsUnpersistedSourceBeforeLoadingRulesOrResolvingFacts() {
         when(symptom.getId()).thenReturn(null);
 
