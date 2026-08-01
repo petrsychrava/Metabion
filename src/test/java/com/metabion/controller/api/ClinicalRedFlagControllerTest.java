@@ -113,9 +113,37 @@ class ClinicalRedFlagControllerTest {
     }
 
     @Test
-    void unauthenticatedClinicalRoutesReturnUnauthorized() throws Exception {
+    void clinicalRoutesReturnForbiddenJsonForAuthenticatedNonClinicalCaller() throws Exception {
+        when(redFlags.historyForClinicalPatient(any(), eq(41L), any()))
+                .thenThrow(new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.FORBIDDEN,
+                        "Current user cannot access clinical data"));
+
+        mvc.perform(get("/api/clinical/patients/41/red-flags/history")
+                        .with(user("coordinator@example.com").roles(RoleName.COORDINATOR.name())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("forbidden"));
+    }
+
+    @Test
+    void clinicalInvalidCursorIsSanitizedToRequestFailed() throws Exception {
+        when(redFlags.historyForClinicalPatient(any(), eq(41L), any()))
+                .thenThrow(new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST,
+                        "cursor decode failed: illegal base64"));
+
+        mvc.perform(get("/api/clinical/patients/41/red-flags/history")
+                        .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .param("cursor", "%%%"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("request_failed"));
+    }
+
+    @Test
+    void unauthenticatedClinicalRoutesReturnUnauthorizedJson() throws Exception {
         mvc.perform(get("/api/clinical/patients/41/red-flags/history"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("unauthorized"));
     }
 
     private ClinicalRedFlagSnapshotResponse snapshotResponse() {

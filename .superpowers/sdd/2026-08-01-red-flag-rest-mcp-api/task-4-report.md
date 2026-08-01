@@ -90,3 +90,56 @@ Result: PASS
 ## Concerns
 
 - None for the requested scope.
+
+---
+
+## Fix round 1
+
+### What changed
+
+- Expanded `PatientRedFlagControllerTest` to cover:
+  - unauthenticated `401` JSON payload assertion: `{"error":"unauthorized"}`
+  - authenticated-but-forbidden non-patient caller returning `403` with `{"error":"forbidden"}`
+- Expanded `ClinicalRedFlagControllerTest` to cover:
+  - unauthenticated `401` JSON payload assertion: `{"error":"unauthorized"}`
+  - authenticated-but-forbidden non-clinical caller returning `403` with `{"error":"forbidden"}`
+  - invalid clinical cursor sanitization returning `400` with `{"error":"request_failed"}`
+- Kept production code unchanged. The review gap was missing contract coverage, not a REST boundary defect.
+
+### Exact commands and output
+
+1. Red verification for the added tests:
+
+```bash
+./gradlew test --tests 'com.metabion.controller.api.PatientRedFlagControllerTest' --tests 'com.metabion.controller.api.ClinicalRedFlagControllerTest'
+```
+
+Result: FAIL
+
+Output highlights:
+
+- `ClinicalRedFlagControllerTest > clinicalRoutesReturnForbiddenJsonForAuthenticatedNonClinicalCaller() FAILED`
+- `PatientRedFlagControllerTest > patientRoutesReturnForbiddenJsonForAuthenticatedNonPatientCaller() FAILED`
+
+Cause verified:
+
+- the controller tests use `@MockitoBean RedFlagEventQueryService`
+- without configuring the mock to throw the same `403` `ResponseStatusException` as the real Task 3 service, forbidden-role requests do not exercise the boundary’s forbidden JSON mapping
+
+2. Final verification required for the fix:
+
+```bash
+./gradlew test --tests 'com.metabion.controller.api.PatientRedFlagControllerTest' --tests 'com.metabion.controller.api.ClinicalRedFlagControllerTest' --tests 'com.metabion.controller.api.GlobalExceptionHandlerTest' --tests 'com.metabion.controller.api.SymptomTrackingControllerTest' --tests 'com.metabion.controller.api.LabResultControllerTest'
+```
+
+Result: PASS
+
+Output:
+
+- `BUILD SUCCESSFUL in 7s`
+
+### Files changed in fix round 1
+
+- `src/test/java/com/metabion/controller/api/PatientRedFlagControllerTest.java`
+- `src/test/java/com/metabion/controller/api/ClinicalRedFlagControllerTest.java`
+- `.superpowers/sdd/2026-08-01-red-flag-rest-mcp-api/task-4-report.md`

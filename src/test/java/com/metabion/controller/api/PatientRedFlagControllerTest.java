@@ -125,9 +125,23 @@ class PatientRedFlagControllerTest {
     }
 
     @Test
-    void unauthenticatedPatientRoutesReturnUnauthorized() throws Exception {
+    void patientRoutesReturnForbiddenJsonForAuthenticatedNonPatientCaller() throws Exception {
+        when(redFlags.currentForCurrentPatient(any()))
+                .thenThrow(new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.FORBIDDEN,
+                        "Current user is not a patient"));
+
+        mvc.perform(get("/api/red-flags/current")
+                        .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("forbidden"));
+    }
+
+    @Test
+    void unauthenticatedPatientRoutesReturnUnauthorizedJson() throws Exception {
         mvc.perform(get("/api/red-flags/current"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("unauthorized"));
     }
 
     private PatientRedFlagSnapshotResponse snapshotResponse() {
