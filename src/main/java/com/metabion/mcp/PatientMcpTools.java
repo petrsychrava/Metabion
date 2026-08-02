@@ -208,7 +208,9 @@ public class PatientMcpTools {
 
     @McpTool(
             name = "metabion_get_current_red_flags",
-            description = "Get the current patient's active red flags. "
+            description = "Get the current red flags for the patient's source records. "
+                    + "Current means the event belongs to the latest evaluation for its source record, "
+                    + "not clinical activity, acknowledgement, or resolution. "
                     + "Disclose returned red flags immediately and do not invent medical guidance.")
     public PatientRedFlagSnapshotResponse metabionGetCurrentRedFlags() {
         var auth = patientAuth();

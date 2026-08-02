@@ -241,6 +241,8 @@ class PatientMcpToolsTest {
         }
 
         assertThat(toolDescription("metabionGetCurrentRedFlags"))
+                .contains("current red flags for the patient's source records")
+                .contains("not clinical activity, acknowledgement, or resolution")
                 .contains("Disclose returned red flags immediately")
                 .contains("do not invent medical guidance");
         assertThat(toolDescription("metabionListRedFlagHistory",

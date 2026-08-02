@@ -87,3 +87,53 @@ IDEA MCP lint was attempted. The open IDEA project is rooted at the main checkou
 - No functional concerns from focused verification.
 - IDEA inspections could not analyze this linked worktree because it is outside the open project content roots.
 - The pre-existing untracked file `docs/superpowers/plans/2026-08-01-red-flag-rest-mcp-api.md` was not touched.
+
+## Final reviewer finding fix
+
+- Exact finding addressed: `Important: PatientMcpTools.java:211 describes the current-red-flags read as “Get the current patient's active red flags.” The API's current flag state means the event belongs to the latest evaluation for its source record; it is not a clinical activity, acknowledgement, or resolution state. This wording can cause an MCP host/model to misrepresent source-record currentness as an active medical condition. Replace the description with source-record-current terminology and explicitly state that currentness is not clinical activity or resolution. Extend PatientMcpToolsTest.java:243 contract coverage to enforce the corrected distinction. Preserve the required immediate-disclosure and no-invented-guidance wording.`
+
+### Files changed
+
+- `src/main/java/com/metabion/mcp/PatientMcpTools.java`
+- `src/test/java/com/metabion/mcp/PatientMcpToolsTest.java`
+- `.superpowers/sdd/2026-08-01-red-flag-rest-mcp-api/task-7-report.md`
+
+### RED
+
+```bash
+./gradlew test --tests 'com.metabion.mcp.PatientMcpToolsTest.redFlagToolSchemaAndAffectedWriteDescriptionsWarnAboutReturnedFlags'
+```
+
+Output:
+
+```text
+> Task :test FAILED
+
+PatientMcpToolsTest > redFlagToolSchemaAndAffectedWriteDescriptionsWarnAboutReturnedFlags() FAILED
+    java.lang.AssertionError at PatientMcpToolsTest.java:244
+
+1 test completed, 1 failed
+
+BUILD FAILED in 2s
+```
+
+### GREEN
+
+```bash
+./gradlew test --tests 'com.metabion.service.PatientAppFacadeTest' --tests 'com.metabion.mcp.PatientMcpToolsTest' --tests 'com.metabion.controller.api.OAuthMetadataControllerTest'
+```
+
+Output:
+
+```text
+> Task :test
+> Task :jacocoTestReport
+
+BUILD SUCCESSFUL in 6s
+5 actionable tasks: 4 executed, 1 up-to-date
+```
+
+### Concerns
+
+- No functional concerns from the focused reviewer-fix scope.
+- The linked worktree still contains a pre-existing untracked file at `docs/superpowers/plans/2026-08-01-red-flag-rest-mcp-api.md`; it was left untouched.
