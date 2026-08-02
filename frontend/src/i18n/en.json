@@ -4,7 +4,7 @@
   "nav": {
     "dashboard": "Dashboard", "dietLogs": "Diet logs", "checkIns": "Check-ins",
     "trends": "Trends", "labs": "Labs", "onboarding": "Onboarding",
-    "education": "Education", "account": "Account", "logout": "Log out",
+    "education": "Education", "redFlags": "Red flags", "account": "Account", "logout": "Log out",
     "language": "Language"
   },
   "auth": {
