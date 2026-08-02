@@ -2,6 +2,7 @@ package com.metabion.mcp;
 
 import com.metabion.config.PatientAccessTokenAuthentication;
 import com.metabion.domain.PatientAccessTokenScope;
+import com.metabion.domain.RedFlagSeverity;
 import com.metabion.dto.DailyDietLogRequest;
 import com.metabion.dto.DailyMeasurementEntryRequest;
 import com.metabion.dto.LabResultRemovalRequest;
@@ -14,11 +15,18 @@ import com.metabion.dto.PatientProfileForm;
 import com.metabion.dto.SymptomCheckInRequest;
 import com.metabion.dto.mcp.DietPhotoBase64UploadRequest;
 import com.metabion.dto.mcp.DietPhotoContentResponse;
+import com.metabion.dto.mcp.McpLabResultRemovalWriteResponse;
+import com.metabion.dto.mcp.McpLabResultSetWriteResponse;
+import com.metabion.dto.mcp.McpSymptomCheckInWriteResponse;
 import com.metabion.dto.mcp.PatientMeResponse;
+import com.metabion.dto.redflag.PatientRedFlagHistoryResponse;
+import com.metabion.dto.redflag.PatientRedFlagSnapshotResponse;
+import com.metabion.dto.redflag.RedFlagHistoryQuery;
 import com.metabion.exception.InsufficientScopeException;
 import com.metabion.service.PatientAccessAuditService;
 import com.metabion.service.PatientAppFacade;
 import org.springframework.ai.mcp.annotation.McpTool;
+import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -160,13 +168,15 @@ public class PatientMcpTools {
         return response;
     }
 
-    @McpTool(name = "metabion_save_symptom_check_in", description = "Save or update a symptom check-in for the current Metabion patient.")
-    public Object metabionSaveSymptomCheckIn(SymptomCheckInRequest request) {
+    @McpTool(
+            name = "metabion_save_symptom_check_in",
+            description = "Save or update a symptom check-in for the current Metabion patient; "
+                    + "disclose returned red flags immediately and do not invent medical guidance.")
+    public McpSymptomCheckInWriteResponse metabionSaveSymptomCheckIn(SymptomCheckInRequest request) {
         var auth = patientAuth();
         require(auth, PatientAccessTokenScope.PATIENT_SYMPTOM_WRITE, "metabion_save_symptom_check_in");
-        var response = patientApp.saveSymptomCheckIn(auth, request);
-        audit.recordToolSuccess(auth, "metabion_save_symptom_check_in");
-        return response;
+        return audited(auth, "metabion_save_symptom_check_in",
+                () -> patientApp.saveSymptomCheckIn(auth, request));
     }
 
     @McpTool(name = "metabion_get_symptom_check_in", description = "Get a symptom check-in for the current Metabion patient by date.")
@@ -194,6 +204,34 @@ public class PatientMcpTools {
         var response = patientApp.dailyTrends(auth, from, to);
         audit.recordToolSuccess(auth, "metabion_get_daily_trends");
         return response;
+    }
+
+    @McpTool(
+            name = "metabion_get_current_red_flags",
+            description = "Get the current patient's active red flags. "
+                    + "Disclose returned red flags immediately and do not invent medical guidance.")
+    public PatientRedFlagSnapshotResponse metabionGetCurrentRedFlags() {
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_RED_FLAG_READ, "metabion_get_current_red_flags");
+        return audited(auth, "metabion_get_current_red_flags",
+                () -> patientApp.currentRedFlags(auth));
+    }
+
+    @McpTool(
+            name = "metabion_list_red_flag_history",
+            description = "List the current patient's red-flag history. "
+                    + "Disclose returned red flags immediately and do not invent medical guidance.")
+    public PatientRedFlagHistoryResponse metabionListRedFlagHistory(
+            @McpToolParam(required = false) LocalDate from,
+            @McpToolParam(required = false) LocalDate to,
+            @McpToolParam(required = false) RedFlagSeverity severity,
+            @McpToolParam(required = false) String cursor,
+            @McpToolParam(required = false) Integer size) {
+        var auth = patientAuth();
+        require(auth, PatientAccessTokenScope.PATIENT_RED_FLAG_READ, "metabion_list_red_flag_history");
+        return audited(auth, "metabion_list_red_flag_history",
+                () -> patientApp.redFlagHistory(auth,
+                        new RedFlagHistoryQuery(from, to, severity, cursor, size)));
     }
 
     @McpTool(name = "metabion_submit_onboarding", description = "Submit onboarding information for the current Metabion patient.")
@@ -263,42 +301,48 @@ public class PatientMcpTools {
     public List<LabTestDefinitionResponse> metabionListLabTests() {
         var auth = patientAuth();
         require(auth, PatientAccessTokenScope.PATIENT_LAB_READ, "metabion_list_lab_tests");
-        return auditedLab(auth, "metabion_list_lab_tests", patientApp::listLabTests);
+        return audited(auth, "metabion_list_lab_tests", patientApp::listLabTests);
     }
 
-    @McpTool(name = "metabion_save_lab_result_set", description = "Save a laboratory result set for the current Metabion patient.")
-    public LabResultSetResponse metabionSaveLabResultSet(LabResultSetRequest request) {
+    @McpTool(
+            name = "metabion_save_lab_result_set",
+            description = "Save a laboratory result set for the current Metabion patient; "
+                    + "disclose returned red flags immediately and do not invent medical guidance.")
+    public McpLabResultSetWriteResponse metabionSaveLabResultSet(LabResultSetRequest request) {
         var auth = patientAuth();
         require(auth, PatientAccessTokenScope.PATIENT_LAB_WRITE, "metabion_save_lab_result_set");
-        return auditedLab(auth, "metabion_save_lab_result_set", () -> patientApp.saveLabResultSet(auth, request));
+        return audited(auth, "metabion_save_lab_result_set", () -> patientApp.saveLabResultSet(auth, request));
     }
 
     @McpTool(name = "metabion_get_lab_result_set", description = "Get a laboratory result set owned by the current Metabion patient.")
     public LabResultSetResponse metabionGetLabResultSet(Long resultSetId) {
         var auth = patientAuth();
         require(auth, PatientAccessTokenScope.PATIENT_LAB_READ, "metabion_get_lab_result_set");
-        return auditedLab(auth, "metabion_get_lab_result_set", () -> patientApp.getLabResultSet(auth, resultSetId));
+        return audited(auth, "metabion_get_lab_result_set", () -> patientApp.getLabResultSet(auth, resultSetId));
     }
 
     @McpTool(name = "metabion_list_lab_result_sets", description = "List laboratory result sets for the current Metabion patient in a date range.")
     public List<LabResultSetResponse> metabionListLabResultSets(LocalDate from, LocalDate to) {
         var auth = patientAuth();
         require(auth, PatientAccessTokenScope.PATIENT_LAB_READ, "metabion_list_lab_result_sets");
-        return auditedLab(auth, "metabion_list_lab_result_sets", () -> patientApp.listLabResultSets(auth, from, to));
+        return audited(auth, "metabion_list_lab_result_sets", () -> patientApp.listLabResultSets(auth, from, to));
     }
 
-    @McpTool(name = "metabion_remove_lab_result_set", description = "Remove a laboratory result set owned by the current Metabion patient.")
-    public void metabionRemoveLabResultSet(LabResultRemovalRequest request) {
+    @McpTool(
+            name = "metabion_remove_lab_result_set",
+            description = "Remove a laboratory result set owned by the current Metabion patient; "
+                    + "disclose returned red flags immediately and do not invent medical guidance.")
+    public McpLabResultRemovalWriteResponse metabionRemoveLabResultSet(LabResultRemovalRequest request) {
         var auth = patientAuth();
         require(auth, PatientAccessTokenScope.PATIENT_LAB_WRITE, "metabion_remove_lab_result_set");
-        auditedLab(auth, "metabion_remove_lab_result_set", () -> patientApp.removeLabResultSet(auth, request));
+        return audited(auth, "metabion_remove_lab_result_set", () -> patientApp.removeLabResultSet(auth, request));
     }
 
     @McpTool(name = "metabion_get_lab_trend", description = "Get a laboratory biomarker trend for the current Metabion patient.")
     public LabTrendResponse metabionGetLabTrend(String testCode, LocalDate from, LocalDate to) {
         var auth = patientAuth();
         require(auth, PatientAccessTokenScope.PATIENT_LAB_READ, "metabion_get_lab_trend");
-        return auditedLab(auth, "metabion_get_lab_trend", () -> patientApp.labTrend(auth, testCode, from, to));
+        return audited(auth, "metabion_get_lab_trend", () -> patientApp.labTrend(auth, testCode, from, to));
     }
 
     private PatientAccessTokenAuthentication patientAuth() {
@@ -319,21 +363,11 @@ public class PatientMcpTools {
         }
     }
 
-    private <T> T auditedLab(PatientAccessTokenAuthentication auth, String operation, Supplier<T> request) {
+    private <T> T audited(PatientAccessTokenAuthentication auth, String operation, Supplier<T> request) {
         try {
             var response = request.get();
             audit.recordToolSuccess(auth, operation);
             return response;
-        } catch (RuntimeException ex) {
-            audit.recordToolFailure(auth, operation, "request_failed");
-            throw ex;
-        }
-    }
-
-    private void auditedLab(PatientAccessTokenAuthentication auth, String operation, Runnable request) {
-        try {
-            request.run();
-            audit.recordToolSuccess(auth, operation);
         } catch (RuntimeException ex) {
             audit.recordToolFailure(auth, operation, "request_failed");
             throw ex;

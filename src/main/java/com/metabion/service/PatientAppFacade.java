@@ -22,7 +22,14 @@ import com.metabion.dto.PatientProfileForm;
 import com.metabion.dto.SymptomCheckInRequest;
 import com.metabion.dto.SymptomCheckInResponse;
 import com.metabion.dto.SymptomQuestionnaireResponse;
+import com.metabion.dto.mcp.McpLabResultRemovalWriteResponse;
+import com.metabion.dto.mcp.McpLabResultSetWriteResponse;
+import com.metabion.dto.mcp.McpSymptomCheckInWriteResponse;
+import com.metabion.dto.redflag.PatientRedFlagHistoryResponse;
+import com.metabion.dto.redflag.PatientRedFlagSnapshotResponse;
+import com.metabion.dto.redflag.RedFlagHistoryQuery;
 import com.metabion.repository.PatientProfileRepository;
+import com.metabion.service.redflag.RedFlagEventQueryService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -46,6 +53,7 @@ public class PatientAppFacade {
     private final LabCatalogService labCatalog;
     private final LabResultService labResults;
     private final LabTrendService labTrends;
+    private final RedFlagEventQueryService redFlags;
 
     public PatientAppFacade(UserPreferenceService preferences,
                             PatientProfileRepository patientProfiles,
@@ -57,7 +65,8 @@ public class PatientAppFacade {
                             EducationContentService education,
                             LabCatalogService labCatalog,
                             LabResultService labResults,
-                            LabTrendService labTrends) {
+                            LabTrendService labTrends,
+                            RedFlagEventQueryService redFlags) {
         this.preferences = preferences;
         this.patientProfiles = patientProfiles;
         this.dietLogs = dietLogs;
@@ -69,6 +78,7 @@ public class PatientAppFacade {
         this.labCatalog = labCatalog;
         this.labResults = labResults;
         this.labTrends = labTrends;
+        this.redFlags = redFlags;
     }
 
     public Long patientProfileId(Authentication auth) {
@@ -118,8 +128,8 @@ public class PatientAppFacade {
         return symptoms.activeQuestionnaire();
     }
 
-    public SymptomCheckInResponse saveSymptomCheckIn(Authentication auth, SymptomCheckInRequest request) {
-        return symptoms.saveForCurrentPatient(auth, request);
+    public McpSymptomCheckInWriteResponse saveSymptomCheckIn(Authentication auth, SymptomCheckInRequest request) {
+        return symptoms.saveForCurrentPatientWithRedFlags(auth, request);
     }
 
     public SymptomCheckInResponse getSymptomCheckIn(Authentication auth, LocalDate date) {
@@ -166,8 +176,8 @@ public class PatientAppFacade {
         return labCatalog.listActive();
     }
 
-    public LabResultSetResponse saveLabResultSet(Authentication auth, LabResultSetRequest request) {
-        return labResults.saveForCurrentPatient(auth, request);
+    public McpLabResultSetWriteResponse saveLabResultSet(Authentication auth, LabResultSetRequest request) {
+        return labResults.saveForCurrentPatientWithRedFlags(auth, request);
     }
 
     public LabResultSetResponse getLabResultSet(Authentication auth, Long resultSetId) {
@@ -178,11 +188,19 @@ public class PatientAppFacade {
         return labResults.listForCurrentPatient(auth, from, to);
     }
 
-    public void removeLabResultSet(Authentication auth, LabResultRemovalRequest request) {
-        labResults.removeForCurrentPatient(auth, request);
+    public McpLabResultRemovalWriteResponse removeLabResultSet(Authentication auth, LabResultRemovalRequest request) {
+        return labResults.removeForCurrentPatientWithRedFlags(auth, request);
     }
 
     public LabTrendResponse labTrend(Authentication auth, String testCode, LocalDate from, LocalDate to) {
         return labTrends.currentPatientTrend(auth, testCode, from, to);
+    }
+
+    public PatientRedFlagSnapshotResponse currentRedFlags(Authentication auth) {
+        return redFlags.currentForCurrentPatient(auth);
+    }
+
+    public PatientRedFlagHistoryResponse redFlagHistory(Authentication auth, RedFlagHistoryQuery query) {
+        return redFlags.historyForCurrentPatient(auth, query);
     }
 }

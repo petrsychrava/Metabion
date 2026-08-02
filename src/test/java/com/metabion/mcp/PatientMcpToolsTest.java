@@ -4,6 +4,7 @@ import com.metabion.config.PatientAccessTokenAuthentication;
 import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessToken;
 import com.metabion.domain.PatientAccessTokenScope;
+import com.metabion.domain.RedFlagSeverity;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.DailyDietLogRequest;
@@ -13,6 +14,14 @@ import com.metabion.dto.LabResultSetResponse;
 import com.metabion.dto.LabTestDefinitionResponse;
 import com.metabion.dto.LabTrendResponse;
 import com.metabion.dto.PatientProfileForm;
+import com.metabion.dto.SymptomCheckInRequest;
+import com.metabion.dto.SymptomCheckInResponse;
+import com.metabion.dto.mcp.McpLabResultRemovalWriteResponse;
+import com.metabion.dto.mcp.McpLabResultSetWriteResponse;
+import com.metabion.dto.mcp.McpSymptomCheckInWriteResponse;
+import com.metabion.dto.redflag.PatientRedFlagHistoryResponse;
+import com.metabion.dto.redflag.PatientRedFlagSnapshotResponse;
+import com.metabion.dto.redflag.RedFlagHistoryQuery;
 import com.metabion.exception.InsufficientScopeException;
 import com.metabion.service.PatientAccessAuditService;
 import com.metabion.service.PatientAppFacade;
@@ -23,6 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.mcp.annotation.McpTool;
+import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -88,6 +98,10 @@ class PatientMcpToolsTest {
         assertThat(toolName("metabionSaveDietLog", DailyDietLogRequest.class)).isEqualTo("metabion_save_diet_log");
         assertThat(toolName("metabionCompleteEducationLesson", String.class, String.class))
                 .isEqualTo("metabion_complete_education_lesson");
+        assertThat(toolName("metabionGetCurrentRedFlags")).isEqualTo("metabion_get_current_red_flags");
+        assertThat(toolName("metabionListRedFlagHistory",
+                LocalDate.class, LocalDate.class, RedFlagSeverity.class, String.class, Integer.class))
+                .isEqualTo("metabion_list_red_flag_history");
     }
 
     @Test
@@ -162,6 +176,102 @@ class PatientMcpToolsTest {
     }
 
     @Test
+    void currentRedFlagsRequireDedicatedScopeAndAuditSuccess() {
+        authenticate(PatientAccessTokenScope.PATIENT_RED_FLAG_READ);
+        var snapshot = new PatientRedFlagSnapshotResponse(RedFlagSeverity.EMERGENCY, List.of());
+        when(patientApp.currentRedFlags(org.mockito.ArgumentMatchers.any())).thenReturn(snapshot);
+
+        assertThat(tools.metabionGetCurrentRedFlags()).isSameAs(snapshot);
+        verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("metabion_get_current_red_flags"));
+    }
+
+    @Test
+    void historyRejectsTokenWithoutDedicatedScope() {
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_READ);
+
+        assertThatThrownBy(() -> tools.metabionListRedFlagHistory(
+                null, null, null, null, 25))
+                .isInstanceOf(InsufficientScopeException.class);
+        verifyNoInteractions(patientApp);
+        verify(audit).recordToolFailure(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("metabion_list_red_flag_history"),
+                org.mockito.ArgumentMatchers.eq("missing_scope"));
+    }
+
+    @Test
+    void historyUsesDedicatedScopeAndForwardsOptionalQuery() {
+        authenticate(PatientAccessTokenScope.PATIENT_RED_FLAG_READ);
+        var from = LocalDate.of(2026, 7, 1);
+        var to = LocalDate.of(2026, 7, 31);
+        var history = new PatientRedFlagHistoryResponse(List.of(), "next");
+        when(patientApp.redFlagHistory(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(new RedFlagHistoryQuery(
+                        from, to, RedFlagSeverity.URGENT_REVIEW, "cursor", 25))))
+                .thenReturn(history);
+
+        assertThat(tools.metabionListRedFlagHistory(
+                from, to, RedFlagSeverity.URGENT_REVIEW, "cursor", 25))
+                .isSameAs(history);
+        verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("metabion_list_red_flag_history"));
+    }
+
+    @Test
+    void redFlagReadFailuresAuditOnlyMetadata() {
+        authenticate(PatientAccessTokenScope.PATIENT_RED_FLAG_READ);
+        when(patientApp.currentRedFlags(org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new IllegalArgumentException("severe bleeding"));
+
+        assertThatThrownBy(() -> tools.metabionGetCurrentRedFlags())
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(audit).recordToolFailure(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("metabion_get_current_red_flags"),
+                org.mockito.ArgumentMatchers.eq("request_failed"));
+    }
+
+    @Test
+    void redFlagToolSchemaAndAffectedWriteDescriptionsWarnAboutReturnedFlags() throws Exception {
+        var history = PatientMcpTools.class.getMethod("metabionListRedFlagHistory",
+                LocalDate.class, LocalDate.class, RedFlagSeverity.class, String.class, Integer.class);
+        for (var parameter : history.getParameters()) {
+            assertThat(parameter.getAnnotation(McpToolParam.class).required()).isFalse();
+        }
+
+        assertThat(toolDescription("metabionGetCurrentRedFlags"))
+                .contains("Disclose returned red flags immediately")
+                .contains("do not invent medical guidance");
+        assertThat(toolDescription("metabionListRedFlagHistory",
+                LocalDate.class, LocalDate.class, RedFlagSeverity.class, String.class, Integer.class))
+                .contains("Disclose returned red flags immediately")
+                .contains("do not invent medical guidance");
+        assertThat(toolDescription("metabionSaveSymptomCheckIn", SymptomCheckInRequest.class))
+                .contains("disclose returned red flags immediately")
+                .contains("do not invent medical guidance");
+        assertThat(toolDescription("metabionSaveLabResultSet", LabResultSetRequest.class))
+                .contains("disclose returned red flags immediately")
+                .contains("do not invent medical guidance");
+        assertThat(toolDescription("metabionRemoveLabResultSet", LabResultRemovalRequest.class))
+                .contains("disclose returned red flags immediately")
+                .contains("do not invent medical guidance");
+    }
+
+    @Test
+    void symptomWriteReturnsOutcomeUnderExistingWriteScope() {
+        authenticate(PatientAccessTokenScope.PATIENT_SYMPTOM_WRITE);
+        var request = mock(SymptomCheckInRequest.class);
+        var writeResponse = new McpSymptomCheckInWriteResponse(mock(SymptomCheckInResponse.class), null);
+        when(patientApp.saveSymptomCheckIn(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.same(request))).thenReturn(writeResponse);
+
+        assertThat(tools.metabionSaveSymptomCheckIn(request)).isSameAs(writeResponse);
+        verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("metabion_save_symptom_check_in"));
+    }
+
+    @Test
     void saveLabResultSetRejectsTokenWithoutWriteScope() {
         authenticate(PatientAccessTokenScope.PATIENT_LAB_READ);
 
@@ -176,12 +286,23 @@ class PatientMcpToolsTest {
     void saveLabResultSetDelegatesAndAuditsSuccess() {
         authenticate(PatientAccessTokenScope.PATIENT_LAB_WRITE);
         var request = mock(LabResultSetRequest.class);
-        var expected = mock(LabResultSetResponse.class);
+        var expected = new McpLabResultSetWriteResponse(mock(LabResultSetResponse.class), null);
         when(patientApp.saveLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request))).thenReturn(expected);
 
         assertThat(tools.metabionSaveLabResultSet(request)).isSameAs(expected);
         verify(patientApp).saveLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request));
         verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_save_lab_result_set"));
+    }
+
+    @Test
+    void labWriteReturnsOutcomeUnderExistingWriteScope() {
+        authenticate(PatientAccessTokenScope.PATIENT_LAB_WRITE);
+        var request = mock(LabResultSetRequest.class);
+        var writeResponse = new McpLabResultSetWriteResponse(mock(LabResultSetResponse.class), null);
+        when(patientApp.saveLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request)))
+                .thenReturn(writeResponse);
+
+        assertThat(tools.metabionSaveLabResultSet(request)).isSameAs(writeResponse);
     }
 
     @Test
@@ -239,12 +360,17 @@ class PatientMcpToolsTest {
     @Test
     void removeLabResultSetRequiresWriteScopeAndAuditsSuccess() {
         var request = mock(LabResultRemovalRequest.class);
+        var response = new McpLabResultRemovalWriteResponse(
+                new McpLabResultRemovalWriteResponse.Result("removed"), null);
         authenticate(PatientAccessTokenScope.PATIENT_LAB_READ);
         assertThatThrownBy(() -> tools.metabionRemoveLabResultSet(request)).isInstanceOf(InsufficientScopeException.class);
         verifyNoInteractions(patientApp);
 
         authenticate(PatientAccessTokenScope.PATIENT_LAB_WRITE);
-        tools.metabionRemoveLabResultSet(request);
+        when(patientApp.removeLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request)))
+                .thenReturn(response);
+
+        assertThat(tools.metabionRemoveLabResultSet(request)).isSameAs(response);
         verify(patientApp).removeLabResultSet(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.same(request));
         verify(audit).recordToolSuccess(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_remove_lab_result_set"));
     }
@@ -280,6 +406,11 @@ class PatientMcpToolsTest {
     private static String toolName(String methodName, Class<?>... parameterTypes) throws Exception {
         Method method = PatientMcpTools.class.getMethod(methodName, parameterTypes);
         return method.getAnnotation(McpTool.class).name();
+    }
+
+    private static String toolDescription(String methodName, Class<?>... parameterTypes) throws Exception {
+        Method method = PatientMcpTools.class.getMethod(methodName, parameterTypes);
+        return method.getAnnotation(McpTool.class).description();
     }
 
     private static ApplicationContextRunner contextRunner() {

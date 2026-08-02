@@ -9,6 +9,7 @@ import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessToken;
 import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.PatientProfile;
+import com.metabion.domain.RedFlagSeverity;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.Sex;
 import com.metabion.domain.SteroidUse;
@@ -23,8 +24,17 @@ import com.metabion.dto.LabTestDefinitionResponse;
 import com.metabion.dto.LabTrendResponse;
 import com.metabion.dto.OnboardingSubmissionResponse;
 import com.metabion.dto.PatientProfileForm;
+import com.metabion.dto.SymptomCheckInRequest;
+import com.metabion.dto.SymptomCheckInResponse;
 import com.metabion.dto.SymptomQuestionnaireResponse;
+import com.metabion.dto.mcp.McpLabResultRemovalWriteResponse;
+import com.metabion.dto.mcp.McpLabResultSetWriteResponse;
+import com.metabion.dto.mcp.McpSymptomCheckInWriteResponse;
+import com.metabion.dto.redflag.PatientRedFlagHistoryResponse;
+import com.metabion.dto.redflag.PatientRedFlagSnapshotResponse;
+import com.metabion.dto.redflag.RedFlagHistoryQuery;
 import com.metabion.repository.PatientProfileRepository;
+import com.metabion.service.redflag.RedFlagEventQueryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -80,6 +90,9 @@ class PatientAppFacadeTest {
     @Mock
     LabTrendService labTrends;
 
+    @Mock
+    RedFlagEventQueryService redFlags;
+
     PatientAppFacade facade;
     PatientAccessTokenAuthentication authentication;
 
@@ -96,7 +109,8 @@ class PatientAppFacadeTest {
                 education,
                 labCatalog,
                 labResults,
-                labTrends);
+                labTrends,
+                redFlags);
         authentication = new PatientAccessTokenAuthentication(token());
     }
 
@@ -165,19 +179,46 @@ class PatientAppFacadeTest {
     @Test
     void delegatesLaboratoryOperationsToLaboratoryServices() {
         var save = mock(LabResultSetRequest.class);
-        var removal = mock(LabResultRemovalRequest.class);
-        var response = mock(LabResultSetResponse.class);
         var trend = mock(LabTrendResponse.class);
-        when(labResults.saveForCurrentPatient(authentication, save)).thenReturn(response);
+        var response = new McpLabResultSetWriteResponse(mock(LabResultSetResponse.class), null);
+        when(labResults.saveForCurrentPatientWithRedFlags(authentication, save)).thenReturn(response);
         when(labTrends.currentPatientTrend(authentication, "CRP", java.time.LocalDate.MIN, java.time.LocalDate.MAX)).thenReturn(trend);
 
         assertThat(facade.saveLabResultSet(authentication, save)).isSameAs(response);
         assertThat(facade.labTrend(authentication, "CRP", java.time.LocalDate.MIN, java.time.LocalDate.MAX)).isSameAs(trend);
-        facade.removeLabResultSet(authentication, removal);
 
-        verify(labResults).saveForCurrentPatient(authentication, save);
-        verify(labResults).removeForCurrentPatient(authentication, removal);
+        verify(labResults).saveForCurrentPatientWithRedFlags(authentication, save);
         verify(labTrends).currentPatientTrend(authentication, "CRP", java.time.LocalDate.MIN, java.time.LocalDate.MAX);
+    }
+
+    @Test
+    void delegatesRedFlagReadsAndEnrichedWrites() {
+        var snapshot = new PatientRedFlagSnapshotResponse(RedFlagSeverity.EMERGENCY, List.of());
+        var query = new RedFlagHistoryQuery(
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 31),
+                RedFlagSeverity.URGENT_REVIEW,
+                "cursor",
+                25);
+        var history = new PatientRedFlagHistoryResponse(List.of(), "next");
+        var symptomRequest = mock(SymptomCheckInRequest.class);
+        var labRequest = mock(LabResultSetRequest.class);
+        var removalRequest = mock(LabResultRemovalRequest.class);
+        var symptomWrite = new McpSymptomCheckInWriteResponse(mock(SymptomCheckInResponse.class), null);
+        var labWrite = new McpLabResultSetWriteResponse(mock(LabResultSetResponse.class), null);
+        var removalWrite = new McpLabResultRemovalWriteResponse(
+                new McpLabResultRemovalWriteResponse.Result("removed"), null);
+        when(redFlags.currentForCurrentPatient(authentication)).thenReturn(snapshot);
+        when(redFlags.historyForCurrentPatient(authentication, query)).thenReturn(history);
+        when(symptoms.saveForCurrentPatientWithRedFlags(authentication, symptomRequest)).thenReturn(symptomWrite);
+        when(labResults.saveForCurrentPatientWithRedFlags(authentication, labRequest)).thenReturn(labWrite);
+        when(labResults.removeForCurrentPatientWithRedFlags(authentication, removalRequest)).thenReturn(removalWrite);
+
+        assertThat(facade.currentRedFlags(authentication)).isSameAs(snapshot);
+        assertThat(facade.redFlagHistory(authentication, query)).isSameAs(history);
+        assertThat(facade.saveSymptomCheckIn(authentication, symptomRequest)).isSameAs(symptomWrite);
+        assertThat(facade.saveLabResultSet(authentication, labRequest)).isSameAs(labWrite);
+        assertThat(facade.removeLabResultSet(authentication, removalRequest)).isSameAs(removalWrite);
     }
 
     @Test
