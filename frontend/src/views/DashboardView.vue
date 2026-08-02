@@ -6,7 +6,12 @@ import { accountApi } from '@/api/account'
 import { dietLogApi } from '@/api/dietLogs'
 import { symptomApi } from '@/api/symptoms'
 import { useApiError } from '@/composables/useApiError'
+import { useRedFlagsStore } from '@/stores/redFlags'
+import RedFlagBanner from '@/components/RedFlagBanner.vue'
+import type { RedFlagSeverity } from '@/types/api'
 import { todayInTimezone } from '@/utils/patientTimezone'
+
+const ALL_SEVERITIES: RedFlagSeverity[] = ['ROUTINE_REVIEW', 'URGENT_REVIEW', 'EMERGENCY']
 
 const { t } = useI18n()
 const { message, capture } = useApiError()
@@ -30,6 +35,7 @@ async function exists(fetcher: () => Promise<unknown>): Promise<boolean> {
 }
 
 onMounted(async () => {
+  void useRedFlagsStore().refreshCurrent()
   try {
     today.value = todayInTimezone((await accountApi.getProfile()).timezone)
   } catch {
@@ -47,6 +53,7 @@ onMounted(async () => {
 <template>
   <section>
     <h1 class="text-2xl font-semibold">{{ t('dashboard.title') }}</h1>
+    <RedFlagBanner :severities="ALL_SEVERITIES" class="mt-4" />
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
     <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
     <div v-else class="mt-4 grid gap-4 sm:grid-cols-2">
