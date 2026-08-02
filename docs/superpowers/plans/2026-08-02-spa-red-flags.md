@@ -505,7 +505,7 @@ Create `frontend/tests/components/RedFlagBanner.test.ts`:
 ```ts
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createPinia, setActivePinia } from 'pinia'
+import { createPinia, getActivePinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import RedFlagBanner from '@/components/RedFlagBanner.vue'
@@ -539,9 +539,11 @@ const urgentSnapshot: PatientRedFlagSnapshot = {
 }
 
 function mountBanner(severities: RedFlagSeverity[]) {
+  // Reuse the active pinia: tests seed the store via setActivePinia(), and a
+  // second createPinia() plugin would give the component a different instance.
   return mount(RedFlagBanner, {
     props: { severities },
-    global: { plugins: [createPinia(), i18n, makeRouter()] },
+    global: { plugins: [getActivePinia()!, i18n, makeRouter()] },
   })
 }
 
