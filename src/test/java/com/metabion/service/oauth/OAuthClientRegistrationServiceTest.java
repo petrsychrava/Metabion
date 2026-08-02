@@ -78,6 +78,21 @@ class OAuthClientRegistrationServiceTest {
     }
 
     @Test
+    void registersRedFlagReadScope() {
+        var response = service.register(new OAuthClientRegistrationRequest(
+                List.of("http://127.0.0.1:49152/callback"), "Codex", null,
+                "patient:red-flags:read patient:profile:read", "none",
+                List.of("authorization_code", "refresh_token"), "native", List.of("code")));
+
+        assertThat(response.scope()).isEqualTo("patient:profile:read patient:red-flags:read");
+
+        var captor = ArgumentCaptor.forClass(OAuthRegisteredClient.class);
+        verify(clients).save(captor.capture());
+        assertThat(captor.getValue().scopes())
+                .containsExactlyInAnyOrder("patient:profile:read", "patient:red-flags:read");
+    }
+
+    @Test
     void registersHttpsClient() {
         var response = service.register(new OAuthClientRegistrationRequest(
                 List.of("https://client.example/callback"),

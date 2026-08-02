@@ -3,6 +3,7 @@ package com.metabion.controller.api;
 import com.metabion.dto.oauth.OAuthErrorResponse;
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.exception.InsufficientScopeException;
+import com.metabion.exception.RedFlagSnapshotException;
 import com.metabion.exception.StaffInvitationException;
 import com.metabion.exception.ValidationException;
 import com.metabion.service.RateLimitedException;
@@ -106,6 +107,12 @@ public class GlobalExceptionHandler {
             error = "conflict";
         }
         return ResponseEntity.status(statusCode).body(Map.of("error", error));
+    }
+
+    @ExceptionHandler(RedFlagSnapshotException.class)
+    public ResponseEntity<Map<String, String>> redFlagSnapshot(RedFlagSnapshotException exception) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", "request_failed"));
     }
 
     @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockException.class})

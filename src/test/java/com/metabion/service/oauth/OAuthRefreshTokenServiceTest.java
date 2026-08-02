@@ -145,6 +145,48 @@ class OAuthRefreshTokenServiceTest {
     }
 
     @Test
+    void refreshPreservesGrantedRedFlagReadScopeWithoutAddingOtherAllowedScopes() {
+        var service = service();
+        var old = refreshToken("red-flag-refresh", NOW.plus(Duration.ofDays(1)));
+        old = new OAuthRefreshToken(PatientAccessTokenService.sha256Hex("red-flag-refresh"), "family-1", old.getUser(),
+                "mobile-app", OAuthClientSource.CONFIGURED, PatientAccessClientType.MCP_OTHER, "Mobile",
+                "http://localhost:8080/api/mcp", NOW.minusSeconds(60), NOW.plus(Duration.ofDays(1)),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ, PatientAccessTokenScope.PATIENT_RED_FLAG_READ));
+        mockLookup("red-flag-refresh", Optional.of(old));
+        when(clients.resolve("mobile-app")).thenReturn(Optional.of(new OAuthClientMetadata(
+                "mobile-app",
+                "Mobile",
+                "native",
+                OAuthClientSource.CONFIGURED,
+                List.of("myapp:/callback"),
+                List.of("patient:profile:read", "patient:red-flags:read", "patient:trend:read"),
+                List.of("authorization_code", "refresh_token"))));
+        when(tokens.save(any())).thenAnswer(invocation -> {
+            var saved = invocation.getArgument(0, OAuthRefreshToken.class);
+            ReflectionTestUtils.setField(saved, "id", 44L);
+            return saved;
+        });
+        when(accessTokens.issueForPatient(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new IssuePatientAccessTokenResponse(
+                        7L,
+                        "new-access",
+                        PatientAccessClientType.MCP_OTHER,
+                        "Mobile",
+                        NOW.plus(Duration.ofHours(1)),
+                        Set.of("patient:profile:read", "patient:red-flags:read")));
+
+        var response = service.refreshGrant("red-flag-refresh", "mobile-app", "http://localhost:8080/api/mcp");
+
+        assertThat(response.response().scope()).isEqualTo("patient:profile:read patient:red-flags:read");
+        var replacement = ArgumentCaptor.forClass(OAuthRefreshToken.class);
+        verify(tokens).save(replacement.capture());
+        assertThat(replacement.getValue().scopes())
+                .containsExactlyInAnyOrder(
+                        PatientAccessTokenScope.PATIENT_PROFILE_READ,
+                        PatientAccessTokenScope.PATIENT_RED_FLAG_READ);
+    }
+
+    @Test
     void rotateRejectsInvalidStoredOrCurrentClientState() {
         assertRejected("unknown", Optional.empty(), mobileClient(), "mobile-app", "http://localhost:8080/api/mcp");
         assertRejectedToken("expired", refreshToken("expired", NOW), mobileClient(), "mobile-app", "http://localhost:8080/api/mcp");

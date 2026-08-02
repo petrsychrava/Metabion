@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -65,31 +66,31 @@ public class RedFlagEvaluationService {
         this.clock = clock;
     }
 
-    public void evaluateSymptom(SymptomCheckIn checkIn) {
+    public RedFlagEvaluationOutcome evaluateSymptom(SymptomCheckIn checkIn) {
         var patient = requirePersisted(checkIn == null ? null : checkIn.getId(),
                 checkIn == null ? null : checkIn.getPatientProfile());
         var definitions = catalog.activeFor(RedFlagSourceType.SYMPTOM_CHECK_IN);
         var input = resolver.forSymptom(checkIn);
-        evaluate(RedFlagSourceOperation.UPSERT, patient, definitions, input);
+        return evaluate(RedFlagSourceOperation.UPSERT, patient, definitions, input);
     }
 
-    public void evaluateLab(LabResultSet resultSet) {
+    public RedFlagEvaluationOutcome evaluateLab(LabResultSet resultSet) {
         var patient = requirePersisted(resultSet == null ? null : resultSet.getId(),
                 resultSet == null ? null : resultSet.getPatientProfile());
         var definitions = catalog.activeFor(RedFlagSourceType.LAB_RESULT_SET);
         var input = resolver.forLab(resultSet);
-        evaluate(RedFlagSourceOperation.UPSERT, patient, definitions, input);
+        return evaluate(RedFlagSourceOperation.UPSERT, patient, definitions, input);
     }
 
-    public void evaluateLabRemoval(LabResultSet resultSet) {
+    public RedFlagEvaluationOutcome evaluateLabRemoval(LabResultSet resultSet) {
         var patient = requirePersisted(resultSet == null ? null : resultSet.getId(),
                 resultSet == null ? null : resultSet.getPatientProfile());
         var definitions = catalog.activeFor(RedFlagSourceType.LAB_RESULT_SET);
         var input = resolver.forLabRemoval(resultSet);
-        evaluate(RedFlagSourceOperation.REMOVE, patient, definitions, input);
+        return evaluate(RedFlagSourceOperation.REMOVE, patient, definitions, input);
     }
 
-    private void evaluate(
+    private RedFlagEvaluationOutcome evaluate(
             RedFlagSourceOperation operation,
             PatientProfile patient,
             List<RedFlagRuleDefinition> definitions,
@@ -108,23 +109,42 @@ public class RedFlagEvaluationService {
                 evaluatedAt, result.overallSeverity());
 
         runs.saveAndFlush(run);
-        runs.findCurrentForUpdate(trigger.sourceType(), trigger.sourceId()).ifPresent(preceding -> {
+        var precedingKeys = runs.findCurrentForUpdate(trigger.sourceType(), trigger.sourceId()).map(preceding -> {
+            var keys = events.findRuleKeysByEvaluationRunId(preceding.getId());
             preceding.supersedeWith(run);
             runs.saveAndFlush(preceding);
-        });
+            return keys;
+        }).orElseGet(List::of);
         run.markCurrent();
 
-        for (var serialized : serializedMatches) {
+        var persistedFlags = serializedMatches.stream().map(serialized -> {
             var match = serialized.match();
             var version = entityManager.getReference(
                     RedFlagRuleVersion.class, match.rule().versionId());
             var group = entityManager.getReference(
                     RedFlagRuleConditionGroup.class, match.matchedGroupId());
-            events.saveAndFlush(new RedFlagTriggerEvent(
+            var event = events.saveAndFlush(new RedFlagTriggerEvent(
                     run, version, group, match.rule().severity(),
                     evaluatedAt, serialized.snapshot()));
-        }
+            return new RedFlagEvaluationOutcome.Flag(
+                    event.getId(),
+                    match.rule().ruleKey(),
+                    match.rule().severity(),
+                    evaluatedAt,
+                    trigger.sourceType(),
+                    trigger.sourceId());
+        }).toList();
+        var currentKeys = persistedFlags.stream()
+                .map(RedFlagEvaluationOutcome.Flag::ruleKey)
+                .collect(Collectors.toSet());
+        var clearedKeys = precedingKeys.stream()
+                .filter(key -> !currentKeys.contains(key))
+                .distinct()
+                .sorted()
+                .toList();
         runs.saveAndFlush(run);
+        return new RedFlagEvaluationOutcome(
+                result.overallSeverity(), persistedFlags, clearedKeys);
     }
 
     private PatientProfile requirePersisted(Long sourceId, PatientProfile patient) {

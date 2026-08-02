@@ -11,10 +11,13 @@ import com.metabion.domain.User;
 import com.metabion.dto.SymptomCheckInRequest;
 import com.metabion.dto.SymptomCheckInResponse;
 import com.metabion.dto.SymptomQuestionnaireResponse;
+import com.metabion.dto.mcp.McpSymptomCheckInWriteResponse;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.SymptomCheckInRepository;
 import com.metabion.repository.SymptomQuestionnaireVersionRepository;
 import com.metabion.repository.UserRepository;
+import com.metabion.service.redflag.PatientRedFlagResponseAssembler;
+import com.metabion.service.redflag.RedFlagEvaluationOutcome;
 import com.metabion.service.redflag.RedFlagEvaluationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -46,6 +49,7 @@ public class SymptomTrackingService {
     private final AccessControlService accessControl;
     private final SymptomQuestionnaireAssembler assembler;
     private final RedFlagEvaluationService redFlags;
+    private final PatientRedFlagResponseAssembler patientRedFlagResponses;
 
     public SymptomTrackingService(UserRepository users,
                                   PatientProfileRepository patientProfiles,
@@ -53,7 +57,8 @@ public class SymptomTrackingService {
                                   SymptomCheckInRepository checkIns,
                                   AccessControlService accessControl,
                                   SymptomQuestionnaireAssembler assembler,
-                                  RedFlagEvaluationService redFlags) {
+                                  RedFlagEvaluationService redFlags,
+                                  PatientRedFlagResponseAssembler patientRedFlagResponses) {
         this.users = users;
         this.patientProfiles = patientProfiles;
         this.versions = versions;
@@ -61,6 +66,7 @@ public class SymptomTrackingService {
         this.accessControl = accessControl;
         this.assembler = assembler;
         this.redFlags = redFlags;
+        this.patientRedFlagResponses = patientRedFlagResponses;
     }
 
     public SymptomQuestionnaireResponse activeQuestionnaire() {
@@ -69,6 +75,19 @@ public class SymptomTrackingService {
 
     @Transactional
     public SymptomCheckInResponse saveForCurrentPatient(Authentication authentication, SymptomCheckInRequest request) {
+        return saveCurrentPatientCheckIn(authentication, request).response();
+    }
+
+    @Transactional
+    public McpSymptomCheckInWriteResponse saveForCurrentPatientWithRedFlags(Authentication authentication,
+                                                                            SymptomCheckInRequest request) {
+        var saved = saveCurrentPatientCheckIn(authentication, request);
+        return new McpSymptomCheckInWriteResponse(
+                saved.response(),
+                patientRedFlagResponses.outcome(saved.redFlagOutcome()));
+    }
+
+    private SavedSymptomCheckIn saveCurrentPatientCheckIn(Authentication authentication, SymptomCheckInRequest request) {
         var patient = currentPatientProfile(authentication);
         if (request == null) {
             throw badRequest("request is required");
@@ -117,8 +136,8 @@ public class SymptomTrackingService {
         }
         checkIn.setTotalSymptomScore(totalScore);
         var saved = checkIns.saveAndFlush(checkIn);
-        redFlags.evaluateSymptom(saved);
-        return assembler.checkIn(saved);
+        var redFlagOutcome = redFlags.evaluateSymptom(saved);
+        return new SavedSymptomCheckIn(assembler.checkIn(saved), redFlagOutcome);
     }
 
     public SymptomCheckInResponse getCurrentPatientCheckIn(Authentication authentication, LocalDate date) {
@@ -339,5 +358,10 @@ public class SymptomTrackingService {
 
     private static ResponseStatusException badRequest(String reason) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, reason);
+    }
+
+    private record SavedSymptomCheckIn(
+            SymptomCheckInResponse response,
+            RedFlagEvaluationOutcome redFlagOutcome) {
     }
 }

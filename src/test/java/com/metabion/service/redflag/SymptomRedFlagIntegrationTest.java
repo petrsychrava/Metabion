@@ -54,6 +54,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         RedFlagRuleCatalog.class,
         RedFlagFactResolver.class,
         RedFlagFactRegistry.class,
+        PatientRedFlagResponseAssembler.class,
         RedFlagSnapshotSerializer.class,
         TimeConfig.class
 })

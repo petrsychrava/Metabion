@@ -2,6 +2,8 @@ package com.metabion.service;
 
 import com.metabion.domain.FlareState;
 import com.metabion.domain.PatientProfile;
+import com.metabion.domain.RedFlagSeverity;
+import com.metabion.domain.RedFlagSourceType;
 import com.metabion.domain.QuestionnaireVersionStatus;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.SymptomAnswerType;
@@ -13,6 +15,8 @@ import com.metabion.domain.SymptomQuestionnaire;
 import com.metabion.domain.SymptomQuestionnaireVersion;
 import com.metabion.domain.User;
 import com.metabion.dto.SymptomCheckInRequest;
+import com.metabion.service.redflag.PatientRedFlagResponseAssembler;
+import com.metabion.service.redflag.RedFlagEvaluationOutcome;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.SymptomCheckInRepository;
 import com.metabion.repository.SymptomQuestionnaireVersionRepository;
@@ -29,6 +33,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -69,7 +74,8 @@ class SymptomTrackingServiceTest {
                 checkIns,
                 accessControl,
                 new SymptomQuestionnaireAssembler(),
-                redFlags);
+                redFlags,
+                new PatientRedFlagResponseAssembler());
         patientAuth = new TestingAuthenticationToken("patient@example.com", "password");
         patientAuth.setAuthenticated(true);
         patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
@@ -146,6 +152,37 @@ class SymptomTrackingServiceTest {
         service.saveForCurrentPatient(patientAuth,
                 completeRequest(LocalDate.of(2026, 6, 26), FlareState.NO_FLARE, "none"));
 
+        verify(redFlags).evaluateSymptom(any(SymptomCheckIn.class));
+        verifyNoMoreInteractions(redFlags);
+    }
+
+    @Test
+    void saveForCurrentPatientWithRedFlagsReturnsCheckInAndEvaluationOutcome() {
+        var evaluationOutcome = new RedFlagEvaluationOutcome(
+                RedFlagSeverity.EMERGENCY,
+                List.of(new RedFlagEvaluationOutcome.Flag(
+                        501L,
+                        "symptom.severe-pain",
+                        RedFlagSeverity.EMERGENCY,
+                        Instant.parse("2026-06-26T10:15:00Z"),
+                        RedFlagSourceType.SYMPTOM_CHECK_IN,
+                        200L)),
+                List.of("symptom.previous"));
+        when(redFlags.evaluateSymptom(any(SymptomCheckIn.class))).thenReturn(evaluationOutcome);
+
+        var response = service.saveForCurrentPatientWithRedFlags(patientAuth,
+                completeRequest(LocalDate.of(2026, 6, 26), FlareState.ACTIVE_FLARE, "severe"));
+
+        assertThat(response.result().id()).isEqualTo(200L);
+        assertThat(response.redFlagOutcome().highestSeverity()).isEqualTo(RedFlagSeverity.EMERGENCY);
+        assertThat(response.redFlagOutcome().currentFlags())
+                .singleElement()
+                .satisfies(flag -> {
+                    assertThat(flag.eventId()).isEqualTo(501L);
+                    assertThat(flag.ruleKey()).isEqualTo("symptom.severe-pain");
+                    assertThat(flag.sourceId()).isEqualTo(200L);
+                });
+        assertThat(response.redFlagOutcome().clearedRuleKeys()).containsExactly("symptom.previous");
         verify(redFlags).evaluateSymptom(any(SymptomCheckIn.class));
         verifyNoMoreInteractions(redFlags);
     }

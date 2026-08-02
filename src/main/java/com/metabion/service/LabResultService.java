@@ -2,9 +2,13 @@ package com.metabion.service;
 
 import com.metabion.domain.*;
 import com.metabion.dto.*;
+import com.metabion.dto.mcp.McpLabResultRemovalWriteResponse;
+import com.metabion.dto.mcp.McpLabResultSetWriteResponse;
 import com.metabion.repository.LabResultSetRepository;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
+import com.metabion.service.redflag.PatientRedFlagResponseAssembler;
+import com.metabion.service.redflag.RedFlagEvaluationOutcome;
 import com.metabion.service.redflag.RedFlagEvaluationService;
 import jakarta.persistence.OptimisticLockException;
 import org.springframework.http.HttpStatus;
@@ -36,24 +40,37 @@ public class LabResultService {
     private final DateRangeValidator dateRanges;
     private final RedFlagEvaluationService redFlags;
     private final Clock clock;
+    private final PatientRedFlagResponseAssembler patientRedFlagResponses;
 
     public LabResultService(UserRepository users, PatientProfileRepository patientProfiles,
                             LabResultSetRepository resultSets, LabCatalogService catalog,
                             LabUnitConversionService conversions, AccessControlService accessControl,
                             LabAuditService audit, LabResponseAssembler responses,
                             DateRangeValidator dateRanges, RedFlagEvaluationService redFlags,
-                            Clock clock) {
+                            Clock clock, PatientRedFlagResponseAssembler patientRedFlagResponses) {
         this.users = users; this.patientProfiles = patientProfiles; this.resultSets = resultSets;
         this.catalog = catalog; this.conversions = conversions; this.accessControl = accessControl;
         this.audit = audit; this.responses = responses; this.dateRanges = dateRanges;
-        this.redFlags = redFlags; this.clock = clock;
+        this.redFlags = redFlags; this.clock = clock; this.patientRedFlagResponses = patientRedFlagResponses;
     }
 
     public LabResultSetResponse saveForCurrentPatient(Authentication authentication, LabResultSetRequest request) {
         var actor = currentUser(authentication); requirePatient(actor);
         var patient = patientProfiles.findByUserId(actor.getId()).orElseThrow(() -> forbidden("Patient profile not found"));
         return request != null && request.resultSetId() != null
-                ? update(patient, actor, request.resultSetId(), request, true) : create(patient, actor, request);
+                ? update(patient, actor, request.resultSetId(), request, true).response()
+                : create(patient, actor, request).response();
+    }
+    public McpLabResultSetWriteResponse saveForCurrentPatientWithRedFlags(Authentication authentication,
+                                                                          LabResultSetRequest request) {
+        var actor = currentUser(authentication); requirePatient(actor);
+        var patient = patientProfiles.findByUserId(actor.getId()).orElseThrow(() -> forbidden("Patient profile not found"));
+        var mutation = request != null && request.resultSetId() != null
+                ? update(patient, actor, request.resultSetId(), request, true)
+                : create(patient, actor, request);
+        return new McpLabResultSetWriteResponse(
+                mutation.response(),
+                patientRedFlagResponses.outcome(mutation.redFlagOutcome()));
     }
     @Transactional(readOnly = true)
     public LabResultSetResponse getForCurrentPatient(Authentication authentication, Long id) {
@@ -71,22 +88,49 @@ public class LabResultService {
     public LabResultSetResponse updateForCurrentPatient(Authentication authentication, Long id, LabResultSetRequest request) {
         var actor = currentUser(authentication); requirePatient(actor);
         var patient = patientProfiles.findByUserId(actor.getId()).orElseThrow(() -> forbidden("Patient profile not found"));
-        return update(patient, actor, id, request, true);
+        return update(patient, actor, id, request, true).response();
+    }
+    public McpLabResultSetWriteResponse updateForCurrentPatientWithRedFlags(Authentication authentication,
+                                                                            Long id,
+                                                                            LabResultSetRequest request) {
+        var actor = currentUser(authentication); requirePatient(actor);
+        var patient = patientProfiles.findByUserId(actor.getId()).orElseThrow(() -> forbidden("Patient profile not found"));
+        var mutation = update(patient, actor, id, request, true);
+        return new McpLabResultSetWriteResponse(
+                mutation.response(),
+                patientRedFlagResponses.outcome(mutation.redFlagOutcome()));
     }
     public void removeForCurrentPatient(Authentication authentication, Long id, LabResultRemovalRequest request) {
         var actor = currentUser(authentication); requirePatient(actor);
         var patient = patientProfiles.findByUserId(actor.getId()).orElseThrow(() -> forbidden("Patient profile not found"));
         remove(patient, actor, id, request, true);
     }
+    public McpLabResultRemovalWriteResponse removeForCurrentPatientWithRedFlags(Authentication authentication,
+                                                                                Long id,
+                                                                                LabResultRemovalRequest request) {
+        var actor = currentUser(authentication); requirePatient(actor);
+        var patient = patientProfiles.findByUserId(actor.getId()).orElseThrow(() -> forbidden("Patient profile not found"));
+        var redFlagOutcome = remove(patient, actor, id, request, true);
+        return new McpLabResultRemovalWriteResponse(
+                new McpLabResultRemovalWriteResponse.Result("removed"),
+                patientRedFlagResponses.outcome(redFlagOutcome));
+    }
     public void removeForCurrentPatient(Authentication authentication, LabResultRemovalRequest request) {
         validateRemovalRequest(request);
         removeForCurrentPatient(authentication, request.resultSetId(), request);
+    }
+    public McpLabResultRemovalWriteResponse removeForCurrentPatientWithRedFlags(Authentication authentication,
+                                                                                LabResultRemovalRequest request) {
+        validateRemovalRequest(request);
+        return removeForCurrentPatientWithRedFlags(authentication, request.resultSetId(), request);
     }
 
     public LabResultSetResponse saveForClinicalPatient(Authentication authentication, Long patientId, LabResultSetRequest request) {
         var actor = clinicalPatient(authentication, patientId);
         var patient = requirePatientProfile(patientId);
-        return request != null && request.resultSetId() != null ? update(patient, actor, request.resultSetId(), request, false) : create(patient, actor, request);
+        return request != null && request.resultSetId() != null
+                ? update(patient, actor, request.resultSetId(), request, false).response()
+                : create(patient, actor, request).response();
     }
     @Transactional(readOnly = true)
     public void requireClinicalPatientAccess(Authentication authentication, Long patientId) {
@@ -104,7 +148,7 @@ public class LabResultService {
     }
     public LabResultSetResponse updateForClinicalPatient(Authentication authentication, Long patientId, Long id, LabResultSetRequest request) {
         var actor = clinicalPatient(authentication, patientId);
-        return update(requirePatientProfile(patientId), actor, id, request, false);
+        return update(requirePatientProfile(patientId), actor, id, request, false).response();
     }
     public void removeForClinicalPatient(Authentication authentication, Long patientId, Long id, LabResultRemovalRequest request) {
         var actor = clinicalPatient(authentication, patientId);
@@ -115,7 +159,7 @@ public class LabResultService {
         removeForClinicalPatient(authentication, patientId, request.resultSetId(), request);
     }
 
-    private LabResultSetResponse create(PatientProfile patient, User actor, LabResultSetRequest request) {
+    private LabResultMutation create(PatientProfile patient, User actor, LabResultSetRequest request) {
         validateRequest(patient, request, false);
         var now = Instant.now(clock);
         var set = new LabResultSet(patient, request.collectionDate(), trimToNull(request.notes()), LabResultSource.MANUAL,
@@ -123,10 +167,10 @@ public class LabResultService {
         set.replaceResults(buildResults(set, request.results()), now);
         var saved = resultSets.saveAndFlush(set);
         audit.recordCreate(saved, actor, now);
-        redFlags.evaluateLab(saved);
-        return responses.resultSet(saved, actor);
+        var redFlagOutcome = redFlags.evaluateLab(saved);
+        return new LabResultMutation(responses.resultSet(saved, actor), redFlagOutcome);
     }
-    private LabResultSetResponse update(PatientProfile patient, User actor, Long id, LabResultSetRequest request, boolean enforceCreator) {
+    private LabResultMutation update(PatientProfile patient, User actor, Long id, LabResultSetRequest request, boolean enforceCreator) {
         var set = requireActiveSet(id, patient.getId());
         if (enforceCreator && !set.getCreatedByUser().getId().equals(actor.getId())) throw forbidden("Patient can only modify patient-created laboratory results");
         requireVersion(set, request == null ? null : request.version()); validateRequest(patient, request, true);
@@ -135,16 +179,16 @@ public class LabResultService {
         set.replaceResults(buildResults(set, request.results()), now);
         flushOrConflict();
         audit.recordUpdate(set, before, actor, now);
-        redFlags.evaluateLab(set);
-        return responses.resultSet(set, actor);
+        var redFlagOutcome = redFlags.evaluateLab(set);
+        return new LabResultMutation(responses.resultSet(set, actor), redFlagOutcome);
     }
-    private void remove(PatientProfile patient, User actor, Long id, LabResultRemovalRequest request, boolean enforceCreator) {
+    private RedFlagEvaluationOutcome remove(PatientProfile patient, User actor, Long id, LabResultRemovalRequest request, boolean enforceCreator) {
         validateRemovalRequest(request);
         var set = requireActiveSet(id, patient.getId());
         if (enforceCreator && !set.getCreatedByUser().getId().equals(actor.getId())) throw forbidden("Patient can only modify patient-created laboratory results");
         requireVersion(set, request.version()); var before = audit.snapshot(set); var now = Instant.now(clock);
         set.markRemoved(actor, trimToNull(request.reason()), now); flushOrConflict(); audit.recordRemoval(set, before, actor, now);
-        redFlags.evaluateLabRemoval(set);
+        return redFlags.evaluateLabRemoval(set);
     }
     private List<LabResult> buildResults(LabResultSet set, List<LabResultRequest> requests) {
         var seen = new HashSet<String>();
@@ -232,4 +276,9 @@ public class LabResultService {
     private static String trimToNull(String value) { if (value == null) return null; var trimmed = value.trim(); return trimmed.isEmpty() ? null : trimmed; }
     private static ResponseStatusException badRequest(String reason) { return new ResponseStatusException(HttpStatus.BAD_REQUEST, reason); }
     private static ResponseStatusException forbidden(String reason) { return new ResponseStatusException(HttpStatus.FORBIDDEN, reason); }
+
+    private record LabResultMutation(
+            LabResultSetResponse response,
+            RedFlagEvaluationOutcome redFlagOutcome) {
+    }
 }

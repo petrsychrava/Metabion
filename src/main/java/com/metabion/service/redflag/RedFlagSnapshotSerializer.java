@@ -1,10 +1,13 @@
 package com.metabion.service.redflag;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.metabion.exception.RedFlagSnapshotException;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -41,12 +44,27 @@ public class RedFlagSnapshotSerializer {
         try {
             return objectMapper.writeValueAsString(new RedFlagMatchedInputSnapshot(facts));
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Unable to serialize red-flag matched input snapshot", exception);
+            throw new RedFlagSnapshotException(exception);
+        }
+    }
+
+    public RedFlagMatchedInputSnapshot deserialize(String snapshot) {
+        try {
+            return objectMapper.readValue(snapshot, RedFlagMatchedInputSnapshot.class);
+        } catch (JsonProcessingException exception) {
+            throw new RedFlagSnapshotException(exception);
         }
     }
 
     private static SimpleModule localDateModule() {
         var module = new SimpleModule();
+        module.addDeserializer(LocalDate.class, new JsonDeserializer<LocalDate>() {
+            @Override
+            public LocalDate deserialize(com.fasterxml.jackson.core.JsonParser parser,
+                    DeserializationContext context) throws IOException {
+                return LocalDate.parse(parser.getValueAsString());
+            }
+        });
         module.addSerializer(LocalDate.class, new JsonSerializer<LocalDate>() {
             @Override
             public void serialize(LocalDate value, com.fasterxml.jackson.core.JsonGenerator generator,

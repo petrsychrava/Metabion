@@ -27,6 +27,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,6 +41,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.tuple;
 
 class RedFlagEvaluationServiceTest {
 
@@ -109,8 +111,10 @@ class RedFlagEvaluationServiceTest {
                 patient, RedFlagSourceType.SYMPTOM_CHECK_IN, SYMPTOM_ID,
                 RedFlagSourceOperation.UPSERT, NOW.minusSeconds(60), RedFlagSeverity.URGENT_REVIEW);
         preceding.markCurrent();
+        ReflectionTestUtils.setField(preceding, "id", 500L);
         when(runs.findCurrentForUpdate(RedFlagSourceType.SYMPTOM_CHECK_IN, SYMPTOM_ID))
                 .thenReturn(Optional.of(preceding));
+        when(events.findRuleKeysByEvaluationRunId(500L)).thenReturn(List.of());
         var version101 = mock(RedFlagRuleVersion.class);
         var version102 = mock(RedFlagRuleVersion.class);
         var group201 = mock(RedFlagRuleConditionGroup.class);
@@ -119,6 +123,12 @@ class RedFlagEvaluationServiceTest {
         when(entityManager.getReference(RedFlagRuleVersion.class, 102L)).thenReturn(version102);
         when(entityManager.getReference(RedFlagRuleConditionGroup.class, 201L)).thenReturn(group201);
         when(entityManager.getReference(RedFlagRuleConditionGroup.class, 202L)).thenReturn(group202);
+        var nextEventId = new AtomicLong(700L);
+        when(events.saveAndFlush(any())).thenAnswer(invocation -> {
+            var event = invocation.getArgument(0, RedFlagTriggerEvent.class);
+            ReflectionTestUtils.setField(event, "id", nextEventId.incrementAndGet());
+            return event;
+        });
 
         var successor = new AtomicReference<RedFlagEvaluationRun>();
         var savedStates = new ArrayList<RunState>();
@@ -217,6 +227,62 @@ class RedFlagEvaluationServiceTest {
     }
 
     @Test
+    void returnsPersistedFlagsAndOnlyGenuinelyClearedRules() {
+        var input = input(RedFlagSourceType.SYMPTOM_CHECK_IN, SYMPTOM_ID, false);
+        var urgent = symptomMatch(101L, 201L, RedFlagSeverity.URGENT_REVIEW, "RULE_101");
+        var emergency = symptomMatch(102L, 202L, RedFlagSeverity.EMERGENCY, "RULE_102");
+        var definitions = List.of(urgent.rule(), emergency.rule());
+        var result = new RedFlagEvaluationResult(List.of(urgent, emergency), RedFlagSeverity.EMERGENCY);
+        when(catalog.activeFor(RedFlagSourceType.SYMPTOM_CHECK_IN)).thenReturn(definitions);
+        when(resolver.forSymptom(symptom)).thenReturn(input);
+        when(engine.evaluate(definitions, input)).thenReturn(result);
+        when(serializer.serialize(urgent.matchedFacts())).thenReturn("{\"match\":1}");
+        when(serializer.serialize(emergency.matchedFacts())).thenReturn("{\"match\":2}");
+
+        var preceding = RedFlagEvaluationRun.pending(
+                patient, RedFlagSourceType.SYMPTOM_CHECK_IN, SYMPTOM_ID,
+                RedFlagSourceOperation.UPSERT, NOW.minusSeconds(60), RedFlagSeverity.URGENT_REVIEW);
+        preceding.markCurrent();
+        ReflectionTestUtils.setField(preceding, "id", 500L);
+        when(runs.findCurrentForUpdate(RedFlagSourceType.SYMPTOM_CHECK_IN, SYMPTOM_ID))
+                .thenReturn(Optional.of(preceding));
+        when(events.findRuleKeysByEvaluationRunId(500L))
+                .thenReturn(List.of("RULE_100", "RULE_101"));
+        var version101 = mock(RedFlagRuleVersion.class);
+        var version102 = mock(RedFlagRuleVersion.class);
+        var group201 = mock(RedFlagRuleConditionGroup.class);
+        var group202 = mock(RedFlagRuleConditionGroup.class);
+        when(entityManager.getReference(RedFlagRuleVersion.class, 101L)).thenReturn(version101);
+        when(entityManager.getReference(RedFlagRuleVersion.class, 102L)).thenReturn(version102);
+        when(entityManager.getReference(RedFlagRuleConditionGroup.class, 201L)).thenReturn(group201);
+        when(entityManager.getReference(RedFlagRuleConditionGroup.class, 202L)).thenReturn(group202);
+        var nextId = new AtomicLong(700L);
+        when(runs.saveAndFlush(any())).thenAnswer(invocation -> {
+            var run = invocation.getArgument(0, RedFlagEvaluationRun.class);
+            if (run.getId() == null) {
+                ReflectionTestUtils.setField(run, "id", 501L);
+            }
+            return run;
+        });
+        when(events.saveAndFlush(any())).thenAnswer(invocation -> {
+            var event = invocation.getArgument(0, RedFlagTriggerEvent.class);
+            ReflectionTestUtils.setField(event, "id", nextId.incrementAndGet());
+            return event;
+        });
+
+        var outcome = service.evaluateSymptom(symptom);
+
+        assertThat(outcome.highestSeverity()).isEqualTo(RedFlagSeverity.EMERGENCY);
+        assertThat(outcome.currentFlags())
+                .extracting(RedFlagEvaluationOutcome.Flag::eventId,
+                        RedFlagEvaluationOutcome.Flag::ruleKey)
+                .containsExactly(
+                        tuple(701L, "RULE_101"),
+                        tuple(702L, "RULE_102"));
+        assertThat(outcome.clearedRuleKeys()).containsExactly("RULE_100");
+    }
+
+    @Test
     void removalEvaluatesEmptyTriggerAndSupersedesThePrecedingRun() {
         var input = input(RedFlagSourceType.LAB_RESULT_SET, LAB_ID, true);
         var definitions = List.<RedFlagRuleDefinition>of();
@@ -227,8 +293,10 @@ class RedFlagEvaluationServiceTest {
                 patient, RedFlagSourceType.LAB_RESULT_SET, LAB_ID,
                 RedFlagSourceOperation.UPSERT, NOW.minusSeconds(60), RedFlagSeverity.URGENT_REVIEW);
         preceding.markCurrent();
+        ReflectionTestUtils.setField(preceding, "id", 500L);
         when(runs.findCurrentForUpdate(RedFlagSourceType.LAB_RESULT_SET, LAB_ID))
                 .thenReturn(Optional.of(preceding));
+        when(events.findRuleKeysByEvaluationRunId(500L)).thenReturn(List.of());
         when(runs.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         service.evaluateLabRemoval(lab);
@@ -242,7 +310,33 @@ class RedFlagEvaluationServiceTest {
         assertThat(removal.isCurrent()).isTrue();
         assertThat(preceding.isCurrent()).isFalse();
         assertThat(preceding.getSupersededByRun()).isSameAs(removal);
-        verifyNoInteractions(serializer, entityManager, events);
+        verifyNoInteractions(serializer, entityManager);
+    }
+
+    @Test
+    void removalReturnsPrecedingRulesAsClearedAndNoCurrentFlags() {
+        var input = input(RedFlagSourceType.LAB_RESULT_SET, LAB_ID, true);
+        var definitions = List.<RedFlagRuleDefinition>of();
+        when(catalog.activeFor(RedFlagSourceType.LAB_RESULT_SET)).thenReturn(definitions);
+        when(resolver.forLabRemoval(lab)).thenReturn(input);
+        when(engine.evaluate(definitions, input)).thenReturn(new RedFlagEvaluationResult(List.of(), null));
+        var preceding = RedFlagEvaluationRun.pending(
+                patient, RedFlagSourceType.LAB_RESULT_SET, LAB_ID,
+                RedFlagSourceOperation.UPSERT, NOW.minusSeconds(60), RedFlagSeverity.URGENT_REVIEW);
+        preceding.markCurrent();
+        ReflectionTestUtils.setField(preceding, "id", 500L);
+        when(runs.findCurrentForUpdate(RedFlagSourceType.LAB_RESULT_SET, LAB_ID))
+                .thenReturn(Optional.of(preceding));
+        when(events.findRuleKeysByEvaluationRunId(500L))
+                .thenReturn(List.of("LAB_CRP_HIGH", "LAB_CRP_ELEVATED"));
+        when(runs.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var outcome = service.evaluateLabRemoval(lab);
+
+        assertThat(outcome.highestSeverity()).isNull();
+        assertThat(outcome.currentFlags()).isEmpty();
+        assertThat(outcome.clearedRuleKeys())
+                .containsExactly("LAB_CRP_ELEVATED", "LAB_CRP_HIGH");
     }
 
     @Test
@@ -377,8 +471,10 @@ class RedFlagEvaluationServiceTest {
                 patient, RedFlagSourceType.SYMPTOM_CHECK_IN, SYMPTOM_ID,
                 RedFlagSourceOperation.UPSERT, NOW.minusSeconds(60), RedFlagSeverity.URGENT_REVIEW);
         preceding.markCurrent();
+        ReflectionTestUtils.setField(preceding, "id", 500L);
         when(runs.findCurrentForUpdate(RedFlagSourceType.SYMPTOM_CHECK_IN, SYMPTOM_ID))
                 .thenReturn(Optional.of(preceding));
+        when(events.findRuleKeysByEvaluationRunId(500L)).thenReturn(List.of());
         var successor = new AtomicReference<RedFlagEvaluationRun>();
         when(runs.saveAndFlush(any()))
                 .thenAnswer(invocation -> {
@@ -391,7 +487,7 @@ class RedFlagEvaluationServiceTest {
         assertThatThrownBy(() -> service.evaluateSymptom(symptom)).isSameAs(failure);
 
         assertThat(successor.get().isCurrent()).isFalse();
-        verifyNoInteractions(events, entityManager);
+        verifyNoInteractions(entityManager);
     }
 
     @Test
@@ -449,6 +545,17 @@ class RedFlagEvaluationServiceTest {
         var fact = new RedFlagRuleMatch.MatchedFact(
                 RedFlagSourceType.SYMPTOM_CHECK_IN, SYMPTOM_ID, OBSERVED_ON,
                 new RedFlagFact(factKey, BigDecimal.ONE, null, "unit"));
+        return new RedFlagRuleMatch(definition, groupId, "GROUP_" + groupId, List.of(fact));
+    }
+
+    private RedFlagRuleMatch symptomMatch(
+            Long versionId, Long groupId, RedFlagSeverity severity, String ruleKey) {
+        var definition = new RedFlagRuleDefinition(
+                versionId, ruleKey, 1,
+                RedFlagSourceType.SYMPTOM_CHECK_IN, severity, List.of());
+        var fact = new RedFlagRuleMatch.MatchedFact(
+                RedFlagSourceType.SYMPTOM_CHECK_IN, SYMPTOM_ID, OBSERVED_ON,
+                new RedFlagFact("symptom.fact." + ruleKey, BigDecimal.ONE, null, "unit"));
         return new RedFlagRuleMatch(definition, groupId, "GROUP_" + groupId, List.of(fact));
     }
 

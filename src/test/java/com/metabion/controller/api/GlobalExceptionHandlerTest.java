@@ -1,6 +1,7 @@
 package com.metabion.controller.api;
 
 import com.metabion.exception.InvalidTokenException;
+import com.metabion.exception.RedFlagSnapshotException;
 import com.metabion.service.RateLimitedException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -134,6 +135,15 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.error").value("conflict"));
     }
 
+    @Test
+    void redFlagSnapshotCorruptionReturnsSanitized500() throws Exception {
+        mvc.perform(post("/throw/red-flag-snapshot"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().json("{\"error\":\"request_failed\"}"))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("snapshot unreadable"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("bad json"))));
+    }
+
     @RestController
     private static class ThrowingController {
 
@@ -184,6 +194,11 @@ class GlobalExceptionHandlerTest {
         @PostMapping("/throw/response-status-conflict")
         void responseStatusConflict() {
             throw new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "conflict");
+        }
+
+        @PostMapping("/throw/red-flag-snapshot")
+        void redFlagSnapshot() {
+            throw new RedFlagSnapshotException(new IllegalArgumentException("bad json: snapshot unreadable"));
         }
     }
 

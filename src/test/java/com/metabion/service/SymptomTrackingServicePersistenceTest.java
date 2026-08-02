@@ -11,6 +11,7 @@ import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.SymptomCheckInRepository;
 import com.metabion.repository.SymptomQuestionnaireVersionRepository;
 import com.metabion.repository.UserRepository;
+import com.metabion.service.redflag.PatientRedFlagResponseAssembler;
 import com.metabion.service.redflag.RedFlagEvaluationService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,7 +45,8 @@ import static org.mockito.Mockito.doThrow;
 @DataJpaTest(properties = {"spring.jpa.hibernate.ddl-auto=validate"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
-@Import({SymptomTrackingService.class, SymptomQuestionnaireAssembler.class})
+@Import({SymptomTrackingService.class, SymptomQuestionnaireAssembler.class,
+        PatientRedFlagResponseAssembler.class})
 class SymptomTrackingServicePersistenceTest {
 
     @Container
