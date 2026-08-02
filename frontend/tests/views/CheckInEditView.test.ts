@@ -194,4 +194,29 @@ describe('CheckInEditView', () => {
     expect(wrapper.find('[data-testid="save"]').exists()).toBe(false)
     expect(posted).toBe(false)
   })
+
+  it('refreshes the current red-flag snapshot after a successful save', async () => {
+    let currentCalls = 0
+    server.use(
+      http.get('/api/symptom-questionnaires/active', () => HttpResponse.json(questionnaire)),
+      http.get('/api/symptom-check-ins/2026-07-24', () => HttpResponse.json({ error: 'not_found' }, { status: 404 })),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/symptom-check-ins', () => HttpResponse.json({ id: 1 })),
+      http.get('/api/red-flags/current', () => {
+        currentCalls += 1
+        return HttpResponse.json({ highestSeverity: null, flags: [] })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/check-ins/2026-07-24')
+    const wrapper = mount(CheckInEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+    expect(currentCalls).toBe(0)
+
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(en.common.saved)
+    expect(currentCalls).toBe(1)
+  })
 })
