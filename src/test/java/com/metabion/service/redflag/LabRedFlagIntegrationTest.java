@@ -79,6 +79,7 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
         RedFlagRuleCatalog.class,
         RedFlagFactResolver.class,
         RedFlagFactRegistry.class,
+        PatientRedFlagResponseAssembler.class,
         RedFlagSnapshotSerializer.class,
         TimeConfig.class
 })

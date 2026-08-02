@@ -14,6 +14,7 @@ import com.metabion.repository.LabResultRepository;
 import com.metabion.repository.LabResultSetRepository;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
+import com.metabion.service.redflag.PatientRedFlagResponseAssembler;
 import com.metabion.service.redflag.RedFlagEvaluationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,7 +51,8 @@ import static org.mockito.Mockito.verify;
 @Testcontainers
 @Import({LabResultService.class, LabAuditService.class, LabResponseAssembler.class,
         LabCatalogService.class, LabUnitConversionService.class, DateRangeValidator.class,
-        TimeConfig.class, LabResultServicePersistenceTest.JsonConfiguration.class})
+        TimeConfig.class, PatientRedFlagResponseAssembler.class,
+        LabResultServicePersistenceTest.JsonConfiguration.class})
 class LabResultServicePersistenceTest {
     @Container static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
 
