@@ -1,0 +1,159 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { http, HttpResponse } from 'msw'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
+import { server } from '../msw/server'
+import RedFlagsView from '@/views/RedFlagsView.vue'
+import en from '@/i18n/en.json'
+
+const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
+
+const currentSnapshot = {
+  highestSeverity: 'URGENT_REVIEW',
+  flags: [
+    {
+      eventId: 701,
+      ruleKey: 'LAB_CRP_HIGH',
+      severity: 'URGENT_REVIEW',
+      detectedAt: '2026-08-01T10:15:30Z',
+      sourceType: 'LAB_RESULT_SET',
+      sourceId: 91,
+      current: true,
+      supersededAt: null,
+    },
+  ],
+}
+
+const historyEvent = {
+  eventId: 700,
+  ruleKey: 'SYM_ACTIVE_FLARE',
+  severity: 'URGENT_REVIEW',
+  detectedAt: '2026-07-30T08:00:00Z',
+  sourceType: 'SYMPTOM_CHECK_IN',
+  sourceId: 55,
+  current: true,
+  supersededAt: null,
+}
+
+function mountView() {
+  return mount(RedFlagsView, { global: { plugins: [createPinia(), i18n] } })
+}
+
+describe('RedFlagsView', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('shows current flags and history rows with localized labels', async () => {
+    server.use(
+      http.get('/api/red-flags/current', () => HttpResponse.json(currentSnapshot)),
+      http.get('/api/red-flags/history', () => HttpResponse.json({ items: [historyEvent], nextCursor: null })),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.redFlags.rules.LAB_CRP_HIGH)
+    expect(wrapper.text()).toContain(en.redFlags.rules.SYM_ACTIVE_FLARE)
+    expect(wrapper.text()).toContain(en.redFlags.sourceType.SYMPTOM_CHECK_IN)
+    expect(wrapper.text()).toContain(en.redFlags.statusCurrent)
+    expect(wrapper.text()).not.toContain(en.redFlags.noCurrent)
+  })
+
+  it('falls back to the raw rule key for unknown rules', async () => {
+    server.use(
+      http.get('/api/red-flags/current', () => HttpResponse.json({ highestSeverity: null, flags: [] })),
+      http.get('/api/red-flags/history', () =>
+        HttpResponse.json({ items: [{ ...historyEvent, ruleKey: 'LAB_FUTURE_RULE' }], nextCursor: null }),
+      ),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('LAB_FUTURE_RULE')
+    expect(wrapper.text()).toContain(en.redFlags.noCurrent)
+  })
+
+  it('labels superseded history entries as superseded', async () => {
+    server.use(
+      http.get('/api/red-flags/current', () => HttpResponse.json({ highestSeverity: null, flags: [] })),
+      http.get('/api/red-flags/history', () =>
+        HttpResponse.json({
+          items: [{ ...historyEvent, current: false, supersededAt: '2026-07-31T08:00:00Z' }],
+          nextCursor: null,
+        }),
+      ),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+    const history = wrapper.find('[data-testid="history-table"]').text()
+    expect(history).toContain(en.redFlags.statusSuperseded)
+    expect(history).not.toContain(en.redFlags.statusCurrent)
+  })
+
+  it('blocks a range over 370 days without calling the history API again', async () => {
+    let historyCalls = 0
+    server.use(
+      http.get('/api/red-flags/current', () => HttpResponse.json({ highestSeverity: null, flags: [] })),
+      http.get('/api/red-flags/history', () => {
+        historyCalls += 1
+        return HttpResponse.json({ items: [], nextCursor: null })
+      }),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+    expect(historyCalls).toBe(1)
+
+    const [fromInput, toInput] = wrapper.findAll('input[type="date"]')
+    await fromInput.setValue('2024-01-01')
+    await toInput.setValue('2025-01-06')
+    await wrapper.find('[data-testid="apply-history"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(en.errors.date_range_too_long)
+    expect(historyCalls).toBe(1)
+  })
+
+  it('applies the severity filter to history requests', async () => {
+    const capturedUrls: string[] = []
+    server.use(
+      http.get('/api/red-flags/current', () => HttpResponse.json({ highestSeverity: null, flags: [] })),
+      http.get('/api/red-flags/history', ({ request }) => {
+        capturedUrls.push(request.url)
+        return HttpResponse.json({ items: [], nextCursor: null })
+      }),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+    expect(new URL(capturedUrls[0]).searchParams.has('severity')).toBe(false)
+
+    await wrapper.find('[data-testid="severity-filter"]').setValue('EMERGENCY')
+    await wrapper.find('[data-testid="apply-history"]').trigger('click')
+    await flushPromises()
+
+    expect(new URL(capturedUrls[1]).searchParams.get('severity')).toBe('EMERGENCY')
+  })
+
+  it('appends the next page on Load more and hides the button at the end', async () => {
+    server.use(
+      http.get('/api/red-flags/current', () => HttpResponse.json({ highestSeverity: null, flags: [] })),
+      http.get('/api/red-flags/history', ({ request }) => {
+        const cursor = new URL(request.url).searchParams.get('cursor')
+        if (!cursor) {
+          return HttpResponse.json({ items: [historyEvent], nextCursor: 'cursor-2' })
+        }
+        return HttpResponse.json({
+          items: [{ ...historyEvent, eventId: 699, ruleKey: 'LAB_CRP_ELEVATED' }],
+          nextCursor: null,
+        })
+      }),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="history-table"]').findAll('tbody tr')).toHaveLength(1)
+    const loadMore = wrapper.find('[data-testid="load-more"]')
+    expect(loadMore.exists()).toBe(true)
+
+    await loadMore.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="history-table"]').findAll('tbody tr')).toHaveLength(2)
+    expect(wrapper.find('[data-testid="load-more"]').exists()).toBe(false)
+  })
+})
