@@ -779,7 +779,6 @@ function makeRouter() {
 Then add the two imports and the `urgentSnapshot` fixture below at the top of the file, and append the four new tests inside the existing `describe('AppShell')` block. The visibility tests stub `GET /api/red-flags/current` to return the seeded snapshot, so the shell's own mount-time refresh preserves it:
 
 ```ts
-import { useRedFlagsStore } from '@/stores/redFlags'
 import type { PatientRedFlagSnapshot } from '@/types/api'
 
 const urgentSnapshot: PatientRedFlagSnapshot = {
