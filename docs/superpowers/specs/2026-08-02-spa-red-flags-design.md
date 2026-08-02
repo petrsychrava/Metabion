@@ -28,8 +28,9 @@ existing precedent in the SPA.
 
 ## Goals
 
-- Show the patient their current red flags as a severity-colored banner on the
-  dashboard.
+- Warn the patient immediately after a symptom or laboratory save that leaves
+  active red flags, via a global banner for urgent and emergency severities.
+- Show current flags of all severities on the dashboard.
 - Provide a dedicated `/red-flags` view with the current snapshot and a
   filterable, cursor-paginated history.
 - Refresh the current snapshot after the SPA's own symptom check-in and
@@ -52,8 +53,8 @@ existing precedent in the SPA.
 
 ## Selected Approach
 
-One `/red-flags` view plus a dashboard banner, with a Pinia store holding the
-current snapshot.
+One `/red-flags` view plus a global banner rendered by `AppShell`, with a
+Pinia store holding the current snapshot.
 
 Rejected alternatives:
 
@@ -63,6 +64,9 @@ Rejected alternatives:
 - Banner-only with history folded into an existing view buries the history
   under an unrelated page and does not match the backend's two-endpoint
   design.
+- A post-save modal or an inline notice confined to the edit views warns
+  immediately but either introduces a brand-new UI pattern or leaves the
+  warning invisible everywhere else.
 
 ## Snapshot Freshness Semantics
 
@@ -70,12 +74,20 @@ The store is a cache of the last known server state, not a live subscription.
 Red flags can change out of band (MCP writes, other sessions). The agreed
 semantics:
 
-- `DashboardView` and `RedFlagsView` call `refreshCurrent()` on mount, so
-  ordinary navigation self-heals staleness.
+- `AppShell` calls `refreshCurrent()` once when the authenticated layout
+  mounts (app load); `DashboardView` and `RedFlagsView` also call it on
+  mount, so ordinary navigation to those pages self-heals staleness.
 - Symptom and laboratory save flows call `refreshCurrent()` after a
-  successful write.
-- No polling and no focus listeners; a user sitting idle on one screen may see
-  a stale snapshot until the next mount, which is accepted.
+  successful write, so a flag triggered by the patient's own submission
+  appears immediately.
+- No polling and no focus listeners; a user navigating pages other than the
+  dashboard and red-flags view may see a stale banner until the next
+  refresh, which is accepted.
+
+The REST current snapshot cannot attribute flags to a specific write (only
+the MCP composite response can, and REST write contracts deliberately exclude
+it). Immediate post-save notices therefore always present the overall current
+state, never "this submission triggered X".
 
 ## Architecture
 
@@ -142,17 +154,29 @@ History is deliberately not in the store; it is view-local state in
 
 ## UI
 
-### Dashboard banner (`components/RedFlagBanner.vue`)
+### Banner (`components/RedFlagBanner.vue`)
 
-- `DashboardView` calls `refreshCurrent()` on mount alongside its existing
-  loads and renders the banner.
-- The banner renders only when `highestSeverity` is non-null and `loadFailed`
-  is false.
-- One severity-colored strip: red for `EMERGENCY`, amber for `URGENT_REVIEW`,
-  neutral blue/gray for `ROUTINE_REVIEW`, each with `dark:` twins, following
-  the existing status-color precedent in `DashboardView`.
-- Content: localized severity label, count of current flags, and a
-  router-link to `/red-flags`. No rule details, no guidance text.
+One reusable severity-colored strip: red for `EMERGENCY`, amber for
+`URGENT_REVIEW`, neutral blue/gray for `ROUTINE_REVIEW`, each with `dark:`
+twins, following the existing status-color precedent in `DashboardView`.
+Content: localized severity label, count of current flags, and a router-link
+to `/red-flags`. No rule details, no guidance text. The component accepts a
+`severities: RedFlagSeverity[]` prop and renders only when the snapshot's
+`highestSeverity` is included in it and `loadFailed` is false. There is no
+dismiss or acknowledgement state (the API has none); the banner disappears
+when a later refresh returns no matching current flags.
+
+Placement and severity policy:
+
+- `AppShell` renders the banner below the header with
+  `severities = ['URGENT_REVIEW', 'EMERGENCY']` on every authenticated page
+  except `/` and `/red-flags`. An urgent or emergency flag therefore
+  interrupts the patient immediately after a triggering save — both edit
+  views stay on the same page after saving — and stays visible app-wide until
+  the underlying data changes and a refresh observes it.
+- `DashboardView` renders the banner with all three severities, so routine
+  flags are visible without persistent app-wide noise.
+- `RedFlagsView` renders no banner; the view itself is the detail.
 
 ### Red-flags view (`views/RedFlagsView.vue`)
 
@@ -179,9 +203,9 @@ Two sections:
 
 After a successful save in `CheckInEditView` and `LabResultSetEditView` (and
 after laboratory removal where the SPA exposes it), call
-`redFlagsStore.refreshCurrent()` fire-and-forget before the existing
-navigation, so the banner is current when the user lands. A refresh failure
-never blocks or errors the save.
+`redFlagsStore.refreshCurrent()` fire-and-forget. Both edit views stay on the
+same page after saving, so the `AppShell` banner appears in place as soon as
+the refresh resolves. A refresh failure never blocks or errors the save.
 
 ### Rendering details
 
@@ -228,13 +252,20 @@ Vitest + MSW, following existing patterns:
 - `tests/stores/redFlags.test.ts` — refresh stores the snapshot, failure sets
   `loadFailed` without throwing, `clear()` resets.
 - `tests/components/RedFlagBanner.test.ts` — hidden with no flags and when
-  `loadFailed`; severity color class per level; link target.
+  `loadFailed`; renders only when `highestSeverity` is in the `severities`
+  prop; severity color class per level; link target.
+- `tests/components/AppShell.test.ts` — urgent and emergency snapshots show
+  the banner, routine does not; banner hidden on `/` and `/red-flags`; update
+  nav-link assertions for the new entry.
+- `tests/views/DashboardView.test.ts` — banner shows for any severity
+  including `ROUTINE_REVIEW` when flags exist.
 - `tests/views/RedFlagsView.test.ts` — MSW-stubbed endpoints; renders current
   flags and the empty state; renders history rows; date-range validation
   blocks API calls; the severity filter changes the query; "Load more"
   appends a page and hides at `nextCursor: null`; unknown `ruleKey` falls
   back to the raw key.
-- Update `tests/components/AppShell.test.ts` if it asserts nav links.
+- Save-flow tests for `CheckInEditView` and `LabResultSetEditView` — a
+  successful save triggers a current-snapshot refetch.
 
 Verification:
 
@@ -247,8 +278,11 @@ unaffected.
 
 ## Completion Criteria
 
-- The dashboard shows a severity-colored banner when current flags exist and
-  hides it otherwise.
+- An urgent or emergency current flag shows the banner on every authenticated
+  page except `/` and `/red-flags`, immediately after a triggering save and
+  until a refresh observes it cleared.
+- The dashboard shows the banner for current flags of any severity, including
+  `ROUTINE_REVIEW`.
 - `/red-flags` shows the current snapshot and a filterable, cursor-paginated
   history reachable from the nav.
 - Saving a symptom check-in or laboratory result set refreshes the snapshot.
