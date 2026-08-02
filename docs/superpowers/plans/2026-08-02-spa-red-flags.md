@@ -951,7 +951,7 @@ git commit -m "Show urgent red-flag banner app-wide and add red-flags nav entry"
 
 - [ ] **Step 1: Write the failing test**
 
-Append inside the existing `describe('DashboardView')` block in `frontend/tests/views/DashboardView.test.ts`, plus the import `import { useRedFlagsStore } from '@/stores/redFlags'` at the top:
+Append inside the existing `describe('DashboardView')` block in `frontend/tests/views/DashboardView.test.ts`:
 
 ```ts
   it('shows the red-flag banner for any severity, including routine', async () => {
