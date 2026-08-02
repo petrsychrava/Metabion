@@ -354,6 +354,28 @@ describe('redFlags store', () => {
     expect(calls).toBe(1)
   })
 
+  it('discards a refresh result when clear() runs while it is in flight', async () => {
+    let calls = 0
+    let release!: () => void
+    server.use(
+      http.get('/api/red-flags/current', async () => {
+        calls += 1
+        await new Promise<void>((resolve) => { release = resolve })
+        return HttpResponse.json(snapshot)
+      }),
+    )
+    const store = useRedFlagsStore()
+    const pending = store.refreshCurrent()
+    // Wait until the MSW handler has actually started before clearing/releasing.
+    await vi.waitFor(() => expect(calls).toBe(1))
+    store.clear()
+    release()
+    await pending
+    expect(store.snapshot).toBeNull()
+    expect(store.loading).toBe(false)
+    expect(store.loadFailed).toBe(false)
+  })
+
   it('clear resets all state', async () => {
     server.use(http.get('/api/red-flags/current', () => HttpResponse.json(snapshot)))
     const store = useRedFlagsStore()
@@ -385,16 +407,22 @@ export const useRedFlagsStore = defineStore('redFlags', () => {
   const snapshot = ref<PatientRedFlagSnapshot | null>(null)
   const loading = ref(false)
   const loadFailed = ref(false)
+  let generation = 0
 
   /**
    * Refreshes the current snapshot. A failure only hides the banner via
-   * loadFailed — it never throws, so save flows are unaffected.
+   * loadFailed — it never throws, so save flows are unaffected. A result
+   * that was in flight when clear() ran is discarded, so a previous
+   * patient's flags cannot reappear after logout.
    */
   async function refreshCurrent(): Promise<void> {
     if (loading.value) return
     loading.value = true
+    const gen = generation
     try {
-      snapshot.value = await redFlagApi.getCurrent()
+      const result = await redFlagApi.getCurrent()
+      if (gen !== generation) return // a clear() happened while in flight; discard
+      snapshot.value = result
       loadFailed.value = false
     } catch {
       loadFailed.value = true
@@ -404,6 +432,7 @@ export const useRedFlagsStore = defineStore('redFlags', () => {
   }
 
   function clear(): void {
+    generation += 1
     snapshot.value = null
     loading.value = false
     loadFailed.value = false

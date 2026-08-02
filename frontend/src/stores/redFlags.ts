@@ -7,16 +7,22 @@ export const useRedFlagsStore = defineStore('redFlags', () => {
   const snapshot = ref<PatientRedFlagSnapshot | null>(null)
   const loading = ref(false)
   const loadFailed = ref(false)
+  let generation = 0
 
   /**
    * Refreshes the current snapshot. A failure only hides the banner via
-   * loadFailed — it never throws, so save flows are unaffected.
+   * loadFailed — it never throws, so save flows are unaffected. A result
+   * that was in flight when clear() ran is discarded, so a previous
+   * patient's flags cannot reappear after logout.
    */
   async function refreshCurrent(): Promise<void> {
     if (loading.value) return
     loading.value = true
+    const gen = generation
     try {
-      snapshot.value = await redFlagApi.getCurrent()
+      const result = await redFlagApi.getCurrent()
+      if (gen !== generation) return // a clear() happened while in flight; discard
+      snapshot.value = result
       loadFailed.value = false
     } catch {
       loadFailed.value = true
@@ -26,6 +32,7 @@ export const useRedFlagsStore = defineStore('redFlags', () => {
   }
 
   function clear(): void {
+    generation += 1
     snapshot.value = null
     loading.value = false
     loadFailed.value = false

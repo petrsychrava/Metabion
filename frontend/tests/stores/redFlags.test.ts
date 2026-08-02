@@ -59,6 +59,28 @@ describe('redFlags store', () => {
     expect(calls).toBe(1)
   })
 
+  it('discards a refresh result when clear() runs while it is in flight', async () => {
+    let calls = 0
+    let release!: () => void
+    server.use(
+      http.get('/api/red-flags/current', async () => {
+        calls += 1
+        await new Promise<void>((resolve) => { release = resolve })
+        return HttpResponse.json(snapshot)
+      }),
+    )
+    const store = useRedFlagsStore()
+    const pending = store.refreshCurrent()
+    // Wait until the MSW handler has actually started before clearing/releasing.
+    await vi.waitFor(() => expect(calls).toBe(1))
+    store.clear()
+    release()
+    await pending
+    expect(store.snapshot).toBeNull()
+    expect(store.loading).toBe(false)
+    expect(store.loadFailed).toBe(false)
+  })
+
   it('clear resets all state', async () => {
     server.use(http.get('/api/red-flags/current', () => HttpResponse.json(snapshot)))
     const store = useRedFlagsStore()
