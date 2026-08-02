@@ -1131,8 +1131,11 @@ describe('RedFlagsView', () => {
     )
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.text()).toContain(en.redFlags.statusSuperseded)
-    expect(wrapper.text()).not.toContain(en.redFlags.statusCurrent)
+    // Scope to the history table: "Current" is a substring of the
+    // "Current red flags" section heading, so page-wide assertions misfire.
+    const history = wrapper.find('[data-testid="history-table"]')
+    expect(history.text()).toContain(en.redFlags.statusSuperseded)
+    expect(history.text()).not.toContain(en.redFlags.statusCurrent)
   })
 
   it('blocks a range over 370 days without calling the history API again', async () => {
