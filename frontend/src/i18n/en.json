@@ -188,6 +188,7 @@
     "currentTitle": "Current red flags",
     "historyTitle": "History",
     "noCurrent": "No active red flags.",
+    "currentLoadFailed": "Could not load current red flags. Please try again.",
     "bannerCount": "Active red flags: {count}",
     "viewDetails": "View details",
     "rule": "Red flag",

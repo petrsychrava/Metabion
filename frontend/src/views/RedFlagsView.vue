@@ -94,7 +94,11 @@ onMounted(() => {
     <h1 class="text-2xl font-semibold">{{ t('redFlags.title') }}</h1>
 
     <h2 class="mt-6 text-lg font-medium">{{ t('redFlags.currentTitle') }}</h2>
-    <p v-if="!redFlags.snapshot || redFlags.snapshot.flags.length === 0" class="mt-2 text-sm">
+    <p v-if="redFlags.loadFailed" class="mt-2 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+      {{ t('redFlags.currentLoadFailed') }}
+    </p>
+    <p v-else-if="!redFlags.snapshot" class="mt-2">{{ t('common.loading') }}</p>
+    <p v-else-if="redFlags.snapshot.flags.length === 0" class="mt-2 text-sm">
       {{ t('redFlags.noCurrent') }}
     </p>
     <table v-else data-testid="current-table" class="mt-2 w-full border-collapse bg-white text-sm dark:bg-gray-800">

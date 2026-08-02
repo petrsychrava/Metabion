@@ -188,6 +188,7 @@
     "currentTitle": "Aktuální varovné signály",
     "historyTitle": "Historie",
     "noCurrent": "Žádné aktivní varovné signály.",
+    "currentLoadFailed": "Nepodařilo se načíst aktuální varovné signály. Zkuste to znovu.",
     "bannerCount": "Aktivní varovné signály: {count}",
     "viewDetails": "Zobrazit podrobnosti",
     "rule": "Signál",

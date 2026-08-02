@@ -25,6 +25,7 @@ export const useRedFlagsStore = defineStore('redFlags', () => {
       snapshot.value = result
       loadFailed.value = false
     } catch {
+      if (gen !== generation) return // a clear() happened while in flight; discard
       loadFailed.value = true
     } finally {
       loading.value = false

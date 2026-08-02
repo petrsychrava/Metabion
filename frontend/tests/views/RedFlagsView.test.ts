@@ -156,4 +156,42 @@ describe('RedFlagsView', () => {
     expect(wrapper.find('[data-testid="history-table"]').findAll('tbody tr')).toHaveLength(2)
     expect(wrapper.find('[data-testid="load-more"]').exists()).toBe(false)
   })
+
+  it('shows an error instead of the empty state when the snapshot load fails', async () => {
+    server.use(
+      http.get('/api/red-flags/current', () => new HttpResponse(null, { status: 500 })),
+      http.get('/api/red-flags/history', () => HttpResponse.json({ items: [], nextCursor: null })),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.redFlags.currentLoadFailed)
+    expect(wrapper.text()).not.toContain(en.redFlags.noCurrent)
+    expect(wrapper.find('[data-testid="current-table"]').exists()).toBe(false)
+  })
+
+  it('shows no empty-state claim while the initial snapshot load is in flight', async () => {
+    server.use(
+      http.get('/api/red-flags/current', async () => {
+        await new Promise<void>(() => {})
+        return HttpResponse.json({ highestSeverity: null, flags: [] })
+      }),
+      http.get('/api/red-flags/history', () => HttpResponse.json({ items: [], nextCursor: null })),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain(en.redFlags.noCurrent)
+    expect(wrapper.text()).not.toContain(en.redFlags.currentLoadFailed)
+    expect(wrapper.find('[data-testid="current-table"]').exists()).toBe(false)
+  })
+
+  it('shows the empty state only after a snapshot loads with zero flags', async () => {
+    server.use(
+      http.get('/api/red-flags/current', () => HttpResponse.json({ highestSeverity: null, flags: [] })),
+      http.get('/api/red-flags/history', () => HttpResponse.json({ items: [], nextCursor: null })),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.redFlags.noCurrent)
+    expect(wrapper.text()).not.toContain(en.redFlags.currentLoadFailed)
+  })
 })

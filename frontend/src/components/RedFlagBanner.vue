@@ -26,7 +26,7 @@ const count = computed(() => redFlags.snapshot?.flags.length ?? 0)
 </script>
 
 <template>
-  <div v-if="visibleSeverity" data-testid="red-flag-banner"
+  <div v-if="visibleSeverity" data-testid="red-flag-banner" role="status"
        class="flex items-center gap-2 rounded p-3 text-sm" :class="bannerClass">
     <span class="font-medium">{{ severityLabel }}</span>
     <span>{{ t('redFlags.bannerCount', { count }) }}</span>
