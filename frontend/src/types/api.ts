@@ -344,3 +344,36 @@ export interface EducationLesson {
 export interface EducationModuleDetail extends Omit<EducationModuleSummary, never> {
   lessons: EducationLesson[]
 }
+
+// Red flags (mirror src/main/java/com/metabion/dto/redflag/)
+export type RedFlagSeverity = 'ROUTINE_REVIEW' | 'URGENT_REVIEW' | 'EMERGENCY'
+export type RedFlagSourceType = 'SYMPTOM_CHECK_IN' | 'LAB_RESULT_SET'
+
+export interface PatientRedFlagEvent {
+  eventId: number
+  ruleKey: string
+  severity: RedFlagSeverity
+  detectedAt: string // ISO instant
+  sourceType: RedFlagSourceType
+  sourceId: number
+  current: boolean
+  supersededAt: string | null // ISO instant
+}
+
+export interface PatientRedFlagSnapshot {
+  highestSeverity: RedFlagSeverity | null
+  flags: PatientRedFlagEvent[]
+}
+
+export interface PatientRedFlagHistoryPage {
+  items: PatientRedFlagEvent[]
+  nextCursor: string | null
+}
+
+export interface RedFlagHistoryParams {
+  from?: string // yyyy-MM-dd, inclusive
+  to?: string // yyyy-MM-dd, inclusive
+  severity?: RedFlagSeverity
+  cursor?: string
+  size?: number
+}
