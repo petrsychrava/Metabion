@@ -445,7 +445,7 @@ export const useRedFlagsStore = defineStore('redFlags', () => {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd frontend && npm run test -- tests/stores/redFlags.test.ts`
-Expected: PASS (4 tests).
+Expected: PASS (5 tests).
 
 - [ ] **Step 5: Clear the store on logout/session expiry**
 
