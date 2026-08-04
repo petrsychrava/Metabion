@@ -29,17 +29,59 @@ describe('router auth guard', () => {
     expect(router.currentRoute.value.path).toBe('/diet-logs')
   })
 
-  it('redirects non-patient staff to /staff-notice', async () => {
-    server.use(http.get('/api/auth/me', () => HttpResponse.json({ email: 's@example.com', roles: ['PHYSICIAN'] })))
-    const router = makeRouter()
-    await router.push('/diet-logs')
-    expect(router.currentRoute.value.path).toBe('/staff-notice')
-  })
-
   it('redirects authenticated users away from /login', async () => {
     server.use(http.get('/api/auth/me', () => HttpResponse.json({ email: 'p@example.com', roles: ['PATIENT'] })))
     const router = makeRouter()
     await router.push('/login')
     expect(router.currentRoute.value.path).toBe('/')
+  })
+
+  it('redirects coordinator staff to /staff-notice', async () => {
+    server.use(http.get('/api/auth/me', () => HttpResponse.json({ email: 'c@example.com', roles: ['COORDINATOR'] })))
+    const router = makeRouter()
+    await router.push('/diet-logs')
+    expect(router.currentRoute.value.path).toBe('/staff-notice')
+  })
+
+  it('redirects clinical experts from patient routes to /clinical', async () => {
+    server.use(http.get('/api/auth/me', () => HttpResponse.json({ email: 'd@example.com', roles: ['PHYSICIAN'] })))
+    const router = makeRouter()
+    await router.push('/diet-logs')
+    expect(router.currentRoute.value.path).toBe('/clinical')
+  })
+
+  it('lets clinical experts into the clinical area', async () => {
+    server.use(http.get('/api/auth/me', () => HttpResponse.json({ email: 'n@example.com', roles: ['NUTRITION_SPECIALIST'] })))
+    const router = makeRouter()
+    await router.push('/clinical')
+    expect(router.currentRoute.value.path).toBe('/clinical')
+  })
+
+  it('lets admins into the clinical area', async () => {
+    server.use(http.get('/api/auth/me', () => HttpResponse.json({ email: 'a@example.com', roles: ['ADMIN'] })))
+    const router = makeRouter()
+    await router.push('/clinical')
+    expect(router.currentRoute.value.path).toBe('/clinical')
+  })
+
+  it('keeps patients out of the clinical area', async () => {
+    server.use(http.get('/api/auth/me', () => HttpResponse.json({ email: 'p@example.com', roles: ['PATIENT'] })))
+    const router = makeRouter()
+    await router.push('/clinical')
+    expect(router.currentRoute.value.path).toBe('/')
+  })
+
+  it('keeps coordinators out of the clinical area', async () => {
+    server.use(http.get('/api/auth/me', () => HttpResponse.json({ email: 'c@example.com', roles: ['COORDINATOR'] })))
+    const router = makeRouter()
+    await router.push('/clinical')
+    expect(router.currentRoute.value.path).toBe('/staff-notice')
+  })
+
+  it('sends experts away from /login to /clinical', async () => {
+    server.use(http.get('/api/auth/me', () => HttpResponse.json({ email: 'd@example.com', roles: ['PHYSICIAN'] })))
+    const router = makeRouter()
+    await router.push('/login')
+    expect(router.currentRoute.value.path).toBe('/clinical')
   })
 })

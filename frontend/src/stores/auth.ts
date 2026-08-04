@@ -10,6 +10,8 @@ import type { LoginResponse } from '@/types/api'
 
 export type AuthStatus = 'unknown' | 'authenticated' | 'anonymous'
 
+export const CLINICAL_ROLES = ['NUTRITION_SPECIALIST', 'PHYSICIAN', 'ADMIN']
+
 export const useAuthStore = defineStore('auth', () => {
   const email = ref<string | null>(null)
   const roles = ref<string[]>([])
@@ -18,6 +20,11 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => status.value === 'authenticated')
   const isPatient = computed(() => roles.value.includes('PATIENT'))
+  const canAccessClinical = computed(() => roles.value.some((role) => CLINICAL_ROLES.includes(role)))
+  const homePath = computed(() => {
+    if (isPatient.value) return '/'
+    return canAccessClinical.value ? '/clinical' : '/staff-notice'
+  })
 
   /** Best-effort sync of the persisted language preference; failures never break auth flows. */
   async function syncLanguagePreference(): Promise<void> {
@@ -92,5 +99,5 @@ export const useAuthStore = defineStore('auth', () => {
     mfaRequired.value = false
   }
 
-  return { email, roles, status, mfaRequired, isAuthenticated, isPatient, fetchMe, login, logout, expire }
+  return { email, roles, status, mfaRequired, isAuthenticated, isPatient, canAccessClinical, homePath, fetchMe, login, logout, expire }
 })

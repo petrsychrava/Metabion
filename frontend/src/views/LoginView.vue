@@ -23,8 +23,8 @@ async function submit() {
       message.value = t('auth.mfaRequired')
       return
     }
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
-    await router.push(redirect)
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
+    await router.push(redirect ?? auth.homePath)
   } catch (e) {
     capture(e)
   } finally {

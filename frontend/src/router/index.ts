@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory, type Router, type RouteRecordRaw } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { CLINICAL_ROLES, useAuthStore } from '@/stores/auth'
 import LoginView from '@/views/LoginView.vue'
 import RegisterView from '@/views/RegisterView.vue'
 import ForgotPasswordView from '@/views/ForgotPasswordView.vue'
@@ -22,6 +22,7 @@ import EducationListView from '@/views/EducationListView.vue'
 import EducationModuleView from '@/views/EducationModuleView.vue'
 import RedFlagsView from '@/views/RedFlagsView.vue'
 import AppShell from '@/components/AppShell.vue'
+import ClinicalStubView from '@/views/clinical/ClinicalStubView.vue'
 
 export const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView },
@@ -53,6 +54,33 @@ export const routes: RouteRecordRaw[] = [
       // Later tasks insert feature child routes here (paths without leading '/').
     ],
   },
+  {
+    path: '/clinical',
+    component: ClinicalStubView, // Task 6 swaps in ClinicalShell
+    meta: { requiresAuth: true, roles: CLINICAL_ROLES },
+    children: [
+      { path: '', component: ClinicalStubView },
+      { path: 'onboarding', component: ClinicalStubView },
+      { path: 'onboarding/:submissionId', component: ClinicalStubView },
+      { path: 'education', component: EducationListView },
+      { path: 'education/:moduleSlug', component: EducationModuleView },
+      {
+        path: 'patients/:patientProfileId',
+        component: ClinicalStubView,
+        children: [
+          { path: '', redirect: (to) => `/clinical/patients/${to.params.patientProfileId}/check-ins` },
+          { path: 'check-ins', component: ClinicalStubView },
+          { path: 'check-ins/:date', component: ClinicalStubView },
+          { path: 'trends', component: ClinicalStubView },
+          { path: 'labs', component: ClinicalStubView },
+          { path: 'labs/new', component: ClinicalStubView },
+          { path: 'labs/:resultSetId', component: ClinicalStubView },
+          { path: 'red-flags', component: ClinicalStubView },
+          { path: 'onboarding', component: ClinicalStubView },
+        ],
+      },
+    ],
+  },
   { path: '/staff-notice', component: StaffNoticeView, meta: { requiresAuth: true, allowStaff: true } },
   { path: '/:pathMatch(.*)*', component: () => import('@/views/NotFoundView.vue'), meta: { requiresAuth: true } },
 ]
@@ -66,11 +94,20 @@ export function installAuthGuard(router: Router): void {
     if (to.meta.requiresAuth && !auth.isAuthenticated) {
       return { path: '/login', query: { redirect: to.fullPath } }
     }
-    if (to.meta.requiresAuth && !to.meta.allowStaff && auth.isAuthenticated && !auth.isPatient) {
-      return { path: '/staff-notice' }
-    }
     if (to.path === '/login' && auth.isAuthenticated) {
-      return { path: '/' }
+      return { path: auth.homePath }
+    }
+    if (to.meta.requiresAuth && auth.isAuthenticated) {
+      const requiredRoles = to.meta.roles as string[] | undefined
+      if (requiredRoles !== undefined) {
+        // Route meta merges across matched records, so children inherit the parent's roles.
+        return requiredRoles.some((role) => auth.roles.includes(role))
+          ? true
+          : { path: auth.isPatient ? '/' : '/staff-notice' }
+      }
+      if (!to.meta.allowStaff && !auth.isPatient) {
+        return { path: auth.homePath }
+      }
     }
     return true
   })
