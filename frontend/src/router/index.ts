@@ -25,6 +25,7 @@ import AppShell from '@/components/AppShell.vue'
 import ClinicalShell from '@/components/ClinicalShell.vue'
 import ClinicalStubView from '@/views/clinical/ClinicalStubView.vue'
 import ClinicalOverviewView from '@/views/clinical/ClinicalOverviewView.vue'
+import ClinicalPatientWorkspaceView from '@/views/clinical/ClinicalPatientWorkspaceView.vue'
 
 export const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView },
@@ -68,7 +69,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'education/:moduleSlug', component: EducationModuleView },
       {
         path: 'patients/:patientProfileId',
-        component: ClinicalStubView,
+        component: ClinicalPatientWorkspaceView,
         children: [
           { path: '', redirect: (to) => `/clinical/patients/${to.params.patientProfileId}/check-ins` },
           { path: 'check-ins', component: ClinicalStubView },
