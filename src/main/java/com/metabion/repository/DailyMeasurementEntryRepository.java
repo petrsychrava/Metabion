@@ -1,12 +1,14 @@
 package com.metabion.repository;
 
 import com.metabion.domain.DailyMeasurementEntry;
+import com.metabion.domain.MeasurementType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 public interface DailyMeasurementEntryRepository extends JpaRepository<DailyMeasurementEntry, Long> {
 
@@ -14,6 +16,9 @@ public interface DailyMeasurementEntryRepository extends JpaRepository<DailyMeas
             Long patientProfileId,
             Instant from,
             Instant to);
+
+    Optional<DailyMeasurementEntry> findFirstByPatientProfileIdAndMeasurementTypeOrderByMeasuredAtDesc(
+            Long patientProfileId, MeasurementType measurementType);
 
     List<DailyMeasurementEntry> findByPatientProfileIdAndMeasuredAtGreaterThanEqualAndMeasuredAtLessThanOrderByMeasuredAtAsc(
             Long patientProfileId,

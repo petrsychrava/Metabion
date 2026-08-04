@@ -11,6 +11,8 @@ public interface DailyDietLogRepository extends JpaRepository<DailyDietLog, Long
 
     Optional<DailyDietLog> findByPatientProfileIdAndLogDate(Long patientProfileId, LocalDate logDate);
 
+    Optional<DailyDietLog> findFirstByPatientProfileIdOrderByLogDateDesc(Long patientProfileId);
+
     List<DailyDietLog> findByPatientProfileIdAndLogDateBetweenOrderByLogDateDesc(
             Long patientProfileId,
             LocalDate from,

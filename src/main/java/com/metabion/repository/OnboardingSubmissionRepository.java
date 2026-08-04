@@ -29,6 +29,8 @@ public interface OnboardingSubmissionRepository extends JpaRepository<Onboarding
 
     List<OnboardingSubmission> findAllByOrderBySubmittedAtDesc();
 
+    long countByPatientProfileIdAndReviewStatus(Long patientProfileId, OnboardingReviewStatus reviewStatus);
+
     @Query("""
             select coalesce(max(submission.version), 0)
             from OnboardingSubmission submission
