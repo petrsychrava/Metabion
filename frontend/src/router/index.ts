@@ -22,6 +22,7 @@ import EducationListView from '@/views/EducationListView.vue'
 import EducationModuleView from '@/views/EducationModuleView.vue'
 import RedFlagsView from '@/views/RedFlagsView.vue'
 import AppShell from '@/components/AppShell.vue'
+import ClinicalShell from '@/components/ClinicalShell.vue'
 import ClinicalStubView from '@/views/clinical/ClinicalStubView.vue'
 
 export const routes: RouteRecordRaw[] = [
@@ -56,7 +57,7 @@ export const routes: RouteRecordRaw[] = [
   },
   {
     path: '/clinical',
-    component: ClinicalStubView, // Task 6 swaps in ClinicalShell
+    component: ClinicalShell,
     meta: { requiresAuth: true, roles: CLINICAL_ROLES },
     children: [
       { path: '', component: ClinicalStubView },
