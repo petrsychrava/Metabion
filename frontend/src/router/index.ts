@@ -24,6 +24,7 @@ import RedFlagsView from '@/views/RedFlagsView.vue'
 import AppShell from '@/components/AppShell.vue'
 import ClinicalShell from '@/components/ClinicalShell.vue'
 import ClinicalStubView from '@/views/clinical/ClinicalStubView.vue'
+import ClinicalOverviewView from '@/views/clinical/ClinicalOverviewView.vue'
 
 export const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView },
@@ -60,7 +61,7 @@ export const routes: RouteRecordRaw[] = [
     component: ClinicalShell,
     meta: { requiresAuth: true, roles: CLINICAL_ROLES },
     children: [
-      { path: '', component: ClinicalStubView },
+      { path: '', component: ClinicalOverviewView },
       { path: 'onboarding', component: ClinicalStubView },
       { path: 'onboarding/:submissionId', component: ClinicalStubView },
       { path: 'education', component: EducationListView },
