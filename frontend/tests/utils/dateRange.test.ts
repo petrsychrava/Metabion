@@ -26,4 +26,10 @@ describe('dateRangeError', () => {
     expect(dateRangeError('not-a-date', '2025-01-01')).toBe('invalid')
     expect(dateRangeError('2025-01-01', 'garbage')).toBe('invalid')
   })
+
+  it('honors a tighter maxDays limit', () => {
+    expect(dateRangeError('2025-01-01', '2026-01-05', 369)).toBeNull()
+    expect(dateRangeError('2025-01-01', '2026-01-06', 369)).toBe('too_long')
+    expect(dateRangeError('2025-01-01', '2026-01-06')).toBeNull()
+  })
 })

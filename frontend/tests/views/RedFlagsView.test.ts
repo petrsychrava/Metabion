@@ -157,6 +157,53 @@ describe('RedFlagsView', () => {
     expect(wrapper.find('[data-testid="load-more"]').exists()).toBe(false)
   })
 
+  it('blocks a 370-day range, matching the history endpoint limit', async () => {
+    let historyCalls = 0
+    server.use(
+      http.get('/api/red-flags/current', () => HttpResponse.json({ highestSeverity: null, flags: [] })),
+      http.get('/api/red-flags/history', () => {
+        historyCalls += 1
+        return HttpResponse.json({ items: [], nextCursor: null })
+      }),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+    expect(historyCalls).toBe(1)
+
+    const [fromInput, toInput] = wrapper.findAll('input[type="date"]')
+    await fromInput.setValue('2025-01-01')
+    await toInput.setValue('2026-01-06')
+    await wrapper.find('[data-testid="apply-history"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(en.errors.date_range_too_long)
+    expect(historyCalls).toBe(1)
+  })
+
+  it('keeps Load more bound to the applied filters', async () => {
+    const capturedUrls: string[] = []
+    server.use(
+      http.get('/api/red-flags/current', () => HttpResponse.json({ highestSeverity: null, flags: [] })),
+      http.get('/api/red-flags/history', ({ request }) => {
+        capturedUrls.push(request.url)
+        const cursor = new URL(request.url).searchParams.get('cursor')
+        return cursor
+          ? HttpResponse.json({ items: [], nextCursor: null })
+          : HttpResponse.json({ items: [historyEvent], nextCursor: 'cursor-2' })
+      }),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-testid="severity-filter"]').setValue('EMERGENCY')
+    await wrapper.find('[data-testid="load-more"]').trigger('click')
+    await flushPromises()
+
+    const url = new URL(capturedUrls[1])
+    expect(url.searchParams.get('cursor')).toBe('cursor-2')
+    expect(url.searchParams.has('severity')).toBe(false)
+  })
+
   it('shows an error instead of the empty state when the snapshot load fails', async () => {
     server.use(
       http.get('/api/red-flags/current', () => new HttpResponse(null, { status: 500 })),

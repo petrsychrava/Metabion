@@ -24,6 +24,9 @@ monthAgo.setDate(monthAgo.getDate() - 30)
 const from = ref(iso(monthAgo))
 const to = ref(iso(today))
 const severity = ref<RedFlagSeverity | ''>('')
+const appliedFrom = ref(from.value)
+const appliedTo = ref(to.value)
+const appliedSeverity = ref<RedFlagSeverity | ''>(severity.value)
 const items = ref<PatientRedFlagEvent[]>([])
 const nextCursor = ref<string | null>(null)
 const loading = ref(true)
@@ -38,7 +41,7 @@ function ruleLabel(ruleKey: string): string {
 
 async function load() {
   clear()
-  const rangeError = dateRangeError(from.value, to.value)
+  const rangeError = dateRangeError(from.value, to.value, 369)
   if (rangeError) {
     message.value = t(`errors.date_range_${rangeError === 'too_long' ? 'too_long' : 'invalid'}`)
     return
@@ -55,6 +58,9 @@ async function load() {
     })
     items.value = page.items
     nextCursor.value = page.nextCursor
+    appliedFrom.value = from.value
+    appliedTo.value = to.value
+    appliedSeverity.value = severity.value
   } catch (e) {
     capture(e)
   } finally {
@@ -68,9 +74,9 @@ async function loadMore() {
   loadingMore.value = true
   try {
     const page = await redFlagApi.getHistory({
-      from: from.value,
-      to: to.value,
-      severity: severity.value || undefined,
+      from: appliedFrom.value,
+      to: appliedTo.value,
+      severity: appliedSeverity.value || undefined,
       cursor: nextCursor.value,
       size: 25,
     })
