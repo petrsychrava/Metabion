@@ -55,6 +55,7 @@ async function load() {
   const requestSeverity = severity.value
   const gen = ++historyGeneration
   loading.value = true
+  loadingMore.value = false // a superseded in-flight pagination request skips its own reset
   items.value = []
   nextCursor.value = null
   try {

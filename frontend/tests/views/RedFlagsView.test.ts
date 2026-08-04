@@ -270,6 +270,39 @@ describe('RedFlagsView', () => {
     expect(table.text()).not.toContain(en.redFlags.rules.SYM_ACTIVE_FLARE)
   })
 
+  it('re-enables Load more when Apply supersedes an in-flight pagination request', async () => {
+    let releasePage!: () => void
+    server.use(
+      http.get('/api/red-flags/current', () => HttpResponse.json({ highestSeverity: null, flags: [] })),
+      http.get('/api/red-flags/history', ({ request }) => {
+        const url = new URL(request.url)
+        if (url.searchParams.has('cursor')) {
+          return new Promise<Response>((resolve) => {
+            releasePage = () => resolve(HttpResponse.json({ items: [], nextCursor: null }))
+          })
+        }
+        if (url.searchParams.has('severity')) {
+          return HttpResponse.json({ items: [historyEvent], nextCursor: 'cursor-9' })
+        }
+        return HttpResponse.json({ items: [historyEvent], nextCursor: 'cursor-2' })
+      }),
+    )
+    const wrapper = mountView()
+    await flushPromises()
+
+    // Start pagination, then apply a new query before it finishes.
+    await wrapper.find('[data-testid="load-more"]').trigger('click')
+    await wrapper.find('[data-testid="severity-filter"]').setValue('EMERGENCY')
+    await wrapper.find('[data-testid="apply-history"]').trigger('click')
+    await flushPromises()
+    releasePage()
+    await flushPromises()
+
+    const loadMore = wrapper.find('[data-testid="load-more"]')
+    expect(loadMore.exists()).toBe(true)
+    expect(loadMore.attributes('disabled')).toBeUndefined()
+  })
+
   it('shows an error instead of the empty state when the snapshot load fails', async () => {
     server.use(
       http.get('/api/red-flags/current', () => new HttpResponse(null, { status: 500 })),

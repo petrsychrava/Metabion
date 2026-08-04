@@ -118,4 +118,34 @@ describe('redFlags store', () => {
     expect(store.loadFailed).toBe(false)
     expect(store.loading).toBe(false)
   })
+
+  it('keeps loading owned by a newer refresh when a stale one settles after clear()', async () => {
+    let calls = 0
+    const releases: Array<() => void> = []
+    server.use(
+      http.get('/api/red-flags/current', async () => {
+        calls += 1
+        await new Promise<void>((resolve) => { releases.push(resolve) })
+        return HttpResponse.json(snapshot)
+      }),
+    )
+    const store = useRedFlagsStore()
+    const stale = store.refreshCurrent() // pre-logout request
+    await vi.waitFor(() => expect(calls).toBe(1))
+    store.clear() // logout
+    const newer = store.refreshCurrent() // new session refresh
+    await vi.waitFor(() => expect(calls).toBe(2))
+
+    releases[0]() // the stale request settles first
+    await stale
+    expect(store.loading).toBe(true) // still owned by the newer refresh
+
+    const queued = store.refreshCurrent() // post-save refresh must queue, not race
+    releases[1]()
+    await vi.waitFor(() => expect(calls).toBe(3))
+    releases[2]()
+    await Promise.all([newer, queued])
+    expect(store.snapshot).toEqual(snapshot)
+    expect(store.loading).toBe(false)
+  })
 })
