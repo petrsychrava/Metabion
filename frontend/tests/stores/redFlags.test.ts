@@ -148,4 +148,32 @@ describe('redFlags store', () => {
     expect(store.snapshot).toEqual(snapshot)
     expect(store.loading).toBe(false)
   })
+
+  it('does not let a stale request consume a follow-up queued for a newer refresh', async () => {
+    let calls = 0
+    const releases: Array<() => void> = []
+    server.use(
+      http.get('/api/red-flags/current', async () => {
+        calls += 1
+        await new Promise<void>((resolve) => { releases.push(resolve) })
+        return HttpResponse.json(snapshot)
+      }),
+    )
+    const store = useRedFlagsStore()
+    const stale = store.refreshCurrent() // pre-logout request
+    await vi.waitFor(() => expect(calls).toBe(1))
+    store.clear() // logout
+    const newer = store.refreshCurrent() // new session refresh
+    await vi.waitFor(() => expect(calls).toBe(2))
+    const queued = store.refreshCurrent() // post-save refresh queued while the new request loads
+
+    releases[0]() // the stale request settles first — it must not consume the queued follow-up
+    await stale
+    releases[1]()
+    await vi.waitFor(() => expect(calls).toBe(3))
+    releases[2]()
+    await Promise.all([newer, queued])
+    expect(store.snapshot).toEqual(snapshot)
+    expect(store.loading).toBe(false)
+  })
 })

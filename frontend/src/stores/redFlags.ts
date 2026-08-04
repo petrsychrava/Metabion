@@ -34,14 +34,15 @@ export const useRedFlagsStore = defineStore('redFlags', () => {
       if (gen !== generation) return // a clear() happened while in flight; discard
       loadFailed.value = true
     } finally {
-      // Only the invocation that still owns the active generation may release
-      // the shared loading flag — a stale request settling after clear() must
-      // not clobber a newer refresh that is already in flight.
-      const ownsRequest = gen === generation
-      if (ownsRequest) loading.value = false
-      const followUp = followUpPending
-      followUpPending = false
-      if (followUp && ownsRequest) await refreshCurrent()
+      // Only the invocation that still owns the active generation may touch
+      // shared state: a stale request settling after clear() must neither
+      // release loading nor consume a follow-up queued for the newer refresh.
+      if (gen === generation) {
+        loading.value = false
+        const followUp = followUpPending
+        followUpPending = false
+        if (followUp) await refreshCurrent()
+      }
     }
   }
 
