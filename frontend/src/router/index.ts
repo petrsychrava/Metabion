@@ -27,6 +27,7 @@ import ClinicalStubView from '@/views/clinical/ClinicalStubView.vue'
 import ClinicalOverviewView from '@/views/clinical/ClinicalOverviewView.vue'
 import ClinicalPatientWorkspaceView from '@/views/clinical/ClinicalPatientWorkspaceView.vue'
 import ClinicalCheckInsView from '@/views/clinical/ClinicalCheckInsView.vue'
+import ClinicalCheckInDayView from '@/views/clinical/ClinicalCheckInDayView.vue'
 
 export const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView },
@@ -74,7 +75,7 @@ export const routes: RouteRecordRaw[] = [
         children: [
           { path: '', redirect: (to) => `/clinical/patients/${to.params.patientProfileId}/check-ins` },
           { path: 'check-ins', component: ClinicalCheckInsView },
-          { path: 'check-ins/:date', component: ClinicalStubView },
+          { path: 'check-ins/:date', component: ClinicalCheckInDayView },
           { path: 'trends', component: ClinicalStubView },
           { path: 'labs', component: ClinicalStubView },
           { path: 'labs/new', component: ClinicalStubView },
