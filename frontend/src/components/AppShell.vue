@@ -1,15 +1,22 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useRedFlagsStore } from '@/stores/redFlags'
 import { setLocale, type AppLocale } from '@/i18n'
 import { setTheme, currentTheme, type ThemePreference } from '@/theme'
 import { accountApi } from '@/api/account'
+import RedFlagBanner from '@/components/RedFlagBanner.vue'
+import type { RedFlagSeverity } from '@/types/api'
 
 const { t, locale } = useI18n()
 const auth = useAuthStore()
+const redFlags = useRedFlagsStore()
 const router = useRouter()
+const route = useRoute()
+
+const URGENT_PLUS: RedFlagSeverity[] = ['URGENT_REVIEW', 'EMERGENCY']
 
 const links = computed(() => [
   { to: '/', label: t('nav.dashboard') },
@@ -17,10 +24,18 @@ const links = computed(() => [
   { to: '/check-ins', label: t('nav.checkIns') },
   { to: '/trends', label: t('nav.trends') },
   { to: '/labs', label: t('nav.labs') },
+  { to: '/red-flags', label: t('nav.redFlags') },
   { to: '/onboarding', label: t('nav.onboarding') },
   { to: '/education', label: t('nav.education') },
   { to: '/account', label: t('nav.account') },
 ])
+
+// The dashboard shows its own all-severity banner; /red-flags is the detail.
+const showShellBanner = computed(() => route.path !== '/' && route.path !== '/red-flags')
+
+onMounted(() => {
+  void redFlags.refreshCurrent()
+})
 
 async function switchLocale(event: Event) {
   const next = (event.target as HTMLSelectElement).value as AppLocale
@@ -84,6 +99,7 @@ async function logout() {
       </div>
     </header>
     <main class="mx-auto max-w-5xl px-4 py-6">
+      <RedFlagBanner v-if="showShellBanner" :severities="URGENT_PLUS" class="mb-4" />
       <router-view />
     </main>
   </div>

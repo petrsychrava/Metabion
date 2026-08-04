@@ -69,4 +69,30 @@ describe('DashboardView', () => {
     expect(wrapper.find('[data-testid="diet-log-status"]').text()).toContain(en.dashboard.dietLogDone)
     expect(wrapper.find('[data-testid="check-in-status"]').text()).toContain(en.dashboard.checkInDone)
   })
+
+  it('shows the red-flag banner for any severity, including routine', async () => {
+    server.use(
+      http.get(`/api/diet-logs/${todayIso()}`, () => HttpResponse.json({ error: 'not_found' }, { status: 404 })),
+      http.get(`/api/symptom-check-ins/${todayIso()}`, () => HttpResponse.json({ error: 'not_found' }, { status: 404 })),
+      http.get('/api/red-flags/current', () => HttpResponse.json({
+        highestSeverity: 'ROUTINE_REVIEW',
+        flags: [
+          {
+            eventId: 702,
+            ruleKey: 'LAB_CALPROTECTIN_BORDERLINE',
+            severity: 'ROUTINE_REVIEW',
+            detectedAt: '2026-08-01T09:00:00Z',
+            sourceType: 'LAB_RESULT_SET',
+            sourceId: 92,
+            current: true,
+            supersededAt: null,
+          },
+        ],
+      })),
+    )
+    const wrapper = mount(DashboardView, { global: { plugins: [createPinia(), i18n] } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="red-flag-banner"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="red-flag-banner"]').text()).toContain(en.redFlags.severity.ROUTINE_REVIEW)
+  })
 })

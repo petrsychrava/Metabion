@@ -116,4 +116,28 @@ describe('LabResultSetEditView', () => {
     expect(wrapper.text()).toContain(en.errors.conflict)
     expect(wrapper.find('[data-testid="reload"]').exists()).toBe(true)
   })
+
+  it('refreshes the current red-flag snapshot after a successful update', async () => {
+    let currentCalls = 0
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/lab-result-sets/3', () => HttpResponse.json(existing)),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/lab-result-sets/3', () => HttpResponse.json({ ...existing, version: 3 })),
+      http.get('/api/red-flags/current', () => {
+        currentCalls += 1
+        return HttpResponse.json({ highestSeverity: null, flags: [] })
+      }),
+    )
+    const router = await makeRouter('/labs/3')
+    const wrapper = mount(LabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+    expect(currentCalls).toBe(0)
+
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(en.common.saved)
+    expect(currentCalls).toBe(1)
+  })
 })

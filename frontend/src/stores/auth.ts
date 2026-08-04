@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { authApi } from '@/api/auth'
 import { accountApi } from '@/api/account'
 import { ApiError, resetCsrfToken } from '@/api/http'
+import { useRedFlagsStore } from '@/stores/redFlags'
 import { setLocale } from '@/i18n'
 import { setTheme } from '@/theme'
 import type { LoginResponse } from '@/types/api'
@@ -84,6 +85,7 @@ export const useAuthStore = defineStore('auth', () => {
   /** Local-only reset, e.g. when a request fails with 401 mid-session. */
   function expire(): void {
     resetCsrfToken()
+    useRedFlagsStore().clear()
     email.value = null
     roles.value = []
     status.value = 'anonymous'

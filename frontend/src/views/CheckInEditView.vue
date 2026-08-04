@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { ApiError } from '@/api/http'
 import { symptomApi } from '@/api/symptoms'
 import { useApiError } from '@/composables/useApiError'
+import { useRedFlagsStore } from '@/stores/redFlags'
 import type { AnswerRequest, FlareState, SymptomCheckInResponse, SymptomQuestionnaire } from '@/types/api'
 
 const { t } = useI18n()
@@ -95,6 +96,7 @@ async function save() {
       notes: notes.value || undefined,
     })
     saved.value = true
+    void useRedFlagsStore().refreshCurrent()
   } catch (e) {
     capture(e)
   }

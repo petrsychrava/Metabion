@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { ApiError } from '@/api/http'
 import { labApi } from '@/api/labs'
 import { useApiError } from '@/composables/useApiError'
+import { useRedFlagsStore } from '@/stores/redFlags'
 import FieldError from '@/components/FieldError.vue'
 import type { LabResultRequest, LabResultSetResponse, LabTestDefinition } from '@/types/api'
 
@@ -111,6 +112,7 @@ async function save() {
       version.value = res.version
     }
     saved.value = true
+    void useRedFlagsStore().refreshCurrent()
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) {
       conflict.value = true

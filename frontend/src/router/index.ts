@@ -20,6 +20,7 @@ import LabTrendsView from '@/views/LabTrendsView.vue'
 import OnboardingView from '@/views/OnboardingView.vue'
 import EducationListView from '@/views/EducationListView.vue'
 import EducationModuleView from '@/views/EducationModuleView.vue'
+import RedFlagsView from '@/views/RedFlagsView.vue'
 import AppShell from '@/components/AppShell.vue'
 
 export const routes: RouteRecordRaw[] = [
@@ -48,6 +49,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'onboarding', component: OnboardingView, meta: { requiresAuth: true } },
       { path: 'education', component: EducationListView, meta: { requiresAuth: true } },
       { path: 'education/:moduleSlug', component: EducationModuleView, meta: { requiresAuth: true } },
+      { path: 'red-flags', component: RedFlagsView, meta: { requiresAuth: true } },
       // Later tasks insert feature child routes here (paths without leading '/').
     ],
   },

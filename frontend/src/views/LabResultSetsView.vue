@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { labApi } from '@/api/labs'
 import { useApiError } from '@/composables/useApiError'
+import { useRedFlagsStore } from '@/stores/redFlags'
 import { dateRangeError } from '@/utils/dateRange'
 import type { LabResultSetResponse } from '@/types/api'
 
@@ -52,6 +53,7 @@ async function confirmRemoval() {
     removalTarget.value = null
     removalReason.value = ''
     removalDone.value = true
+    void useRedFlagsStore().refreshCurrent()
     await load()
   } catch (e) {
     capture(e)
