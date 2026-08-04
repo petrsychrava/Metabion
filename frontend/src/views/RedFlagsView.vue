@@ -39,6 +39,8 @@ function ruleLabel(ruleKey: string): string {
   return te(key) ? t(key) : ruleKey
 }
 
+let historyGeneration = 0
+
 async function load() {
   clear()
   const rangeError = dateRangeError(from.value, to.value, 369)
@@ -46,31 +48,40 @@ async function load() {
     message.value = t(`errors.date_range_${rangeError === 'too_long' ? 'too_long' : 'invalid'}`)
     return
   }
+  // Capture before the await: controls edited mid-flight must not leak into
+  // the cursor bookkeeping, and a stale response must not overwrite a newer one.
+  const requestFrom = from.value
+  const requestTo = to.value
+  const requestSeverity = severity.value
+  const gen = ++historyGeneration
   loading.value = true
   items.value = []
   nextCursor.value = null
   try {
     const page = await redFlagApi.getHistory({
-      from: from.value,
-      to: to.value,
-      severity: severity.value || undefined,
+      from: requestFrom,
+      to: requestTo,
+      severity: requestSeverity || undefined,
       size: 25,
     })
+    if (gen !== historyGeneration) return
     items.value = page.items
     nextCursor.value = page.nextCursor
-    appliedFrom.value = from.value
-    appliedTo.value = to.value
-    appliedSeverity.value = severity.value
+    appliedFrom.value = requestFrom
+    appliedTo.value = requestTo
+    appliedSeverity.value = requestSeverity
   } catch (e) {
+    if (gen !== historyGeneration) return
     capture(e)
   } finally {
-    loading.value = false
+    if (gen === historyGeneration) loading.value = false
   }
 }
 
 async function loadMore() {
   if (!nextCursor.value) return
   clear()
+  const gen = historyGeneration
   loadingMore.value = true
   try {
     const page = await redFlagApi.getHistory({
@@ -80,12 +91,14 @@ async function loadMore() {
       cursor: nextCursor.value,
       size: 25,
     })
+    if (gen !== historyGeneration) return
     items.value = [...items.value, ...page.items]
     nextCursor.value = page.nextCursor
   } catch (e) {
+    if (gen !== historyGeneration) return
     capture(e)
   } finally {
-    loadingMore.value = false
+    if (gen === historyGeneration) loadingMore.value = false
   }
 }
 

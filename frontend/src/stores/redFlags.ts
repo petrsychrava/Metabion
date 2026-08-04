@@ -8,15 +8,21 @@ export const useRedFlagsStore = defineStore('redFlags', () => {
   const loading = ref(false)
   const loadFailed = ref(false)
   let generation = 0
+  let followUpPending = false
 
   /**
    * Refreshes the current snapshot. A failure only hides the banner via
    * loadFailed — it never throws, so save flows are unaffected. A result
    * that was in flight when clear() ran is discarded, so a previous
-   * patient's flags cannot reappear after logout.
+   * patient's flags cannot reappear after logout. A refresh requested while
+   * one is in flight is coalesced into a single follow-up run, because the
+   * in-flight response may predate the write that triggered the request.
    */
   async function refreshCurrent(): Promise<void> {
-    if (loading.value) return
+    if (loading.value) {
+      followUpPending = true
+      return
+    }
     loading.value = true
     const gen = generation
     try {
@@ -29,11 +35,15 @@ export const useRedFlagsStore = defineStore('redFlags', () => {
       loadFailed.value = true
     } finally {
       loading.value = false
+      const followUp = followUpPending
+      followUpPending = false
+      if (followUp && gen === generation) await refreshCurrent()
     }
   }
 
   function clear(): void {
     generation += 1
+    followUpPending = false
     snapshot.value = null
     loading.value = false
     loadFailed.value = false

@@ -39,7 +39,7 @@ describe('redFlags store', () => {
     expect(store.snapshot).toBeNull()
   })
 
-  it('skips a second refresh while one is in flight', async () => {
+  it('coalesces a refresh requested during an in-flight fetch into a follow-up', async () => {
     let calls = 0
     let release!: () => void
     server.use(
@@ -55,11 +55,15 @@ describe('redFlags store', () => {
     // Wait until the MSW handler has actually started before releasing it.
     await vi.waitFor(() => expect(calls).toBe(1))
     release()
+    // The queued request runs as a single follow-up once the first completes.
+    await vi.waitFor(() => expect(calls).toBe(2))
+    release()
     await Promise.all([first, second])
-    expect(calls).toBe(1)
+    expect(calls).toBe(2)
+    expect(store.snapshot).toEqual(snapshot)
   })
 
-  it('discards a refresh result when clear() runs while it is in flight', async () => {
+  it('discards a refresh result and its queued follow-up when clear() runs while in flight', async () => {
     let calls = 0
     let release!: () => void
     server.use(
@@ -71,11 +75,13 @@ describe('redFlags store', () => {
     )
     const store = useRedFlagsStore()
     const pending = store.refreshCurrent()
-    // Wait until the MSW handler has actually started before clearing/releasing.
+    // Wait until the MSW handler has actually started before queueing/clearing.
     await vi.waitFor(() => expect(calls).toBe(1))
+    const queued = store.refreshCurrent()
     store.clear()
     release()
-    await pending
+    await Promise.all([pending, queued])
+    expect(calls).toBe(1)
     expect(store.snapshot).toBeNull()
     expect(store.loading).toBe(false)
     expect(store.loadFailed).toBe(false)

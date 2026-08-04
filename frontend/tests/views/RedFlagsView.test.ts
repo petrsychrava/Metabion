@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { http, HttpResponse } from 'msw'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import { server } from '../msw/server'
@@ -202,6 +202,72 @@ describe('RedFlagsView', () => {
     const url = new URL(capturedUrls[1])
     expect(url.searchParams.get('cursor')).toBe('cursor-2')
     expect(url.searchParams.has('severity')).toBe(false)
+  })
+
+  it('binds the cursor to the request filters even when controls change mid-flight', async () => {
+    const capturedUrls: string[] = []
+    let release!: () => void
+    server.use(
+      http.get('/api/red-flags/current', () => HttpResponse.json({ highestSeverity: null, flags: [] })),
+      http.get('/api/red-flags/history', ({ request }) => {
+        capturedUrls.push(request.url)
+        if (capturedUrls.length === 1) {
+          return new Promise<Response>((resolve) => {
+            release = () => resolve(HttpResponse.json({ items: [historyEvent], nextCursor: 'cursor-2' }))
+          })
+        }
+        return HttpResponse.json({ items: [], nextCursor: null })
+      }),
+    )
+    const wrapper = mountView()
+    await vi.waitFor(() => expect(capturedUrls.length).toBe(1))
+
+    // The user edits the severity while the first load is still in flight.
+    await wrapper.find('[data-testid="severity-filter"]').setValue('EMERGENCY')
+    release()
+    await flushPromises()
+
+    await wrapper.find('[data-testid="load-more"]').trigger('click')
+    await flushPromises()
+
+    const url = new URL(capturedUrls[1])
+    expect(url.searchParams.get('cursor')).toBe('cursor-2')
+    expect(url.searchParams.has('severity')).toBe(false)
+  })
+
+  it('ignores a stale history response that finishes after a newer one', async () => {
+    const releases: Array<() => void> = []
+    server.use(
+      http.get('/api/red-flags/current', () => HttpResponse.json({ highestSeverity: null, flags: [] })),
+      http.get('/api/red-flags/history', ({ request }) => {
+        const filtered = new URL(request.url).searchParams.has('severity')
+        const body = {
+          items: [{ ...historyEvent, ruleKey: filtered ? 'LAB_CRP_ELEVATED' : 'SYM_ACTIVE_FLARE' }],
+          nextCursor: null,
+        }
+        return new Promise<Response>((resolve) => {
+          releases.push(() => resolve(HttpResponse.json(body)))
+        })
+      }),
+    )
+    const wrapper = mountView()
+    await vi.waitFor(() => expect(releases.length).toBe(1))
+
+    // Apply a severity filter before the initial load finishes.
+    await wrapper.find('[data-testid="severity-filter"]').setValue('EMERGENCY')
+    await wrapper.find('[data-testid="apply-history"]').trigger('click')
+    await vi.waitFor(() => expect(releases.length).toBe(2))
+
+    // Complete the newer request first, then the stale one.
+    releases[1]()
+    await flushPromises()
+    releases[0]()
+    await flushPromises()
+
+    const table = wrapper.find('[data-testid="history-table"]')
+    expect(table.findAll('tbody tr')).toHaveLength(1)
+    expect(table.text()).toContain(en.redFlags.rules.LAB_CRP_ELEVATED)
+    expect(table.text()).not.toContain(en.redFlags.rules.SYM_ACTIVE_FLARE)
   })
 
   it('shows an error instead of the empty state when the snapshot load fails', async () => {
