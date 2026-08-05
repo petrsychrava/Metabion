@@ -30,6 +30,7 @@ import ClinicalCheckInsView from '@/views/clinical/ClinicalCheckInsView.vue'
 import ClinicalCheckInDayView from '@/views/clinical/ClinicalCheckInDayView.vue'
 import ClinicalPatientTrendsView from '@/views/clinical/ClinicalPatientTrendsView.vue'
 import ClinicalPatientLabsView from '@/views/clinical/ClinicalPatientLabsView.vue'
+import ClinicalLabResultSetEditView from '@/views/clinical/ClinicalLabResultSetEditView.vue'
 
 export const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView },
@@ -80,8 +81,8 @@ export const routes: RouteRecordRaw[] = [
           { path: 'check-ins/:date', component: ClinicalCheckInDayView },
           { path: 'trends', component: ClinicalPatientTrendsView },
           { path: 'labs', component: ClinicalPatientLabsView },
-          { path: 'labs/new', component: ClinicalStubView },
-          { path: 'labs/:resultSetId', component: ClinicalStubView },
+          { path: 'labs/new', component: ClinicalLabResultSetEditView },
+          { path: 'labs/:resultSetId', component: ClinicalLabResultSetEditView },
           { path: 'red-flags', component: ClinicalStubView },
           { path: 'onboarding', component: ClinicalStubView },
         ],
