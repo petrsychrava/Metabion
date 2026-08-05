@@ -23,7 +23,6 @@ import EducationModuleView from '@/views/EducationModuleView.vue'
 import RedFlagsView from '@/views/RedFlagsView.vue'
 import AppShell from '@/components/AppShell.vue'
 import ClinicalShell from '@/components/ClinicalShell.vue'
-import ClinicalStubView from '@/views/clinical/ClinicalStubView.vue'
 import ClinicalOverviewView from '@/views/clinical/ClinicalOverviewView.vue'
 import ClinicalPatientWorkspaceView from '@/views/clinical/ClinicalPatientWorkspaceView.vue'
 import ClinicalCheckInsView from '@/views/clinical/ClinicalCheckInsView.vue'
@@ -34,6 +33,7 @@ import ClinicalLabResultSetEditView from '@/views/clinical/ClinicalLabResultSetE
 import ClinicalPatientRedFlagsView from '@/views/clinical/ClinicalPatientRedFlagsView.vue'
 import ClinicalOnboardingQueueView from '@/views/clinical/ClinicalOnboardingQueueView.vue'
 import ClinicalOnboardingReviewView from '@/views/clinical/ClinicalOnboardingReviewView.vue'
+import ClinicalPatientOnboardingView from '@/views/clinical/ClinicalPatientOnboardingView.vue'
 
 export const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView },
@@ -87,7 +87,7 @@ export const routes: RouteRecordRaw[] = [
           { path: 'labs/new', component: ClinicalLabResultSetEditView },
           { path: 'labs/:resultSetId', component: ClinicalLabResultSetEditView },
           { path: 'red-flags', component: ClinicalPatientRedFlagsView },
-          { path: 'onboarding', component: ClinicalStubView },
+          { path: 'onboarding', component: ClinicalPatientOnboardingView },
         ],
       },
     ],
