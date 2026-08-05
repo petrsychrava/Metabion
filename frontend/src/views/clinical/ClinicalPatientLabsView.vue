@@ -65,6 +65,11 @@ async function loadTrend() {
   }
 }
 
+async function apply() {
+  await loadList()
+  await loadTrend()
+}
+
 onMounted(async () => {
   try {
     tests.value = await labApi.listTests()
@@ -94,7 +99,7 @@ watch(selectedTest, loadTrend)
       <label class="text-sm">{{ t('common.to') }}
         <input v-model="to" type="date" class="ml-1 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
       </label>
-      <button class="rounded bg-blue-600 px-3 py-1 text-sm text-white" @click="loadList">{{ t('common.apply') }}</button>
+      <button data-testid="apply-range" class="rounded bg-blue-600 px-3 py-1 text-sm text-white" @click="apply">{{ t('common.apply') }}</button>
     </div>
 
     <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>

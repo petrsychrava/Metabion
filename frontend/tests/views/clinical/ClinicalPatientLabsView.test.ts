@@ -78,17 +78,23 @@ describe('ClinicalPatientLabsView', () => {
 
   it('loads the per-test trend when a test is selected', async () => {
     let trendUrl = ''
+    let trendCalls = 0
     server.use(
       http.get('/api/clinical/patients/41/labs/result-sets', () => HttpResponse.json(resultSets)),
       http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
       http.get('/api/clinical/patients/41/labs/trends/CRP', ({ request }) => {
+        trendCalls += 1
         trendUrl = request.url
         return HttpResponse.json(trend)
       }),
     )
     const router = createRouter({
       history: createMemoryHistory(),
-      routes: [{ path: '/clinical/patients/:patientProfileId/labs', component: ClinicalPatientLabsView }],
+      routes: [
+        { path: '/clinical/patients/:patientProfileId/labs', component: ClinicalPatientLabsView },
+        { path: '/clinical/patients/:patientProfileId/labs/new', component: { template: '<div />' } },
+        { path: '/clinical/patients/:patientProfileId/labs/:resultSetId', component: { template: '<div />' } },
+      ],
     })
     await router.push('/clinical/patients/41/labs')
     const wrapper = mount(ClinicalPatientLabsView, {
@@ -99,5 +105,10 @@ describe('ClinicalPatientLabsView', () => {
     await wrapper.find('[data-testid="test-select"]').setValue('CRP')
     await flushPromises()
     expect(trendUrl).toContain('/api/clinical/patients/41/labs/trends/CRP')
+
+    const callsAfterSelect = trendCalls
+    await wrapper.find('[data-testid="apply-range"]').trigger('click')
+    await flushPromises()
+    expect(trendCalls).toBeGreaterThan(callsAfterSelect)
   })
 })

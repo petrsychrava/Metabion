@@ -3316,6 +3316,8 @@ git add frontend/src/views/clinical/ClinicalPatientLabsView.vue \
 git commit -m "Add clinical labs tab"
 ```
 
+Amendment (review fix): the Apply button refreshes both the result-set list and the trend chart (apply() calls loadList + loadTrend); test pins the trend reload and registers stub editor routes.
+
 ---
 
 ### Task 13: Frontend — lab result-set editor (entry/edit/removal)
