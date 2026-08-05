@@ -84,4 +84,12 @@ describe('router auth guard', () => {
     await router.push('/login')
     expect(router.currentRoute.value.path).toBe('/clinical')
   })
+
+  it('preserves the query when the workspace index redirects to check-ins', async () => {
+    server.use(http.get('/api/auth/me', () => HttpResponse.json({ email: 'd@example.com', roles: ['PHYSICIAN'] })))
+    const router = makeRouter()
+    await router.push('/clinical/patients/41?email=x%40example.com')
+    expect(router.currentRoute.value.path).toBe('/clinical/patients/41/check-ins')
+    expect(router.currentRoute.value.query.email).toBe('x@example.com')
+  })
 })

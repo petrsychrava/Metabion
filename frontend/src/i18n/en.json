@@ -161,6 +161,7 @@
     "photos": "Photos",
     "answers": "Answers",
     "queueTitle": "Onboarding review",
+    "queueEmpty": "No submissions match the filter.",
     "allStatuses": "All statuses",
     "openReview": "Review",
     "reviewTitle": "Review submission",

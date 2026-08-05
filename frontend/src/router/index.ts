@@ -79,7 +79,7 @@ export const routes: RouteRecordRaw[] = [
         path: 'patients/:patientProfileId',
         component: ClinicalPatientWorkspaceView,
         children: [
-          { path: '', redirect: (to) => `/clinical/patients/${to.params.patientProfileId}/check-ins` },
+          { path: '', redirect: (to) => ({ path: `/clinical/patients/${to.params.patientProfileId}/check-ins`, query: to.query }) },
           { path: 'check-ins', component: ClinicalCheckInsView },
           { path: 'check-ins/:date', component: ClinicalCheckInDayView },
           { path: 'trends', component: ClinicalPatientTrendsView },

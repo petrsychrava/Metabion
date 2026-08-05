@@ -54,6 +54,7 @@ onMounted(load)
 
     <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
+    <p v-else-if="items.length === 0" class="mt-4 text-sm text-gray-600 dark:text-gray-400">{{ t('clinical.queueEmpty') }}</p>
     <table v-else class="mt-4 w-full border-collapse bg-white text-sm dark:bg-gray-800">
       <thead>
         <tr class="border-b text-left">

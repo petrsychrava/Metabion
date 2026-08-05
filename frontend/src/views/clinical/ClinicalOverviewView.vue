@@ -48,7 +48,7 @@ const sortedRows = computed(() =>
 )
 
 function ketones(row: ClinicalPatientOverview): string {
-  if (row.latestKetoneValue === null) return t('clinical.noValue')
+  if (row.latestKetoneValue === null || row.latestKetoneUnit === null) return t('clinical.noValue')
   return `${row.latestKetoneValue} ${t(`enums.MeasurementUnit.${row.latestKetoneUnit}`)}`
 }
 

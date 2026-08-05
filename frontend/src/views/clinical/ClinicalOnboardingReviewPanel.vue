@@ -51,7 +51,11 @@ async function submitReview() {
 }
 
 onMounted(load)
-watch(() => props.submissionId, load)
+// The id is derived from the route; navigating away re-evaluates it to NaN
+// before unmount, so skip reloads without a valid id.
+watch(() => props.submissionId, (id) => {
+  if (!Number.isNaN(id)) void load()
+})
 </script>
 
 <template>

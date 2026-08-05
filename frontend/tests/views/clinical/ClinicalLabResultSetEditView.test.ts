@@ -14,6 +14,11 @@ const catalog = [
   { code: 'CRP', label: 'C-reactive protein', category: 'INFLAMMATION', canonicalUnit: 'mg/L', displayScale: 1, allowedUnits: ['mg/L'] },
 ]
 
+const catalogMulti = [
+  ...catalog,
+  { code: 'GLU', label: 'Glucose', category: 'METABOLIC', canonicalUnit: 'mmol/L', displayScale: 1, allowedUnits: ['mmol/L', 'mg/dL'] },
+]
+
 const existing = {
   id: 3,
   version: 2,
@@ -87,5 +92,72 @@ describe('ClinicalLabResultSetEditView', () => {
     expect(received).toEqual({ resultSetId: 3, version: 2, reason: 'entered in error' })
     expect(router.currentRoute.value.path).toBe('/clinical/patients/41/labs')
     expect(router.currentRoute.value.query.email).toBe('patient@example.com')
+  })
+
+  it('removes a result row via the per-row remove button', async () => {
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/clinical/patients/41/labs/result-sets/3', () => HttpResponse.json(existing)),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/3')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="result-value-0"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="remove-result-0"]').trigger('click')
+    expect(wrapper.find('[data-testid="result-value-0"]').exists()).toBe(false)
+  })
+
+  it('resets the row unit to the first allowed unit when the test changes', async () => {
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalogMulti)),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/new')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="add-result"]').trigger('click')
+    const selects = wrapper.findAll('select')
+    await selects[0].setValue('GLU')
+    expect((selects[1].element as HTMLSelectElement).value).toBe('mmol/L')
+  })
+
+  it('sends a cleared value input as null in the save payload', async () => {
+    let received: { results: { value: unknown }[] } | undefined
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/clinical/patients/41/labs/result-sets', async ({ request }) => {
+        received = await request.json() as { results: { value: unknown }[] }
+        return HttpResponse.json({ ...existing, id: 4 })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/new')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="add-result"]').trigger('click')
+    await wrapper.find('[data-testid="result-value-0"]').setValue('')
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await flushPromises()
+
+    expect(received?.results[0]?.value).toBeNull()
+  })
+
+  it('defaults the collection date to today for a new set', async () => {
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/new')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    const d = new Date()
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', today)
   })
 })

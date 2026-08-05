@@ -36,8 +36,15 @@ const saved = ref(false)
 const conflict = ref(false)
 const removalReason = ref('')
 
-function numOrNull(v: number | null): number | null {
-  return v === null || Number.isNaN(v) ? null : v
+// v-model.number keeps the raw '' when a typed value is cleared; coerce it
+// back to null so the payload matches the numeric DTO fields.
+function numOrNull(v: number | null | '' | undefined): number | null {
+  return v === '' || v === null || v === undefined || Number.isNaN(v) ? null : v
+}
+
+function onTestChange(row: ResultRow) {
+  const def = tests.value.find((test) => test.code === row.testCode)
+  if (def) row.unit = def.allowedUnits[0] ?? ''
 }
 
 function allowedUnits(testCode: string): string[] {
@@ -45,7 +52,13 @@ function allowedUnits(testCode: string): string[] {
 }
 
 async function loadExisting() {
-  if (id.value === null) return
+  if (id.value === null) {
+    // Browser-local date: toISOString() is UTC and can land on "tomorrow"
+    // for UTC- evening users, which the backend @PastOrPresent rejects.
+    const d = new Date()
+    collectionDate.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return
+  }
   const existing = await clinicalApi.getLabResultSet(patientProfileId, id.value)
   collectionDate.value = existing.collectionDate
   notes.value = existing.notes ?? ''
@@ -170,7 +183,7 @@ async function requestRemoval() {
         <h3 class="text-sm font-medium">{{ t('labs.results') }}</h3>
         <div v-for="(result, index) in results" :key="index" class="flex flex-wrap items-end gap-2">
           <label class="text-sm">{{ t('labs.test') }}
-            <select v-model="result.testCode"
+            <select v-model="result.testCode" @change="onTestChange(result)"
                     class="ml-1 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
               <option v-for="test in tests" :key="test.code" :value="test.code">{{ test.label }}</option>
             </select>
@@ -193,6 +206,10 @@ async function requestRemoval() {
             <input v-model.number="result.referenceUpper" type="number" step="any"
                    class="ml-1 w-24 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
           </label>
+          <button type="button" :data-testid="`remove-result-${index}`"
+                  class="text-sm text-red-600 dark:text-red-400" @click="results.splice(index, 1)">
+            {{ t('common.remove') }}
+          </button>
         </div>
         <button type="button" data-testid="add-result" class="rounded border px-3 py-1 text-sm" @click="addResult">
           {{ t('labs.addResult') }}

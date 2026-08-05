@@ -89,6 +89,19 @@ describe('clinical onboarding review', () => {
     expect(router.currentRoute.value.path).toBe('/clinical/onboarding/9')
   })
 
+  it('shows an empty state instead of the table when no submissions match', async () => {
+    server.use(
+      http.get('/api/clinical/onboarding/submissions', () => HttpResponse.json([])),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/onboarding')
+    const wrapper = mount(ClinicalOnboardingQueueView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(en.clinical.queueEmpty)
+    expect(wrapper.find('table').exists()).toBe(false)
+  })
+
   it('renders the submission and submits a review', async () => {
     let received: unknown
     server.use(
