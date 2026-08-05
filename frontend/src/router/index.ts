@@ -32,6 +32,8 @@ import ClinicalPatientTrendsView from '@/views/clinical/ClinicalPatientTrendsVie
 import ClinicalPatientLabsView from '@/views/clinical/ClinicalPatientLabsView.vue'
 import ClinicalLabResultSetEditView from '@/views/clinical/ClinicalLabResultSetEditView.vue'
 import ClinicalPatientRedFlagsView from '@/views/clinical/ClinicalPatientRedFlagsView.vue'
+import ClinicalOnboardingQueueView from '@/views/clinical/ClinicalOnboardingQueueView.vue'
+import ClinicalOnboardingReviewView from '@/views/clinical/ClinicalOnboardingReviewView.vue'
 
 export const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView },
@@ -69,8 +71,8 @@ export const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, roles: CLINICAL_ROLES },
     children: [
       { path: '', component: ClinicalOverviewView },
-      { path: 'onboarding', component: ClinicalStubView },
-      { path: 'onboarding/:submissionId', component: ClinicalStubView },
+      { path: 'onboarding', component: ClinicalOnboardingQueueView },
+      { path: 'onboarding/:submissionId', component: ClinicalOnboardingReviewView },
       { path: 'education', component: EducationListView },
       { path: 'education/:moduleSlug', component: EducationModuleView },
       {
