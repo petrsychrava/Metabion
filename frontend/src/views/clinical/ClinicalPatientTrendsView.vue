@@ -28,8 +28,12 @@ const to = ref(iso(today))
 const trend = ref<DailyTrendResponse | null>(null)
 const loading = ref(true)
 
+let loadGeneration = 0
+
 async function load() {
   clear()
+  // Bump before any early return: a range error also invalidates an in-flight request.
+  const gen = ++loadGeneration
   const rangeError = dateRangeError(from.value, to.value)
   if (rangeError) {
     message.value = t(`errors.date_range_${rangeError === 'too_long' ? 'too_long' : 'invalid'}`)
@@ -37,11 +41,14 @@ async function load() {
   }
   loading.value = true
   try {
-    trend.value = await clinicalApi.dailyTrend(patientProfileId, from.value, to.value)
+    const result = await clinicalApi.dailyTrend(patientProfileId, from.value, to.value)
+    if (gen !== loadGeneration) return
+    trend.value = result
   } catch (e) {
+    if (gen !== loadGeneration) return
     capture(e)
   } finally {
-    loading.value = false
+    if (gen === loadGeneration) loading.value = false
   }
 }
 

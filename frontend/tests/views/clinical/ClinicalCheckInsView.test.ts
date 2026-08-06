@@ -87,4 +87,40 @@ describe('ClinicalCheckInsView', () => {
     expect(router.currentRoute.value.path).toBe('/clinical/patients/41/check-ins/2026-08-02')
     expect(router.currentRoute.value.query.email).toBe('patient@example.com')
   })
+
+  it('drops a stale list response when two applies race', async () => {
+    const staleRows = [{ ...summaries[0], date: '2026-07-01' }]
+    const freshRows = [{ ...summaries[0], date: '2026-08-01' }]
+    let call = 0
+    let resolveHeld: (response: HttpResponse<typeof staleRows>) => void = () => undefined
+    server.use(
+      http.get('/api/clinical/daily-check-ins', () => {
+        call += 1
+        if (call === 1) return HttpResponse.json([])
+        // The first Apply stays in flight until the test releases it.
+        if (call === 2) {
+          return new Promise<HttpResponse<typeof staleRows>>((resolve) => {
+            resolveHeld = resolve
+          })
+        }
+        return HttpResponse.json(freshRows)
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/check-ins')
+    const wrapper = mount(ClinicalCheckInsView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    // The view's only button is Apply; two rapid clicks race two range loads.
+    await wrapper.find('button').trigger('click')
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('2026-08-01')
+
+    // The stale first response lands now and must not overwrite the fresh list.
+    resolveHeld(HttpResponse.json(staleRows))
+    await flushPromises()
+    expect(wrapper.text()).toContain('2026-08-01')
+    expect(wrapper.text()).not.toContain('2026-07-01')
+  })
 })

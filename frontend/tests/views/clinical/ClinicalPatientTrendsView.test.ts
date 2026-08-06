@@ -61,4 +61,42 @@ describe('ClinicalPatientTrendsView', () => {
     expect(wrapper.text()).toContain(en.trends.glucose)
     expect(wrapper.text()).toContain(en.trends.ketones)
   })
+
+  it('drops a stale trend response when two applies race', async () => {
+    const staleTrend = { ...trend, glucoseUnit: 'MG_DL' }
+    let call = 0
+    let resolveHeld: (response: HttpResponse<typeof staleTrend>) => void = () => undefined
+    server.use(
+      http.get('/api/clinical/trends/daily', () => {
+        call += 1
+        // The mount load stays in flight until the test releases it.
+        if (call === 1) {
+          return new Promise<HttpResponse<typeof staleTrend>>((resolve) => {
+            resolveHeld = resolve
+          })
+        }
+        return HttpResponse.json(trend)
+      }),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/clinical/patients/:patientProfileId/trends', component: ClinicalPatientTrendsView }],
+    })
+    await router.push('/clinical/patients/41/trends')
+    const wrapper = mount(ClinicalPatientTrendsView, {
+      global: { plugins: [createPinia(), i18n, router], stubs: { LineChart: true } },
+    })
+    await flushPromises()
+
+    // The view's only button is Apply; it races the still-in-flight mount load.
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.enums.MeasurementUnit.MMOL_L)
+
+    // The stale mount response (a different unit) lands now and must be dropped.
+    resolveHeld(HttpResponse.json(staleTrend))
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.enums.MeasurementUnit.MMOL_L)
+    expect(wrapper.text()).not.toContain(en.enums.MeasurementUnit.MG_DL)
+  })
 })
