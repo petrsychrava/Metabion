@@ -90,6 +90,8 @@ describe('ClinicalOverviewView', () => {
     const flagged = wrapper.find('[data-testid="overview-row"][data-email="flagged@example.com"]')
     expect(flagged.text()).toContain(en.redFlags.severity.EMERGENCY)
     expect(flagged.text()).toContain(en.clinical.pendingReviews.replace('{count}', '1'))
+    // The flare cell carries the symptom score as an attention signal, not just the label.
+    expect(flagged.text()).toContain(`${en.checkIn.FlareState.ACTIVE_FLARE} · 9`)
 
     const stale = wrapper.find('[data-testid="overview-row"][data-email="stale@example.com"]')
     expect(stale.text()).toContain(en.clinical.stale)

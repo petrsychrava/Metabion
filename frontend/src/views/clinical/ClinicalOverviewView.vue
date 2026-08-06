@@ -109,7 +109,10 @@ onMounted(async () => {
               <span v-else>{{ t('clinical.noValue') }}</span>
             </td>
             <td class="p-2">
-              {{ row.latestFlareState ? t(`checkIn.FlareState.${row.latestFlareState}`) : t('clinical.noValue') }}
+              <template v-if="row.latestFlareState">
+                {{ t(`checkIn.FlareState.${row.latestFlareState}`) }}<template v-if="row.latestSymptomScore !== null"> · {{ row.latestSymptomScore }}</template>
+              </template>
+              <span v-else>{{ t('clinical.noValue') }}</span>
             </td>
             <td class="p-2">{{ ketones(row) }}</td>
             <td class="p-2">

@@ -40,27 +40,45 @@ function rangeInvalid(): boolean {
   return false
 }
 
+let listGeneration = 0
+
 async function loadList() {
   clear()
+  // Bump before any early return: a range error also invalidates an in-flight request.
+  const gen = ++listGeneration
   if (rangeInvalid()) return
   loading.value = true
   try {
-    resultSets.value = await clinicalApi.listLabResultSets(patientProfileId, from.value, to.value)
+    const list = await clinicalApi.listLabResultSets(patientProfileId, from.value, to.value)
+    if (gen !== listGeneration) return
+    resultSets.value = list
   } catch (e) {
+    if (gen !== listGeneration) return
     capture(e)
   } finally {
-    loading.value = false
+    if (gen === listGeneration) loading.value = false
   }
 }
 
+let trendGeneration = 0
+
 async function loadTrend() {
+  // Bump before the guard: clearing the test or an invalid range also
+  // invalidates an in-flight request, so its stale response gets dropped.
+  const gen = ++trendGeneration
   if (!selectedTest.value || rangeInvalid()) {
     trend.value = null
     return
   }
+  const requestTest = selectedTest.value
+  const requestFrom = from.value
+  const requestTo = to.value
   try {
-    trend.value = await clinicalApi.labTrend(patientProfileId, selectedTest.value, from.value, to.value)
+    const result = await clinicalApi.labTrend(patientProfileId, requestTest, requestFrom, requestTo)
+    if (gen !== trendGeneration) return
+    trend.value = result
   } catch (e) {
+    if (gen !== trendGeneration) return
     capture(e)
   }
 }

@@ -111,4 +111,50 @@ describe('ClinicalPatientLabsView', () => {
     await flushPromises()
     expect(trendCalls).toBeGreaterThan(callsAfterSelect)
   })
+
+  it('drops a stale trend response when the selection changes mid-flight', async () => {
+    const twoTests = [
+      catalog[0],
+      { code: 'HGB', label: 'Hemoglobin', category: 'HEMATOLOGY', canonicalUnit: 'g/dL', displayScale: 1, allowedUnits: ['g/dL'] },
+    ]
+    let resolveFirst: (response: HttpResponse<typeof trend>) => void = () => undefined
+    server.use(
+      http.get('/api/clinical/patients/41/labs/result-sets', () => HttpResponse.json([])),
+      http.get('/api/lab-tests', () => HttpResponse.json(twoTests)),
+      // The CRP request never resolves until the test releases it.
+      http.get('/api/clinical/patients/41/labs/trends/CRP', () =>
+        new Promise<HttpResponse<typeof trend>>((resolve) => {
+          resolveFirst = resolve
+        }),
+      ),
+      http.get('/api/clinical/patients/41/labs/trends/HGB', () =>
+        HttpResponse.json({ ...trend, testCode: 'HGB', label: 'Hemoglobin', canonicalUnit: 'g/dL' }),
+      ),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/clinical/patients/:patientProfileId/labs', component: ClinicalPatientLabsView },
+        { path: '/clinical/patients/:patientProfileId/labs/new', component: { template: '<div />' } },
+        { path: '/clinical/patients/:patientProfileId/labs/:resultSetId', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/clinical/patients/41/labs')
+    const wrapper = mount(ClinicalPatientLabsView, {
+      global: { plugins: [createPinia(), i18n, router], stubs: { LineChart: true } },
+    })
+    await flushPromises()
+
+    // Start the CRP request (stays in flight), then switch to HGB, which resolves.
+    await wrapper.find('[data-testid="test-select"]').setValue('CRP')
+    await wrapper.find('[data-testid="test-select"]').setValue('HGB')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Hemoglobin (g/dL)')
+
+    // The stale CRP response lands now and must not overwrite the HGB chart.
+    resolveFirst(HttpResponse.json(trend))
+    await flushPromises()
+    expect(wrapper.text()).toContain('Hemoglobin (g/dL)')
+    expect(wrapper.text()).not.toContain('C-reactive protein (mg/L)')
+  })
 })
