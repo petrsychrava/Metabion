@@ -157,4 +157,42 @@ describe('ClinicalPatientLabsView', () => {
     expect(wrapper.text()).toContain('Hemoglobin (g/dL)')
     expect(wrapper.text()).not.toContain('C-reactive protein (mg/L)')
   })
+
+  it('clears the list loading state and drops the in-flight response when the applied range is invalid', async () => {
+    let resolveHeld: (response: HttpResponse<typeof resultSets>) => void = () => undefined
+    server.use(
+      http.get('/api/clinical/patients/41/labs/result-sets', () =>
+        new Promise<HttpResponse<typeof resultSets>>((resolve) => {
+          resolveHeld = resolve
+        }),
+      ),
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/clinical/patients/:patientProfileId/labs', component: ClinicalPatientLabsView },
+        { path: '/clinical/patients/:patientProfileId/labs/new', component: { template: '<div />' } },
+        { path: '/clinical/patients/:patientProfileId/labs/:resultSetId', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/clinical/patients/41/labs')
+    const wrapper = mount(ClinicalPatientLabsView, {
+      global: { plugins: [createPinia(), i18n, router], stubs: { LineChart: true } },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.common.loading)
+
+    const dateInputs = wrapper.findAll('input[type="date"]')
+    await dateInputs[0].setValue('2026-08-03')
+    await dateInputs[1].setValue('2026-08-01')
+    await wrapper.find('[data-testid="apply-range"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.date_range_invalid)
+    expect(wrapper.text()).not.toContain(en.common.loading)
+
+    resolveHeld(HttpResponse.json(resultSets))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="resultsets-table"] tbody').findAll('tr')).toHaveLength(0)
+  })
 })

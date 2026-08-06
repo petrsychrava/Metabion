@@ -46,7 +46,11 @@ async function loadList() {
   clear()
   // Bump before any early return: a range error also invalidates an in-flight request.
   const gen = ++listGeneration
-  if (rangeInvalid()) return
+  if (rangeInvalid()) {
+    // The bump above bars the in-flight request from clearing this — do it here.
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
     const list = await clinicalApi.listLabResultSets(patientProfileId, from.value, to.value)

@@ -58,4 +58,40 @@ describe('ClinicalPatientRedFlagsView', () => {
     expect(wrapper.findAll('[data-testid="history-row"]')).toHaveLength(2)
     expect(wrapper.find('[data-testid="load-more"]').exists()).toBe(false)
   })
+
+  it('clears loading and drops the in-flight history when the applied range is invalid', async () => {
+    type HistoryPage = { items: ReturnType<typeof event>[]; nextCursor: string | null }
+    let resolveHeld: (response: HttpResponse<HistoryPage>) => void = () => undefined
+    server.use(
+      http.get('/api/clinical/patients/41/red-flags/current', () =>
+        HttpResponse.json({ highestSeverity: null, flags: [] }),
+      ),
+      http.get('/api/clinical/patients/41/red-flags/history', () =>
+        new Promise<HttpResponse<HistoryPage>>((resolve) => {
+          resolveHeld = resolve
+        }),
+      ),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/clinical/patients/:patientProfileId/red-flags', component: ClinicalPatientRedFlagsView }],
+    })
+    await router.push('/clinical/patients/41/red-flags')
+    const wrapper = mount(ClinicalPatientRedFlagsView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.common.loading)
+
+    const dateInputs = wrapper.findAll('input[type="date"]')
+    await dateInputs[0].setValue('2026-08-03')
+    await dateInputs[1].setValue('2026-08-01')
+    // The only rendered button at this point is the history Apply.
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.date_range_invalid)
+    expect(wrapper.text()).not.toContain(en.common.loading)
+
+    resolveHeld(HttpResponse.json({ items: [event(701, 'URGENT_REVIEW', true)], nextCursor: null }))
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="history-row"]')).toHaveLength(0)
+  })
 })

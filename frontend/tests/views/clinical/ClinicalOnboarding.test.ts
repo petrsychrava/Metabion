@@ -143,4 +143,40 @@ describe('clinical onboarding review', () => {
     expect(wrapper.find('[data-testid="submit-review"]').exists()).toBe(false)
     expect(wrapper.text()).toContain(en.clinical.alreadyReviewed)
   })
+
+  it('drops a stale queue response when two filter applies race', async () => {
+    const pendingRows = [summary]
+    const reviewedRows = [{ ...summary, id: 10, patientEmail: 'reviewed@example.com', reviewStatus: 'REVIEWED' }]
+    let call = 0
+    let resolveHeld: (response: HttpResponse<typeof pendingRows>) => void = () => undefined
+    server.use(
+      http.get('/api/clinical/onboarding/submissions', () => {
+        call += 1
+        if (call === 1) return HttpResponse.json([])
+        // The first Apply stays in flight until the test releases it.
+        if (call === 2) {
+          return new Promise<HttpResponse<typeof pendingRows>>((resolve) => {
+            resolveHeld = resolve
+          })
+        }
+        return HttpResponse.json(reviewedRows)
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/onboarding')
+    const wrapper = mount(ClinicalOnboardingQueueView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="status-filter"]').setValue('PENDING_REVIEW')
+    await wrapper.find('[data-testid="apply-filter"]').trigger('click')
+    await wrapper.find('[data-testid="status-filter"]').setValue('REVIEWED')
+    await wrapper.find('[data-testid="apply-filter"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('reviewed@example.com')
+
+    resolveHeld(HttpResponse.json(pendingRows))
+    await flushPromises()
+    expect(wrapper.text()).toContain('reviewed@example.com')
+    expect(wrapper.text()).not.toContain('patient@example.com')
+  })
 })

@@ -99,4 +99,37 @@ describe('ClinicalPatientTrendsView', () => {
     expect(wrapper.text()).toContain(en.enums.MeasurementUnit.MMOL_L)
     expect(wrapper.text()).not.toContain(en.enums.MeasurementUnit.MG_DL)
   })
+
+  it('clears loading and drops the in-flight response when the applied range is invalid', async () => {
+    let resolveHeld: (response: HttpResponse<typeof trend>) => void = () => undefined
+    server.use(
+      http.get('/api/clinical/trends/daily', () =>
+        new Promise<HttpResponse<typeof trend>>((resolve) => {
+          resolveHeld = resolve
+        }),
+      ),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/clinical/patients/:patientProfileId/trends', component: ClinicalPatientTrendsView }],
+    })
+    await router.push('/clinical/patients/41/trends')
+    const wrapper = mount(ClinicalPatientTrendsView, {
+      global: { plugins: [createPinia(), i18n, router], stubs: { LineChart: true } },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.common.loading)
+
+    const dateInputs = wrapper.findAll('input[type="date"]')
+    await dateInputs[0].setValue('2026-08-03')
+    await dateInputs[1].setValue('2026-08-01')
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.date_range_invalid)
+    expect(wrapper.text()).not.toContain(en.common.loading)
+
+    resolveHeld(HttpResponse.json(trend))
+    await flushPromises()
+    expect(wrapper.text()).not.toContain(en.trends.symptomScore)
+  })
 })

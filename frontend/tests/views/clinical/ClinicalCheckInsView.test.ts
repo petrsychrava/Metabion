@@ -123,4 +123,32 @@ describe('ClinicalCheckInsView', () => {
     expect(wrapper.text()).toContain('2026-08-01')
     expect(wrapper.text()).not.toContain('2026-07-01')
   })
+
+  it('clears loading and drops the in-flight response when the applied range is invalid', async () => {
+    let resolveHeld: (response: HttpResponse<typeof summaries>) => void = () => undefined
+    server.use(
+      http.get('/api/clinical/daily-check-ins', () =>
+        new Promise<HttpResponse<typeof summaries>>((resolve) => {
+          resolveHeld = resolve
+        }),
+      ),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/check-ins')
+    const wrapper = mount(ClinicalCheckInsView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.common.loading)
+
+    const dateInputs = wrapper.findAll('input[type="date"]')
+    await dateInputs[0].setValue('2026-08-03')
+    await dateInputs[1].setValue('2026-08-01')
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.date_range_invalid)
+    expect(wrapper.text()).not.toContain(en.common.loading)
+
+    resolveHeld(HttpResponse.json(summaries))
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="checkin-row"]')).toHaveLength(0)
+  })
 })

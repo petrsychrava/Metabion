@@ -55,9 +55,13 @@ async function loadSnapshot() {
 
 async function load() {
   clear()
+  // Bump before any early return: an invalid range also invalidates an in-flight request.
+  const gen = ++historyGeneration
   const rangeError = dateRangeError(from.value, to.value, 369)
   if (rangeError) {
     message.value = t(`errors.date_range_${rangeError === 'too_long' ? 'too_long' : 'invalid'}`)
+    // The bump above bars the in-flight request from clearing this — do it here.
+    loading.value = false
     return
   }
   // Capture before the await: controls edited mid-flight must not leak into
@@ -65,7 +69,6 @@ async function load() {
   const requestFrom = from.value
   const requestTo = to.value
   const requestSeverity = severity.value
-  const gen = ++historyGeneration
   loading.value = true
   loadingMore.value = false
   items.value = []

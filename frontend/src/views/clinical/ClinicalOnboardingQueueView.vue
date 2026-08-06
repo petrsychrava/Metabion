@@ -17,15 +17,22 @@ const loading = ref(true)
 
 const statusOptions: OnboardingReviewStatus[] = ['PENDING_REVIEW', 'REVIEWED', 'NEEDS_FOLLOW_UP']
 
+let loadGeneration = 0
+
 async function load() {
   clear()
+  const gen = ++loadGeneration
   loading.value = true
   try {
-    items.value = await clinicalApi.listOnboardingSubmissions(undefined, status.value || undefined)
+    const requestStatus = status.value
+    const result = await clinicalApi.listOnboardingSubmissions(undefined, requestStatus || undefined)
+    if (gen !== loadGeneration) return
+    items.value = result
   } catch (e) {
+    if (gen !== loadGeneration) return
     capture(e)
   } finally {
-    loading.value = false
+    if (gen === loadGeneration) loading.value = false
   }
 }
 
