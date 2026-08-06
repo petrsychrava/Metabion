@@ -189,4 +189,30 @@ describe('ClinicalLabResultSetEditView', () => {
     expect(wrapper.text()).toContain(en.errors.request_failed)
     expect(wrapper.find('[data-testid="reload"]').exists()).toBe(true)
   })
+
+  it('ignores a second save while a create is in flight', async () => {
+    let postCalls = 0
+    let resolveCreate: (response: HttpResponse<typeof existing>) => void = () => undefined
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/clinical/patients/41/labs/result-sets', () => {
+        postCalls += 1
+        return new Promise<HttpResponse<typeof existing>>((resolve) => {
+          resolveCreate = resolve
+        })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/new')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    resolveCreate(HttpResponse.json({ ...existing, id: 4 }))
+    await flushPromises()
+
+    expect(postCalls).toBe(1)
+  })
 })

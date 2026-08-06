@@ -195,4 +195,40 @@ describe('ClinicalPatientLabsView', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="resultsets-table"] tbody').findAll('tr')).toHaveLength(0)
   })
+
+  it('clears the previous chart when a replacement trend request fails', async () => {
+    const twoTests = [
+      catalog[0],
+      { code: 'HGB', label: 'Hemoglobin', category: 'HEMATOLOGY', canonicalUnit: 'g/dL', displayScale: 1, allowedUnits: ['g/dL'] },
+    ]
+    server.use(
+      http.get('/api/clinical/patients/41/labs/result-sets', () => HttpResponse.json([])),
+      http.get('/api/lab-tests', () => HttpResponse.json(twoTests)),
+      http.get('/api/clinical/patients/41/labs/trends/CRP', () => HttpResponse.json(trend)),
+      http.get('/api/clinical/patients/41/labs/trends/HGB', () =>
+        HttpResponse.json({ error: 'request_failed' }, { status: 500 })),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/clinical/patients/:patientProfileId/labs', component: ClinicalPatientLabsView },
+        { path: '/clinical/patients/:patientProfileId/labs/new', component: { template: '<div />' } },
+        { path: '/clinical/patients/:patientProfileId/labs/:resultSetId', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/clinical/patients/41/labs')
+    const wrapper = mount(ClinicalPatientLabsView, {
+      global: { plugins: [createPinia(), i18n, router], stubs: { LineChart: true } },
+    })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="test-select"]').setValue('CRP')
+    await flushPromises()
+    expect(wrapper.text()).toContain('C-reactive protein (mg/L)')
+
+    await wrapper.find('[data-testid="test-select"]').setValue('HGB')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.request_failed)
+    expect(wrapper.text()).not.toContain('C-reactive protein (mg/L)')
+  })
 })

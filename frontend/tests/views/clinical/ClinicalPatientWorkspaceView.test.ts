@@ -69,7 +69,14 @@ describe('ClinicalPatientWorkspaceView', () => {
         {
           path: '/clinical/patients/:patientProfileId',
           component: ClinicalPatientWorkspaceView,
-          children: [{ path: 'check-ins', component: ClinicalCheckInsView }],
+          children: [
+            { path: 'check-ins', component: ClinicalCheckInsView },
+            // Stubs so the workspace's tab links resolve without warnings.
+            { path: 'trends', component: { template: '<div />' } },
+            { path: 'labs', component: { template: '<div />' } },
+            { path: 'red-flags', component: { template: '<div />' } },
+            { path: 'onboarding', component: { template: '<div />' } },
+          ],
         },
       ],
     })

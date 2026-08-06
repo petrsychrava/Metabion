@@ -35,6 +35,7 @@ const loading = ref(true)
 const saved = ref(false)
 const conflict = ref(false)
 const removalReason = ref('')
+const saving = ref(false)
 
 // v-model.number keeps the raw '' when a typed value is cleared; coerce it
 // back to null so the payload matches the numeric DTO fields.
@@ -110,9 +111,12 @@ async function reload() {
 }
 
 async function save() {
+  // Guard against double-submit: two in-flight creates would persist duplicates.
+  if (saving.value) return
   clear()
   saved.value = false
   conflict.value = false
+  saving.value = true
   try {
     const payload = {
       resultSetId: isNew.value ? null : id.value,
@@ -145,6 +149,8 @@ async function save() {
       return
     }
     capture(e)
+  } finally {
+    saving.value = false
   }
 }
 
@@ -220,7 +226,8 @@ async function requestRemoval() {
         </button>
 
         <div>
-          <button type="button" data-testid="save" class="rounded bg-blue-600 px-4 py-2 text-white" @click="save">
+          <button type="button" data-testid="save" :disabled="saving"
+                  class="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50" @click="save">
             {{ t('common.save') }}
           </button>
         </div>

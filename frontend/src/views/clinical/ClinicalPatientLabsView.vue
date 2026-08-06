@@ -83,6 +83,8 @@ async function loadTrend() {
     trend.value = result
   } catch (e) {
     if (gen !== trendGeneration) return
+    // Drop the previous chart: the controls describe the failed request now.
+    trend.value = null
     capture(e)
   }
 }

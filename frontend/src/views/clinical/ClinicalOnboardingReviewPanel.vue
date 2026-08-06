@@ -22,15 +22,23 @@ function val(v: string | number | null | undefined): string {
   return v === null || v === undefined || v === '' ? t('onboarding.notProvided') : String(v)
 }
 
+let loadGeneration = 0
+
 async function load() {
   clear()
+  // Generation guard: a response for a superseded submissionId must never land.
+  const gen = ++loadGeneration
+  const submissionId = props.submissionId
   loading.value = true
   try {
-    submission.value = await clinicalApi.getOnboardingSubmission(props.submissionId)
+    const result = await clinicalApi.getOnboardingSubmission(submissionId)
+    if (gen !== loadGeneration) return
+    submission.value = result
   } catch (e) {
+    if (gen !== loadGeneration) return
     capture(e)
   } finally {
-    loading.value = false
+    if (gen === loadGeneration) loading.value = false
   }
 }
 
