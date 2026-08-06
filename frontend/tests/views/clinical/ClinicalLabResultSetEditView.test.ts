@@ -160,4 +160,33 @@ describe('ClinicalLabResultSetEditView', () => {
     const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', today)
   })
+
+  it('keeps the conflict prompt and reports the error when the conflict reload fails', async () => {
+    let getCalls = 0
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/clinical/patients/41/labs/result-sets/3', () => {
+        getCalls += 1
+        // The initial load succeeds; the conflict-triggered reload fails.
+        if (getCalls === 1) return HttpResponse.json(existing)
+        return HttpResponse.json({ error: 'request_failed' }, { status: 500 })
+      }),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/clinical/patients/41/labs/result-sets/3', () =>
+        HttpResponse.json({ error: 'conflict' }, { status: 409 })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/3')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="reload"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="reload"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.request_failed)
+    expect(wrapper.find('[data-testid="reload"]').exists()).toBe(true)
+  })
 })

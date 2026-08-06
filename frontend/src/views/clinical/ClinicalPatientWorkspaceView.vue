@@ -38,6 +38,9 @@ const tabs = computed(() => {
         {{ tab.label }}
       </router-link>
     </nav>
-    <router-view />
+    <!-- Remount the active tab when the patient changes: child views capture
+         patientProfileId once at setup, and a reused child would keep showing
+         (or editing) the previous patient's data under the new header. -->
+    <router-view :key="patientProfileId" />
   </section>
 </template>

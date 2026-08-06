@@ -100,6 +100,10 @@ async function reload() {
   loading.value = true
   try {
     await loadExisting()
+  } catch (e) {
+    // Keep the conflict state (and its reload button) until a reload succeeds.
+    capture(e)
+    conflict.value = true
   } finally {
     loading.value = false
   }
