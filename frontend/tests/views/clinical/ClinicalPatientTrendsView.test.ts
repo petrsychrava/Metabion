@@ -132,4 +132,31 @@ describe('ClinicalPatientTrendsView', () => {
     await flushPromises()
     expect(wrapper.text()).not.toContain(en.trends.symptomScore)
   })
+
+  it('clears the previous charts when a replacement trend request fails', async () => {
+    let call = 0
+    server.use(
+      http.get('/api/clinical/trends/daily', () => {
+        call += 1
+        if (call === 1) return HttpResponse.json(trend)
+        return HttpResponse.json({ error: 'request_failed' }, { status: 500 })
+      }),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/clinical/patients/:patientProfileId/trends', component: ClinicalPatientTrendsView }],
+    })
+    await router.push('/clinical/patients/41/trends')
+    const wrapper = mount(ClinicalPatientTrendsView, {
+      global: { plugins: [createPinia(), i18n, router], stubs: { LineChart: true } },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.trends.symptomScore)
+
+    // The only button is Apply; the replacement request fails.
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.request_failed)
+    expect(wrapper.text()).not.toContain(en.trends.symptomScore)
+  })
 })

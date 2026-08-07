@@ -231,4 +231,53 @@ describe('ClinicalPatientLabsView', () => {
     expect(wrapper.text()).toContain(en.errors.request_failed)
     expect(wrapper.text()).not.toContain('C-reactive protein (mg/L)')
   })
+
+  it('invalidates an in-flight trend as soon as Apply is clicked', async () => {
+    let resolveStaleTrend: (response: HttpResponse<typeof trend>) => void = () => undefined
+    let trendCalls = 0
+    server.use(
+      // The Apply-time list request never resolves, so loadList alone cannot
+      // be what drops the stale trend — only the synchronous bump in apply() can.
+      http.get('/api/clinical/patients/41/labs/result-sets', () =>
+        new Promise<HttpResponse<never[]>>(() => undefined),
+      ),
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/clinical/patients/41/labs/trends/CRP', () => {
+        trendCalls += 1
+        if (trendCalls === 1) {
+          return new Promise<HttpResponse<typeof trend>>((resolve) => {
+            resolveStaleTrend = resolve
+          })
+        }
+        return HttpResponse.json({ ...trend, canonicalUnit: 'g/dL' })
+      }),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/clinical/patients/:patientProfileId/labs', component: ClinicalPatientLabsView },
+        { path: '/clinical/patients/:patientProfileId/labs/new', component: { template: '<div />' } },
+        { path: '/clinical/patients/:patientProfileId/labs/:resultSetId', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/clinical/patients/41/labs')
+    const wrapper = mount(ClinicalPatientLabsView, {
+      global: { plugins: [createPinia(), i18n, router], stubs: { LineChart: true } },
+    })
+    await flushPromises()
+
+    // Select CRP: the trend request stays in flight.
+    await wrapper.find('[data-testid="test-select"]').setValue('CRP')
+    // Apply starts the replacement trend (and the never-resolving list reload).
+    await wrapper.find('[data-testid="apply-range"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('C-reactive protein (g/dL)')
+
+    // The pre-Apply trend response lands now and must be dropped even though
+    // the list reload is still pending.
+    resolveStaleTrend(HttpResponse.json(trend))
+    await flushPromises()
+    expect(wrapper.text()).toContain('C-reactive protein (g/dL)')
+    expect(wrapper.text()).not.toContain('C-reactive protein (mg/L)')
+  })
 })

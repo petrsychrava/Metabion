@@ -71,4 +71,28 @@ describe('ClinicalOnboardingReviewPanel', () => {
     expect(wrapper.text()).toContain('fresh@example.com')
     expect(wrapper.text()).not.toContain('patient@example.com')
   })
+
+  it('resets the decision form when the submission changes', async () => {
+    server.use(
+      http.get('/api/clinical/onboarding/submissions/9', () => HttpResponse.json(submission)),
+      http.get('/api/clinical/onboarding/submissions/10', () =>
+        HttpResponse.json({ ...submission, id: 10, patientEmail: 'fresh@example.com' }),
+      ),
+    )
+    const wrapper = mount(ClinicalOnboardingReviewPanel, {
+      props: { submissionId: 9 },
+      global: { plugins: [createPinia(), i18n] },
+    })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="review-decision"]').setValue('NEEDS_FOLLOW_UP')
+    await wrapper.find('[data-testid="review-notes"]').setValue('note for the previous submission')
+
+    await wrapper.setProps({ submissionId: 10 })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('fresh@example.com')
+    expect((wrapper.find('[data-testid="review-decision"]').element as HTMLSelectElement).value).toBe('REVIEWED')
+    expect((wrapper.find('[data-testid="review-notes"]').element as HTMLTextAreaElement).value).toBe('')
+  })
 })

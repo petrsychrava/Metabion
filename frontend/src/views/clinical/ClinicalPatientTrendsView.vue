@@ -48,6 +48,8 @@ async function load() {
     trend.value = result
   } catch (e) {
     if (gen !== loadGeneration) return
+    // Drop the previous charts: the controls describe the failed request now.
+    trend.value = null
     capture(e)
   } finally {
     if (gen === loadGeneration) loading.value = false

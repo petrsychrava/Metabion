@@ -29,11 +29,15 @@ async function load() {
   // Generation guard: a response for a superseded submissionId must never land.
   const gen = ++loadGeneration
   const submissionId = props.submissionId
+  // Never show the previous submission (or its half-entered review) under a new id.
+  submission.value = null
   loading.value = true
   try {
     const result = await clinicalApi.getOnboardingSubmission(submissionId)
     if (gen !== loadGeneration) return
     submission.value = result
+    decision.value = 'REVIEWED'
+    reviewNotes.value = ''
   } catch (e) {
     if (gen !== loadGeneration) return
     capture(e)

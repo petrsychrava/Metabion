@@ -90,8 +90,9 @@ async function loadTrend() {
 }
 
 async function apply() {
-  await loadList()
-  await loadTrend()
+  // Start both synchronously: loadTrend's generation bump must happen now, not
+  // after the list request, so an in-flight older trend is invalidated at once.
+  await Promise.all([loadList(), loadTrend()])
 }
 
 onMounted(async () => {
