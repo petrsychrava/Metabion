@@ -179,4 +179,26 @@ describe('clinical onboarding review', () => {
     expect(wrapper.text()).toContain('reviewed@example.com')
     expect(wrapper.text()).not.toContain('patient@example.com')
   })
+
+  it('clears the previous rows when a replacement filter request fails', async () => {
+    let call = 0
+    server.use(
+      http.get('/api/clinical/onboarding/submissions', () => {
+        call += 1
+        if (call === 1) return HttpResponse.json([summary])
+        return HttpResponse.json({ error: 'request_failed' }, { status: 500 })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/onboarding')
+    const wrapper = mount(ClinicalOnboardingQueueView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="queue-row"]')).toHaveLength(1)
+
+    await wrapper.find('[data-testid="status-filter"]').setValue('PENDING_REVIEW')
+    await wrapper.find('[data-testid="apply-filter"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.request_failed)
+    expect(wrapper.findAll('[data-testid="queue-row"]')).toHaveLength(0)
+  })
 })

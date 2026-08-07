@@ -47,6 +47,8 @@ async function load() {
     items.value = result
   } catch (e) {
     if (gen !== loadGeneration) return
+    // Drop the previous rows: the controls describe the failed request now.
+    items.value = []
     capture(e)
   } finally {
     if (gen === loadGeneration) loading.value = false

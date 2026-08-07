@@ -151,4 +151,26 @@ describe('ClinicalCheckInsView', () => {
     await flushPromises()
     expect(wrapper.findAll('[data-testid="checkin-row"]')).toHaveLength(0)
   })
+
+  it('clears the previous rows when a replacement list request fails', async () => {
+    let call = 0
+    server.use(
+      http.get('/api/clinical/daily-check-ins', () => {
+        call += 1
+        if (call === 1) return HttpResponse.json(summaries)
+        return HttpResponse.json({ error: 'request_failed' }, { status: 500 })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/check-ins')
+    const wrapper = mount(ClinicalCheckInsView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="checkin-row"]')).toHaveLength(2)
+
+    // The only button is Apply; the replacement request fails.
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.request_failed)
+    expect(wrapper.findAll('[data-testid="checkin-row"]')).toHaveLength(0)
+  })
 })

@@ -30,6 +30,8 @@ async function load() {
     items.value = result
   } catch (e) {
     if (gen !== loadGeneration) return
+    // Drop the previous rows: the filter describes the failed request now.
+    items.value = []
     capture(e)
   } finally {
     if (gen === loadGeneration) loading.value = false
