@@ -33,38 +33,52 @@ function makeRouter() {
 describe('ClinicalPatientWorkspaceView', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it('renders the patient email header and query-preserving tabs', async () => {
-    const router = makeRouter()
-    await router.push('/clinical/patients/41/check-ins?email=patient%40example.com')
-    const wrapper = mount(ClinicalPatientWorkspaceView, { global: { plugins: [createPinia(), i18n, router] } })
-
-    expect(wrapper.text()).toContain('patient@example.com')
-    const html = wrapper.html()
-    // vue-router 4 serializes query values with encodeURI, which leaves '@' unencoded
-    expect(html).toContain('href="/clinical/patients/41/trends?email=patient@example.com"')
-    expect(html).toContain('href="/clinical/patients/41/red-flags?email=patient@example.com"')
-    expect(html).toContain('href="/clinical"')
-  })
-
-  it('falls back to a localized patient label without the email param', async () => {
+  it('resolves the header identity from the server and renders plain tab links', async () => {
+    server.use(
+      http.get('/api/clinical/patients/41', () =>
+        HttpResponse.json({ id: 41, email: 'patient@example.com' }),
+      ),
+    )
     const router = makeRouter()
     await router.push('/clinical/patients/41/check-ins')
     const wrapper = mount(ClinicalPatientWorkspaceView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('patient@example.com')
+    const html = wrapper.html()
+    expect(html).toContain('href="/clinical/patients/41/trends"')
+    expect(html).toContain('href="/clinical/patients/41/red-flags"')
+    expect(html).toContain('href="/clinical"')
+  })
+
+  it('falls back to a localized patient label when the identity cannot be loaded', async () => {
+    server.use(
+      http.get('/api/clinical/patients/41', () =>
+        HttpResponse.json({ error: 'forbidden' }, { status: 403 }),
+      ),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/check-ins')
+    const wrapper = mount(ClinicalPatientWorkspaceView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
 
     expect(wrapper.text()).toContain(en.clinical.patientFallback.replace('{id}', '41'))
   })
 
-  it('remounts the child tab when the patient id changes', async () => {
+  it('remounts the child tab and reloads the identity when the patient id changes', async () => {
     const requested: (string | null)[] = []
     server.use(
       http.get('/api/clinical/daily-check-ins', ({ request }) => {
         requested.push(new URL(request.url).searchParams.get('patientProfileId'))
         return HttpResponse.json([])
       }),
+      http.get('/api/clinical/patients/41', () => HttpResponse.json({ id: 41, email: 'a@example.com' })),
+      http.get('/api/clinical/patients/42', () => HttpResponse.json({ id: 42, email: 'b@example.com' })),
     )
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [
+        { path: '/', component: { template: '<div />' } },
         { path: '/clinical', component: { template: '<div />' } },
         {
           path: '/clinical/patients/:patientProfileId',
@@ -82,11 +96,12 @@ describe('ClinicalPatientWorkspaceView', () => {
     })
     const wrapper = mount({ render: () => h(RouterView) }, { global: { plugins: [createPinia(), i18n, router] } })
 
-    await router.push('/clinical/patients/41/check-ins?email=a%40example.com')
+    await router.push('/clinical/patients/41/check-ins')
     await flushPromises()
     expect(requested).toEqual(['41'])
+    expect(wrapper.text()).toContain('a@example.com')
 
-    await router.push('/clinical/patients/42/check-ins?email=b%40example.com')
+    await router.push('/clinical/patients/42/check-ins')
     await flushPromises()
     expect(requested).toEqual(['41', '42'])
     expect(wrapper.text()).toContain('b@example.com')

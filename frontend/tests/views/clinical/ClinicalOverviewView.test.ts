@@ -69,6 +69,7 @@ function makeRouter() {
     history: createMemoryHistory(),
     routes: [
       { path: '/clinical', component: ClinicalOverviewView },
+      { path: '/clinical/onboarding', component: { template: '<div />' } },
       { path: '/clinical/patients/:patientProfileId/check-ins', component: { template: '<div />' } },
     ],
   })
@@ -93,11 +94,16 @@ describe('ClinicalOverviewView', () => {
     // The flare cell carries the symptom score as an attention signal, not just the label.
     expect(flagged.text()).toContain(`${en.checkIn.FlareState.ACTIVE_FLARE} · 9`)
 
+    // The ketone cell carries the measurement date so an old value can't pass for a fresh one.
+    const ok = wrapper.find('[data-testid="overview-row"][data-email="ok@example.com"]')
+    const ketoneDate = new Date('2026-08-04T06:30:00Z').toLocaleDateString('en')
+    expect(ok.text()).toContain(`1.2 ${en.enums.MeasurementUnit.MMOL_L} · ${ketoneDate}`)
+
     const stale = wrapper.find('[data-testid="overview-row"][data-email="stale@example.com"]')
     expect(stale.text()).toContain(en.clinical.stale)
   })
 
-  it('navigates to the patient workspace with the email query param', async () => {
+  it('navigates to the patient workspace', async () => {
     server.use(http.get('/api/clinical/overview', () => HttpResponse.json(rows)))
     const router = makeRouter()
     await router.push('/clinical')
@@ -107,7 +113,6 @@ describe('ClinicalOverviewView', () => {
     await wrapper.find('[data-testid="overview-row"][data-email="flagged@example.com"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/clinical/patients/2/check-ins')
-    expect(router.currentRoute.value.query.email).toBe('flagged@example.com')
   })
 
   it('shows the empty state with a link to the review queue', async () => {

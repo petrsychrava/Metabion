@@ -91,7 +91,6 @@ describe('ClinicalLabResultSetEditView', () => {
 
     expect(received).toEqual({ resultSetId: 3, version: 2, reason: 'entered in error' })
     expect(router.currentRoute.value.path).toBe('/clinical/patients/41/labs')
-    expect(router.currentRoute.value.query.email).toBe('patient@example.com')
   })
 
   it('removes a result row via the per-row remove button', async () => {

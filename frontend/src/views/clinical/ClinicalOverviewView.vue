@@ -7,7 +7,7 @@ import { useApiError } from '@/composables/useApiError'
 import { severityBadgeClass } from '@/utils/redFlags'
 import type { ClinicalPatientOverview, FlareState, RedFlagSeverity } from '@/types/api'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { message, capture } = useApiError()
 const router = useRouter()
 
@@ -49,14 +49,13 @@ const sortedRows = computed(() =>
 
 function ketones(row: ClinicalPatientOverview): string {
   if (row.latestKetoneValue === null || row.latestKetoneUnit === null) return t('clinical.noValue')
-  return `${row.latestKetoneValue} ${t(`enums.MeasurementUnit.${row.latestKetoneUnit}`)}`
+  const value = `${row.latestKetoneValue} ${t(`enums.MeasurementUnit.${row.latestKetoneUnit}`)}`
+  if (row.latestKetoneMeasuredAt === null) return value
+  return `${value} · ${new Date(row.latestKetoneMeasuredAt).toLocaleDateString(locale.value)}`
 }
 
 function open(row: ClinicalPatientOverview) {
-  void router.push({
-    path: `/clinical/patients/${row.patientProfileId}/check-ins`,
-    query: { email: row.patientEmail },
-  })
+  void router.push({ path: `/clinical/patients/${row.patientProfileId}/check-ins` })
 }
 
 onMounted(async () => {

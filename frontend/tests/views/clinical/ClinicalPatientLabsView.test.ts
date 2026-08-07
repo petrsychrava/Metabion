@@ -72,8 +72,8 @@ describe('ClinicalPatientLabsView', () => {
 
     expect(seenUrl).toContain('/api/clinical/patients/41/labs/result-sets')
     expect(wrapper.text()).toContain('CRP')
-    expect(wrapper.html()).toContain('href="/clinical/patients/41/labs/3?email=patient@example.com"')
-    expect(wrapper.html()).toContain('href="/clinical/patients/41/labs/new?email=patient@example.com"')
+    expect(wrapper.html()).toContain('href="/clinical/patients/41/labs/3"')
+    expect(wrapper.html()).toContain('href="/clinical/patients/41/labs/new"')
   })
 
   it('loads the per-test trend when a test is selected', async () => {

@@ -75,17 +75,16 @@ describe('ClinicalCheckInsView', () => {
     expect(rows[1].text()).toContain(en.clinical.noValue)
   })
 
-  it('opens the day detail with the email query preserved', async () => {
+  it('opens the day detail', async () => {
     server.use(http.get('/api/clinical/daily-check-ins', () => HttpResponse.json(summaries)))
     const router = makeRouter()
-    await router.push('/clinical/patients/41/check-ins?email=patient%40example.com')
+    await router.push('/clinical/patients/41/check-ins')
     const wrapper = mount(ClinicalCheckInsView, { global: { plugins: [createPinia(), i18n, router] } })
     await flushPromises()
 
     await wrapper.findAll('[data-testid="checkin-row"]')[1].trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/clinical/patients/41/check-ins/2026-08-02')
-    expect(router.currentRoute.value.query.email).toBe('patient@example.com')
   })
 
   it('drops a stale list response when two applies race', async () => {

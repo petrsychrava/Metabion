@@ -116,7 +116,7 @@ watch(selectedTest, loadTrend)
   <section class="mt-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h2 class="text-lg font-medium">{{ t('labs.title') }}</h2>
-      <router-link :to="{ path: `/clinical/patients/${patientProfileId}/labs/new`, query: route.query }"
+      <router-link :to="`/clinical/patients/${patientProfileId}/labs/new`"
                    class="rounded bg-blue-600 px-3 py-1 text-sm text-white">
         {{ t('labs.newResultSet') }}
       </router-link>
@@ -149,7 +149,7 @@ watch(selectedTest, loadTrend)
           <td class="p-2">{{ rs.results.map((r) => r.testCode).join(', ') }}</td>
           <td class="p-2">{{ t(rs.confirmationStatus === 'CONFIRMED' ? 'labs.confirmed' : 'labs.unconfirmed') }}</td>
           <td class="p-2">
-            <router-link :to="{ path: `/clinical/patients/${patientProfileId}/labs/${rs.id}`, query: route.query }"
+            <router-link :to="`/clinical/patients/${patientProfileId}/labs/${rs.id}`"
                          class="text-blue-600 dark:text-blue-400">
               {{ t('labs.edit') }}
             </router-link>

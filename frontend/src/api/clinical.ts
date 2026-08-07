@@ -2,6 +2,7 @@ import { apiFetch } from './http'
 import type {
   ClinicalDailyCheckInDetail,
   ClinicalDailyCheckInSummary,
+  ClinicalPatientOption,
   ClinicalPatientOverview,
   ClinicalRedFlagHistoryPage,
   ClinicalRedFlagSnapshot,
@@ -18,6 +19,9 @@ import type {
 
 export const clinicalApi = {
   overview: () => apiFetch<ClinicalPatientOverview[]>('/api/clinical/overview'),
+
+  getPatient: (patientProfileId: number) =>
+    apiFetch<ClinicalPatientOption>(`/api/clinical/patients/${patientProfileId}`),
 
   listDailyCheckIns: (patientProfileId: number, from: string, to: string) =>
     apiFetch<ClinicalDailyCheckInSummary[]>(

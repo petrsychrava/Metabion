@@ -56,10 +56,7 @@ async function load() {
 }
 
 function open(item: ClinicalDailyCheckInSummary) {
-  void router.push({
-    path: `/clinical/patients/${patientProfileId}/check-ins/${item.date}`,
-    query: route.query,
-  })
+  void router.push({ path: `/clinical/patients/${patientProfileId}/check-ins/${item.date}` })
 }
 
 onMounted(load)

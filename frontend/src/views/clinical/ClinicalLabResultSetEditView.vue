@@ -135,7 +135,7 @@ async function save() {
       version.value = res.version
       id.value = res.id
       // Switch into edit mode so a second Save updates instead of duplicating.
-      await router.replace({ path: `/clinical/patients/${patientProfileId}/labs/${res.id}`, query: route.query })
+      await router.replace({ path: `/clinical/patients/${patientProfileId}/labs/${res.id}` })
     } else {
       const res = await clinicalApi.updateLabResultSet(patientProfileId, id.value!, payload)
       version.value = res.version
@@ -157,7 +157,7 @@ async function requestRemoval() {
   clear()
   try {
     await clinicalApi.requestLabRemoval(patientProfileId, id.value!, version.value!, removalReason.value)
-    await router.push({ path: `/clinical/patients/${patientProfileId}/labs`, query: route.query })
+    await router.push({ path: `/clinical/patients/${patientProfileId}/labs` })
   } catch (e) {
     capture(e)
   }

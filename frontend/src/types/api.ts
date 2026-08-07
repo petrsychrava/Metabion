@@ -382,6 +382,11 @@ export interface RedFlagHistoryParams {
 }
 
 // Clinical (expert area; mirror backend clinical DTOs)
+export interface ClinicalPatientOption {
+  id: number
+  email: string
+}
+
 export interface ClinicalPatientOverview {
   patientProfileId: number
   patientEmail: string

@@ -21,13 +21,16 @@ public class ClinicalPatientDirectoryService {
     private final UserRepository users;
     private final StaffProfileRepository staffProfiles;
     private final PatientProfileRepository patientProfiles;
+    private final AccessControlService accessControl;
 
     public ClinicalPatientDirectoryService(UserRepository users,
                                            StaffProfileRepository staffProfiles,
-                                           PatientProfileRepository patientProfiles) {
+                                           PatientProfileRepository patientProfiles,
+                                           AccessControlService accessControl) {
         this.users = users;
         this.staffProfiles = staffProfiles;
         this.patientProfiles = patientProfiles;
+        this.accessControl = accessControl;
     }
 
     public List<PatientOptionResponse> listAccessible(Authentication authentication) {
@@ -41,6 +44,22 @@ public class ClinicalPatientDirectoryService {
         return staffProfiles.findByUserId(user.getId())
                 .map(staff -> patientProfiles.findAccessiblePatientOptionsForStaff(staff.getId()))
                 .orElseGet(List::of);
+    }
+
+    public PatientOptionResponse getAccessible(Authentication authentication, Long patientProfileId) {
+        var user = currentUser(authentication);
+        if (!user.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN, RoleName.ADMIN)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user cannot access clinical data");
+        }
+        // 403 regardless of existence — the caller learns nothing about other patients.
+        if (!accessControl.canViewPatientClinicalData(user, patientProfileId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Patient profile is not assigned to current user");
+        }
+        return patientProfiles.findById(patientProfileId)
+                .map(profile -> new PatientOptionResponse(profile.getId(), profile.getUser().getEmail()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Patient profile not found"));
     }
 
     private User currentUser(Authentication authentication) {

@@ -1,5 +1,6 @@
 package com.metabion.service;
 
+import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.StaffProfile;
 import com.metabion.domain.User;
@@ -21,6 +22,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,10 +31,11 @@ class ClinicalPatientDirectoryServiceTest {
     @Mock UserRepository users;
     @Mock StaffProfileRepository staffProfiles;
     @Mock PatientProfileRepository patientProfiles;
+    @Mock AccessControlService accessControl;
 
     @Test
     void adminListsAllPatients() {
-        var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles);
+        var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles, accessControl);
         var admin = user(1L, "admin@example.com", RoleName.ADMIN);
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
         when(patientProfiles.findAllPatientOptions())
@@ -44,7 +47,7 @@ class ClinicalPatientDirectoryServiceTest {
 
     @Test
     void assignedStaffListsRepositoryAuthorizedPatients() {
-        var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles);
+        var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles, accessControl);
         var doctor = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
         var staff = new StaffProfile(doctor);
         staff.setId(20L);
@@ -59,7 +62,7 @@ class ClinicalPatientDirectoryServiceTest {
 
     @Test
     void patientCannotListClinicalOptions() {
-        var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles);
+        var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles, accessControl);
         var patient = user(3L, "patient@example.com", RoleName.PATIENT);
         when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
 
@@ -71,11 +74,51 @@ class ClinicalPatientDirectoryServiceTest {
 
     @Test
     void coordinatorCannotListClinicalOptions() {
-        var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles);
+        var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles, accessControl);
         var coordinator = user(4L, "coordinator@example.com", RoleName.COORDINATOR);
         when(users.findByEmail("coordinator@example.com")).thenReturn(Optional.of(coordinator));
 
         assertThatThrownBy(() -> service.listAccessible(auth("coordinator@example.com")))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+                        .isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
+    @Test
+    void clinicalStaffGetsAssignedPatientIdentity() {
+        var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles, accessControl);
+        var doctor = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(doctor));
+        when(accessControl.canViewPatientClinicalData(doctor, 41L)).thenReturn(true);
+        var profile = mock(PatientProfile.class);
+        when(profile.getId()).thenReturn(41L);
+        when(profile.getUser()).thenReturn(new User("patient@example.com", "hash"));
+        when(patientProfiles.findById(41L)).thenReturn(Optional.of(profile));
+
+        assertThat(service.getAccessible(auth("doctor@example.com"), 41L))
+                .isEqualTo(new PatientOptionResponse(41L, "patient@example.com"));
+    }
+
+    @Test
+    void unassignedStaffGetsForbiddenForIdentity() {
+        var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles, accessControl);
+        var doctor = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(doctor));
+        when(accessControl.canViewPatientClinicalData(doctor, 41L)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.getAccessible(auth("doctor@example.com"), 41L))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+                        .isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
+    @Test
+    void patientCannotGetClinicalIdentity() {
+        var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles, accessControl);
+        var patient = user(3L, "patient@example.com", RoleName.PATIENT);
+        when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+
+        assertThatThrownBy(() -> service.getAccessible(auth("patient@example.com"), 41L))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
                         .isEqualTo(HttpStatus.FORBIDDEN));

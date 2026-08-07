@@ -1,16 +1,31 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { clinicalApi } from '@/api/clinical'
 
 const { t } = useI18n()
 const route = useRoute()
 
 const patientProfileId = computed(() => Number(route.params.patientProfileId))
-const patientEmail = computed(() => {
-  const email = route.query.email
-  return typeof email === 'string' && email.length > 0 ? email : null
-})
+// Identity comes from the server, keyed by the path id — never from the URL query.
+const patientEmail = ref<string | null>(null)
+
+let identityGeneration = 0
+
+async function loadIdentity() {
+  const gen = ++identityGeneration
+  try {
+    const option = await clinicalApi.getPatient(patientProfileId.value)
+    if (gen !== identityGeneration) return
+    patientEmail.value = option.email
+  } catch {
+    if (gen === identityGeneration) patientEmail.value = null
+  }
+}
+
+onMounted(loadIdentity)
+watch(patientProfileId, loadIdentity)
 
 const tabs = computed(() => {
   const base = `/clinical/patients/${patientProfileId.value}`
@@ -32,7 +47,7 @@ const tabs = computed(() => {
     </h1>
     <nav class="mt-4 flex flex-wrap gap-3 border-b pb-2 text-sm dark:border-gray-700">
       <router-link v-for="tab in tabs" :key="tab.to"
-                   :to="{ path: tab.to, query: route.query }"
+                   :to="tab.to"
                    class="text-gray-700 hover:text-blue-700 dark:text-gray-300 dark:hover:text-blue-300"
                    active-class="font-semibold text-blue-700 dark:text-blue-300">
         {{ tab.label }}
