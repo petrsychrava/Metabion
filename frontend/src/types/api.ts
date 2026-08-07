@@ -303,6 +303,9 @@ export interface OnboardingSubmissionResponse extends OnboardingSubmissionReques
   countryRegion: string | null
   timezone: string | null
   reviewStatus: OnboardingReviewStatus
+  reviewedByEmail: string | null
+  reviewedAt: string | null
+  reviewNotes: string | null
 }
 export interface OnboardingSubmissionSummary {
   id: number

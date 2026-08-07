@@ -169,7 +169,9 @@
     "reviewNotes": "Poznámky k posouzení",
     "submitReview": "Odeslat posouzení",
     "alreadyReviewed": "Tato žádost již byla posouzena.",
-    "crpMgL": "CRP (mg/L)"
+    "crpMgL": "CRP (mg/L)",
+    "labNotes": "Poznámky k laboratořím",
+    "reviewedBy": "Posoudil"
   },
   "trends": {
     "symptomScore": "Skóre příznaků",

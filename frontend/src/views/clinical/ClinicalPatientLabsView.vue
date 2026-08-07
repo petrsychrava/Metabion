@@ -30,6 +30,9 @@ const tests = ref<LabTestDefinition[]>([])
 const selectedTest = ref('')
 const trend = ref<LabTrendResponse | null>(null)
 const loading = ref(true)
+// Catalog failures get their own indicator: loadList()/loadTrend() clear the
+// shared error message, which would otherwise erase a catalog error silently.
+const catalogFailed = ref(false)
 
 function rangeInvalid(): boolean {
   const rangeError = dateRangeError(from.value, to.value)
@@ -58,6 +61,8 @@ async function loadList() {
     resultSets.value = list
   } catch (e) {
     if (gen !== listGeneration) return
+    // Drop the previous rows: the controls describe the failed request now.
+    resultSets.value = []
     capture(e)
   } finally {
     if (gen === listGeneration) loading.value = false
@@ -98,8 +103,8 @@ async function apply() {
 onMounted(async () => {
   try {
     tests.value = await labApi.listTests()
-  } catch (e) {
-    capture(e)
+  } catch {
+    catalogFailed.value = true
   }
   await loadList()
 })
@@ -161,6 +166,10 @@ watch(selectedTest, loadTrend)
           <option v-for="test in tests" :key="test.code" :value="test.code">{{ test.label }}</option>
         </select>
       </label>
+      <p v-if="catalogFailed" data-testid="catalog-failed"
+         class="mt-2 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        {{ t('errors.request_failed') }}
+      </p>
       <template v-if="trend">
         <h3 class="mb-2 mt-4 font-medium">{{ trend.label }} ({{ trend.canonicalUnit }})</h3>
         <LineChart

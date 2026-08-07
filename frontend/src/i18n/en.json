@@ -169,7 +169,9 @@
     "reviewNotes": "Review notes",
     "submitReview": "Submit review",
     "alreadyReviewed": "This submission has already been reviewed.",
-    "crpMgL": "CRP (mg/L)"
+    "crpMgL": "CRP (mg/L)",
+    "labNotes": "Lab notes",
+    "reviewedBy": "Reviewed by"
   },
   "trends": {
     "symptomScore": "Symptom score",

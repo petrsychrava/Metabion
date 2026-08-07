@@ -280,4 +280,58 @@ describe('ClinicalPatientLabsView', () => {
     expect(wrapper.text()).toContain('C-reactive protein (g/dL)')
     expect(wrapper.text()).not.toContain('C-reactive protein (mg/L)')
   })
+
+  it('retains a catalog failure after the list load succeeds', async () => {
+    server.use(
+      http.get('/api/clinical/patients/41/labs/result-sets', () => HttpResponse.json(resultSets)),
+      http.get('/api/lab-tests', () => HttpResponse.json({ error: 'request_failed' }, { status: 500 })),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/clinical/patients/:patientProfileId/labs', component: ClinicalPatientLabsView },
+        { path: '/clinical/patients/:patientProfileId/labs/new', component: { template: '<div />' } },
+        { path: '/clinical/patients/:patientProfileId/labs/:resultSetId', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/clinical/patients/41/labs')
+    const wrapper = mount(ClinicalPatientLabsView, {
+      global: { plugins: [createPinia(), i18n, router], stubs: { LineChart: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="catalog-failed"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('CRP')
+  })
+
+  it('clears the previous rows when a replacement list request fails', async () => {
+    let call = 0
+    server.use(
+      http.get('/api/clinical/patients/41/labs/result-sets', () => {
+        call += 1
+        if (call === 1) return HttpResponse.json(resultSets)
+        return HttpResponse.json({ error: 'request_failed' }, { status: 500 })
+      }),
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/clinical/patients/:patientProfileId/labs', component: ClinicalPatientLabsView },
+        { path: '/clinical/patients/:patientProfileId/labs/new', component: { template: '<div />' } },
+        { path: '/clinical/patients/:patientProfileId/labs/:resultSetId', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/clinical/patients/41/labs')
+    const wrapper = mount(ClinicalPatientLabsView, {
+      global: { plugins: [createPinia(), i18n, router], stubs: { LineChart: true } },
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="resultsets-table"] tbody').findAll('tr')).toHaveLength(1)
+
+    await wrapper.find('[data-testid="apply-range"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.request_failed)
+    expect(wrapper.find('[data-testid="resultsets-table"] tbody').findAll('tr')).toHaveLength(0)
+  })
 })

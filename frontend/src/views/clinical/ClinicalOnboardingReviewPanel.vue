@@ -96,6 +96,7 @@ watch(() => props.submissionId, (id) => {
         <div><dt class="inline font-medium">{{ t('onboarding.calprotectin') }}: </dt><dd class="inline">{{ val(submission.fecalCalprotectinUgG) }}</dd></div>
         <div><dt class="inline font-medium">{{ t('onboarding.hemoglobin') }}: </dt><dd class="inline">{{ val(submission.hemoglobinGDl) }}</dd></div>
         <div><dt class="inline font-medium">{{ t('onboarding.albumin') }}: </dt><dd class="inline">{{ val(submission.albuminGDl) }}</dd></div>
+        <div><dt class="inline font-medium">{{ t('clinical.labNotes') }}: </dt><dd class="inline">{{ val(submission.labNotes) }}</dd></div>
       </dl>
 
       <p class="mt-4 text-sm">
@@ -118,7 +119,15 @@ watch(() => props.submissionId, (id) => {
           {{ t('clinical.submitReview') }}
         </button>
       </template>
-      <p v-else class="mt-3 text-sm text-gray-600 dark:text-gray-400">{{ t('clinical.alreadyReviewed') }}</p>
+      <template v-else>
+        <p class="mt-3 text-sm text-gray-600 dark:text-gray-400">{{ t('clinical.alreadyReviewed') }}</p>
+        <p v-if="submission.reviewedByEmail" class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          {{ t('clinical.reviewedBy') }}: {{ submission.reviewedByEmail }}<template v-if="submission.reviewedAt"> · {{ formatDateTime(submission.reviewedAt, locale) }}</template>
+        </p>
+        <p v-if="submission.reviewNotes" class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          {{ t('clinical.reviewNotes') }}: {{ submission.reviewNotes }}
+        </p>
+      </template>
     </template>
   </section>
 </template>

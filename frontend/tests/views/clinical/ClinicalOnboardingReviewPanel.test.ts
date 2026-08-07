@@ -95,4 +95,29 @@ describe('ClinicalOnboardingReviewPanel', () => {
     expect((wrapper.find('[data-testid="review-decision"]').element as HTMLSelectElement).value).toBe('REVIEWED')
     expect((wrapper.find('[data-testid="review-notes"]').element as HTMLTextAreaElement).value).toBe('')
   })
+
+  it('renders lab notes and the review audit details', async () => {
+    server.use(
+      http.get('/api/clinical/onboarding/submissions/9', () =>
+        HttpResponse.json({
+          ...submission,
+          labNotes: 'fasting blood draw',
+          reviewStatus: 'REVIEWED',
+          reviewedByEmail: 'doctor@example.com',
+          reviewedAt: '2026-08-02T14:00:00Z',
+          reviewNotes: 'labs match the history',
+        }),
+      ),
+    )
+    const wrapper = mount(ClinicalOnboardingReviewPanel, {
+      props: { submissionId: 9 },
+      global: { plugins: [createPinia(), i18n] },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('fasting blood draw')
+    expect(wrapper.text()).toContain('doctor@example.com')
+    expect(wrapper.text()).toContain('labs match the history')
+    expect(wrapper.find('[data-testid="submit-review"]').exists()).toBe(false)
+  })
 })

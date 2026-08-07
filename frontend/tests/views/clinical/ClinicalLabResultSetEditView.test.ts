@@ -147,7 +147,9 @@ describe('ClinicalLabResultSetEditView', () => {
     expect(received?.results[0]?.value).toBeNull()
   })
 
-  it('defaults the collection date to today for a new set', async () => {
+  it('leaves the collection date unset for explicit selection on a new set', async () => {
+    // The backend validates the date against the patient's timezone, so a
+    // browser-local default can be rejected as the patient's "tomorrow".
     server.use(
       http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
     )
@@ -156,9 +158,7 @@ describe('ClinicalLabResultSetEditView', () => {
     const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
     await flushPromises()
 
-    const d = new Date()
-    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', today)
+    expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', '')
   })
 
   it('keeps the conflict prompt and reports the error when the conflict reload fails', async () => {

@@ -53,11 +53,10 @@ function allowedUnits(testCode: string): string[] {
 }
 
 async function loadExisting() {
+  // New sets start with an empty collection date: the backend validates it
+  // against the patient's timezone, where the staff browser's "today" can
+  // already be tomorrow — and the lab report's date is what belongs here.
   if (id.value === null) {
-    // Browser-local date: toISOString() is UTC and can land on "tomorrow"
-    // for UTC- evening users, which the backend @PastOrPresent rejects.
-    const d = new Date()
-    collectionDate.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     return
   }
   const existing = await clinicalApi.getLabResultSet(patientProfileId, id.value)
