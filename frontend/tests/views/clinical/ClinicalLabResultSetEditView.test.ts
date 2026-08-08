@@ -1,0 +1,400 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { http, HttpResponse } from 'msw'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
+import { createRouter, createMemoryHistory } from 'vue-router'
+import { server } from '../../msw/server'
+import ClinicalLabResultSetEditView from '@/views/clinical/ClinicalLabResultSetEditView.vue'
+import en from '@/i18n/en.json'
+
+const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
+
+const catalog = [
+  { code: 'CRP', label: 'C-reactive protein', category: 'INFLAMMATION', canonicalUnit: 'mg/L', displayScale: 1, allowedUnits: ['mg/L'] },
+]
+
+const catalogMulti = [
+  ...catalog,
+  { code: 'GLU', label: 'Glucose', category: 'METABOLIC', canonicalUnit: 'mmol/L', displayScale: 1, allowedUnits: ['mmol/L', 'mg/dL'] },
+]
+
+const existing = {
+  id: 3,
+  version: 2,
+  patientProfileId: 41,
+  collectionDate: '2026-07-10',
+  notes: 'note',
+  source: 'MANUAL',
+  confirmationStatus: 'UNCONFIRMED',
+  createdByCurrentPatient: false,
+  createdAt: '2026-07-10T08:00:00Z',
+  updatedAt: '2026-07-10T08:00:00Z',
+  results: [
+    { id: 31, testCode: 'CRP', label: 'C-reactive protein', reportedValue: 4.2, reportedUnit: 'mg/L', canonicalValue: 4.2, canonicalUnit: 'mg/L', referenceLower: null, referenceUpper: 5 },
+  ],
+}
+
+function makeRouter() {
+  return createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/clinical/patients/:patientProfileId/labs', component: { template: '<div />' } },
+      { path: '/clinical/patients/:patientProfileId/labs/new', component: ClinicalLabResultSetEditView },
+      { path: '/clinical/patients/:patientProfileId/labs/:resultSetId', component: ClinicalLabResultSetEditView },
+    ],
+  })
+}
+
+describe('ClinicalLabResultSetEditView', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('shows conflict message and reload button on 409', async () => {
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/clinical/patients/41/labs/result-sets/3', () => HttpResponse.json(existing)),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/clinical/patients/41/labs/result-sets/3', () =>
+        HttpResponse.json({ error: 'conflict' }, { status: 409 })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/3')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+    expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', '2026-07-10')
+
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.conflict)
+    expect(wrapper.find('[data-testid="reload"]').exists()).toBe(true)
+  })
+
+  it('requests removal with a reason and returns to the labs tab', async () => {
+    let received: unknown
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/clinical/patients/41/labs/result-sets/3', () => HttpResponse.json(existing)),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/clinical/patients/41/labs/result-sets/3/removal', async ({ request }) => {
+        received = await request.json()
+        return HttpResponse.json({ status: 'removed' })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/3?email=patient%40example.com')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="removal-reason"]').setValue('entered in error')
+    await wrapper.find('[data-testid="remove"]').trigger('click')
+    await flushPromises()
+
+    expect(received).toEqual({ resultSetId: 3, version: 2, reason: 'entered in error' })
+    expect(router.currentRoute.value.path).toBe('/clinical/patients/41/labs')
+  })
+
+  it('removes a result row via the per-row remove button', async () => {
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/clinical/patients/41/labs/result-sets/3', () => HttpResponse.json(existing)),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/3')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="result-value-0"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="remove-result-0"]').trigger('click')
+    expect(wrapper.find('[data-testid="result-value-0"]').exists()).toBe(false)
+  })
+
+  it('resets the row unit to the first allowed unit when the test changes', async () => {
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalogMulti)),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/new')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="add-result"]').trigger('click')
+    const selects = wrapper.findAll('select')
+    await selects[0].setValue('GLU')
+    expect((selects[1].element as HTMLSelectElement).value).toBe('mmol/L')
+  })
+
+  it('sends a cleared value input as null in the save payload', async () => {
+    let received: { results: { value: unknown }[] } | undefined
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/clinical/patients/41/labs/result-sets', async ({ request }) => {
+        received = await request.json() as { results: { value: unknown }[] }
+        return HttpResponse.json({ ...existing, id: 4 })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/new')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="add-result"]').trigger('click')
+    await wrapper.find('[data-testid="result-value-0"]').setValue('')
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await flushPromises()
+
+    expect(received?.results[0]?.value).toBeNull()
+  })
+
+  it('leaves the collection date unset for explicit selection on a new set', async () => {
+    // The backend validates the date against the patient's timezone, so a
+    // browser-local default can be rejected as the patient's "tomorrow".
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/new')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', '')
+  })
+
+  it('loads an existing result set even when the lab catalog fails', async () => {
+    let resultSetCalls = 0
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json({ error: 'request_failed' }, { status: 500 })),
+      http.get('/api/clinical/patients/41/labs/result-sets/3', () => {
+        resultSetCalls += 1
+        return HttpResponse.json(existing)
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/3')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    expect(resultSetCalls).toBe(1)
+    expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', '2026-07-10')
+    expect(wrapper.find('[data-testid="remove"]').exists()).toBe(true)
+    expect((wrapper.find('input[type="date"]').element as HTMLInputElement).disabled).toBe(true)
+    expect((wrapper.find('[data-testid="result-value-0"]').element as HTMLInputElement).disabled).toBe(true)
+    expect((wrapper.find('[data-testid="save"]').element as HTMLButtonElement).disabled).toBe(true)
+    expect((wrapper.find('[data-testid="removal-reason"]').element as HTMLInputElement).disabled).toBe(true)
+    expect((wrapper.find('[data-testid="remove"]').element as HTMLButtonElement).disabled).toBe(true)
+    expect(wrapper.text()).toContain(en.errors.request_failed)
+  })
+
+  it('keeps the editor closed when an existing result set fails to load', async () => {
+    let resultSetCalls = 0
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/clinical/patients/41/labs/result-sets/3', () => {
+        resultSetCalls += 1
+        if (resultSetCalls === 1) return HttpResponse.json({ error: 'request_failed' }, { status: 500 })
+        return HttpResponse.json(existing)
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/3')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="removal-reason"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="reload"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain(en.errors.request_failed)
+
+    await wrapper.find('[data-testid="reload"]').trigger('click')
+    await flushPromises()
+
+    expect(resultSetCalls).toBe(2)
+    expect(wrapper.find('form').exists()).toBe(true)
+    expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', '2026-07-10')
+  })
+
+  it('rejects a nonnumeric result-set route ID instead of opening create mode', async () => {
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/not-a-number')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(en.errors.invalid_result_set_id)
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="save"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="remove"]').exists()).toBe(false)
+  })
+
+  it('reloads the editor when the result-set route changes', async () => {
+    const second = {
+      ...existing,
+      id: 4,
+      version: 6,
+      collectionDate: '2026-08-04',
+      notes: 'second result set',
+      results: [{ ...existing.results[0], id: 41, reportedValue: 8.1 }],
+    }
+    const requestedIds: number[] = []
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/clinical/patients/41/labs/result-sets/3', () => {
+        requestedIds.push(3)
+        return HttpResponse.json(existing)
+      }),
+      http.get('/api/clinical/patients/41/labs/result-sets/4', () => {
+        requestedIds.push(4)
+        return HttpResponse.json(second)
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/3')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+    expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', '2026-07-10')
+
+    await wrapper.find('[data-testid="removal-reason"]').setValue('remove first')
+
+    await router.push('/clinical/patients/41/labs/4')
+    await flushPromises()
+
+    expect(requestedIds).toEqual([3, 4])
+    expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', '2026-08-04')
+    expect(wrapper.find('[data-testid="result-value-0"]').element).toHaveProperty('value', '8.1')
+    expect(wrapper.find('input[type="text"]').element).toHaveProperty('value', 'second result set')
+    expect(wrapper.find('[data-testid="removal-reason"]').element).toHaveProperty('value', '')
+  })
+
+  it('ignores an update response after navigating to another result set', async () => {
+    const second = {
+      ...existing,
+      id: 4,
+      version: 6,
+      collectionDate: '2026-08-04',
+      notes: 'second result set',
+      results: [{ ...existing.results[0], id: 41, reportedValue: 8.1 }],
+    }
+    let updateStarted = false
+    let resolveUpdate: (response: HttpResponse<typeof existing>) => void = () => undefined
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/clinical/patients/41/labs/result-sets/3', () => HttpResponse.json(existing)),
+      http.get('/api/clinical/patients/41/labs/result-sets/4', () => HttpResponse.json(second)),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/clinical/patients/41/labs/result-sets/3', () => {
+        updateStarted = true
+        return new Promise<HttpResponse<typeof existing>>((resolve) => {
+          resolveUpdate = resolve
+        })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/3')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await vi.waitFor(() => expect(updateStarted).toBe(true))
+
+    await router.push('/clinical/patients/41/labs/4')
+    await flushPromises()
+    expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', '2026-08-04')
+
+    resolveUpdate(HttpResponse.json({ ...existing, version: 99 }))
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="result-value-0"]').element).toHaveProperty('value', '8.1')
+    expect(wrapper.text()).not.toContain(en.common.saved)
+  })
+
+  it('keeps the conflict prompt and reports the error when the conflict reload fails', async () => {
+    let getCalls = 0
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/clinical/patients/41/labs/result-sets/3', () => {
+        getCalls += 1
+        // The initial load succeeds; the conflict-triggered reload fails.
+        if (getCalls === 1) return HttpResponse.json(existing)
+        return HttpResponse.json({ error: 'request_failed' }, { status: 500 })
+      }),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/clinical/patients/41/labs/result-sets/3', () =>
+        HttpResponse.json({ error: 'conflict' }, { status: 409 })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/3')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="reload"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="reload"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.request_failed)
+    expect(wrapper.find('[data-testid="reload"]').exists()).toBe(true)
+  })
+
+  it('ignores a second save while a create is in flight', async () => {
+    let postCalls = 0
+    let resolveCreate: (response: HttpResponse<typeof existing>) => void = () => undefined
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/clinical/patients/41/labs/result-sets', () => {
+        postCalls += 1
+        return new Promise<HttpResponse<typeof existing>>((resolve) => {
+          resolveCreate = resolve
+        })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/new')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    resolveCreate(HttpResponse.json({ ...existing, id: 4 }))
+    await flushPromises()
+
+    expect(postCalls).toBe(1)
+  })
+
+  it('disables the form controls while a save is in flight', async () => {
+    let postStarted = false
+    let resolveCreate: (response: HttpResponse<typeof existing>) => void = () => undefined
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/clinical/patients/41/labs/result-sets', () => {
+        postStarted = true
+        return new Promise<HttpResponse<typeof existing>>((resolve) => {
+          resolveCreate = resolve
+        })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/new')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="add-result"]').trigger('click')
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await vi.waitFor(() => expect(postStarted).toBe(true))
+    // The save is in flight: no edit made now is part of the request, so the
+    // controls must be unavailable rather than silently unsaved.
+    expect((wrapper.find('input[type="date"]').element as HTMLInputElement).disabled).toBe(true)
+    expect((wrapper.find('[data-testid="result-value-0"]').element as HTMLInputElement).disabled).toBe(true)
+    expect((wrapper.find('[data-testid="add-result"]').element as HTMLButtonElement).disabled).toBe(true)
+
+    resolveCreate(HttpResponse.json({ ...existing, id: 4 }))
+    // The create resolves, then the view switches into edit mode via
+    // router.replace — wait for the route change before asserting re-enable.
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/clinical/patients/41/labs/4'))
+    expect((wrapper.find('input[type="date"]').element as HTMLInputElement).disabled).toBe(false)
+  })
+})

@@ -1,0 +1,312 @@
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { clinicalApi } from '@/api/clinical'
+import { labApi } from '@/api/labs'
+import { ApiError } from '@/api/http'
+import { useApiError } from '@/composables/useApiError'
+import FieldError from '@/components/FieldError.vue'
+import type { LabTestDefinition } from '@/types/api'
+
+interface ResultRow {
+  testCode: string
+  value: number | null
+  unit: string
+  referenceLower: number | null
+  referenceUpper: number | null
+}
+
+const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
+const { message, fieldErrors, capture, clear } = useApiError()
+
+const patientProfileId = Number(route.params.patientProfileId)
+
+type ResultSetRouteId = number | null | 'invalid'
+
+function routeResultSetId(): ResultSetRouteId {
+  const raw = route.params.resultSetId
+  if (raw === undefined) return null
+  const value = Array.isArray(raw) ? raw[0] : raw
+  if (!value) return 'invalid'
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 'invalid'
+}
+
+const initialRouteId = routeResultSetId()
+const id = ref<number | null>(initialRouteId === 'invalid' ? null : initialRouteId)
+const invalidResultSetId = ref(initialRouteId === 'invalid')
+const isNew = computed(() => id.value === null && !invalidResultSetId.value)
+
+const tests = ref<LabTestDefinition[]>([])
+const collectionDate = ref('')
+const notes = ref('')
+const version = ref<number | null>(null)
+const results = reactive<ResultRow[]>([])
+const loading = ref(true)
+const saved = ref(false)
+const conflict = ref(false)
+const removalReason = ref('')
+const saving = ref(false)
+const catalogFailed = ref(false)
+const initializationFailed = ref(false)
+
+// v-model.number keeps the raw '' when a typed value is cleared; coerce it
+// back to null so the payload matches the numeric DTO fields.
+function numOrNull(v: number | null | '' | undefined): number | null {
+  return v === '' || v === null || v === undefined || Number.isNaN(v) ? null : v
+}
+
+function onTestChange(row: ResultRow) {
+  const def = tests.value.find((test) => test.code === row.testCode)
+  if (def) row.unit = def.allowedUnits[0] ?? ''
+}
+
+function allowedUnits(testCode: string): string[] {
+  return tests.value.find((test) => test.code === testCode)?.allowedUnits ?? []
+}
+
+function clearLoadedState() {
+  collectionDate.value = ''
+  notes.value = ''
+  version.value = null
+  removalReason.value = ''
+  results.splice(0, results.length)
+}
+
+let loadGeneration = 0
+
+async function loadRoute(clearError: boolean) {
+  if (clearError) clear()
+  const gen = ++loadGeneration
+  const parsedRouteId = routeResultSetId()
+  const nextId = parsedRouteId === 'invalid' ? null : parsedRouteId
+  invalidResultSetId.value = parsedRouteId === 'invalid'
+  id.value = nextId
+  clearLoadedState()
+  saved.value = false
+  conflict.value = false
+  initializationFailed.value = false
+  saving.value = false
+  loading.value = true
+  try {
+    // New sets start with an empty collection date: the backend validates it
+    // against the patient's timezone, where the staff browser's "today" can
+    // already be tomorrow — and the lab report's date is what belongs here.
+    if (parsedRouteId === 'invalid' || nextId === null) return
+    const existing = await clinicalApi.getLabResultSet(patientProfileId, nextId)
+    if (gen !== loadGeneration) return
+    collectionDate.value = existing.collectionDate
+    notes.value = existing.notes ?? ''
+    version.value = existing.version
+    results.splice(0, results.length, ...existing.results.map((r) => ({
+      testCode: r.testCode,
+      value: r.reportedValue,
+      unit: r.reportedUnit,
+      referenceLower: r.referenceLower,
+      referenceUpper: r.referenceUpper,
+    })))
+  } catch (e) {
+    if (gen !== loadGeneration) return
+    initializationFailed.value = true
+    capture(e)
+  } finally {
+    if (gen === loadGeneration) loading.value = false
+  }
+}
+
+onMounted(async () => {
+  try {
+    tests.value = await labApi.listTests()
+  } catch (e) {
+    catalogFailed.value = true
+    capture(e)
+  }
+  await loadRoute(false)
+})
+
+watch(() => route.params.resultSetId, () => {
+  // A create already puts the new id into local state before replacing the
+  // route; direct navigation to another id still reloads the editor.
+  const parsedRouteId = routeResultSetId()
+  const nextId = parsedRouteId === 'invalid' ? null : parsedRouteId
+  if (nextId === id.value && (parsedRouteId === 'invalid') === invalidResultSetId.value) return
+  void loadRoute(true)
+})
+
+function addResult() {
+  if (catalogFailed.value) return
+  const first = tests.value[0]
+  results.push({
+    testCode: first?.code ?? '',
+    value: null,
+    unit: first?.allowedUnits[0] ?? '',
+    referenceLower: null,
+    referenceUpper: null,
+  })
+}
+
+async function reload() {
+  await loadRoute(true)
+}
+
+async function save() {
+  // Guard against double-submit: two in-flight creates would persist duplicates.
+  if (saving.value || catalogFailed.value || invalidResultSetId.value) return
+  const saveRouteId = routeResultSetId()
+  if (saveRouteId === 'invalid') return
+  const saveGeneration = loadGeneration
+  const saveIsNew = saveRouteId === null
+  const saveVersion = version.value
+  const isCurrentSave = () => saveGeneration === loadGeneration && routeResultSetId() === saveRouteId
+  clear()
+  saved.value = false
+  conflict.value = false
+  saving.value = true
+  try {
+    const payload = {
+      resultSetId: saveIsNew ? null : saveRouteId,
+      version: saveIsNew ? null : saveVersion,
+      collectionDate: collectionDate.value,
+      notes: notes.value || undefined,
+      results: results.map((r) => ({
+        testCode: r.testCode,
+        value: numOrNull(r.value) as number,
+        unit: r.unit,
+        referenceLower: numOrNull(r.referenceLower),
+        referenceUpper: numOrNull(r.referenceUpper),
+      })),
+    }
+    if (saveIsNew) {
+      const res = await clinicalApi.createLabResultSet(patientProfileId, payload)
+      if (!isCurrentSave()) return
+      version.value = res.version
+      id.value = res.id
+      // Switch into edit mode so a second Save updates instead of duplicating.
+      await router.replace({ path: `/clinical/patients/${patientProfileId}/labs/${res.id}` })
+      if (saveGeneration !== loadGeneration || routeResultSetId() !== res.id) return
+    } else {
+      const res = await clinicalApi.updateLabResultSet(patientProfileId, saveRouteId, payload)
+      if (!isCurrentSave()) return
+      version.value = res.version
+    }
+    saved.value = true
+  } catch (e) {
+    if (!isCurrentSave()) return
+    if (e instanceof ApiError && e.status === 409) {
+      conflict.value = true
+      message.value = t('errors.conflict')
+      return
+    }
+    capture(e)
+  } finally {
+    if (saveGeneration === loadGeneration) saving.value = false
+  }
+}
+
+async function requestRemoval() {
+  if (catalogFailed.value || invalidResultSetId.value || id.value === null || version.value === null) return
+  clear()
+  try {
+    await clinicalApi.requestLabRemoval(patientProfileId, id.value!, version.value!, removalReason.value)
+    await router.push({ path: `/clinical/patients/${patientProfileId}/labs` })
+  } catch (e) {
+    capture(e)
+  }
+}
+</script>
+
+<template>
+  <section class="mt-4">
+    <h2 class="text-lg font-medium">{{ isNew ? t('labs.newResultSet') : t('labs.edit') }}</h2>
+
+    <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
+    <template v-else>
+      <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
+      <p v-if="catalogFailed && !message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ t('errors.request_failed') }}</p>
+      <p v-if="invalidResultSetId" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ t('errors.invalid_result_set_id') }}</p>
+      <template v-if="invalidResultSetId">
+        <!-- Keep malformed routes out of create mode. -->
+      </template>
+      <template v-else-if="initializationFailed">
+        <button data-testid="reload" class="mt-2 rounded border px-3 py-1 text-sm" @click="reload">
+          {{ t('labs.reload') }}
+        </button>
+      </template>
+      <template v-else>
+        <p v-if="saved" class="mt-4 rounded bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">{{ t('common.saved') }}</p>
+        <button v-if="conflict" data-testid="reload" class="mt-2 rounded border px-3 py-1 text-sm" @click="reload">
+          {{ t('labs.reload') }}
+        </button>
+
+        <form class="mt-4 space-y-4" @submit.prevent="save">
+        <div>
+          <label class="block text-sm font-medium">{{ t('labs.collectionDate') }}</label>
+          <input v-model="collectionDate" type="date" required :disabled="saving || catalogFailed"
+                 class="mt-1 rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
+          <FieldError :message="fieldErrors.collectionDate" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium">{{ t('labs.notes') }}</label>
+          <input v-model="notes" type="text" :disabled="saving || catalogFailed"
+                 class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
+        </div>
+
+        <h3 class="text-sm font-medium">{{ t('labs.results') }}</h3>
+        <div v-for="(result, index) in results" :key="index" class="flex flex-wrap items-end gap-2">
+          <label class="text-sm">{{ t('labs.test') }}
+            <select v-model="result.testCode" :disabled="saving || catalogFailed" @change="onTestChange(result)"
+                    class="ml-1 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
+              <option v-for="test in tests" :key="test.code" :value="test.code">{{ test.label }}</option>
+            </select>
+          </label>
+          <label class="text-sm">{{ t('labs.value') }}
+            <input v-model.number="result.value" type="number" step="any" :disabled="saving || catalogFailed" :data-testid="`result-value-${index}`"
+                   class="ml-1 w-28 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+          </label>
+          <label class="text-sm">{{ t('labs.unit') }}
+            <select v-model="result.unit" :disabled="saving || catalogFailed"
+                    class="ml-1 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
+              <option v-for="unit in allowedUnits(result.testCode)" :key="unit" :value="unit">{{ unit }}</option>
+            </select>
+          </label>
+          <label class="text-sm">{{ t('labs.referenceLower') }}
+            <input v-model.number="result.referenceLower" type="number" step="any" :disabled="saving || catalogFailed"
+                   class="ml-1 w-24 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+          </label>
+          <label class="text-sm">{{ t('labs.referenceUpper') }}
+            <input v-model.number="result.referenceUpper" type="number" step="any" :disabled="saving || catalogFailed"
+                   class="ml-1 w-24 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+          </label>
+          <button type="button" :disabled="saving || catalogFailed" :data-testid="`remove-result-${index}`"
+                  class="text-sm text-red-600 dark:text-red-400" @click="results.splice(index, 1)">
+            {{ t('common.remove') }}
+          </button>
+        </div>
+        <button type="button" data-testid="add-result" :disabled="saving || catalogFailed" class="rounded border px-3 py-1 text-sm" @click="addResult">
+          {{ t('labs.addResult') }}
+        </button>
+
+        <div>
+          <button type="button" data-testid="save" :disabled="saving || catalogFailed"
+                  class="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50" @click="save">
+            {{ t('common.save') }}
+          </button>
+        </div>
+        </form>
+
+        <div v-if="!isNew" class="mt-6 rounded border border-red-200 p-4 dark:border-red-900">
+          <label class="block text-sm font-medium">{{ t('labs.removalReason') }}</label>
+          <input v-model="removalReason" type="text" data-testid="removal-reason" :disabled="saving || catalogFailed"
+                 class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
+          <button data-testid="remove" :disabled="saving || catalogFailed" class="mt-2 rounded border border-red-300 px-3 py-1 text-sm text-red-700 dark:text-red-300"
+                  @click="requestRemoval">
+            {{ t('labs.requestRemoval') }}
+          </button>
+        </div>
+      </template>
+    </template>
+  </section>
+</template>

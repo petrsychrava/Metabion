@@ -13,6 +13,8 @@ public interface SymptomCheckInRepository extends JpaRepository<SymptomCheckIn, 
 
     Optional<SymptomCheckIn> findByPatientProfileIdAndCheckInDate(Long patientProfileId, LocalDate checkInDate);
 
+    Optional<SymptomCheckIn> findFirstByPatientProfileIdOrderByCheckInDateDesc(Long patientProfileId);
+
     List<SymptomCheckIn> findByPatientProfileIdAndCheckInDateBetweenOrderByCheckInDateDesc(
             Long patientProfileId, LocalDate from, LocalDate to);
 

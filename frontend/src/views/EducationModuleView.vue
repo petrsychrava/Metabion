@@ -1,19 +1,22 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { educationApi } from '@/api/education'
 import { useApiError } from '@/composables/useApiError'
+import { useAuthStore } from '@/stores/auth'
 import type { EducationLesson, EducationModuleDetail } from '@/types/api'
 
 const { t, locale } = useI18n()
 const route = useRoute()
+const auth = useAuthStore()
 const { message, capture } = useApiError()
 
 const moduleSlug = route.params.moduleSlug as string
 const module = ref<EducationModuleDetail | null>(null)
 const loading = ref(true)
 const openLesson = ref<string | null>(null)
+const educationBase = computed(() => (route.path.startsWith('/clinical') ? '/clinical/education' : '/education'))
 
 async function load() {
   try {
@@ -48,7 +51,7 @@ async function toggleLesson(lesson: EducationLesson) {
 
 <template>
   <section class="max-w-3xl">
-    <router-link to="/education" class="text-sm text-blue-600 dark:text-blue-400">← {{ t('education.backToModules') }}</router-link>
+    <router-link :to="educationBase" class="text-sm text-blue-600 dark:text-blue-400">← {{ t('education.backToModules') }}</router-link>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
     <template v-else-if="module">
       <h1 class="mt-2 text-2xl font-semibold">{{ module.title }}</h1>
@@ -74,7 +77,7 @@ async function toggleLesson(lesson: EducationLesson) {
           <div v-if="openLesson === lesson.lessonSlug" class="border-t p-4">
             <!-- bodyHtml is server-rendered from staff-authored, reviewed content; safe to render -->
             <div class="prose max-w-none" v-html="lesson.bodyHtml" />
-            <button :data-testid="`lesson-toggle-${lesson.lessonSlug}`"
+            <button v-if="auth.isPatient" :data-testid="`lesson-toggle-${lesson.lessonSlug}`"
                     class="mt-4 rounded border px-3 py-1 text-sm"
                     @click="toggleLesson(lesson)">
               {{ lesson.completed ? t('education.markIncomplete') : t('education.markComplete') }}

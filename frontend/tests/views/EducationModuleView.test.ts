@@ -6,6 +6,7 @@ import { createI18n } from 'vue-i18n'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { server } from '../msw/server'
 import EducationModuleView from '@/views/EducationModuleView.vue'
+import { useAuthStore } from '@/stores/auth'
 import en from '@/i18n/en.json'
 import cs from '@/i18n/cs.json'
 
@@ -71,7 +72,9 @@ describe('EducationModuleView', () => {
     )
     const router = makeRouter()
     await router.push('/education/ibd-basics')
-    const wrapper = mount(EducationModuleView, { global: { plugins: [createPinia(), i18n, router] } })
+    const pinia = createPinia()
+    const wrapper = mount(EducationModuleView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).roles = ['PATIENT']
     await flushPromises()
 
     expect(wrapper.text()).toContain('IBD Basics')
@@ -104,5 +107,22 @@ describe('EducationModuleView', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Základy IBD')
     i18n.global.locale.value = 'en'
+  })
+
+  it('hides the completion toggle for staff roles', async () => {
+    server.use(http.get('/api/education/modules/ibd-basics', () => HttpResponse.json(moduleDetail)))
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/clinical/education/:moduleSlug', component: EducationModuleView }],
+    })
+    await router.push('/clinical/education/ibd-basics')
+    const pinia = createPinia()
+    const wrapper = mount(EducationModuleView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).roles = ['PHYSICIAN']
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('IBD Basics')
+    expect(wrapper.find('[data-testid="lesson-toggle-what-is-ibd"]').exists()).toBe(false)
+    expect(wrapper.find('a[href="/clinical/education"]').exists()).toBe(true)
   })
 })

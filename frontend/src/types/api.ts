@@ -303,6 +303,9 @@ export interface OnboardingSubmissionResponse extends OnboardingSubmissionReques
   countryRegion: string | null
   timezone: string | null
   reviewStatus: OnboardingReviewStatus
+  reviewedByEmail: string | null
+  reviewedAt: string | null
+  reviewNotes: string | null
 }
 export interface OnboardingSubmissionSummary {
   id: number
@@ -376,4 +379,77 @@ export interface RedFlagHistoryParams {
   severity?: RedFlagSeverity
   cursor?: string
   size?: number
+}
+
+// Clinical (expert area; mirror backend clinical DTOs)
+export interface ClinicalPatientOption {
+  id: number
+  email: string
+}
+
+export interface ClinicalPatientOverview {
+  patientProfileId: number
+  patientEmail: string
+  currentRedFlagCount: number
+  highestRedFlagSeverity: RedFlagSeverity | null
+  latestFlareState: FlareState | null
+  latestSymptomScore: number | null
+  latestSymptomCheckInDate: string | null
+  latestKetoneValue: number | null
+  latestKetoneUnit: MeasurementUnit | null
+  latestKetoneMeasuredAt: string | null
+  latestAdherenceLevel: DietAdherenceLevel | null
+  lastActivityDate: string | null
+  pendingOnboardingCount: number
+  stale: boolean
+}
+
+export interface ClinicalDailyCheckInSummary {
+  patientProfileId: number
+  patientEmail: string
+  date: string
+  dietLogId: number | null
+  adherenceLevel: DietAdherenceLevel | null
+  appetiteLevel: AppetiteLevel | null
+  mealCount: number | null
+  deviationCount: number | null
+  measurementCount: number | null
+  symptomCheckInId: number | null
+  symptomScore: number | null
+  flareState: FlareState | null
+}
+
+export interface ClinicalDailyCheckInDetail {
+  patientProfileId: number
+  patientEmail: string
+  date: string
+  dietLog: DailyDietLogResponse | null
+  symptomCheckIn: SymptomCheckInResponse | null
+}
+
+export interface ClinicalRedFlagEvent {
+  eventId: number
+  ruleKey: string
+  severity: RedFlagSeverity
+  detectedAt: string
+  sourceType: RedFlagSourceType
+  sourceId: number
+  current: boolean
+  supersededAt: string | null
+  ruleVersion: number
+}
+
+export interface ClinicalRedFlagSnapshot {
+  highestSeverity: RedFlagSeverity | null
+  flags: ClinicalRedFlagEvent[]
+}
+
+export interface ClinicalRedFlagHistoryPage {
+  items: ClinicalRedFlagEvent[]
+  nextCursor: string | null
+}
+
+export interface OnboardingReviewRequest {
+  reviewStatus: OnboardingReviewStatus
+  reviewNotes?: string
 }
