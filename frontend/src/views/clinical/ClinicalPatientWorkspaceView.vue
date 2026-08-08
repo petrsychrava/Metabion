@@ -15,6 +15,9 @@ let identityGeneration = 0
 
 async function loadIdentity() {
   const gen = ++identityGeneration
+  // Clear first: the previous patient's email must never sit above the next
+  // patient's data while the replacement request is in flight.
+  patientEmail.value = null
   try {
     const option = await clinicalApi.getPatient(patientProfileId.value)
     if (gen !== identityGeneration) return

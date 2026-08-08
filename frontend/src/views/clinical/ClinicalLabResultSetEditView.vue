@@ -179,48 +179,48 @@ async function requestRemoval() {
       <form class="mt-4 space-y-4" @submit.prevent="save">
         <div>
           <label class="block text-sm font-medium">{{ t('labs.collectionDate') }}</label>
-          <input v-model="collectionDate" type="date" required
+          <input v-model="collectionDate" type="date" required :disabled="saving"
                  class="mt-1 rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
           <FieldError :message="fieldErrors.collectionDate" />
         </div>
         <div>
           <label class="block text-sm font-medium">{{ t('labs.notes') }}</label>
-          <input v-model="notes" type="text"
+          <input v-model="notes" type="text" :disabled="saving"
                  class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
         </div>
 
         <h3 class="text-sm font-medium">{{ t('labs.results') }}</h3>
         <div v-for="(result, index) in results" :key="index" class="flex flex-wrap items-end gap-2">
           <label class="text-sm">{{ t('labs.test') }}
-            <select v-model="result.testCode" @change="onTestChange(result)"
+            <select v-model="result.testCode" :disabled="saving" @change="onTestChange(result)"
                     class="ml-1 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
               <option v-for="test in tests" :key="test.code" :value="test.code">{{ test.label }}</option>
             </select>
           </label>
           <label class="text-sm">{{ t('labs.value') }}
-            <input v-model.number="result.value" type="number" step="any" :data-testid="`result-value-${index}`"
+            <input v-model.number="result.value" type="number" step="any" :disabled="saving" :data-testid="`result-value-${index}`"
                    class="ml-1 w-28 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
           </label>
           <label class="text-sm">{{ t('labs.unit') }}
-            <select v-model="result.unit"
+            <select v-model="result.unit" :disabled="saving"
                     class="ml-1 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
               <option v-for="unit in allowedUnits(result.testCode)" :key="unit" :value="unit">{{ unit }}</option>
             </select>
           </label>
           <label class="text-sm">{{ t('labs.referenceLower') }}
-            <input v-model.number="result.referenceLower" type="number" step="any"
+            <input v-model.number="result.referenceLower" type="number" step="any" :disabled="saving"
                    class="ml-1 w-24 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
           </label>
           <label class="text-sm">{{ t('labs.referenceUpper') }}
-            <input v-model.number="result.referenceUpper" type="number" step="any"
+            <input v-model.number="result.referenceUpper" type="number" step="any" :disabled="saving"
                    class="ml-1 w-24 rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
           </label>
-          <button type="button" :data-testid="`remove-result-${index}`"
+          <button type="button" :disabled="saving" :data-testid="`remove-result-${index}`"
                   class="text-sm text-red-600 dark:text-red-400" @click="results.splice(index, 1)">
             {{ t('common.remove') }}
           </button>
         </div>
-        <button type="button" data-testid="add-result" class="rounded border px-3 py-1 text-sm" @click="addResult">
+        <button type="button" data-testid="add-result" :disabled="saving" class="rounded border px-3 py-1 text-sm" @click="addResult">
           {{ t('labs.addResult') }}
         </button>
 

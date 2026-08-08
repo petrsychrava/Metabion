@@ -214,4 +214,38 @@ describe('ClinicalLabResultSetEditView', () => {
 
     expect(postCalls).toBe(1)
   })
+
+  it('disables the form controls while a save is in flight', async () => {
+    let postStarted = false
+    let resolveCreate: (response: HttpResponse<typeof existing>) => void = () => undefined
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/clinical/patients/41/labs/result-sets', () => {
+        postStarted = true
+        return new Promise<HttpResponse<typeof existing>>((resolve) => {
+          resolveCreate = resolve
+        })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/new')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="add-result"]').trigger('click')
+    await wrapper.find('[data-testid="save"]').trigger('click')
+    await vi.waitFor(() => expect(postStarted).toBe(true))
+    // The save is in flight: no edit made now is part of the request, so the
+    // controls must be unavailable rather than silently unsaved.
+    expect((wrapper.find('input[type="date"]').element as HTMLInputElement).disabled).toBe(true)
+    expect((wrapper.find('[data-testid="result-value-0"]').element as HTMLInputElement).disabled).toBe(true)
+    expect((wrapper.find('[data-testid="add-result"]').element as HTMLButtonElement).disabled).toBe(true)
+
+    resolveCreate(HttpResponse.json({ ...existing, id: 4 }))
+    // The create resolves, then the view switches into edit mode via
+    // router.replace — wait for the route change before asserting re-enable.
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/clinical/patients/41/labs/4'))
+    expect((wrapper.find('input[type="date"]').element as HTMLInputElement).disabled).toBe(false)
+  })
 })

@@ -67,13 +67,19 @@ describe('ClinicalPatientWorkspaceView', () => {
 
   it('remounts the child tab and reloads the identity when the patient id changes', async () => {
     const requested: (string | null)[] = []
+    let resolveIdentity: (response: HttpResponse<{ id: number; email: string }>) => void = () => undefined
     server.use(
       http.get('/api/clinical/daily-check-ins', ({ request }) => {
         requested.push(new URL(request.url).searchParams.get('patientProfileId'))
         return HttpResponse.json([])
       }),
       http.get('/api/clinical/patients/41', () => HttpResponse.json({ id: 41, email: 'a@example.com' })),
-      http.get('/api/clinical/patients/42', () => HttpResponse.json({ id: 42, email: 'b@example.com' })),
+      // Patient 42's identity stays in flight until the test releases it.
+      http.get('/api/clinical/patients/42', () =>
+        new Promise<HttpResponse<{ id: number; email: string }>>((resolve) => {
+          resolveIdentity = resolve
+        }),
+      ),
     )
     const router = createRouter({
       history: createMemoryHistory(),
@@ -104,6 +110,12 @@ describe('ClinicalPatientWorkspaceView', () => {
     await router.push('/clinical/patients/42/check-ins')
     await flushPromises()
     expect(requested).toEqual(['41', '42'])
+    // The old identity is cleared while the new one loads — never shown over B's data.
+    expect(wrapper.text()).not.toContain('a@example.com')
+    expect(wrapper.text()).toContain(en.clinical.patientFallback.replace('{id}', '42'))
+
+    resolveIdentity(HttpResponse.json({ id: 42, email: 'b@example.com' }))
+    await flushPromises()
     expect(wrapper.text()).toContain('b@example.com')
   })
 })
