@@ -232,6 +232,43 @@ describe('ClinicalPatientLabsView', () => {
     expect(wrapper.text()).not.toContain('C-reactive protein (mg/L)')
   })
 
+  it('clears a previous trend error after a replacement request succeeds', async () => {
+    const twoTests = [
+      catalog[0],
+      { code: 'HGB', label: 'Hemoglobin', category: 'HEMATOLOGY', canonicalUnit: 'g/dL', displayScale: 1, allowedUnits: ['g/dL'] },
+    ]
+    server.use(
+      http.get('/api/clinical/patients/41/labs/result-sets', () => HttpResponse.json([])),
+      http.get('/api/lab-tests', () => HttpResponse.json(twoTests)),
+      http.get('/api/clinical/patients/41/labs/trends/CRP', () =>
+        HttpResponse.json({ error: 'request_failed' }, { status: 500 })),
+      http.get('/api/clinical/patients/41/labs/trends/HGB', () =>
+        HttpResponse.json({ ...trend, testCode: 'HGB', label: 'Hemoglobin', canonicalUnit: 'g/dL' })),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/clinical/patients/:patientProfileId/labs', component: ClinicalPatientLabsView },
+        { path: '/clinical/patients/:patientProfileId/labs/new', component: { template: '<div />' } },
+        { path: '/clinical/patients/:patientProfileId/labs/:resultSetId', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/clinical/patients/41/labs')
+    const wrapper = mount(ClinicalPatientLabsView, {
+      global: { plugins: [createPinia(), i18n, router], stubs: { LineChart: true } },
+    })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="test-select"]').setValue('CRP')
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.errors.request_failed)
+
+    await wrapper.find('[data-testid="test-select"]').setValue('HGB')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Hemoglobin (g/dL)')
+    expect(wrapper.text()).not.toContain(en.errors.request_failed)
+  })
+
   it('invalidates an in-flight trend as soon as Apply is clicked', async () => {
     let resolveStaleTrend: (response: HttpResponse<typeof trend>) => void = () => undefined
     let trendCalls = 0

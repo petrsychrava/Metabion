@@ -79,6 +79,7 @@ async function loadTrend() {
     trend.value = null
     return
   }
+  clear()
   const requestTest = selectedTest.value
   const requestFrom = from.value
   const requestTo = to.value

@@ -75,6 +75,10 @@ async function loadExisting() {
 onMounted(async () => {
   try {
     tests.value = await labApi.listTests()
+  } catch (e) {
+    capture(e)
+  }
+  try {
     await loadExisting()
   } catch (e) {
     capture(e)
