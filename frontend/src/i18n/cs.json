@@ -162,6 +162,7 @@
     "answers": "Odpovědi",
     "queueTitle": "Posouzení onboardingu",
     "queueEmpty": "Filtru neodpovídají žádné žádosti.",
+    "contextFilter": "Kontext onboardingu",
     "allStatuses": "Všechny stavy",
     "openReview": "Posoudit",
     "reviewTitle": "Posoudit žádost",

@@ -39,7 +39,7 @@ const rows = [
     highestRedFlagSeverity: 'EMERGENCY',
     latestFlareState: 'ACTIVE_FLARE',
     latestSymptomScore: 9,
-    latestSymptomCheckInDate: isoDaysAgo(1),
+    latestSymptomCheckInDate: isoDaysAgo(9),
     latestKetoneValue: null,
     latestKetoneUnit: null,
     latestKetoneMeasuredAt: null,
@@ -93,6 +93,7 @@ describe('ClinicalOverviewView', () => {
     expect(flagged.text()).toContain(en.clinical.pendingReviews.replace('{count}', '1'))
     // The flare cell carries the symptom score as an attention signal, not just the label.
     expect(flagged.text()).toContain(`${en.checkIn.FlareState.ACTIVE_FLARE} · 9`)
+    expect(flagged.text()).toContain(rows[1].latestSymptomCheckInDate)
 
     // The ketone cell carries the measurement date so an old value can't pass for a fresh one.
     const ok = wrapper.find('[data-testid="overview-row"][data-email="ok@example.com"]')

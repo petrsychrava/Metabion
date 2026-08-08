@@ -37,6 +37,7 @@ const conflict = ref(false)
 const removalReason = ref('')
 const saving = ref(false)
 const catalogFailed = ref(false)
+const initializationFailed = ref(false)
 
 // v-model.number keeps the raw '' when a typed value is cleared; coerce it
 // back to null so the payload matches the numeric DTO fields.
@@ -83,6 +84,7 @@ onMounted(async () => {
   try {
     await loadExisting()
   } catch (e) {
+    initializationFailed.value = true
     capture(e)
   } finally {
     loading.value = false
@@ -111,6 +113,20 @@ async function reload() {
     // Keep the conflict state (and its reload button) until a reload succeeds.
     capture(e)
     conflict.value = true
+  } finally {
+    loading.value = false
+  }
+}
+
+async function retryInitialization() {
+  clear()
+  loading.value = true
+  try {
+    await loadExisting()
+    initializationFailed.value = false
+  } catch (e) {
+    initializationFailed.value = true
+    capture(e)
   } finally {
     loading.value = false
   }
@@ -179,12 +195,19 @@ async function requestRemoval() {
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
     <template v-else>
       <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
-      <p v-if="saved" class="mt-4 rounded bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">{{ t('common.saved') }}</p>
-      <button v-if="conflict" data-testid="reload" class="mt-2 rounded border px-3 py-1 text-sm" @click="reload">
-        {{ t('labs.reload') }}
-      </button>
+      <p v-if="catalogFailed && !message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ t('errors.request_failed') }}</p>
+      <template v-if="initializationFailed">
+        <button data-testid="reload" class="mt-2 rounded border px-3 py-1 text-sm" @click="retryInitialization">
+          {{ t('labs.reload') }}
+        </button>
+      </template>
+      <template v-else>
+        <p v-if="saved" class="mt-4 rounded bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">{{ t('common.saved') }}</p>
+        <button v-if="conflict" data-testid="reload" class="mt-2 rounded border px-3 py-1 text-sm" @click="reload">
+          {{ t('labs.reload') }}
+        </button>
 
-      <form class="mt-4 space-y-4" @submit.prevent="save">
+        <form class="mt-4 space-y-4" @submit.prevent="save">
         <div>
           <label class="block text-sm font-medium">{{ t('labs.collectionDate') }}</label>
           <input v-model="collectionDate" type="date" required :disabled="saving || catalogFailed"
@@ -238,17 +261,18 @@ async function requestRemoval() {
             {{ t('common.save') }}
           </button>
         </div>
-      </form>
+        </form>
 
-      <div v-if="!isNew" class="mt-6 rounded border border-red-200 p-4 dark:border-red-900">
-        <label class="block text-sm font-medium">{{ t('labs.removalReason') }}</label>
-        <input v-model="removalReason" type="text" data-testid="removal-reason" :disabled="saving || catalogFailed"
-               class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
-        <button data-testid="remove" :disabled="saving || catalogFailed" class="mt-2 rounded border border-red-300 px-3 py-1 text-sm text-red-700 dark:text-red-300"
-                @click="requestRemoval">
-          {{ t('labs.requestRemoval') }}
-        </button>
-      </div>
+        <div v-if="!isNew" class="mt-6 rounded border border-red-200 p-4 dark:border-red-900">
+          <label class="block text-sm font-medium">{{ t('labs.removalReason') }}</label>
+          <input v-model="removalReason" type="text" data-testid="removal-reason" :disabled="saving || catalogFailed"
+                 class="mt-1 w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800" />
+          <button data-testid="remove" :disabled="saving || catalogFailed" class="mt-2 rounded border border-red-300 px-3 py-1 text-sm text-red-700 dark:text-red-300"
+                  @click="requestRemoval">
+            {{ t('labs.requestRemoval') }}
+          </button>
+        </div>
+      </template>
     </template>
   </section>
 </template>

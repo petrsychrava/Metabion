@@ -185,6 +185,34 @@ describe('ClinicalLabResultSetEditView', () => {
     expect(wrapper.text()).toContain(en.errors.request_failed)
   })
 
+  it('keeps the editor closed when an existing result set fails to load', async () => {
+    let resultSetCalls = 0
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/clinical/patients/41/labs/result-sets/3', () => {
+        resultSetCalls += 1
+        if (resultSetCalls === 1) return HttpResponse.json({ error: 'request_failed' }, { status: 500 })
+        return HttpResponse.json(existing)
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/3')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="removal-reason"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="reload"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain(en.errors.request_failed)
+
+    await wrapper.find('[data-testid="reload"]').trigger('click')
+    await flushPromises()
+
+    expect(resultSetCalls).toBe(2)
+    expect(wrapper.find('form').exists()).toBe(true)
+    expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', '2026-07-10')
+  })
+
   it('keeps the conflict prompt and reports the error when the conflict reload fails', async () => {
     let getCalls = 0
     server.use(

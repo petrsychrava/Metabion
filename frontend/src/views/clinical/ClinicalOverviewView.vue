@@ -109,7 +109,7 @@ onMounted(async () => {
             </td>
             <td class="p-2">
               <template v-if="row.latestFlareState">
-                {{ t(`checkIn.FlareState.${row.latestFlareState}`) }}<template v-if="row.latestSymptomScore !== null"> · {{ row.latestSymptomScore }}</template>
+                {{ t(`checkIn.FlareState.${row.latestFlareState}`) }}<template v-if="row.latestSymptomScore !== null"> · {{ row.latestSymptomScore }}</template><template v-if="row.latestSymptomCheckInDate"> · {{ row.latestSymptomCheckInDate }}</template>
               </template>
               <span v-else>{{ t('clinical.noValue') }}</span>
             </td>

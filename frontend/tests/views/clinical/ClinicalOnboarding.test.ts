@@ -79,9 +79,12 @@ describe('clinical onboarding review', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('patient@example.com')
+    expect(wrapper.text()).toContain('baseline')
+    await wrapper.find('[data-testid="context-filter"]').setValue('baseline')
     await wrapper.find('[data-testid="status-filter"]').setValue('PENDING_REVIEW')
     await wrapper.find('[data-testid="apply-filter"]').trigger('click')
     await flushPromises()
+    expect(seenUrl).toContain('context=baseline')
     expect(seenUrl).toContain('status=PENDING_REVIEW')
 
     await wrapper.find('[data-testid="queue-row"]').trigger('click')
