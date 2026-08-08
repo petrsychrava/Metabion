@@ -42,7 +42,18 @@ class DatabaseMigrationLayoutTest {
 
     @Test
     void postgresqlMigrationsHaveExpectedInventoryAndLayout() throws IOException {
-        Resource[] migrations = resolver.getResources("classpath*:db/migration/postgresql/V*.sql");
+        assertExpectedInventory("postgresql");
+
+        assertThat(resolver.getResources("classpath*:db/migration/*.sql")).isEmpty();
+    }
+
+    @Test
+    void oracleMigrationsHaveExpectedInventoryAndLayout() throws IOException {
+        assertExpectedInventory("oracle");
+    }
+
+    private void assertExpectedInventory(String vendor) throws IOException {
+        Resource[] migrations = resolver.getResources("classpath*:db/migration/" + vendor + "/V*.sql");
 
         var parsed = Arrays.stream(migrations)
                 .map(Resource::getFilename)
@@ -58,9 +69,7 @@ class DatabaseMigrationLayoutTest {
         assertThat(parsed.stream().map(Map.Entry::getKey).toList())
                 .containsExactlyElementsOf(EXPECTED_DESCRIPTIONS.keySet().stream().sorted().toList());
         parsed.forEach(entry -> assertThat(entry.getValue())
-                .as("description for migration V%s", entry.getKey())
+                .as("description for %s migration V%s", vendor, entry.getKey())
                 .isEqualTo(EXPECTED_DESCRIPTIONS.get(entry.getKey())));
-
-        assertThat(resolver.getResources("classpath*:db/migration/*.sql")).isEmpty();
     }
 }

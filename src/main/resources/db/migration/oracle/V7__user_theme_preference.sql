@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD theme_preference VARCHAR2(20) DEFAULT 'SYSTEM' NOT NULL;
