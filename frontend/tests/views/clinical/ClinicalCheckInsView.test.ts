@@ -172,4 +172,24 @@ describe('ClinicalCheckInsView', () => {
     expect(wrapper.text()).toContain(en.errors.request_failed)
     expect(wrapper.findAll('[data-testid="checkin-row"]')).toHaveLength(0)
   })
+
+  it('clears previous rows when an invalid replacement range is applied', async () => {
+    server.use(
+      http.get('/api/clinical/daily-check-ins', () => HttpResponse.json(summaries)),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/check-ins')
+    const wrapper = mount(ClinicalCheckInsView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="checkin-row"]')).toHaveLength(2)
+
+    const dateInputs = wrapper.findAll('input[type="date"]')
+    await dateInputs[0].setValue('2026-08-03')
+    await dateInputs[1].setValue('2026-08-01')
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(en.errors.date_range_invalid)
+    expect(wrapper.findAll('[data-testid="checkin-row"]')).toHaveLength(0)
+  })
 })

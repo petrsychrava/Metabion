@@ -371,4 +371,34 @@ describe('ClinicalPatientLabsView', () => {
     expect(wrapper.text()).toContain(en.errors.request_failed)
     expect(wrapper.find('[data-testid="resultsets-table"] tbody').findAll('tr')).toHaveLength(0)
   })
+
+  it('clears previous rows when an invalid replacement range is applied', async () => {
+    server.use(
+      http.get('/api/clinical/patients/41/labs/result-sets', () => HttpResponse.json(resultSets)),
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/clinical/patients/:patientProfileId/labs', component: ClinicalPatientLabsView },
+        { path: '/clinical/patients/:patientProfileId/labs/new', component: { template: '<div />' } },
+        { path: '/clinical/patients/:patientProfileId/labs/:resultSetId', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/clinical/patients/41/labs')
+    const wrapper = mount(ClinicalPatientLabsView, {
+      global: { plugins: [createPinia(), i18n, router], stubs: { LineChart: true } },
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="resultsets-table"] tbody').findAll('tr')).toHaveLength(1)
+
+    const dateInputs = wrapper.findAll('input[type="date"]')
+    await dateInputs[0].setValue('2026-08-03')
+    await dateInputs[1].setValue('2026-08-01')
+    await wrapper.find('[data-testid="apply-range"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(en.errors.date_range_invalid)
+    expect(wrapper.find('[data-testid="resultsets-table"] tbody').findAll('tr')).toHaveLength(0)
+  })
 })

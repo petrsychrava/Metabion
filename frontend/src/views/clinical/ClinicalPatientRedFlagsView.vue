@@ -59,6 +59,8 @@ async function load() {
   const gen = ++historyGeneration
   const rangeError = dateRangeError(from.value, to.value, 369)
   if (rangeError) {
+    items.value = []
+    nextCursor.value = null
     message.value = t(`errors.date_range_${rangeError === 'too_long' ? 'too_long' : 'invalid'}`)
     // The bump above bars in-flight requests from clearing these — do it here.
     loading.value = false

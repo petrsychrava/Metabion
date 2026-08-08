@@ -50,6 +50,7 @@ async function loadList() {
   // Bump before any early return: a range error also invalidates an in-flight request.
   const gen = ++listGeneration
   if (rangeInvalid()) {
+    resultSets.value = []
     // The bump above bars the in-flight request from clearing this — do it here.
     loading.value = false
     return

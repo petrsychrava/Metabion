@@ -159,4 +159,29 @@ describe('ClinicalPatientTrendsView', () => {
     expect(wrapper.text()).toContain(en.errors.request_failed)
     expect(wrapper.text()).not.toContain(en.trends.symptomScore)
   })
+
+  it('clears previous charts when an invalid replacement range is applied', async () => {
+    server.use(
+      http.get('/api/clinical/trends/daily', () => HttpResponse.json(trend)),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/clinical/patients/:patientProfileId/trends', component: ClinicalPatientTrendsView }],
+    })
+    await router.push('/clinical/patients/41/trends')
+    const wrapper = mount(ClinicalPatientTrendsView, {
+      global: { plugins: [createPinia(), i18n, router], stubs: { LineChart: true } },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.trends.symptomScore)
+
+    const dateInputs = wrapper.findAll('input[type="date"]')
+    await dateInputs[0].setValue('2026-08-03')
+    await dateInputs[1].setValue('2026-08-01')
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(en.errors.date_range_invalid)
+    expect(wrapper.text()).not.toContain(en.trends.symptomScore)
+  })
 })

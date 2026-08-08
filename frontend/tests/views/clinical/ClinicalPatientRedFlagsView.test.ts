@@ -95,7 +95,7 @@ describe('ClinicalPatientRedFlagsView', () => {
     expect(wrapper.findAll('[data-testid="history-row"]')).toHaveLength(0)
   })
 
-  it('re-enables load-more when an invalid range invalidates an in-flight page request', async () => {
+  it('clears history when an invalid range invalidates an in-flight page request', async () => {
     type HistoryPage = { items: ReturnType<typeof event>[]; nextCursor: string | null }
     let historyCalls = 0
     let resolvePage: (response: HttpResponse<HistoryPage>) => void = () => undefined
@@ -133,11 +133,41 @@ describe('ClinicalPatientRedFlagsView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain(en.errors.date_range_invalid)
-    expect(wrapper.find('[data-testid="load-more"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.findAll('[data-testid="history-row"]')).toHaveLength(0)
+    expect(wrapper.find('[data-testid="load-more"]').exists()).toBe(false)
 
-    // The invalidated page request resolves late and is dropped: still one row.
+    // The invalidated page request resolves late and is dropped: still no rows.
     resolvePage(HttpResponse.json({ items: [event(700, 'ROUTINE_REVIEW', false)], nextCursor: null }))
     await flushPromises()
+    expect(wrapper.findAll('[data-testid="history-row"]')).toHaveLength(0)
+  })
+
+  it('clears previous history and its cursor when an invalid replacement range is applied', async () => {
+    server.use(
+      http.get('/api/clinical/patients/41/red-flags/current', () =>
+        HttpResponse.json({ highestSeverity: null, flags: [] }),
+      ),
+      http.get('/api/clinical/patients/41/red-flags/history', () =>
+        HttpResponse.json({ items: [event(701, 'URGENT_REVIEW', true)], nextCursor: 'abc' })),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/clinical/patients/:patientProfileId/red-flags', component: ClinicalPatientRedFlagsView }],
+    })
+    await router.push('/clinical/patients/41/red-flags')
+    const wrapper = mount(ClinicalPatientRedFlagsView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
     expect(wrapper.findAll('[data-testid="history-row"]')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="load-more"]').exists()).toBe(true)
+
+    const dateInputs = wrapper.findAll('input[type="date"]')
+    await dateInputs[0].setValue('2026-08-03')
+    await dateInputs[1].setValue('2026-08-01')
+    await wrapper.findAll('button')[0].trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(en.errors.date_range_invalid)
+    expect(wrapper.findAll('[data-testid="history-row"]')).toHaveLength(0)
+    expect(wrapper.find('[data-testid="load-more"]').exists()).toBe(false)
   })
 })

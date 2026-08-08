@@ -35,6 +35,7 @@ async function load() {
   const gen = ++loadGeneration
   const rangeError = dateRangeError(from.value, to.value)
   if (rangeError) {
+    items.value = []
     message.value = t(`errors.date_range_${rangeError === 'too_long' ? 'too_long' : 'invalid'}`)
     // The bump above bars the in-flight request from clearing this — do it here.
     loading.value = false
