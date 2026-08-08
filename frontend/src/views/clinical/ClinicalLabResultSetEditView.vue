@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { clinicalApi } from '@/api/clinical'
@@ -23,7 +23,15 @@ const router = useRouter()
 const { message, fieldErrors, capture, clear } = useApiError()
 
 const patientProfileId = Number(route.params.patientProfileId)
-const id = ref<number | null>(route.params.resultSetId ? Number(route.params.resultSetId) : null)
+
+function routeResultSetId(): number | null {
+  const raw = route.params.resultSetId
+  if (!raw) return null
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const id = ref<number | null>(routeResultSetId())
 const isNew = computed(() => id.value === null)
 
 const tests = ref<LabTestDefinition[]>([])
@@ -54,24 +62,49 @@ function allowedUnits(testCode: string): string[] {
   return tests.value.find((test) => test.code === testCode)?.allowedUnits ?? []
 }
 
-async function loadExisting() {
-  // New sets start with an empty collection date: the backend validates it
-  // against the patient's timezone, where the staff browser's "today" can
-  // already be tomorrow — and the lab report's date is what belongs here.
-  if (id.value === null) {
-    return
+function clearLoadedState() {
+  collectionDate.value = ''
+  notes.value = ''
+  version.value = null
+  results.splice(0, results.length)
+}
+
+let loadGeneration = 0
+
+async function loadRoute(clearError: boolean) {
+  if (clearError) clear()
+  const gen = ++loadGeneration
+  const nextId = routeResultSetId()
+  id.value = nextId
+  clearLoadedState()
+  saved.value = false
+  conflict.value = false
+  initializationFailed.value = false
+  loading.value = true
+  try {
+    // New sets start with an empty collection date: the backend validates it
+    // against the patient's timezone, where the staff browser's "today" can
+    // already be tomorrow — and the lab report's date is what belongs here.
+    if (nextId === null) return
+    const existing = await clinicalApi.getLabResultSet(patientProfileId, nextId)
+    if (gen !== loadGeneration) return
+    collectionDate.value = existing.collectionDate
+    notes.value = existing.notes ?? ''
+    version.value = existing.version
+    results.splice(0, results.length, ...existing.results.map((r) => ({
+      testCode: r.testCode,
+      value: r.reportedValue,
+      unit: r.reportedUnit,
+      referenceLower: r.referenceLower,
+      referenceUpper: r.referenceUpper,
+    })))
+  } catch (e) {
+    if (gen !== loadGeneration) return
+    initializationFailed.value = true
+    capture(e)
+  } finally {
+    if (gen === loadGeneration) loading.value = false
   }
-  const existing = await clinicalApi.getLabResultSet(patientProfileId, id.value)
-  collectionDate.value = existing.collectionDate
-  notes.value = existing.notes ?? ''
-  version.value = existing.version
-  results.splice(0, results.length, ...existing.results.map((r) => ({
-    testCode: r.testCode,
-    value: r.reportedValue,
-    unit: r.reportedUnit,
-    referenceLower: r.referenceLower,
-    referenceUpper: r.referenceUpper,
-  })))
 }
 
 onMounted(async () => {
@@ -81,14 +114,14 @@ onMounted(async () => {
     catalogFailed.value = true
     capture(e)
   }
-  try {
-    await loadExisting()
-  } catch (e) {
-    initializationFailed.value = true
-    capture(e)
-  } finally {
-    loading.value = false
-  }
+  await loadRoute(false)
+})
+
+watch(() => route.params.resultSetId, () => {
+  // A create already puts the new id into local state before replacing the
+  // route; direct navigation to another id still reloads the editor.
+  if (routeResultSetId() === id.value) return
+  void loadRoute(true)
 })
 
 function addResult() {
@@ -104,32 +137,7 @@ function addResult() {
 }
 
 async function reload() {
-  conflict.value = false
-  clear()
-  loading.value = true
-  try {
-    await loadExisting()
-  } catch (e) {
-    // Keep the conflict state (and its reload button) until a reload succeeds.
-    capture(e)
-    conflict.value = true
-  } finally {
-    loading.value = false
-  }
-}
-
-async function retryInitialization() {
-  clear()
-  loading.value = true
-  try {
-    await loadExisting()
-    initializationFailed.value = false
-  } catch (e) {
-    initializationFailed.value = true
-    capture(e)
-  } finally {
-    loading.value = false
-  }
+  await loadRoute(true)
 }
 
 async function save() {
@@ -197,7 +205,7 @@ async function requestRemoval() {
       <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
       <p v-if="catalogFailed && !message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ t('errors.request_failed') }}</p>
       <template v-if="initializationFailed">
-        <button data-testid="reload" class="mt-2 rounded border px-3 py-1 text-sm" @click="retryInitialization">
+        <button data-testid="reload" class="mt-2 rounded border px-3 py-1 text-sm" @click="reload">
           {{ t('labs.reload') }}
         </button>
       </template>

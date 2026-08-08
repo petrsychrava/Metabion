@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { clinicalApi } from '@/api/clinical'
@@ -9,28 +9,40 @@ import type { AnswerResponse, ClinicalDailyCheckInDetail } from '@/types/api'
 
 const { t, locale } = useI18n()
 const route = useRoute()
-const { message, capture } = useApiError()
+const { message, capture, clear } = useApiError()
 
 const patientProfileId = Number(route.params.patientProfileId)
-const date = route.params.date as string
+const date = ref(route.params.date as string)
 
 const detail = ref<ClinicalDailyCheckInDetail | null>(null)
 const loading = ref(true)
+let loadGeneration = 0
 
 function answerValue(answer: AnswerResponse): string {
   const value = answer.optionLabel ?? answer.answerNumeric ?? answer.answerText
   return value === null || value === undefined ? t('clinical.noValue') : String(value)
 }
 
-onMounted(async () => {
+async function load(nextDate: string) {
+  const gen = ++loadGeneration
+  clear()
+  date.value = nextDate
+  detail.value = null
+  loading.value = true
   try {
-    detail.value = await clinicalApi.getDailyCheckIn(patientProfileId, date)
+    const result = await clinicalApi.getDailyCheckIn(patientProfileId, nextDate)
+    if (gen !== loadGeneration) return
+    detail.value = result
   } catch (e) {
+    if (gen !== loadGeneration) return
     capture(e)
   } finally {
-    loading.value = false
+    if (gen === loadGeneration) loading.value = false
   }
-})
+}
+
+onMounted(() => { void load(route.params.date as string) })
+watch(() => route.params.date as string, (nextDate) => { void load(nextDate) })
 </script>
 
 <template>

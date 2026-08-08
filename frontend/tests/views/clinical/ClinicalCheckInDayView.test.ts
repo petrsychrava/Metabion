@@ -122,4 +122,36 @@ describe('ClinicalCheckInDayView', () => {
     expect(wrapper.text()).toContain(en.clinical.noDietLog)
     expect(wrapper.text()).toContain('Abdominal pain')
   })
+
+  it('reloads the detail when the check-in date route changes', async () => {
+    const requestedDates: string[] = []
+    server.use(
+      http.get('/api/clinical/daily-check-ins/41/:date', ({ params }) => {
+        const requestedDate = String(params.date)
+        requestedDates.push(requestedDate)
+        return HttpResponse.json({
+          ...detail,
+          date: requestedDate,
+          dietLog: { ...detail.dietLog, logDate: requestedDate, notes: `note for ${requestedDate}` },
+          symptomCheckIn: { ...detail.symptomCheckIn, checkInDate: requestedDate },
+        })
+      }),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/clinical/patients/:patientProfileId/check-ins/:date', component: ClinicalCheckInDayView }],
+    })
+    await router.push('/clinical/patients/41/check-ins/2026-08-03')
+    const wrapper = mount(ClinicalCheckInDayView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('note for 2026-08-03')
+
+    await router.push('/clinical/patients/41/check-ins/2026-08-04')
+    await flushPromises()
+
+    expect(requestedDates).toEqual(['2026-08-03', '2026-08-04'])
+    expect(wrapper.text()).toContain(`${en.clinical.dayDetailTitle} — 2026-08-04`)
+    expect(wrapper.text()).toContain('note for 2026-08-04')
+    expect(wrapper.text()).not.toContain('note for 2026-08-03')
+  })
 })

@@ -213,6 +213,42 @@ describe('ClinicalLabResultSetEditView', () => {
     expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', '2026-07-10')
   })
 
+  it('reloads the editor when the result-set route changes', async () => {
+    const second = {
+      ...existing,
+      id: 4,
+      version: 6,
+      collectionDate: '2026-08-04',
+      notes: 'second result set',
+      results: [{ ...existing.results[0], id: 41, reportedValue: 8.1 }],
+    }
+    const requestedIds: number[] = []
+    server.use(
+      http.get('/api/lab-tests', () => HttpResponse.json(catalog)),
+      http.get('/api/clinical/patients/41/labs/result-sets/3', () => {
+        requestedIds.push(3)
+        return HttpResponse.json(existing)
+      }),
+      http.get('/api/clinical/patients/41/labs/result-sets/4', () => {
+        requestedIds.push(4)
+        return HttpResponse.json(second)
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/patients/41/labs/3')
+    const wrapper = mount(ClinicalLabResultSetEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+    expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', '2026-07-10')
+
+    await router.push('/clinical/patients/41/labs/4')
+    await flushPromises()
+
+    expect(requestedIds).toEqual([3, 4])
+    expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', '2026-08-04')
+    expect(wrapper.find('[data-testid="result-value-0"]').element).toHaveProperty('value', '8.1')
+    expect(wrapper.find('input[type="text"]').element).toHaveProperty('value', 'second result set')
+  })
+
   it('keeps the conflict prompt and reports the error when the conflict reload fails', async () => {
     let getCalls = 0
     server.use(
