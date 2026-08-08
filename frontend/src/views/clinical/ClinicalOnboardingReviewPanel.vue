@@ -31,6 +31,7 @@ async function load() {
   const submissionId = props.submissionId
   // Never show the previous submission (or its half-entered review) under a new id.
   submission.value = null
+  submitting.value = false
   loading.value = true
   try {
     const result = await clinicalApi.getOnboardingSubmission(submissionId)
@@ -48,17 +49,24 @@ async function load() {
 
 async function submitReview() {
   clear()
+  const submittedId = props.submissionId
+  const submitGeneration = loadGeneration
   submitting.value = true
   try {
-    submission.value = await clinicalApi.reviewOnboardingSubmission(props.submissionId, {
+    const result = await clinicalApi.reviewOnboardingSubmission(submittedId, {
       reviewStatus: decision.value,
       reviewNotes: reviewNotes.value || undefined,
     })
+    if (submittedId !== props.submissionId || submitGeneration !== loadGeneration) return
+    submission.value = result
     emit('reviewed')
   } catch (e) {
+    if (submittedId !== props.submissionId || submitGeneration !== loadGeneration) return
     capture(e)
   } finally {
-    submitting.value = false
+    if (submittedId === props.submissionId && submitGeneration === loadGeneration) {
+      submitting.value = false
+    }
   }
 }
 

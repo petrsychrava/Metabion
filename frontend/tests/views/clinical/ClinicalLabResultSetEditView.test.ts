@@ -177,6 +177,11 @@ describe('ClinicalLabResultSetEditView', () => {
     expect(resultSetCalls).toBe(1)
     expect(wrapper.find('input[type="date"]').element).toHaveProperty('value', '2026-07-10')
     expect(wrapper.find('[data-testid="remove"]').exists()).toBe(true)
+    expect((wrapper.find('input[type="date"]').element as HTMLInputElement).disabled).toBe(true)
+    expect((wrapper.find('[data-testid="result-value-0"]').element as HTMLInputElement).disabled).toBe(true)
+    expect((wrapper.find('[data-testid="save"]').element as HTMLButtonElement).disabled).toBe(true)
+    expect((wrapper.find('[data-testid="removal-reason"]').element as HTMLInputElement).disabled).toBe(true)
+    expect((wrapper.find('[data-testid="remove"]').element as HTMLButtonElement).disabled).toBe(true)
     expect(wrapper.text()).toContain(en.errors.request_failed)
   })
 

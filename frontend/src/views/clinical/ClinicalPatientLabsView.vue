@@ -11,7 +11,16 @@ import type { LabResultSetResponse, LabTestDefinition, LabTrendResponse } from '
 
 const { t } = useI18n()
 const route = useRoute()
-const { message, capture, clear } = useApiError()
+const {
+  message: listMessage,
+  capture: captureList,
+  clear: clearList,
+} = useApiError()
+const {
+  message: trendMessage,
+  capture: captureTrend,
+  clear: clearTrend,
+} = useApiError()
 
 const patientProfileId = Number(route.params.patientProfileId)
 
@@ -30,27 +39,26 @@ const tests = ref<LabTestDefinition[]>([])
 const selectedTest = ref('')
 const trend = ref<LabTrendResponse | null>(null)
 const loading = ref(true)
-// Catalog failures get their own indicator: loadList()/loadTrend() clear the
-// shared error message, which would otherwise erase a catalog error silently.
+// Keep catalog failures separate from the list and trend request errors.
 const catalogFailed = ref(false)
 
-function rangeInvalid(): boolean {
+function rangeMessage(): string | null {
   const rangeError = dateRangeError(from.value, to.value)
-  if (rangeError) {
-    message.value = t(`errors.date_range_${rangeError === 'too_long' ? 'too_long' : 'invalid'}`)
-    return true
-  }
-  return false
+  return rangeError
+    ? t(`errors.date_range_${rangeError === 'too_long' ? 'too_long' : 'invalid'}`)
+    : null
 }
 
 let listGeneration = 0
 
 async function loadList() {
-  clear()
+  clearList()
   // Bump before any early return: a range error also invalidates an in-flight request.
   const gen = ++listGeneration
-  if (rangeInvalid()) {
+  const invalidRangeMessage = rangeMessage()
+  if (invalidRangeMessage) {
     resultSets.value = []
+    listMessage.value = invalidRangeMessage
     // The bump above bars the in-flight request from clearing this — do it here.
     loading.value = false
     return
@@ -64,7 +72,7 @@ async function loadList() {
     if (gen !== listGeneration) return
     // Drop the previous rows: the controls describe the failed request now.
     resultSets.value = []
-    capture(e)
+    captureList(e)
   } finally {
     if (gen === listGeneration) loading.value = false
   }
@@ -76,11 +84,17 @@ async function loadTrend() {
   // Bump before the guard: clearing the test or an invalid range also
   // invalidates an in-flight request, so its stale response gets dropped.
   const gen = ++trendGeneration
-  if (!selectedTest.value || rangeInvalid()) {
+  clearTrend()
+  if (!selectedTest.value) {
     trend.value = null
     return
   }
-  clear()
+  const invalidRangeMessage = rangeMessage()
+  if (invalidRangeMessage) {
+    trend.value = null
+    trendMessage.value = invalidRangeMessage
+    return
+  }
   const requestTest = selectedTest.value
   const requestFrom = from.value
   const requestTo = to.value
@@ -92,7 +106,7 @@ async function loadTrend() {
     if (gen !== trendGeneration) return
     // Drop the previous chart: the controls describe the failed request now.
     trend.value = null
-    capture(e)
+    captureTrend(e)
   }
 }
 
@@ -134,7 +148,7 @@ watch(selectedTest, loadTrend)
       <button data-testid="apply-range" class="rounded bg-blue-600 px-3 py-1 text-sm text-white" @click="apply">{{ t('common.apply') }}</button>
     </div>
 
-    <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
+    <p v-if="listMessage" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ listMessage }}</p>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
     <table v-else data-testid="resultsets-table" class="mt-4 w-full border-collapse bg-white text-sm dark:bg-gray-800">
       <thead>
@@ -171,6 +185,10 @@ watch(selectedTest, loadTrend)
       <p v-if="catalogFailed" data-testid="catalog-failed"
          class="mt-2 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
         {{ t('errors.request_failed') }}
+      </p>
+      <p v-if="trendMessage" data-testid="trend-error"
+         class="mt-2 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        {{ trendMessage }}
       </p>
       <template v-if="trend">
         <h3 class="mb-2 mt-4 font-medium">{{ trend.label }} ({{ trend.canonicalUnit }})</h3>

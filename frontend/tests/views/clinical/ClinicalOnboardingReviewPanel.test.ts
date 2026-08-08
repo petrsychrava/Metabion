@@ -96,6 +96,43 @@ describe('ClinicalOnboardingReviewPanel', () => {
     expect((wrapper.find('[data-testid="review-notes"]').element as HTMLTextAreaElement).value).toBe('')
   })
 
+  it('ignores a stale review response when the submission changes mid-flight', async () => {
+    let reviewStarted = false
+    let resolveReview: (response: HttpResponse<typeof submission>) => void = () => undefined
+    server.use(
+      http.get('/api/clinical/onboarding/submissions/9', () => HttpResponse.json(submission)),
+      http.get('/api/clinical/onboarding/submissions/10', () =>
+        HttpResponse.json({ ...submission, id: 10, patientEmail: 'fresh@example.com' })),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/clinical/onboarding/submissions/9/review', () => {
+        reviewStarted = true
+        return new Promise<HttpResponse<typeof submission>>((resolve) => {
+          resolveReview = resolve
+        })
+      }),
+    )
+    const wrapper = mount(ClinicalOnboardingReviewPanel, {
+      props: { submissionId: 9 },
+      global: { plugins: [createPinia(), i18n] },
+    })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="submit-review"]').trigger('click')
+    await vi.waitFor(() => expect(reviewStarted).toBe(true))
+
+    await wrapper.setProps({ submissionId: 10 })
+    await flushPromises()
+    expect(wrapper.text()).toContain('fresh@example.com')
+    expect((wrapper.find('[data-testid="submit-review"]').element as HTMLButtonElement).disabled).toBe(false)
+
+    resolveReview(HttpResponse.json({ ...submission, reviewStatus: 'REVIEWED' }))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('fresh@example.com')
+    expect(wrapper.text()).not.toContain('patient@example.com')
+    expect(wrapper.emitted('reviewed')).toBeUndefined()
+  })
+
   it('renders lab notes and the review audit details', async () => {
     server.use(
       http.get('/api/clinical/onboarding/submissions/9', () =>
