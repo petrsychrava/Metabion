@@ -22,8 +22,9 @@ export const useAuthStore = defineStore('auth', () => {
   const isPatient = computed(() => roles.value.includes('PATIENT'))
   const canAccessClinical = computed(() => roles.value.some((role) => CLINICAL_ROLES.includes(role)))
   const homePath = computed(() => {
+    if (canAccessClinical.value) return '/clinical'
     if (isPatient.value) return '/'
-    return canAccessClinical.value ? '/clinical' : '/staff-notice'
+    return '/staff-notice'
   })
 
   /** Best-effort sync of the persisted language preference; failures never break auth flows. */

@@ -33,6 +33,16 @@ describe('auth store', () => {
     expect(auth.isPatient).toBe(true)
   })
 
+  it('prefers the clinical home for users with patient and clinical roles', async () => {
+    server.use(http.get('/api/auth/me', () => HttpResponse.json({ email: 'clinician@example.com', roles: ['PATIENT', 'PHYSICIAN'] })))
+    const auth = useAuthStore()
+    await auth.fetchMe()
+
+    expect(auth.isPatient).toBe(true)
+    expect(auth.canAccessClinical).toBe(true)
+    expect(auth.homePath).toBe('/clinical')
+  })
+
   it('fetchMe maps 401 to anonymous', async () => {
     server.use(http.get('/api/auth/me', () => new HttpResponse(null, { status: 401 })))
     const auth = useAuthStore()

@@ -24,15 +24,21 @@ const { message, fieldErrors, capture, clear } = useApiError()
 
 const patientProfileId = Number(route.params.patientProfileId)
 
-function routeResultSetId(): number | null {
+type ResultSetRouteId = number | null | 'invalid'
+
+function routeResultSetId(): ResultSetRouteId {
   const raw = route.params.resultSetId
-  if (!raw) return null
-  const parsed = Number(raw)
-  return Number.isFinite(parsed) ? parsed : null
+  if (raw === undefined) return null
+  const value = Array.isArray(raw) ? raw[0] : raw
+  if (!value) return 'invalid'
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 'invalid'
 }
 
-const id = ref<number | null>(routeResultSetId())
-const isNew = computed(() => id.value === null)
+const initialRouteId = routeResultSetId()
+const id = ref<number | null>(initialRouteId === 'invalid' ? null : initialRouteId)
+const invalidResultSetId = ref(initialRouteId === 'invalid')
+const isNew = computed(() => id.value === null && !invalidResultSetId.value)
 
 const tests = ref<LabTestDefinition[]>([])
 const collectionDate = ref('')
@@ -66,6 +72,7 @@ function clearLoadedState() {
   collectionDate.value = ''
   notes.value = ''
   version.value = null
+  removalReason.value = ''
   results.splice(0, results.length)
 }
 
@@ -74,18 +81,21 @@ let loadGeneration = 0
 async function loadRoute(clearError: boolean) {
   if (clearError) clear()
   const gen = ++loadGeneration
-  const nextId = routeResultSetId()
+  const parsedRouteId = routeResultSetId()
+  const nextId = parsedRouteId === 'invalid' ? null : parsedRouteId
+  invalidResultSetId.value = parsedRouteId === 'invalid'
   id.value = nextId
   clearLoadedState()
   saved.value = false
   conflict.value = false
   initializationFailed.value = false
+  saving.value = false
   loading.value = true
   try {
     // New sets start with an empty collection date: the backend validates it
     // against the patient's timezone, where the staff browser's "today" can
     // already be tomorrow — and the lab report's date is what belongs here.
-    if (nextId === null) return
+    if (parsedRouteId === 'invalid' || nextId === null) return
     const existing = await clinicalApi.getLabResultSet(patientProfileId, nextId)
     if (gen !== loadGeneration) return
     collectionDate.value = existing.collectionDate
@@ -120,7 +130,9 @@ onMounted(async () => {
 watch(() => route.params.resultSetId, () => {
   // A create already puts the new id into local state before replacing the
   // route; direct navigation to another id still reloads the editor.
-  if (routeResultSetId() === id.value) return
+  const parsedRouteId = routeResultSetId()
+  const nextId = parsedRouteId === 'invalid' ? null : parsedRouteId
+  if (nextId === id.value && (parsedRouteId === 'invalid') === invalidResultSetId.value) return
   void loadRoute(true)
 })
 
@@ -142,15 +154,21 @@ async function reload() {
 
 async function save() {
   // Guard against double-submit: two in-flight creates would persist duplicates.
-  if (saving.value || catalogFailed.value) return
+  if (saving.value || catalogFailed.value || invalidResultSetId.value) return
+  const saveRouteId = routeResultSetId()
+  if (saveRouteId === 'invalid') return
+  const saveGeneration = loadGeneration
+  const saveIsNew = saveRouteId === null
+  const saveVersion = version.value
+  const isCurrentSave = () => saveGeneration === loadGeneration && routeResultSetId() === saveRouteId
   clear()
   saved.value = false
   conflict.value = false
   saving.value = true
   try {
     const payload = {
-      resultSetId: isNew.value ? null : id.value,
-      version: isNew.value ? null : version.value,
+      resultSetId: saveIsNew ? null : saveRouteId,
+      version: saveIsNew ? null : saveVersion,
       collectionDate: collectionDate.value,
       notes: notes.value || undefined,
       results: results.map((r) => ({
@@ -161,18 +179,22 @@ async function save() {
         referenceUpper: numOrNull(r.referenceUpper),
       })),
     }
-    if (isNew.value) {
+    if (saveIsNew) {
       const res = await clinicalApi.createLabResultSet(patientProfileId, payload)
+      if (!isCurrentSave()) return
       version.value = res.version
       id.value = res.id
       // Switch into edit mode so a second Save updates instead of duplicating.
       await router.replace({ path: `/clinical/patients/${patientProfileId}/labs/${res.id}` })
+      if (saveGeneration !== loadGeneration || routeResultSetId() !== res.id) return
     } else {
-      const res = await clinicalApi.updateLabResultSet(patientProfileId, id.value!, payload)
+      const res = await clinicalApi.updateLabResultSet(patientProfileId, saveRouteId, payload)
+      if (!isCurrentSave()) return
       version.value = res.version
     }
     saved.value = true
   } catch (e) {
+    if (!isCurrentSave()) return
     if (e instanceof ApiError && e.status === 409) {
       conflict.value = true
       message.value = t('errors.conflict')
@@ -180,12 +202,12 @@ async function save() {
     }
     capture(e)
   } finally {
-    saving.value = false
+    if (saveGeneration === loadGeneration) saving.value = false
   }
 }
 
 async function requestRemoval() {
-  if (catalogFailed.value) return
+  if (catalogFailed.value || invalidResultSetId.value || id.value === null || version.value === null) return
   clear()
   try {
     await clinicalApi.requestLabRemoval(patientProfileId, id.value!, version.value!, removalReason.value)
@@ -204,7 +226,11 @@ async function requestRemoval() {
     <template v-else>
       <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
       <p v-if="catalogFailed && !message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ t('errors.request_failed') }}</p>
-      <template v-if="initializationFailed">
+      <p v-if="invalidResultSetId" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ t('errors.invalid_result_set_id') }}</p>
+      <template v-if="invalidResultSetId">
+        <!-- Keep malformed routes out of create mode. -->
+      </template>
+      <template v-else-if="initializationFailed">
         <button data-testid="reload" class="mt-2 rounded border px-3 py-1 text-sm" @click="reload">
           {{ t('labs.reload') }}
         </button>
