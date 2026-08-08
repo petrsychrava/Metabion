@@ -22,5 +22,6 @@ public record ClinicalPatientOverviewResponse(
         Instant latestKetoneMeasuredAt,
         DietAdherenceLevel latestAdherenceLevel,
         LocalDate lastActivityDate,
-        long pendingOnboardingCount) {
+        long pendingOnboardingCount,
+        boolean stale) {
 }

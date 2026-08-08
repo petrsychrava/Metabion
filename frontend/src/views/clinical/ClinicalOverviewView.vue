@@ -14,16 +14,8 @@ const router = useRouter()
 const rows = ref<ClinicalPatientOverview[]>([])
 const loading = ref(true)
 
-function iso(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-// Logging is daily; anything quieter than 2 days is stale.
-function isStale(lastActivityDate: string | null): boolean {
-  if (lastActivityDate === null) return true
-  const cutoff = new Date()
-  cutoff.setDate(cutoff.getDate() - 2)
-  return lastActivityDate < iso(cutoff)
+function isStale(row: ClinicalPatientOverview): boolean {
+  return row.stale
 }
 
 const SEVERITY_RANK: Record<RedFlagSeverity, number> = {
@@ -39,7 +31,7 @@ const FLARE_RANK: Partial<Record<FlareState, number>> = {
 function rank(row: ClinicalPatientOverview): number {
   if (row.highestRedFlagSeverity) return SEVERITY_RANK[row.highestRedFlagSeverity]
   if (row.latestFlareState && row.latestFlareState !== 'NO_FLARE') return FLARE_RANK[row.latestFlareState] ?? 5
-  if (isStale(row.lastActivityDate)) return 6
+  if (isStale(row)) return 6
   return 7
 }
 
@@ -119,7 +111,7 @@ onMounted(async () => {
             </td>
             <td class="p-2">
               {{ row.lastActivityDate ?? t('clinical.noValue') }}
-              <span v-if="isStale(row.lastActivityDate)"
+              <span v-if="isStale(row)"
                     class="ml-1 rounded bg-amber-100 px-2 py-0.5 text-amber-800 dark:bg-amber-950 dark:text-amber-200">
                 {{ t('clinical.stale') }}
               </span>

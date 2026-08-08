@@ -13,7 +13,8 @@ import com.metabion.domain.RoleName;
 import com.metabion.domain.StaffProfile;
 import com.metabion.domain.SymptomCheckIn;
 import com.metabion.domain.User;
-import com.metabion.dto.PatientOptionResponse;
+import com.metabion.dto.ClinicalOverviewPatientTarget;
+import com.metabion.dto.ClinicalPatientOverviewResponse;
 import com.metabion.dto.redflag.ClinicalRedFlagEventResponse;
 import com.metabion.dto.redflag.ClinicalRedFlagSnapshotResponse;
 import com.metabion.repository.DailyDietLogRepository;
@@ -34,8 +35,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -61,7 +64,8 @@ class ClinicalOverviewServiceTest {
 
     private ClinicalOverviewService service() {
         return new ClinicalOverviewService(users, staffProfiles, patientProfiles,
-                symptomCheckIns, dietLogs, measurements, onboardingSubmissions, redFlags);
+                symptomCheckIns, dietLogs, measurements, onboardingSubmissions, redFlags,
+                Clock.fixed(Instant.parse("2026-08-02T23:30:00Z"), ZoneOffset.UTC));
     }
 
     @Test
@@ -71,8 +75,8 @@ class ClinicalOverviewServiceTest {
         staff.setId(20L);
         when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(doctor));
         when(staffProfiles.findByUserId(doctor.getId())).thenReturn(Optional.of(staff));
-        when(patientProfiles.findAccessiblePatientOptionsForStaff(20L))
-                .thenReturn(List.of(new PatientOptionResponse(41L, "patient@example.com")));
+        when(patientProfiles.findAccessibleClinicalOverviewPatientsForStaff(20L))
+                .thenReturn(List.of(new ClinicalOverviewPatientTarget(41L, "patient@example.com", "Europe/Prague")));
 
         when(redFlags.currentForClinicalPatient(any(), eq(41L))).thenReturn(
                 new ClinicalRedFlagSnapshotResponse(RedFlagSeverity.URGENT_REVIEW, List.of(
@@ -123,6 +127,35 @@ class ClinicalOverviewServiceTest {
         // last activity = max(diet log 08-03, check-in 08-02)
         assertThat(row.lastActivityDate()).isEqualTo(LocalDate.of(2026, 8, 3));
         assertThat(row.pendingOnboardingCount()).isEqualTo(2L);
+        assertThat(row.stale()).isFalse();
+    }
+
+    @Test
+    void staleFlagUsesThePatientTimezone() {
+        var doctor = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var staff = new StaffProfile(doctor);
+        staff.setId(20L);
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(doctor));
+        when(staffProfiles.findByUserId(doctor.getId())).thenReturn(Optional.of(staff));
+        when(patientProfiles.findAccessibleClinicalOverviewPatientsForStaff(20L)).thenReturn(List.of(
+                new ClinicalOverviewPatientTarget(41L, "utc@example.com", "UTC"),
+                new ClinicalOverviewPatientTarget(42L, "kiritimati@example.com", "Pacific/Kiritimati")));
+        when(redFlags.currentForClinicalPatient(any(), any())).thenReturn(
+                new ClinicalRedFlagSnapshotResponse(null, List.of()));
+        var checkIn = mock(SymptomCheckIn.class);
+        when(checkIn.getCheckInDate()).thenReturn(LocalDate.of(2026, 7, 31));
+        when(symptomCheckIns.findFirstByPatientProfileIdOrderByCheckInDateDesc(any()))
+                .thenReturn(Optional.of(checkIn));
+        when(dietLogs.findFirstByPatientProfileIdOrderByLogDateDesc(any())).thenReturn(Optional.empty());
+        when(measurements.findFirstByPatientProfileIdAndMeasurementTypeOrderByMeasuredAtDesc(any(), eq(MeasurementType.KETONE)))
+                .thenReturn(Optional.empty());
+        when(onboardingSubmissions.countByPatientProfileIdAndReviewStatus(any(), eq(OnboardingReviewStatus.PENDING_REVIEW)))
+                .thenReturn(0L);
+
+        var rows = service().overview(auth("doctor@example.com"));
+
+        assertThat(rows).extracting(ClinicalPatientOverviewResponse::stale)
+                .containsExactly(false, true);
     }
 
     @Test
@@ -135,7 +168,7 @@ class ClinicalOverviewServiceTest {
         staff.setId(10L);
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
         when(staffProfiles.findByUserId(admin.getId())).thenReturn(Optional.of(staff));
-        when(patientProfiles.findAccessiblePatientOptionsForStaff(10L)).thenReturn(List.of());
+        when(patientProfiles.findAccessibleClinicalOverviewPatientsForStaff(10L)).thenReturn(List.of());
 
         assertThat(service().overview(auth("admin@example.com"))).isEmpty();
         // Deliberate: no admin bypass on the overview aggregate.

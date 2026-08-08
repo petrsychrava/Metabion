@@ -82,7 +82,7 @@ class ClinicalOverviewControllerTest {
                         41L, "patient@example.com", 2, RedFlagSeverity.URGENT_REVIEW,
                         FlareState.SUSPECTED_FLARE, new BigDecimal("7"), LocalDate.of(2026, 8, 2),
                         new BigDecimal("1.8"), MeasurementUnit.MMOL_L, Instant.parse("2026-08-03T06:30:00Z"),
-                        DietAdherenceLevel.MOSTLY, LocalDate.of(2026, 8, 3), 1L)));
+                        DietAdherenceLevel.MOSTLY, LocalDate.of(2026, 8, 3), 1L, false)));
 
         mvc.perform(get("/api/clinical/overview")
                         .with(user("doctor@example.com").roles(RoleName.PHYSICIAN.name())))
@@ -93,7 +93,8 @@ class ClinicalOverviewControllerTest {
                 .andExpect(jsonPath("$[0].highestRedFlagSeverity").value("URGENT_REVIEW"))
                 .andExpect(jsonPath("$[0].latestFlareState").value("SUSPECTED_FLARE"))
                 .andExpect(jsonPath("$[0].latestKetoneValue").value(1.8))
-                .andExpect(jsonPath("$[0].pendingOnboardingCount").value(1));
+                .andExpect(jsonPath("$[0].pendingOnboardingCount").value(1))
+                .andExpect(jsonPath("$[0].stale").value(false));
     }
 
     @Test

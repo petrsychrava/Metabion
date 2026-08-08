@@ -401,6 +401,7 @@ export interface ClinicalPatientOverview {
   latestAdherenceLevel: DietAdherenceLevel | null
   lastActivityDate: string | null
   pendingOnboardingCount: number
+  stale: boolean
 }
 
 export interface ClinicalDailyCheckInSummary {

@@ -4,8 +4,8 @@ import com.metabion.domain.MeasurementType;
 import com.metabion.domain.OnboardingReviewStatus;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
+import com.metabion.dto.ClinicalOverviewPatientTarget;
 import com.metabion.dto.ClinicalPatientOverviewResponse;
-import com.metabion.dto.PatientOptionResponse;
 import com.metabion.repository.DailyDietLogRepository;
 import com.metabion.repository.DailyMeasurementEntryRepository;
 import com.metabion.repository.OnboardingSubmissionRepository;
@@ -20,7 +20,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
+import java.time.DateTimeException;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 
 @Service
@@ -35,6 +38,7 @@ public class ClinicalOverviewService {
     private final DailyMeasurementEntryRepository measurements;
     private final OnboardingSubmissionRepository onboardingSubmissions;
     private final RedFlagEventQueryService redFlags;
+    private final Clock clock;
 
     public ClinicalOverviewService(UserRepository users,
                                    StaffProfileRepository staffProfiles,
@@ -43,7 +47,8 @@ public class ClinicalOverviewService {
                                    DailyDietLogRepository dietLogs,
                                    DailyMeasurementEntryRepository measurements,
                                    OnboardingSubmissionRepository onboardingSubmissions,
-                                   RedFlagEventQueryService redFlags) {
+                                   RedFlagEventQueryService redFlags,
+                                   Clock clock) {
         this.users = users;
         this.staffProfiles = staffProfiles;
         this.patientProfiles = patientProfiles;
@@ -52,6 +57,7 @@ public class ClinicalOverviewService {
         this.measurements = measurements;
         this.onboardingSubmissions = onboardingSubmissions;
         this.redFlags = redFlags;
+        this.clock = clock;
     }
 
     public List<ClinicalPatientOverviewResponse> overview(Authentication authentication) {
@@ -63,7 +69,7 @@ public class ClinicalOverviewService {
         // Monitored patients only — the admin access bypass deliberately does not apply
         // here: the overview is a personal workload view for every role.
         return staffProfiles.findByUserId(user.getId())
-                .map(staff -> patientProfiles.findAccessiblePatientOptionsForStaff(staff.getId()))
+                .map(staff -> patientProfiles.findAccessibleClinicalOverviewPatientsForStaff(staff.getId()))
                 .orElseGet(List::of)
                 .stream()
                 .map(patient -> rowFor(authentication, patient))
@@ -71,7 +77,7 @@ public class ClinicalOverviewService {
     }
 
     private ClinicalPatientOverviewResponse rowFor(Authentication authentication,
-                                                   PatientOptionResponse patient) {
+                                                   ClinicalOverviewPatientTarget patient) {
         Long id = patient.id();
         var redFlagSnapshot = redFlags.currentForClinicalPatient(authentication, id);
         var latestCheckIn = symptomCheckIns.findFirstByPatientProfileIdOrderByCheckInDateDesc(id).orElse(null);
@@ -81,6 +87,8 @@ public class ClinicalOverviewService {
                 .orElse(null);
         long pending = onboardingSubmissions.countByPatientProfileIdAndReviewStatus(
                 id, OnboardingReviewStatus.PENDING_REVIEW);
+        var lastActivity = lastActivity(latestCheckIn == null ? null : latestCheckIn.getCheckInDate(),
+                latestLog == null ? null : latestLog.getLogDate());
         return new ClinicalPatientOverviewResponse(
                 id,
                 patient.email(),
@@ -93,9 +101,9 @@ public class ClinicalOverviewService {
                 latestKetone == null ? null : latestKetone.getUnit(),
                 latestKetone == null ? null : latestKetone.getMeasuredAt(),
                 latestLog == null ? null : latestLog.getAdherenceLevel(),
-                lastActivity(latestCheckIn == null ? null : latestCheckIn.getCheckInDate(),
-                        latestLog == null ? null : latestLog.getLogDate()),
-                pending);
+                lastActivity,
+                pending,
+                isStale(lastActivity, patient.timezone()));
     }
 
     private LocalDate lastActivity(LocalDate checkInDate, LocalDate logDate) {
@@ -106,6 +114,25 @@ public class ClinicalOverviewService {
             return checkInDate;
         }
         return checkInDate.isAfter(logDate) ? checkInDate : logDate;
+    }
+
+    private boolean isStale(LocalDate lastActivity, String timezone) {
+        if (lastActivity == null) {
+            return true;
+        }
+        var cutoff = LocalDate.now(clock.withZone(zoneFor(timezone))).minusDays(2);
+        return lastActivity.isBefore(cutoff);
+    }
+
+    private ZoneId zoneFor(String timezone) {
+        if (timezone == null || timezone.isBlank()) {
+            return ZoneId.systemDefault();
+        }
+        try {
+            return ZoneId.of(timezone.trim());
+        } catch (DateTimeException ignored) {
+            return ZoneId.systemDefault();
+        }
     }
 
     private User currentUser(Authentication authentication) {

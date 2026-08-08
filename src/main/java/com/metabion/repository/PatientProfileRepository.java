@@ -1,6 +1,7 @@
 package com.metabion.repository;
 
 import com.metabion.domain.PatientProfile;
+import com.metabion.dto.ClinicalOverviewPatientTarget;
 import com.metabion.dto.PatientOptionResponse;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -118,6 +119,33 @@ public interface PatientProfileRepository extends JpaRepository<PatientProfile, 
             order by user.email asc, profile.id asc
             """)
     List<PatientOptionResponse> findAccessiblePatientOptionsForStaff(@Param("staffProfileId") Long staffProfileId);
+
+    @Query("""
+            select distinct new com.metabion.dto.ClinicalOverviewPatientTarget(profile.id, user.email, profile.timezone)
+            from PatientProfile profile
+            join profile.user user
+            where user.enabled = true
+              and (exists (
+                select assignment.id
+                from PatientExpertAssignment assignment
+                where assignment.patientProfile = profile
+                  and assignment.staffProfile.id = :staffProfileId
+                  and assignment.endedAt is null
+            )
+               or exists (
+                select membership.id
+                from PatientCohortMembership membership
+                join CohortStaffAssignment assignment on assignment.cohort = membership.cohort
+                where membership.patientProfile = profile
+                  and assignment.staffProfile.id = :staffProfileId
+                  and membership.endedAt is null
+                  and assignment.endedAt is null
+                  and assignment.cohort.archivedAt is null
+            ))
+            order by user.email asc, profile.id asc
+            """)
+    List<ClinicalOverviewPatientTarget> findAccessibleClinicalOverviewPatientsForStaff(
+            @Param("staffProfileId") Long staffProfileId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select profile from PatientProfile profile where profile.id = :id")

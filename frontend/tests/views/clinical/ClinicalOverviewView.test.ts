@@ -31,6 +31,7 @@ const rows = [
     latestAdherenceLevel: 'FULL',
     lastActivityDate: isoDaysAgo(0),
     pendingOnboardingCount: 0,
+    stale: false,
   },
   {
     patientProfileId: 2,
@@ -46,6 +47,7 @@ const rows = [
     latestAdherenceLevel: 'PARTIAL',
     lastActivityDate: isoDaysAgo(1),
     pendingOnboardingCount: 1,
+    stale: false,
   },
   {
     patientProfileId: 3,
@@ -61,6 +63,7 @@ const rows = [
     latestAdherenceLevel: 'MOSTLY',
     lastActivityDate: isoDaysAgo(9),
     pendingOnboardingCount: 0,
+    stale: true,
   },
 ]
 
@@ -114,6 +117,18 @@ describe('ClinicalOverviewView', () => {
     await wrapper.find('[data-testid="overview-row"][data-email="flagged@example.com"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/clinical/patients/2/check-ins')
+  })
+
+  it('uses the server-provided stale flag instead of the browser date', async () => {
+    const row = { ...rows[0], patientProfileId: 4, patientEmail: 'timezone@example.com', stale: true }
+    server.use(http.get('/api/clinical/overview', () => HttpResponse.json([row])))
+    const router = makeRouter()
+    await router.push('/clinical')
+    const wrapper = mount(ClinicalOverviewView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    const rendered = wrapper.find('[data-testid="overview-row"][data-email="timezone@example.com"]')
+    expect(rendered.text()).toContain(en.clinical.stale)
   })
 
   it('shows the empty state with a link to the review queue', async () => {
