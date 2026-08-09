@@ -18,6 +18,8 @@
 - Preserve session-based authentication, CSRF behavior, bearer-token behavior, OAuth behavior, and all patient/staff access rules.
 - Do not modify unrelated pre-existing worktree changes in .idea, .superpowers, .codex, or var.
 - Do not migrate or copy existing PostgreSQL patient data into Oracle.
+- Oracle 26ai reserves `RESOURCE`. Preserve the existing logical column name by using the lowercase quoted identifier `"resource"` only in the Oracle V15/V17 DDL and in the three affected JPA mappings; do not rename the column and do not enable global identifier quoting. See the [Oracle reserved-word reference](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Oracle-SQL-Reserved-Words.html).
+- Use Oracle 26ai `CREATE ASSERTION ... DEFERRABLE INITIALLY DEFERRED` for the V4 role/profile integrity rules. Do not approximate the PostgreSQL commit-deferred behavior with an after-statement compound trigger. See the [Oracle assertion reference](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/create-assertion.html).
 - Every implementation task writes its focused test first, observes the expected failure, implements the minimum change, and reruns the focused test before moving on.
 
 ---
@@ -47,6 +49,9 @@ Persistence code:
 - src/main/java/com/metabion/domain/LabResultAuditEvent.java
 - src/main/java/com/metabion/domain/RedFlagTriggerEvent.java
 - src/main/java/com/metabion/domain/User.java
+- src/main/java/com/metabion/domain/PatientAccessToken.java
+- src/main/java/com/metabion/domain/OAuthAuthorizationCode.java
+- src/main/java/com/metabion/domain/OAuthRefreshToken.java
 
 Flyway resources:
 
@@ -360,6 +365,8 @@ Expected: PASS against PostgreSQL Testcontainers, confirming the relocated histo
 - Oracle resources contain V1 through V21 with the same logical version and description inventory as PostgreSQL.
 - Oracle SQL contains no PostgreSQL-only BIGSERIAL, BYTEA, TIMESTAMPTZ, NOW(), ON CONFLICT, CREATE CONSTRAINT TRIGGER, or partial-index WHERE clause.
 - Oracle SQL preserves all table names, columns, foreign keys, unique constraints, seed rows, and business invariants of the PostgreSQL history.
+- Oracle V15 and V17 preserve the logical `resource` column name as the lowercase quoted identifier `"resource"`; every DDL and DML reference to that column is quoted.
+- Oracle V4 preserves commit-deferred role/profile integrity with two `CREATE ASSERTION` objects declared `DEFERRABLE INITIALLY DEFERRED`; the profile-insert PL/SQL triggers remain statement-level guards.
 
 - [ ] **Step 1: Extend the migration-layout test before adding Oracle SQL**
 
@@ -373,6 +380,10 @@ Create OracleMigrationContentTest with these checks:
     no Oracle migration contains ON CONFLICT
     no Oracle migration contains CREATE CONSTRAINT TRIGGER
     no Oracle migration creates a partial index using a trailing WHERE clause
+    V15 and V17 contain no unquoted resource identifier and use "resource" for every resource column reference
+    V4 contains the patient-profile and staff-profile assertions with DEFERRABLE INITIALLY DEFERRED
+    V4 assertion expressions contain no ANSI JOIN syntax
+    V4 does not contain a compound trigger for user_roles role-integrity enforcement
 
 The content test must inspect the actual classpath SQL resources and report the migration filename in any failure.
 
@@ -391,10 +402,44 @@ Create these Oracle migrations:
 - V1 users: use NUMBER(19) identity for the user ID, BOOLEAN for enabled and MFA flags, BLOB for the encrypted MFA secret, and TIMESTAMP WITH TIME ZONE for timestamps.
 - V2 verification/reset tokens: replace BIGSERIAL and timezone defaults while preserving token hash uniqueness and user foreign keys.
 - V3 Spring Session: use NUMBER-compatible timestamp columns and BLOB for SPRING_SESSION_ATTRIBUTES.ATTRIBUTE_BYTES. Preserve uppercase table/index names required by Spring Session JDBC.
-- V4 RBAC/assignments: translate all IDs to identity/NUMBER, booleans to BOOLEAN, use function-based unique indexes for active rows, and rewrite role-integrity functions and the deferrable constraint-trigger behavior as Oracle PL/SQL/declarative constraints.
+- V4 RBAC/assignments: translate all IDs to identity/NUMBER, booleans to BOOLEAN, and use function-based unique indexes for active rows. Keep the Oracle `BEFORE INSERT OR UPDATE OF user_id` PL/SQL triggers that reject patient/staff profiles without a matching current role. Replace the PostgreSQL `protect_profile_role_integrity` function and deferred constraint trigger with these two Oracle 26ai assertions:
+
+      CREATE ASSERTION assert_patient_profile_has_role
+      CHECK (
+          NOT EXISTS (
+              SELECT 1
+              FROM patient_profiles pp
+              WHERE NOT EXISTS (
+                  SELECT 1
+                  FROM user_roles ur, roles r
+                  WHERE r.code = ur.role
+                    AND ur.user_id = pp.user_id
+                    AND r.patient_profile = TRUE
+              )
+          )
+      )
+      DEFERRABLE INITIALLY DEFERRED;
+
+      CREATE ASSERTION assert_staff_profile_has_role
+      CHECK (
+          NOT EXISTS (
+              SELECT 1
+              FROM staff_profiles sp
+              WHERE NOT EXISTS (
+                  SELECT 1
+                  FROM user_roles ur, roles r
+                  WHERE r.code = ur.role
+                    AND ur.user_id = sp.user_id
+                    AND r.clinical_staff = TRUE
+              )
+          )
+      )
+      DEFERRABLE INITIALLY DEFERRED;
+
+  These assertions must be created after `roles`, `user_roles`, `patient_profiles`, and `staff_profiles`, and they must cover both role deletion and role replacement within one transaction. Oracle assertion expressions prohibit ANSI join syntax, so keep their table relationships in comma-separated `FROM` clauses with predicates in `WHERE`. Do not create an `AFTER STATEMENT` or `COMPOUND TRIGGER` replacement for this invariant: Oracle 26ai assertions are the required commit-deferred mechanism.
 - V5 staff invitations: translate the clinical-role trigger to PL/SQL and replace the pending-email partial unique index with a CASE-based function index.
 
-For all trigger translations, use Oracle trigger syntax and keep the checks transactional. Do not use quoted identifiers to hide reserved-word conflicts.
+For trigger translations other than the V4 role/profile assertions, use Oracle trigger syntax and keep the checks transactional. The only permitted quoted identifier is lowercase `"resource"`, required because `RESOURCE` is an Oracle 26ai reserved word; do not quote other identifiers, rename the column, or enable global identifier quoting.
 
 - [ ] **Step 4: Translate V6 through V10**
 
@@ -415,9 +460,9 @@ Create these Oracle migrations:
 - V12 meal-deviation link: preserve the ALTER TABLE and foreign-key behavior.
 - V13 symptom tracking: use CLOB only where the PostgreSQL schema uses text, BOOLEAN for required/active flags, and Oracle-compatible seed timestamp expressions.
 - V14 patient access tokens: preserve token hash uniqueness, scope rows, and timestamp semantics.
-- V15 MCP OAuth authorization: preserve resource/client fields, token hash constraints, and authorization-code expiry/consumption behavior.
+- V15 MCP OAuth authorization: preserve resource/client fields, token hash constraints, and authorization-code expiry/consumption behavior. Declare and reference the reserved column as lowercase `"resource"` in the `ALTER TABLE`, backfill `UPDATE`, `MODIFY`, table definition, and all predicates.
 - V16 dynamic client registration: preserve client metadata lengths, redirect URI uniqueness, and identity keys.
-- V17 OAuth client capabilities: preserve the grant/scope seed copy operations and refresh-token family relationships.
+- V17 OAuth client capabilities: preserve the grant/scope seed copy operations and refresh-token family relationships. Declare the refresh-token resource column as lowercase `"resource"`.
 - V18 food-category removal: translate the existing ALTER TABLE operation without reintroducing the removed column or constraint.
 
 For all ISO seed timestamps, use TO_TIMESTAMP_TZ with an explicit format mask such as:
@@ -440,7 +485,7 @@ Run:
 
     ./gradlew test --tests com.metabion.config.DatabaseMigrationLayoutTest --tests com.metabion.config.OracleMigrationContentTest
 
-Expected: PASS with matching PostgreSQL and Oracle version/description inventories and no prohibited PostgreSQL syntax in Oracle files.
+Expected: PASS with matching PostgreSQL and Oracle version/description inventories, no prohibited PostgreSQL syntax in Oracle files, exact quoting for the reserved `resource` columns, and both deferred V4 assertions present.
 
 - [ ] **Step 8: Commit**
 
@@ -456,6 +501,9 @@ Expected: PASS with matching PostgreSQL and Oracle version/description inventori
 - Modify: src/main/java/com/metabion/domain/LabResultAuditEvent.java
 - Modify: src/main/java/com/metabion/domain/RedFlagTriggerEvent.java
 - Modify: src/main/java/com/metabion/domain/User.java
+- Modify: src/main/java/com/metabion/domain/PatientAccessToken.java
+- Modify: src/main/java/com/metabion/domain/OAuthAuthorizationCode.java
+- Modify: src/main/java/com/metabion/domain/OAuthRefreshToken.java
 - Create: src/test/java/com/metabion/domain/DatabasePortableMappingTest.java
 
 **Interfaces:**
@@ -465,6 +513,8 @@ Expected: PASS with matching PostgreSQL and Oracle version/description inventori
 - PostgreSQL validation continues to see TEXT and BYTEA.
 - Oracle validation sees CLOB and BLOB.
 - No affected entity retains a PostgreSQL-only columnDefinition value.
+- PatientAccessToken.resource, OAuthAuthorizationCode.resource, and OAuthRefreshToken.resource use the quoted JPA column name `"resource"` so Hibernate emits a quoted lowercase identifier on both databases. PostgreSQL migration files remain unchanged because their unquoted `resource` columns are lowercase.
+- Global Hibernate identifier quoting is not enabled; all other table and column mappings remain unquoted.
 
 - [ ] **Step 1: Write the failing mapping test**
 
@@ -479,13 +529,19 @@ Create DatabasePortableMappingTest using reflection and assert the exact JdbcTyp
 
 Also assert that these fields have no non-blank Column.columnDefinition value. Keep each field's existing nullable, length, name, and updatable settings.
 
+Add exact column-name assertions for the reserved resource mappings:
+
+    PatientAccessToken.resource -> Column.name() == "\"resource\""
+    OAuthAuthorizationCode.resource -> Column.name() == "\"resource\""
+    OAuthRefreshToken.resource -> Column.name() == "\"resource\""
+
 - [ ] **Step 2: Run the mapping test and confirm it fails**
 
 Run:
 
     ./gradlew test --tests com.metabion.domain.DatabasePortableMappingTest
 
-Expected: FAIL because the fields currently use PostgreSQL-specific TEXT column definitions or no explicit long-binary mapping.
+Expected: FAIL because the fields currently use PostgreSQL-specific TEXT column definitions or no explicit long-binary mapping, and the three resource mappings are currently unquoted.
 
 - [ ] **Step 3: Implement the portable Hibernate mappings**
 
@@ -496,6 +552,12 @@ Import org.hibernate.annotations.JdbcTypeCode and org.hibernate.type.SqlTypes. R
 Keep the surrounding @Column annotation without columnDefinition. Add the equivalent LONG32VARBINARY annotation to User.mfaSecretEncrypted and keep its existing column name.
 
 Do not use @Lob for these fields: Hibernate 7.2's PostgreSQL dialect maps CLOB/BLOB LOB APIs to oid, while LONG32VARCHAR/LONG32VARBINARY map to PostgreSQL text/bytea and Oracle CLOB/BLOB.
+
+For the three reserved resource fields, keep their existing `@Column` attributes and change only the name value to the JPA/Hibernate quoted form:
+
+    @Column(name = "\"resource\"", nullable = false, length = 255)
+
+Apply this to PatientAccessToken.resource, OAuthAuthorizationCode.resource, and OAuthRefreshToken.resource. The Oracle migrations must use the matching lowercase quoted identifier. Do not quote the enclosing tables, do not enable `hibernate.globally_quoted_identifiers`, and do not change the PostgreSQL migration history.
 
 - [ ] **Step 4: Run mapping and PostgreSQL validation tests**
 
@@ -508,7 +570,7 @@ Expected: PASS. The repository tests must still pass Hibernate ddl-auto=validate
 
 - [ ] **Step 5: Commit**
 
-    git add src/main/java/com/metabion/domain/Cohort.java src/main/java/com/metabion/domain/EducationLessonLocalization.java src/main/java/com/metabion/domain/LabResultAuditEvent.java src/main/java/com/metabion/domain/RedFlagTriggerEvent.java src/main/java/com/metabion/domain/User.java src/test/java/com/metabion/domain/DatabasePortableMappingTest.java
+    git add src/main/java/com/metabion/domain/Cohort.java src/main/java/com/metabion/domain/EducationLessonLocalization.java src/main/java/com/metabion/domain/LabResultAuditEvent.java src/main/java/com/metabion/domain/RedFlagTriggerEvent.java src/main/java/com/metabion/domain/User.java src/main/java/com/metabion/domain/PatientAccessToken.java src/main/java/com/metabion/domain/OAuthAuthorizationCode.java src/main/java/com/metabion/domain/OAuthRefreshToken.java src/test/java/com/metabion/domain/DatabasePortableMappingTest.java
     git commit -m "Use portable large text and binary mappings"
 
 ## Task 6: Add the Vendor-Specific Education Completion Adapter
@@ -651,8 +713,13 @@ Add a metadata test using JdbcTemplate:
     USER table ENABLED and MFA_ENABLED columns report BOOLEAN
     USER MFA_SECRET_ENCRYPTED reports BLOB
     EDUCATION_LESSON_LOCALIZATIONS BODY_MARKDOWN reports CLOB
+    PATIENT_ACCESS_TOKENS has a COLUMN_NAME of lowercase resource
+    OAUTH_AUTHORIZATION_CODES has a COLUMN_NAME of lowercase resource
+    OAUTH_REFRESH_TOKENS has a COLUMN_NAME of lowercase resource
+    USER_ASSERTIONS contains ASSERT_PATIENT_PROFILE_HAS_ROLE and ASSERT_STAFF_PROFILE_HAS_ROLE,
+    both with DEFERRABLE = DEFERRABLE and DEFERRED = DEFERRED
 
-Use Oracle's uppercase USER_TAB_COLUMNS view and uppercase table/column names in these assertions.
+Use Oracle's uppercase USER_TAB_COLUMNS and USER_ASSERTIONS views. Table names in USER_TAB_COLUMNS are uppercase because their identifiers are unquoted; the three reserved resource column values must be compared as lowercase `resource` because the DDL intentionally quotes that identifier.
 
 - [ ] **Step 2: Run the Oracle test without an environment and verify it is skipped**
 
@@ -672,6 +739,8 @@ When an Oracle 26ai test database is available, extend OracleDatabaseIT to:
 - verify one completion row exists
 - attempt duplicate active assignment data and assert the Oracle function-based unique index rejects it
 - attempt an invalid red-flag transition and assert the PL/SQL trigger rejects it
+- within a transaction, remove the only patient or clinical-staff role for a profile and assert the commit fails because the deferred V4 assertion is violated
+- within one transaction, replace a user's only clinical-staff role with another clinical-staff role and assert the commit succeeds, proving the assertion is deferred to transaction end rather than enforced after each statement
 
 Keep the test database disposable or use a dedicated schema. Do not call Flyway.clean automatically against a shared environment.
 
@@ -766,7 +835,8 @@ Coverage:
 - Vendor enum validation and adapter selection: Tasks 1, 2, and 6.
 - PostgreSQL migration preservation and Flyway path isolation: Task 3.
 - Oracle V1 through V21 schema support: Task 4.
-- PostgreSQL TEXT/BYTEA and Oracle CLOB/BLOB ORM compatibility: Task 5.
+- Oracle reserved `resource` identifier compatibility and PostgreSQL TEXT/BYTEA plus Oracle CLOB/BLOB ORM compatibility: Tasks 4 and 5.
+- Commit-deferred role/profile integrity on Oracle 26ai: Tasks 4 and 7.
 - Native ON CONFLICT replacement with Oracle MERGE: Task 6.
 - Oracle 26ai startup, Flyway, Hibernate validation, and representative behavior: Task 7.
 - Documentation and full regression/build evidence: Tasks 7 and 8.
@@ -778,4 +848,6 @@ Consistency:
 - The Oracle Flyway location is classpath:db/migration/oracle throughout.
 - The PostgreSQL Flyway location is classpath:db/migration/postgresql throughout.
 - The Oracle test environment variables are ORACLE_TEST_URL, ORACLE_TEST_USERNAME, and ORACLE_TEST_PASSWORD throughout.
+- The logical resource column remains named `resource`; Oracle V15/V17 and the three JPA mappings use lowercase quoted `"resource"`, while the PostgreSQL migration history remains unchanged.
+- Oracle V4 role/profile integrity uses `CREATE ASSERTION ... DEFERRABLE INITIALLY DEFERRED`; no after-statement compound trigger is used for that invariant.
 - No task depends on runtime database switching or data transfer.

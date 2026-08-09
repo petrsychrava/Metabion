@@ -150,9 +150,9 @@ CHECK (
         FROM patient_profiles pp
         WHERE NOT EXISTS (
             SELECT 1
-            FROM user_roles ur
-            JOIN roles r ON r.code = ur.role
-            WHERE ur.user_id = pp.user_id
+            FROM user_roles ur, roles r
+            WHERE r.code = ur.role
+              AND ur.user_id = pp.user_id
               AND r.patient_profile = TRUE
         )
     )
@@ -166,9 +166,9 @@ CHECK (
         FROM staff_profiles sp
         WHERE NOT EXISTS (
             SELECT 1
-            FROM user_roles ur
-            JOIN roles r ON r.code = ur.role
-            WHERE ur.user_id = sp.user_id
+            FROM user_roles ur, roles r
+            WHERE r.code = ur.role
+              AND ur.user_id = sp.user_id
               AND r.clinical_staff = TRUE
         )
     )

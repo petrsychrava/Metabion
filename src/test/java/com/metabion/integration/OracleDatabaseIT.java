@@ -21,6 +21,7 @@ import com.metabion.repository.StaffProfileRepository;
 import com.metabion.repository.UserRepository;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,8 +31,14 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -103,15 +110,15 @@ class OracleDatabaseIT {
         assertColumnExists("OAUTH_REFRESH_TOKENS", "resource");
 
         Map<String, Map<String, Object>> assertions = jdbcTemplate.queryForList("""
-                        SELECT constraint_name, deferrable, deferred
+                        SELECT assertion_name, deferrable, deferred
                         FROM user_assertions
-                        WHERE constraint_name IN (
+                        WHERE assertion_name IN (
                             'ASSERT_PATIENT_PROFILE_HAS_ROLE',
                             'ASSERT_STAFF_PROFILE_HAS_ROLE'
                         )
                         """).stream()
                 .collect(java.util.stream.Collectors.toMap(
-                        row -> (String) row.get("CONSTRAINT_NAME"),
+                        row -> (String) row.get("ASSERTION_NAME"),
                         row -> row));
 
         assertThat(assertions).containsKeys(
@@ -136,6 +143,33 @@ class OracleDatabaseIT {
         assertThat(completions.findCompletedLessonVersionIds(
                 fixture.patientProfileId(), java.util.List.of(fixture.lessonVersionId())))
                 .containsExactly(fixture.lessonVersionId());
+    }
+
+    @Test
+    @Timeout(value = 45, unit = TimeUnit.SECONDS)
+    void concurrentEducationCompletionInsertsReturnOneAndZero() throws Exception {
+        EducationFixture fixture = createEducationFixture();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        try {
+            Future<Integer> first = submitCompletion(executor, ready, start, fixture);
+            Future<Integer> second = submitCompletion(executor, ready, start, fixture);
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(List.of(
+                    first.get(30, TimeUnit.SECONDS),
+                    second.get(30, TimeUnit.SECONDS)).stream().sorted().toList())
+                    .containsExactly(0, 1);
+            assertThat(completions.findCompletedLessonVersionIds(
+                    fixture.patientProfileId(), List.of(fixture.lessonVersionId())))
+                    .containsExactly(fixture.lessonVersionId());
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
     }
 
     @Test
@@ -206,6 +240,21 @@ class OracleDatabaseIT {
                         FROM user_tab_columns
                         WHERE table_name = ? AND column_name = ?
                         """, Integer.class, tableName, columnName)).isEqualTo(1);
+    }
+
+    private Future<Integer> submitCompletion(
+            ExecutorService executor,
+            CountDownLatch ready,
+            CountDownLatch start,
+            EducationFixture fixture) {
+        return executor.submit(() -> {
+            ready.countDown();
+            if (!start.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Timed out waiting to start concurrent completion insert");
+            }
+            return transactionTemplate.execute(status -> completionInsertions.insertCompletionIfAbsent(
+                    fixture.patientProfileId(), fixture.moduleVersionId(), fixture.lessonVersionId()));
+        });
     }
 
     private EducationFixture createEducationFixture() {

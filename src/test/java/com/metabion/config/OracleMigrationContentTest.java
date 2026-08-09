@@ -7,6 +7,7 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.regex.MatchResult;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,6 +42,10 @@ class OracleMigrationContentTest {
             "\\bCREATE(?:\\s+OR\\s+REPLACE)?\\s+TRIGGER\\b"
                     + ".*?\\bON\\s+user_roles\\b.*?\\bCOMPOUND\\s+TRIGGER\\b",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern CREATE_ASSERTION = Pattern.compile(
+            "\\bCREATE\\s+ASSERTION\\b.*?;",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern ANSI_JOIN = token("JOIN");
 
     private final PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
 
@@ -103,6 +108,22 @@ class OracleMigrationContentTest {
         assertThat(USER_ROLES_COMPOUND_TRIGGER.matcher(sql).find())
                 .as("Oracle migration %s must not use a user_roles compound trigger", migration.getFilename())
                 .isFalse();
+    }
+
+    @Test
+    void rbacAssertionsDoNotUseAnsiJoinSyntax() throws IOException {
+        Resource migration = oracleMigration("V4__rbac_assignment_model.sql");
+        String sql = migration.getContentAsString(StandardCharsets.UTF_8);
+        var assertions = CREATE_ASSERTION.matcher(sql).results()
+                .map(MatchResult::group)
+                .toList();
+
+        assertThat(assertions)
+                .as("Oracle migration %s assertions", migration.getFilename())
+                .hasSize(2)
+                .allSatisfy(assertion -> assertThat(ANSI_JOIN.matcher(assertion).find())
+                        .as("Oracle migration %s assertion must not use ANSI JOIN", migration.getFilename())
+                        .isFalse());
     }
 
     private void assertNoMigrationContains(Pattern prohibitedSyntax, String description) throws IOException {

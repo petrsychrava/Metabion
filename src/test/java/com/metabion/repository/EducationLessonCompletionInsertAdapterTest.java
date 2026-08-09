@@ -2,10 +2,13 @@ package com.metabion.repository;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -36,6 +39,29 @@ class EducationLessonCompletionInsertAdapterTest {
 
         assertThat(result).isZero();
         assertStatementAndParameters(jdbcTemplate, "MERGE");
+    }
+
+    @Test
+    void oracleDuplicateKeyDuringConcurrentMergeReturnsZero() {
+        var jdbcTemplate = mock(NamedParameterJdbcTemplate.class);
+        when(jdbcTemplate.update(anyString(), any(MapSqlParameterSource.class)))
+                .thenThrow(new DuplicateKeyException("concurrent completion"));
+
+        var result = new OracleEducationLessonCompletionInsertAdapter(jdbcTemplate)
+                .insertCompletionIfAbsent(11L, 60L, 100L);
+
+        assertThat(result).isZero();
+    }
+
+    @Test
+    void oracleRethrowsUnrelatedDataAccessException() {
+        var jdbcTemplate = mock(NamedParameterJdbcTemplate.class);
+        var failure = new DataAccessResourceFailureException("database unavailable");
+        when(jdbcTemplate.update(anyString(), any(MapSqlParameterSource.class))).thenThrow(failure);
+
+        assertThatThrownBy(() -> new OracleEducationLessonCompletionInsertAdapter(jdbcTemplate)
+                .insertCompletionIfAbsent(11L, 60L, 100L))
+                .isSameAs(failure);
     }
 
     private void assertStatementAndParameters(NamedParameterJdbcTemplate jdbcTemplate, String sqlFragment) {
