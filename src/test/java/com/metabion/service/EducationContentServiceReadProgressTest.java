@@ -13,6 +13,7 @@ import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.EducationLessonUpsertRequest;
+import com.metabion.repository.EducationLessonCompletionInsertPort;
 import com.metabion.repository.EducationLessonCompletionRepository;
 import com.metabion.repository.EducationLessonRepository;
 import com.metabion.repository.EducationModuleRepository;
@@ -63,13 +64,17 @@ class EducationContentServiceReadProgressTest {
     private EducationLessonCompletionRepository completions;
 
     @Mock
+    private EducationLessonCompletionInsertPort completionInsertions;
+
+    @Mock
     private EducationMarkdownService markdown;
 
     private EducationContentService service;
 
     @BeforeEach
     void setUp() {
-        service = new EducationContentService(users, patientProfiles, modules, versions, lessons, completions, markdown);
+        service = new EducationContentService(
+                users, patientProfiles, modules, versions, lessons, completions, completionInsertions, markdown);
     }
 
     @Test
@@ -108,12 +113,10 @@ class EducationContentServiceReadProgressTest {
         when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
         when(patientProfiles.findByUserId(3L)).thenReturn(Optional.of(patient));
         when(modules.findBySlug("nutrition")).thenReturn(Optional.of(module));
-        when(completions.insertCompletionIfAbsent(11L, 60L, 100L)).thenReturn(1);
-
         service.completeLesson(auth("patient@example.com"), "nutrition", "intro");
         service.uncompleteLesson(auth("patient@example.com"), "nutrition", "intro");
 
-        verify(completions).insertCompletionIfAbsent(11L, 60L, 100L);
+        verify(completionInsertions).insertCompletionIfAbsent(11L, 60L, 100L);
         verify(completions).deleteByPatientProfileIdAndLessonVersionId(11L, 100L);
     }
 
@@ -125,11 +128,9 @@ class EducationContentServiceReadProgressTest {
         when(users.findByEmail("patient@example.com")).thenReturn(Optional.of(patientUser));
         when(patientProfiles.findByUserId(12L)).thenReturn(Optional.of(patient));
         when(modules.findBySlug("nutrition")).thenReturn(Optional.of(module));
-        when(completions.insertCompletionIfAbsent(13L, 60L, 100L)).thenReturn(0);
-
         service.completeLesson(auth("patient@example.com"), "nutrition", "intro");
 
-        verify(completions).insertCompletionIfAbsent(13L, 60L, 100L);
+        verify(completionInsertions).insertCompletionIfAbsent(13L, 60L, 100L);
     }
 
     @Test
@@ -140,7 +141,7 @@ class EducationContentServiceReadProgressTest {
         assertThatThrownBy(() -> service.completeLesson(auth("physician@example.com"), "nutrition", "intro"))
                 .isInstanceOfSatisfying(ResponseStatusException.class, ex ->
                         assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
-        verify(completions, never()).insertCompletionIfAbsent(any(), any(), any());
+        verify(completionInsertions, never()).insertCompletionIfAbsent(any(), any(), any());
     }
 
     @Test
