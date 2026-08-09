@@ -34,7 +34,7 @@ CREATE TABLE oauth_refresh_tokens (
     client_source VARCHAR2(32) NOT NULL,
     client_type VARCHAR2(40) NOT NULL,
     display_label VARCHAR2(120) NOT NULL,
-    resource VARCHAR2(255) NOT NULL,
+    "resource" VARCHAR2(255) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     consumed_at TIMESTAMP WITH TIME ZONE,

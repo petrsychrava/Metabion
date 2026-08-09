@@ -143,73 +143,34 @@ BEGIN
 END;
 /
 
-CREATE OR REPLACE TRIGGER trg_user_roles_protect_profile_role_integrity
-    FOR DELETE OR UPDATE ON user_roles
-    COMPOUND TRIGGER
+CREATE ASSERTION assert_patient_profile_has_role
+CHECK (
+    NOT EXISTS (
+        SELECT 1
+        FROM patient_profiles pp
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM user_roles ur
+            JOIN roles r ON r.code = ur.role
+            WHERE ur.user_id = pp.user_id
+              AND r.patient_profile = TRUE
+        )
+    )
+)
+DEFERRABLE INITIALLY DEFERRED;
 
-    TYPE affected_user_map IS TABLE OF NUMBER(19) INDEX BY VARCHAR2(64);
-    affected_users affected_user_map;
-
-    AFTER EACH ROW IS
-    BEGIN
-        affected_users(TO_CHAR(:OLD.user_id)) := :OLD.user_id;
-    END AFTER EACH ROW;
-
-    AFTER STATEMENT IS
-        user_key              VARCHAR2(64);
-        user_exists           NUMBER(10);
-        patient_profile_count NUMBER(10);
-        patient_role_count    NUMBER(10);
-        staff_profile_count   NUMBER(10);
-        clinical_role_count   NUMBER(10);
-        affected_user_id      NUMBER(19);
-    BEGIN
-        user_key := affected_users.FIRST;
-        WHILE user_key IS NOT NULL LOOP
-            affected_user_id := affected_users(user_key);
-
-            SELECT COUNT(*) INTO user_exists
-            FROM users
-            WHERE id = affected_user_id;
-
-            IF user_exists > 0 THEN
-                SELECT COUNT(*) INTO patient_profile_count
-                FROM patient_profiles
-                WHERE user_id = affected_user_id;
-
-                IF patient_profile_count > 0 THEN
-                    SELECT COUNT(*) INTO patient_role_count
-                    FROM user_roles ur
-                    JOIN roles r ON r.code = ur.role
-                    WHERE ur.user_id = affected_user_id
-                      AND r.patient_profile = TRUE;
-
-                    IF patient_role_count = 0 THEN
-                        RAISE_APPLICATION_ERROR(-20003,
-                            'Cannot remove PATIENT role while patient profile exists');
-                    END IF;
-                END IF;
-
-                SELECT COUNT(*) INTO staff_profile_count
-                FROM staff_profiles
-                WHERE user_id = affected_user_id;
-
-                IF staff_profile_count > 0 THEN
-                    SELECT COUNT(*) INTO clinical_role_count
-                    FROM user_roles ur
-                    JOIN roles r ON r.code = ur.role
-                    WHERE ur.user_id = affected_user_id
-                      AND r.clinical_staff = TRUE;
-
-                    IF clinical_role_count = 0 THEN
-                        RAISE_APPLICATION_ERROR(-20004,
-                            'Cannot remove clinical staff role while staff profile exists');
-                    END IF;
-                END IF;
-            END IF;
-
-            user_key := affected_users.NEXT(user_key);
-        END LOOP;
-    END AFTER STATEMENT;
-END;
-/
+CREATE ASSERTION assert_staff_profile_has_role
+CHECK (
+    NOT EXISTS (
+        SELECT 1
+        FROM staff_profiles sp
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM user_roles ur
+            JOIN roles r ON r.code = ur.role
+            WHERE ur.user_id = sp.user_id
+              AND r.clinical_staff = TRUE
+        )
+    )
+)
+DEFERRABLE INITIALLY DEFERRED;

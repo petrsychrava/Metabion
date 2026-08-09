@@ -23,6 +23,24 @@ class OracleMigrationContentTest {
     private static final Pattern PARTIAL_INDEX = Pattern.compile(
             "\\bCREATE\\s+(?:UNIQUE\\s+)?INDEX\\b[^;]*\\bWHERE\\b[^;]*;",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern RESOURCE_REFERENCE = Pattern.compile(
+            "(?i)(?<![A-Za-z0-9_\"])(\"?resource\"?)(?![A-Za-z0-9_\"])");
+    private static final Pattern PATIENT_PROFILE_ROLE_ASSERTION = Pattern.compile(
+            "\\bCREATE\\s+ASSERTION\\s+assert_patient_profile_has_role\\s+CHECK\\s*\\("
+                    + ".*?FROM\\s+patient_profiles\\s+pp"
+                    + ".*?r\\.patient_profile\\s*=\\s*TRUE"
+                    + ".*?\\)\\s*DEFERRABLE\\s+INITIALLY\\s+DEFERRED\\s*;",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern STAFF_PROFILE_ROLE_ASSERTION = Pattern.compile(
+            "\\bCREATE\\s+ASSERTION\\s+assert_staff_profile_has_role\\s+CHECK\\s*\\("
+                    + ".*?FROM\\s+staff_profiles\\s+sp"
+                    + ".*?r\\.clinical_staff\\s*=\\s*TRUE"
+                    + ".*?\\)\\s*DEFERRABLE\\s+INITIALLY\\s+DEFERRED\\s*;",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern USER_ROLES_COMPOUND_TRIGGER = Pattern.compile(
+            "\\bCREATE(?:\\s+OR\\s+REPLACE)?\\s+TRIGGER\\b"
+                    + ".*?\\bON\\s+user_roles\\b.*?\\bCOMPOUND\\s+TRIGGER\\b",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     private final PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
 
@@ -61,6 +79,32 @@ class OracleMigrationContentTest {
         assertNoMigrationContains(PARTIAL_INDEX, "a partial-index WHERE clause");
     }
 
+    @Test
+    void resourceColumnsUseLowercaseQuotedIdentifier() throws IOException {
+        assertResourceReferencesQuoted("V15__mcp_oauth_authorization.sql", 5);
+        assertResourceReferencesQuoted("V17__oauth_client_capabilities.sql", 1);
+    }
+
+    @Test
+    void rbacMigrationUsesDeferredAssertionsInsteadOfUserRolesCompoundTrigger() throws IOException {
+        Resource migration = oracleMigration("V4__rbac_assignment_model.sql");
+        String sql = migration.getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(PATIENT_PROFILE_ROLE_ASSERTION.matcher(sql).results().count())
+                .as("Oracle migration %s patient-profile role assertion", migration.getFilename())
+                .isEqualTo(1);
+        assertThat(STAFF_PROFILE_ROLE_ASSERTION.matcher(sql).results().count())
+                .as("Oracle migration %s staff-profile role assertion", migration.getFilename())
+                .isEqualTo(1);
+        assertThat(Pattern.compile("\\bCREATE\\s+ASSERTION\\b", Pattern.CASE_INSENSITIVE)
+                .matcher(sql).results().count())
+                .as("Oracle migration %s assertion count", migration.getFilename())
+                .isEqualTo(2);
+        assertThat(USER_ROLES_COMPOUND_TRIGGER.matcher(sql).find())
+                .as("Oracle migration %s must not use a user_roles compound trigger", migration.getFilename())
+                .isFalse();
+    }
+
     private void assertNoMigrationContains(Pattern prohibitedSyntax, String description) throws IOException {
         Resource[] migrations = resolver.getResources("classpath*:db/migration/oracle/V*.sql");
         assertThat(migrations).as("Oracle migration resources").hasSize(21);
@@ -77,6 +121,25 @@ class OracleMigrationContentTest {
                     .as("Oracle migration %s must not contain %s", migration.getFilename(), description)
                     .isFalse();
         });
+    }
+
+    private void assertResourceReferencesQuoted(String filename, int expectedReferences) throws IOException {
+        Resource migration = oracleMigration(filename);
+        String sql = migration.getContentAsString(StandardCharsets.UTF_8);
+        var references = RESOURCE_REFERENCE.matcher(sql).results()
+                .map(result -> result.group(1))
+                .toList();
+
+        assertThat(references)
+                .as("Oracle migration %s resource references", migration.getFilename())
+                .hasSize(expectedReferences)
+                .containsOnly("\"resource\"");
+    }
+
+    private Resource oracleMigration(String filename) {
+        Resource migration = resolver.getResource("classpath:db/migration/oracle/" + filename);
+        assertThat(migration.exists()).as("Oracle migration %s", filename).isTrue();
+        return migration;
     }
 
     private static Pattern token(String token) {
