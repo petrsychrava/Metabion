@@ -12,6 +12,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.Immutable;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -44,7 +46,8 @@ public class RedFlagTriggerEvent {
     @Column(name = "triggered_at", nullable = false, updatable = false)
     private Instant triggeredAt;
 
-    @Column(name = "matched_inputs", nullable = false, updatable = false, columnDefinition = "TEXT")
+    @JdbcTypeCode(SqlTypes.LONG32VARCHAR)
+    @Column(name = "matched_inputs", nullable = false, updatable = false)
     private String matchedInputs;
 
     protected RedFlagTriggerEvent() {

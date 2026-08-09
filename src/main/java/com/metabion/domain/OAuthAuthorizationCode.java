@@ -40,7 +40,7 @@ public class OAuthAuthorizationCode {
     @Column(name = "redirect_uri", nullable = false, length = 500)
     private String redirectUri;
 
-    @Column(name = "resource", nullable = false, length = 255)
+    @Column(name = "\"resource\"", nullable = false, length = 255)
     private String resource;
 
     @Column(name = "code_challenge", nullable = false, length = 128)

@@ -11,6 +11,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "education_lesson_localizations")
@@ -34,7 +36,8 @@ public class EducationLessonLocalization {
     @Column(nullable = false, length = 1000)
     private String summary;
 
-    @Column(name = "body_markdown", nullable = false, columnDefinition = "text")
+    @JdbcTypeCode(SqlTypes.LONG32VARCHAR)
+    @Column(name = "body_markdown", nullable = false)
     private String bodyMarkdown;
 
     public EducationLessonLocalization() {

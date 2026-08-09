@@ -20,7 +20,7 @@ public class OAuthRefreshToken {
     @Enumerated(EnumType.STRING) @Column(name = "client_source", nullable = false, length = 32) private OAuthClientSource clientSource;
     @Enumerated(EnumType.STRING) @Column(name = "client_type", nullable = false, length = 40) private PatientAccessClientType clientType;
     @Column(name = "display_label", nullable = false, length = 120) private String displayLabel;
-    @Column(name = "resource", nullable = false, length = 255) private String resource;
+    @Column(name = "\"resource\"", nullable = false, length = 255) private String resource;
     @Column(name = "created_at", nullable = false, updatable = false) private Instant createdAt;
     @Column(name = "expires_at", nullable = false) private Instant expiresAt;
     @Column(name = "consumed_at") private Instant consumedAt;

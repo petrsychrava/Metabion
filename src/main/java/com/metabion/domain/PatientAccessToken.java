@@ -47,7 +47,7 @@ public class PatientAccessToken {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
-    @Column(name = "resource", nullable = false, length = 255)
+    @Column(name = "\"resource\"", nullable = false, length = 255)
     private String resource;
 
     @Column(name = "last_used_at")
