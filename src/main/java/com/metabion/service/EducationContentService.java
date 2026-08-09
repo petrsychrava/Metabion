@@ -19,6 +19,7 @@ import com.metabion.dto.EducationManagementSummaryResponse;
 import com.metabion.dto.EducationModuleDetailResponse;
 import com.metabion.dto.EducationModuleRequest;
 import com.metabion.dto.EducationModuleSummaryResponse;
+import com.metabion.repository.EducationLessonCompletionInsertPort;
 import com.metabion.repository.EducationLessonCompletionRepository;
 import com.metabion.repository.EducationLessonRepository;
 import com.metabion.repository.EducationModuleRepository;
@@ -48,6 +49,7 @@ public class EducationContentService {
     private final EducationModuleVersionRepository versions;
     private final EducationLessonRepository lessons;
     private final EducationLessonCompletionRepository completions;
+    private final EducationLessonCompletionInsertPort completionInsertions;
     private final EducationMarkdownService markdown;
 
     public EducationContentService(
@@ -57,6 +59,7 @@ public class EducationContentService {
             EducationModuleVersionRepository versions,
             EducationLessonRepository lessons,
             EducationLessonCompletionRepository completions,
+            EducationLessonCompletionInsertPort completionInsertions,
             EducationMarkdownService markdown) {
         this.users = users;
         this.patientProfiles = patientProfiles;
@@ -64,6 +67,7 @@ public class EducationContentService {
         this.versions = versions;
         this.lessons = lessons;
         this.completions = completions;
+        this.completionInsertions = completionInsertions;
         this.markdown = markdown;
     }
 
@@ -282,7 +286,7 @@ public class EducationContentService {
         var patient = currentPatient(currentUser(authentication));
         var moduleVersion = currentPublishedVersion(moduleSlug);
         var lessonVersion = currentLessonVersion(moduleVersion, lessonSlug);
-        completions.insertCompletionIfAbsent(patient.getId(), moduleVersion.getId(), lessonVersion.getId());
+        completionInsertions.insertCompletionIfAbsent(patient.getId(), moduleVersion.getId(), lessonVersion.getId());
     }
 
     public void uncompleteLesson(Authentication authentication, String moduleSlug, String lessonSlug) {

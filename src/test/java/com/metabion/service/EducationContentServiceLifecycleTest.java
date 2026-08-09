@@ -12,6 +12,7 @@ import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.EducationContentForm;
 import com.metabion.dto.EducationModuleRequest;
+import com.metabion.repository.EducationLessonCompletionInsertPort;
 import com.metabion.repository.EducationLessonCompletionRepository;
 import com.metabion.repository.EducationLessonRepository;
 import com.metabion.repository.EducationModuleRepository;
@@ -60,13 +61,17 @@ class EducationContentServiceLifecycleTest {
     private EducationLessonCompletionRepository completions;
 
     @Mock
+    private EducationLessonCompletionInsertPort completionInsertions;
+
+    @Mock
     private EducationMarkdownService markdown;
 
     private EducationContentService service;
 
     @BeforeEach
     void setUp() {
-        service = new EducationContentService(users, patientProfiles, modules, versions, lessons, completions, markdown);
+        service = new EducationContentService(
+                users, patientProfiles, modules, versions, lessons, completions, completionInsertions, markdown);
     }
 
     @Test

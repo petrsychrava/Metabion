@@ -1,5 +1,6 @@
 package com.metabion.repository;
 
+import com.metabion.config.DatabaseConfiguration;
 import com.metabion.domain.EducationLanguage;
 import com.metabion.domain.EducationLesson;
 import com.metabion.domain.EducationLessonCompletion;
@@ -19,6 +20,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.context.annotation.Import;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -28,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest(properties = {"spring.jpa.hibernate.ddl-auto=validate"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Import(DatabaseConfiguration.class)
 @Testcontainers
 class EducationContentRepositoryTest {
 
@@ -51,6 +54,9 @@ class EducationContentRepositoryTest {
 
     @Autowired
     EducationLessonCompletionRepository completions;
+
+    @Autowired
+    EducationLessonCompletionInsertPort completionInsertions;
 
     @Autowired
     EntityManager entityManager;
@@ -98,9 +104,9 @@ class EducationContentRepositoryTest {
         var version = module.getCurrentPublishedVersion();
         var lessonVersion = version.getLessons().getFirst();
 
-        assertThat(completions.insertCompletionIfAbsent(patient.getId(), version.getId(), lessonVersion.getId()))
+        assertThat(completionInsertions.insertCompletionIfAbsent(patient.getId(), version.getId(), lessonVersion.getId()))
                 .isEqualTo(1);
-        assertThat(completions.insertCompletionIfAbsent(patient.getId(), version.getId(), lessonVersion.getId()))
+        assertThat(completionInsertions.insertCompletionIfAbsent(patient.getId(), version.getId(), lessonVersion.getId()))
                 .isZero();
         assertThat(completions.findCompletedLessonVersionIds(patient.getId(), java.util.List.of(lessonVersion.getId())))
                 .containsExactly(lessonVersion.getId());

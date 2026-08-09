@@ -32,6 +32,8 @@ dependencies {
     implementation 'org.postgresql:postgresql:42.7.4'
     implementation 'org.flywaydb:flyway-core:11.14.0'
     implementation 'org.flywaydb:flyway-database-postgresql:11.14.0'
+    implementation 'com.oracle.database.jdbc:ojdbc11:23.26.3.0.0'
+    implementation 'org.flywaydb:flyway-database-oracle:11.14.0'
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'com.bucket4j:bucket4j-core:8.10.1'
 
@@ -53,7 +55,8 @@ tasks.named('test') {
 }
 
 bootRun {
-    args = ["--spring.profiles.active=dev"]
+    def activeProfiles = project.findProperty('profiles') ?: 'dev,postgresql'
+    args = ["--spring.profiles.active=${activeProfiles}"]
 }
 
 tasks.named('jacocoTestReport') {

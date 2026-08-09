@@ -1,8 +1,10 @@
 package com.metabion.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -36,6 +38,7 @@ public class User {
     @Column(name = "mfa_enabled", nullable = false)
     private boolean mfaEnabled = false;
 
+    @JdbcTypeCode(SqlTypes.LONG32VARBINARY)
     @Column(name = "mfa_secret_encrypted")
     private byte[] mfaSecretEncrypted;
 
