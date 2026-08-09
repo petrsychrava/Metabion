@@ -126,6 +126,16 @@ class OracleMigrationContentTest {
                         .isFalse());
     }
 
+    @Test
+    void patientProfileRoleIsCheckedByDeferredAssertionOnly() throws IOException {
+        Resource migration = oracleMigration("V4__rbac_assignment_model.sql");
+        String sql = migration.getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(sql)
+                .as("Oracle migration %s must not check patient roles with an immediate trigger", migration.getFilename())
+                .doesNotContain("trg_patient_profiles_require_patient_role");
+    }
+
     private void assertNoMigrationContains(Pattern prohibitedSyntax, String description) throws IOException {
         Resource[] migrations = resolver.getResources("classpath*:db/migration/oracle/V*.sql");
         assertThat(migrations).as("Oracle migration resources").hasSize(21);

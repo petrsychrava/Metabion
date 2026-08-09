@@ -105,25 +105,6 @@ CREATE INDEX idx_csa_cohort_id ON cohort_staff_assignments(cohort_id);
 CREATE INDEX idx_csa_staff_profile_id ON cohort_staff_assignments(staff_profile_id);
 CREATE INDEX idx_csa_assigned_by_user_id ON cohort_staff_assignments(assigned_by_user_id);
 
-CREATE OR REPLACE TRIGGER trg_patient_profiles_require_patient_role
-    BEFORE INSERT OR UPDATE OF user_id ON patient_profiles
-    FOR EACH ROW
-DECLARE
-    matching_roles NUMBER(10);
-BEGIN
-    SELECT COUNT(*)
-    INTO matching_roles
-    FROM user_roles ur
-    JOIN roles r ON r.code = ur.role
-    WHERE ur.user_id = :NEW.user_id
-      AND r.patient_profile = TRUE;
-
-    IF matching_roles = 0 THEN
-        RAISE_APPLICATION_ERROR(-20001, 'Patient profile requires PATIENT role');
-    END IF;
-END;
-/
-
 CREATE OR REPLACE TRIGGER trg_staff_profiles_require_clinical_staff_role
     BEFORE INSERT OR UPDATE OF user_id ON staff_profiles
     FOR EACH ROW

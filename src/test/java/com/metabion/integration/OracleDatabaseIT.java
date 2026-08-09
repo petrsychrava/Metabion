@@ -11,6 +11,7 @@ import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.StaffProfile;
 import com.metabion.domain.User;
+import com.metabion.dto.RegisterRequest;
 import com.metabion.repository.EducationLessonCompletionInsertPort;
 import com.metabion.repository.EducationLessonCompletionRepository;
 import com.metabion.repository.EducationLessonRepository;
@@ -19,6 +20,8 @@ import com.metabion.repository.EducationModuleVersionRepository;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.StaffProfileRepository;
 import com.metabion.repository.UserRepository;
+import com.metabion.service.EmailService;
+import com.metabion.service.UserService;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -29,6 +32,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
@@ -61,6 +65,12 @@ class OracleDatabaseIT {
 
     @Autowired
     UserRepository users;
+
+    @Autowired
+    UserService userService;
+
+    @MockitoBean
+    EmailService emailService;
 
     @Autowired
     PatientProfileRepository patientProfiles;
@@ -97,6 +107,17 @@ class OracleDatabaseIT {
         assertThat(flyway.info().current()).isNotNull();
         assertThat(flyway.info().applied())
                 .anyMatch(migration -> migration.getVersion() != null && "21".equals(migration.getVersion().getVersion()));
+    }
+
+    @Test
+    void registersPatientWhenRolesAndProfileArePersistedInOneTransaction() {
+        String email = nextEmail("registration");
+
+        userService.register(new RegisterRequest(email, "CorrectPass123"));
+
+        User user = users.findByEmail(email).orElseThrow();
+        assertThat(user.hasRole(RoleName.PATIENT)).isTrue();
+        assertThat(patientProfiles.findByUserId(user.getId())).isPresent();
     }
 
     @Test
