@@ -87,4 +87,44 @@ class DatabaseProfilePropertiesTest {
             assertThat(profileProperties.containsProperty("spring.jpa.properties.hibernate.dialect")).isFalse();
         }
     }
+
+    @Nested
+    @SpringBootTest(properties = {
+            "spring.flyway.enabled=false",
+            "spring.jpa.hibernate.ddl-auto=none",
+            "spring.datasource.url=jdbc:h2:mem:database_profile_prod_test;DB_CLOSE_DELAY=-1",
+            "spring.datasource.driver-class-name=org.h2.Driver",
+            "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
+            "spring.autoconfigure.exclude=org.springframework.boot.session.jdbc.autoconfigure.JdbcSessionAutoConfiguration"
+    })
+    @ActiveProfiles("prod")
+    class ProductionProfile {
+
+        @Autowired
+        ConfigurableEnvironment environment;
+
+        @MockitoBean
+        FindByIndexNameSessionRepository<Session> sessions;
+
+        @Test
+        void activatesPostgreSqlProfileThroughProductionProfileGroup() {
+            assertThat(environment.getActiveProfiles())
+                    .contains("prod", "postgresql");
+            PropertySource<?> profileProperties = profileProperties();
+
+            assertThat(profileProperties.getProperty("spring.flyway.locations"))
+                    .isEqualTo("classpath:db/migration/postgresql");
+            assertThat(profileProperties.getProperty("spring.datasource.driver-class-name"))
+                    .isEqualTo("org.postgresql.Driver");
+            assertThat(profileProperties.getProperty("spring.jpa.properties.hibernate.dialect"))
+                    .isEqualTo("org.hibernate.dialect.PostgreSQLDialect");
+        }
+
+        private PropertySource<?> profileProperties() {
+            return environment.getPropertySources().stream()
+                    .filter(propertySource -> propertySource.getName().contains("application-postgresql.properties"))
+                    .findFirst()
+                    .orElseThrow();
+        }
+    }
 }
