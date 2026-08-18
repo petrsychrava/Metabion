@@ -166,7 +166,9 @@ class SymptomTrackingServiceTest {
                         RedFlagSeverity.EMERGENCY,
                         Instant.parse("2026-06-26T10:15:00Z"),
                         RedFlagSourceType.SYMPTOM_CHECK_IN,
-                        200L)),
+                        200L,
+                        1,
+                        "{\"facts\":[]}")),
                 List.of("symptom.previous"));
         when(redFlags.evaluateSymptom(any(SymptomCheckIn.class))).thenReturn(evaluationOutcome);
 

@@ -1,15 +1,19 @@
 package com.metabion.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.metabion.domain.*;
 import com.metabion.dto.*;
 import com.metabion.repository.*;
+import com.metabion.service.redflag.ClinicalRedFlagResponseAssembler;
 import com.metabion.service.redflag.PatientRedFlagResponseAssembler;
 import com.metabion.service.redflag.RedFlagEvaluationOutcome;
 import com.metabion.service.redflag.RedFlagEvaluationService;
+import com.metabion.service.redflag.RedFlagSnapshotSerializer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.authentication.TestingAuthenticationToken;
@@ -43,10 +47,12 @@ class LabResultServiceTest {
 
     @BeforeEach
     void setUp() {
+        var snapshotSerializer = snapshotSerializer();
         service = new LabResultService(users, patientProfiles, resultSets, catalog, conversions,
                 accessControl, audit, responses, new DateRangeValidator(), redFlags,
                 Clock.fixed(Instant.parse("2026-07-16T12:00:00Z"), java.time.ZoneOffset.UTC),
-                new PatientRedFlagResponseAssembler());
+                new PatientRedFlagResponseAssembler(),
+                new ClinicalRedFlagResponseAssembler(snapshotSerializer));
     }
 
     @Test
@@ -181,6 +187,111 @@ class LabResultServiceTest {
         ordered.verify(resultSets).flush();
         ordered.verify(audit).recordUpdate(eq(set), any(), eq(clinician), any());
         ordered.verify(redFlags).evaluateLab(set);
+    }
+
+    @Test
+    void saveForClinicalPatientWithRedFlagsReturnsDetailedClinicalOutcomeWithoutSecondEvaluation() {
+        var patient = mock(PatientProfile.class);
+        var clinician = user(2L, RoleName.PHYSICIAN);
+        when(users.findByEmail("clinician@example.com")).thenReturn(Optional.of(clinician));
+        when(patientProfiles.findById(10L)).thenReturn(Optional.of(patient));
+        when(accessControl.canViewPatientClinicalData(any(Authentication.class), eq(10L))).thenReturn(true);
+        stubCrpConversion();
+        when(resultSets.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(responses.resultSet(any(), eq(clinician))).thenReturn(response(90L, clinician));
+        when(redFlags.evaluateLab(any(LabResultSet.class)))
+                .thenReturn(labOutcome(603L, "lab.clinical-crp", List.of("lab.old-crp")));
+
+        var response = service.saveForClinicalPatientWithRedFlags(
+                auth("clinician@example.com"), 10L, request(null, null));
+
+        assertThat(response.result().id()).isEqualTo(90L);
+        assertThat(response.redFlagOutcome().highestSeverity()).isEqualTo(RedFlagSeverity.URGENT_REVIEW);
+        assertThat(response.redFlagOutcome().currentFlags()).singleElement().satisfies(flag -> {
+            assertThat(flag.eventId()).isEqualTo(603L);
+            assertThat(flag.ruleKey()).isEqualTo("lab.clinical-crp");
+            assertThat(flag.ruleVersion()).isEqualTo(3);
+            assertThat(flag.matchedInputs().facts()).singleElement().satisfies(fact -> {
+                assertThat(fact.factKey()).isEqualTo("lab.CRP");
+                assertThat(fact.decimalValue()).isEqualTo("312");
+            });
+        });
+        assertThat(response.redFlagOutcome().clearedRuleKeys()).containsExactly("lab.old-crp");
+        var ordered = inOrder(resultSets, audit, redFlags);
+        ordered.verify(resultSets).saveAndFlush(any(LabResultSet.class));
+        ordered.verify(audit).recordCreate(any(LabResultSet.class), eq(clinician), any(Instant.class));
+        ordered.verify(redFlags).evaluateLab(any(LabResultSet.class));
+        verify(redFlags, never()).evaluateLabRemoval(any());
+        verifyNoMoreInteractions(redFlags);
+    }
+
+    @Test
+    void updateForClinicalPatientWithRedFlagsReturnsDetailedClinicalOutcomeWithoutSecondEvaluation() {
+        var patient = mock(PatientProfile.class);
+        when(patient.getId()).thenReturn(10L);
+        var clinician = user(2L, RoleName.PHYSICIAN);
+        when(users.findByEmail("clinician@example.com")).thenReturn(Optional.of(clinician));
+        when(patientProfiles.findById(10L)).thenReturn(Optional.of(patient));
+        when(accessControl.canViewPatientClinicalData(any(Authentication.class), eq(10L))).thenReturn(true);
+        var set = mock(LabResultSet.class);
+        when(set.getPatientProfile()).thenReturn(patient);
+        when(set.getVersion()).thenReturn(0L);
+        when(resultSets.findActiveById(90L)).thenReturn(Optional.of(set));
+        stubCrpConversion();
+        when(responses.resultSet(set, clinician)).thenReturn(response(90L, clinician));
+        when(redFlags.evaluateLab(set)).thenReturn(labOutcome(604L, "lab.updated-clinical-crp", List.of()));
+
+        var response = service.saveForClinicalPatientWithRedFlags(
+                auth("clinician@example.com"), 10L, request(90L, 0L));
+
+        assertThat(response.result().id()).isEqualTo(90L);
+        assertThat(response.redFlagOutcome().currentFlags()).singleElement().satisfies(flag -> {
+            assertThat(flag.eventId()).isEqualTo(604L);
+            assertThat(flag.ruleKey()).isEqualTo("lab.updated-clinical-crp");
+            assertThat(flag.ruleVersion()).isEqualTo(3);
+            assertThat(flag.matchedInputs().facts()).singleElement()
+                    .extracting("factKey", "decimalValue")
+                    .containsExactly("lab.CRP", "312");
+        });
+        var ordered = inOrder(resultSets, audit, redFlags);
+        ordered.verify(resultSets).flush();
+        ordered.verify(audit).recordUpdate(eq(set), any(), eq(clinician), any(Instant.class));
+        ordered.verify(redFlags).evaluateLab(set);
+        verify(redFlags, never()).evaluateLabRemoval(any());
+        verifyNoMoreInteractions(redFlags);
+    }
+
+    @Test
+    void removeForClinicalPatientWithRedFlagsReturnsDetailedClearedOutcomeWithoutRereadingEvents() {
+        var patient = mock(PatientProfile.class);
+        when(patient.getId()).thenReturn(10L);
+        var clinician = user(2L, RoleName.PHYSICIAN);
+        when(users.findByEmail("clinician@example.com")).thenReturn(Optional.of(clinician));
+        when(patientProfiles.findById(10L)).thenReturn(Optional.of(patient));
+        when(accessControl.canViewPatientClinicalData(any(Authentication.class), eq(10L))).thenReturn(true);
+        var set = new LabResultSet(patient, LocalDate.now(), null, LabResultSource.MANUAL,
+                LabResultConfirmationStatus.CONFIRMED, clinician, Instant.EPOCH);
+        when(resultSets.findActiveById(90L)).thenReturn(Optional.of(set));
+        var evaluationOutcome = new RedFlagEvaluationOutcome(
+                null,
+                List.of(),
+                List.of("lab.high-crp", "lab.high-calprotectin"));
+        when(redFlags.evaluateLabRemoval(set)).thenReturn(evaluationOutcome);
+
+        var response = service.removeForClinicalPatientWithRedFlags(auth("clinician@example.com"), 10L, 90L,
+                new LabResultRemovalRequest(90L, 0L, "duplicate"));
+
+        assertThat(response.result().status()).isEqualTo("removed");
+        assertThat(response.redFlagOutcome().highestSeverity()).isNull();
+        assertThat(response.redFlagOutcome().currentFlags()).isEmpty();
+        assertThat(response.redFlagOutcome().clearedRuleKeys())
+                .containsExactly("lab.high-crp", "lab.high-calprotectin");
+        var ordered = inOrder(resultSets, audit, redFlags);
+        ordered.verify(resultSets).flush();
+        ordered.verify(audit).recordRemoval(eq(set), any(), eq(clinician), any(Instant.class));
+        ordered.verify(redFlags).evaluateLabRemoval(set);
+        verify(redFlags, never()).evaluateLab(any());
+        verifyNoMoreInteractions(redFlags);
     }
 
     @Test
@@ -382,7 +493,18 @@ class LabResultServiceTest {
                         RedFlagSeverity.URGENT_REVIEW,
                         Instant.parse("2026-07-16T12:00:00Z"),
                         RedFlagSourceType.LAB_RESULT_SET,
-                        90L)),
+                        90L,
+                        3,
+                        "{\"facts\":[{\"sourceType\":\"LAB_RESULT_SET\",\"sourceId\":90,"
+                                + "\"factKey\":\"lab.CRP\",\"observedOn\":\"2026-07-16\","
+                                + "\"decimalValue\":\"312\",\"textValue\":null,\"unit\":\"mg/L\"}]}")),
                 clearedRuleKeys);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static RedFlagSnapshotSerializer snapshotSerializer() {
+        ObjectProvider<ObjectMapper> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable(any())).thenReturn(new ObjectMapper());
+        return new RedFlagSnapshotSerializer(provider);
     }
 }

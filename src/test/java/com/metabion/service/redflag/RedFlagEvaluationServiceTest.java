@@ -275,10 +275,12 @@ class RedFlagEvaluationServiceTest {
         assertThat(outcome.highestSeverity()).isEqualTo(RedFlagSeverity.EMERGENCY);
         assertThat(outcome.currentFlags())
                 .extracting(RedFlagEvaluationOutcome.Flag::eventId,
-                        RedFlagEvaluationOutcome.Flag::ruleKey)
+                        RedFlagEvaluationOutcome.Flag::ruleKey,
+                        RedFlagEvaluationOutcome.Flag::ruleVersion,
+                        RedFlagEvaluationOutcome.Flag::matchedInputs)
                 .containsExactly(
-                        tuple(701L, "RULE_101"),
-                        tuple(702L, "RULE_102"));
+                        tuple(701L, "RULE_101", 1, "{\"match\":1}"),
+                        tuple(702L, "RULE_102", 1, "{\"match\":2}"));
         assertThat(outcome.clearedRuleKeys()).containsExactly("RULE_100");
     }
 

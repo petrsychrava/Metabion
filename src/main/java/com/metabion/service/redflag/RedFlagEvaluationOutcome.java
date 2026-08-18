@@ -22,6 +22,8 @@ public record RedFlagEvaluationOutcome(
             RedFlagSeverity severity,
             Instant detectedAt,
             RedFlagSourceType sourceType,
-            Long sourceId) {
+            Long sourceId,
+            int ruleVersion,
+            String matchedInputs) {
     }
 }

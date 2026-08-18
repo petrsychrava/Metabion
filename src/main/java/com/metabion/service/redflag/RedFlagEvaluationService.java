@@ -132,7 +132,9 @@ public class RedFlagEvaluationService {
                     match.rule().severity(),
                     evaluatedAt,
                     trigger.sourceType(),
-                    trigger.sourceId());
+                    trigger.sourceId(),
+                    match.rule().versionNumber(),
+                    serialized.snapshot());
         }).toList();
         var currentKeys = persistedFlags.stream()
                 .map(RedFlagEvaluationOutcome.Flag::ruleKey)

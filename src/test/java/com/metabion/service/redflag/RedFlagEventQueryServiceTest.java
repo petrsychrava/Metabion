@@ -307,7 +307,8 @@ class RedFlagEventQueryServiceTest {
                 RedFlagSeverity.EMERGENCY,
                 List.of(new RedFlagEvaluationOutcome.Flag(
                         901L, "SYM_SEVERE_ABDOMINAL_PAIN", RedFlagSeverity.EMERGENCY,
-                        DETECTED_AT, RedFlagSourceType.SYMPTOM_CHECK_IN, 601L)),
+                        DETECTED_AT, RedFlagSourceType.SYMPTOM_CHECK_IN, 601L,
+                        1, "{\"facts\":[]}")),
                 List.of("SYM_SUSPECTED_FLARE"));
 
         var response = new PatientRedFlagResponseAssembler().outcome(outcome);

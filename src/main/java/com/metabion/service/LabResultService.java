@@ -2,11 +2,14 @@ package com.metabion.service;
 
 import com.metabion.domain.*;
 import com.metabion.dto.*;
+import com.metabion.dto.mcp.McpClinicalLabResultRemovalWriteResponse;
+import com.metabion.dto.mcp.McpClinicalLabResultSetWriteResponse;
 import com.metabion.dto.mcp.McpLabResultRemovalWriteResponse;
 import com.metabion.dto.mcp.McpLabResultSetWriteResponse;
 import com.metabion.repository.LabResultSetRepository;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
+import com.metabion.service.redflag.ClinicalRedFlagResponseAssembler;
 import com.metabion.service.redflag.PatientRedFlagResponseAssembler;
 import com.metabion.service.redflag.RedFlagEvaluationOutcome;
 import com.metabion.service.redflag.RedFlagEvaluationService;
@@ -41,17 +44,20 @@ public class LabResultService {
     private final RedFlagEvaluationService redFlags;
     private final Clock clock;
     private final PatientRedFlagResponseAssembler patientRedFlagResponses;
+    private final ClinicalRedFlagResponseAssembler clinicalRedFlagResponses;
 
     public LabResultService(UserRepository users, PatientProfileRepository patientProfiles,
                             LabResultSetRepository resultSets, LabCatalogService catalog,
                             LabUnitConversionService conversions, AccessControlService accessControl,
                             LabAuditService audit, LabResponseAssembler responses,
                             DateRangeValidator dateRanges, RedFlagEvaluationService redFlags,
-                            Clock clock, PatientRedFlagResponseAssembler patientRedFlagResponses) {
+                            Clock clock, PatientRedFlagResponseAssembler patientRedFlagResponses,
+                            ClinicalRedFlagResponseAssembler clinicalRedFlagResponses) {
         this.users = users; this.patientProfiles = patientProfiles; this.resultSets = resultSets;
         this.catalog = catalog; this.conversions = conversions; this.accessControl = accessControl;
         this.audit = audit; this.responses = responses; this.dateRanges = dateRanges;
         this.redFlags = redFlags; this.clock = clock; this.patientRedFlagResponses = patientRedFlagResponses;
+        this.clinicalRedFlagResponses = clinicalRedFlagResponses;
     }
 
     public LabResultSetResponse saveForCurrentPatient(Authentication authentication, LabResultSetRequest request) {
@@ -132,6 +138,17 @@ public class LabResultService {
                 ? update(patient, actor, request.resultSetId(), request, false).response()
                 : create(patient, actor, request).response();
     }
+    public McpClinicalLabResultSetWriteResponse saveForClinicalPatientWithRedFlags(
+            Authentication authentication, Long patientId, LabResultSetRequest request) {
+        var actor = clinicalPatient(authentication, patientId);
+        var patient = requirePatientProfile(patientId);
+        var mutation = request != null && request.resultSetId() != null
+                ? update(patient, actor, request.resultSetId(), request, false)
+                : create(patient, actor, request);
+        return new McpClinicalLabResultSetWriteResponse(
+                mutation.response(),
+                clinicalRedFlagResponses.outcome(mutation.redFlagOutcome()));
+    }
     @Transactional(readOnly = true)
     public void requireClinicalPatientAccess(Authentication authentication, Long patientId) {
         clinicalPatient(authentication, patientId);
@@ -154,9 +171,22 @@ public class LabResultService {
         var actor = clinicalPatient(authentication, patientId);
         remove(requirePatientProfile(patientId), actor, id, request, false);
     }
+    public McpClinicalLabResultRemovalWriteResponse removeForClinicalPatientWithRedFlags(
+            Authentication authentication, Long patientId, Long id, LabResultRemovalRequest request) {
+        var actor = clinicalPatient(authentication, patientId);
+        var redFlagOutcome = remove(requirePatientProfile(patientId), actor, id, request, false);
+        return new McpClinicalLabResultRemovalWriteResponse(
+                new McpClinicalLabResultRemovalWriteResponse.Result("removed"),
+                clinicalRedFlagResponses.outcome(redFlagOutcome));
+    }
     public void removeForClinicalPatient(Authentication authentication, Long patientId, LabResultRemovalRequest request) {
         validateRemovalRequest(request);
         removeForClinicalPatient(authentication, patientId, request.resultSetId(), request);
+    }
+    public McpClinicalLabResultRemovalWriteResponse removeForClinicalPatientWithRedFlags(
+            Authentication authentication, Long patientId, LabResultRemovalRequest request) {
+        validateRemovalRequest(request);
+        return removeForClinicalPatientWithRedFlags(authentication, patientId, request.resultSetId(), request);
     }
 
     private LabResultMutation create(PatientProfile patient, User actor, LabResultSetRequest request) {
