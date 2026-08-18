@@ -23,7 +23,7 @@ import com.metabion.dto.redflag.PatientRedFlagHistoryResponse;
 import com.metabion.dto.redflag.PatientRedFlagSnapshotResponse;
 import com.metabion.dto.redflag.RedFlagHistoryQuery;
 import com.metabion.exception.InsufficientScopeException;
-import com.metabion.service.PatientAccessAuditService;
+import com.metabion.service.McpAccessAuditService;
 import com.metabion.service.PatientAppFacade;
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -48,9 +48,9 @@ import java.util.stream.Collectors;
 public class PatientMcpTools {
 
     private final PatientAppFacade patientApp;
-    private final PatientAccessAuditService audit;
+    private final McpAccessAuditService audit;
 
-    public PatientMcpTools(PatientAppFacade patientApp, PatientAccessAuditService audit) {
+    public PatientMcpTools(PatientAppFacade patientApp, McpAccessAuditService audit) {
         this.patientApp = patientApp;
         this.audit = audit;
     }

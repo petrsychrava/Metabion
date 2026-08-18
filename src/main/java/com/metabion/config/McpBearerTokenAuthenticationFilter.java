@@ -1,13 +1,15 @@
 package com.metabion.config;
 
-import com.metabion.domain.PatientAccessToken;
-import com.metabion.service.PatientAccessAuditService;
+import com.metabion.service.ClinicalAccessTokenService;
+import com.metabion.service.McpAccessAuditService;
+import com.metabion.service.McpTokenCodec;
 import com.metabion.service.PatientAccessTokenService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Component;
@@ -18,18 +20,22 @@ import java.io.IOException;
 import java.util.Optional;
 
 @Component
-public class PatientBearerTokenAuthenticationFilter extends OncePerRequestFilter {
+public class McpBearerTokenAuthenticationFilter extends OncePerRequestFilter {
 
     private final PatientAccessTokenService patientTokens;
-    private final PatientAccessAuditService audit;
+    private final ClinicalAccessTokenService clinicalTokens;
+    private final McpAccessAuditService audit;
     private final OAuthAuthorizationProperties oauthProperties;
     private final SecurityContextRepository securityContextRepository;
+    private final McpTokenCodec tokenCodec = new McpTokenCodec();
 
-    public PatientBearerTokenAuthenticationFilter(PatientAccessTokenService patientTokens,
-                                                  PatientAccessAuditService audit,
-                                                  OAuthAuthorizationProperties oauthProperties,
-                                                  SecurityContextRepository securityContextRepository) {
+    public McpBearerTokenAuthenticationFilter(PatientAccessTokenService patientTokens,
+                                              ClinicalAccessTokenService clinicalTokens,
+                                              McpAccessAuditService audit,
+                                              OAuthAuthorizationProperties oauthProperties,
+                                              SecurityContextRepository securityContextRepository) {
         this.patientTokens = patientTokens;
+        this.clinicalTokens = clinicalTokens;
         this.audit = audit;
         this.oauthProperties = oauthProperties;
         this.securityContextRepository = securityContextRepository;
@@ -50,11 +56,11 @@ public class PatientBearerTokenAuthenticationFilter extends OncePerRequestFilter
             return;
         }
 
-        var resolved = authenticate(token, request, response);
+        var authentication = authenticate(token, request, response);
         if (response.isCommitted()) {
             return;
         }
-        if (resolved.isEmpty()) {
+        if (authentication.isEmpty()) {
             audit.recordAuthenticationFailure(request.getRequestURI(), "invalid_token");
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setHeader("WWW-Authenticate", challenge("invalid_token", null));
@@ -63,10 +69,9 @@ public class PatientBearerTokenAuthenticationFilter extends OncePerRequestFilter
             return;
         }
 
-        var authentication = new PatientAccessTokenAuthentication(resolved.get());
-        audit.recordAuthenticationSuccess(authentication, request.getRequestURI());
+        audit.recordAuthenticationSuccess(authentication.get(), request.getRequestURI());
         var context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(authentication);
+        context.setAuthentication(authentication.get());
         SecurityContextHolder.setContext(context);
         try {
             securityContextRepository.saveContext(context, request, response);
@@ -90,11 +95,22 @@ public class PatientBearerTokenAuthenticationFilter extends OncePerRequestFilter
         return "/api/mcp".equals(uri) || uri.startsWith("/api/mcp/");
     }
 
-    private Optional<PatientAccessToken> authenticate(String token,
-                                                      HttpServletRequest request,
-                                                      HttpServletResponse response) throws IOException {
+    private Optional<Authentication> authenticate(String token,
+                                                  HttpServletRequest request,
+                                                  HttpServletResponse response) throws IOException {
         try {
-            return patientTokens.authenticate(token);
+            var route = tokenCodec.route(token);
+            return switch (route) {
+                case PATIENT, LEGACY_PATIENT -> patientTokens
+                        .authenticateForResource(token, oauthProperties.resource())
+                        .map(PatientAccessTokenAuthentication::new)
+                        .map(Authentication.class::cast);
+                case CLINICIAN -> clinicalTokens
+                        .authenticateForResource(token, oauthProperties.resource())
+                        .map(ClinicalAccessTokenAuthentication::new)
+                        .map(Authentication.class::cast);
+                case INVALID -> Optional.empty();
+            };
         } catch (ResponseStatusException ex) {
             var error = ex.getStatusCode().isSameCodeAs(HttpStatus.FORBIDDEN)
                     ? "insufficient_scope"

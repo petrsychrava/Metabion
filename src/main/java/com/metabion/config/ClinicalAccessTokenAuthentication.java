@@ -1,7 +1,7 @@
 package com.metabion.config;
 
+import com.metabion.domain.ClinicalAccessToken;
 import com.metabion.domain.McpTokenSubject;
-import com.metabion.domain.PatientAccessToken;
 import com.metabion.domain.User;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -12,11 +12,11 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class PatientAccessTokenAuthentication extends AbstractAuthenticationToken implements McpTokenAuthentication {
+public class ClinicalAccessTokenAuthentication extends AbstractAuthenticationToken implements McpTokenAuthentication {
 
-    private final PatientAccessToken token;
+    private final ClinicalAccessToken token;
 
-    public PatientAccessTokenAuthentication(PatientAccessToken token) {
+    public ClinicalAccessTokenAuthentication(ClinicalAccessToken token) {
         super(authorities(token));
         this.token = token;
         setAuthenticated(true);
@@ -39,7 +39,7 @@ public class PatientAccessTokenAuthentication extends AbstractAuthenticationToke
 
     @Override
     public McpTokenSubject subject() {
-        return McpTokenSubject.PATIENT;
+        return McpTokenSubject.CLINICIAN;
     }
 
     @Override
@@ -64,11 +64,11 @@ public class PatientAccessTokenAuthentication extends AbstractAuthenticationToke
                 .collect(Collectors.toUnmodifiableSet());
     }
 
-    public PatientAccessToken token() {
+    public ClinicalAccessToken token() {
         return token;
     }
 
-    private static Collection<GrantedAuthority> authorities(PatientAccessToken token) {
+    private static Collection<GrantedAuthority> authorities(ClinicalAccessToken token) {
         if (token == null) {
             throw new IllegalArgumentException("token is required");
         }

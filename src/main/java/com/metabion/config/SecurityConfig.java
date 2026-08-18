@@ -126,7 +126,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            RateLimitingFilter rateLimitingFilter,
-                                           PatientBearerTokenAuthenticationFilter patientBearerTokenAuthenticationFilter,
+                                           McpBearerTokenAuthenticationFilter mcpBearerTokenAuthenticationFilter,
                                            McpLocalhostFilter mcpLocalhostFilter,
                                            OAuthAuthorizationProperties oauthProperties,
                                            SecurityContextRepository securityContextRepository) throws Exception {
@@ -220,7 +220,7 @@ public class SecurityConfig {
                                 new LinkedHashMap<>(Map.of(apiRequestMatcher, apiAccessDeniedHandler)),
                                 new AccessDeniedHandlerImpl())))
                 .addFilterBefore(mcpLocalhostFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(patientBearerTokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(mcpBearerTokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())

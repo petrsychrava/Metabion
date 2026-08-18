@@ -1,5 +1,7 @@
 package com.metabion.config;
 
+import com.metabion.domain.ClinicalAccessToken;
+import com.metabion.domain.ClinicalAccessTokenScope;
 import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessToken;
 import com.metabion.domain.PatientAccessTokenScope;
@@ -7,6 +9,7 @@ import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.LoginResponse;
 import com.metabion.service.AssignmentManagementService;
+import com.metabion.service.ClinicalAccessTokenService;
 import com.metabion.service.PatientAccessTokenService;
 import com.metabion.service.SecurityService;
 import com.metabion.service.StaffInvitationService;
@@ -72,6 +75,9 @@ class SecurityConfigTest {
 
     private static final Pattern CSRF_TOKEN_VALUE =
             Pattern.compile("name=\"_csrf\"[^>]*value=\"([^\"]+)\"");
+    private static final String RESOURCE = "http://localhost:8080/api/mcp";
+    private static final String PATIENT_TOKEN = "pat_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi_0123456";
+    private static final String CLINICAL_TOKEN = "clin_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi_0123456";
 
     @Autowired
     WebApplicationContext context;
@@ -93,6 +99,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     PatientAccessTokenService patientAccessTokenService;
+
+    @MockitoBean
+    ClinicalAccessTokenService clinicalAccessTokenService;
 
     @MockitoBean
     AssignmentManagementService assignmentManagementService;
@@ -132,12 +141,24 @@ class SecurityConfigTest {
 
     @Test
     void mcp_post_with_bearer_without_csrf_is_not_rejected_by_csrf() throws Exception {
-        when(patientAccessTokenService.authenticate("valid-token")).thenReturn(Optional.of(patientToken()));
+        when(patientAccessTokenService.authenticateForResource(PATIENT_TOKEN, RESOURCE))
+                .thenReturn(Optional.of(patientToken()));
 
         mvc.perform(post("/api/mcp")
-                        .header("Authorization", "Bearer valid-token"))
+                        .header("Authorization", "Bearer " + PATIENT_TOKEN))
                 .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
-        verify(patientAccessTokenService, atLeastOnce()).authenticate("valid-token");
+        verify(patientAccessTokenService, atLeastOnce()).authenticateForResource(PATIENT_TOKEN, RESOURCE);
+    }
+
+    @Test
+    void mcp_post_with_clinician_bearer_routes_to_clinical_token_service() throws Exception {
+        when(clinicalAccessTokenService.authenticateForResource(CLINICAL_TOKEN, RESOURCE))
+                .thenReturn(Optional.of(clinicalToken()));
+
+        mvc.perform(post("/api/mcp")
+                        .header("Authorization", "Bearer " + CLINICAL_TOKEN))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
+        verify(clinicalAccessTokenService, atLeastOnce()).authenticateForResource(CLINICAL_TOKEN, RESOURCE);
     }
 
     @Test
@@ -150,13 +171,14 @@ class SecurityConfigTest {
 
     @Test
     void mcp_delete_with_bearer_without_csrf_is_not_rejected_by_csrf() throws Exception {
-        when(patientAccessTokenService.authenticate("valid-token")).thenReturn(Optional.of(patientToken()));
+        when(patientAccessTokenService.authenticateForResource(PATIENT_TOKEN, RESOURCE))
+                .thenReturn(Optional.of(patientToken()));
 
         mvc.perform(delete("/api/mcp")
-                        .header("Authorization", "Bearer valid-token")
+                        .header("Authorization", "Bearer " + PATIENT_TOKEN)
                         .header("Mcp-Session-Id", "session-1"))
                 .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
-        verify(patientAccessTokenService, atLeastOnce()).authenticate("valid-token");
+        verify(patientAccessTokenService, atLeastOnce()).authenticateForResource(PATIENT_TOKEN, RESOURCE);
     }
 
     @Test
@@ -530,9 +552,27 @@ class SecurityConfigTest {
                 "Codex",
                 Instant.parse("2026-07-04T10:00:00Z"),
                 Instant.parse("2026-08-03T10:00:00Z"),
-                "http://localhost:8080/api/mcp",
+                RESOURCE,
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
         ReflectionTestUtils.setField(token, "id", 50L);
+        return token;
+    }
+
+    private static ClinicalAccessToken clinicalToken() {
+        var user = new User("clinician@example.com", "hash");
+        ReflectionTestUtils.setField(user, "id", 20L);
+        user.setEnabled(true);
+        user.addRole(RoleName.PHYSICIAN);
+        var token = new ClinicalAccessToken(
+                user,
+                "hash",
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                Instant.parse("2026-07-04T10:00:00Z"),
+                Instant.parse("2026-08-03T10:00:00Z"),
+                RESOURCE,
+                Set.of(ClinicalAccessTokenScope.CLINICIAN_PATIENTS_READ));
+        ReflectionTestUtils.setField(token, "id", 60L);
         return token;
     }
 }
