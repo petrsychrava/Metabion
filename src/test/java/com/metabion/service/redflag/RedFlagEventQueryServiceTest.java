@@ -242,18 +242,14 @@ class RedFlagEventQueryServiceTest {
     }
 
     @Test
-    void adminCanReadClinicalCurrentWithoutAssignmentCheck() {
+    void adminCannotReadClinicalCurrent() {
         var authentication = authentication("admin@example.com");
         authenticatedUser(authentication, RoleName.ADMIN);
-        var patient = patientProfile("UTC");
-        var routine = routineEvent();
-        when(patientProfiles.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
-        when(events.findCurrentForPatient(PATIENT_ID)).thenReturn(List.of(routine));
 
-        ClinicalRedFlagSnapshotResponse result = service.currentForClinicalPatient(authentication, PATIENT_ID);
+        assertStatus(() -> service.currentForClinicalPatient(authentication, PATIENT_ID), HttpStatus.FORBIDDEN);
 
-        assertThat(result.highestSeverity()).isEqualTo(RedFlagSeverity.ROUTINE_REVIEW);
         verifyNoInteractions(accessControl);
+        verifyNoInteractions(patientProfiles, events);
     }
 
     @Test
@@ -266,6 +262,20 @@ class RedFlagEventQueryServiceTest {
 
         verify(accessControl).canViewPatientClinicalData(authentication, PATIENT_ID);
         verifyNoInteractions(patientProfiles, events);
+    }
+
+    @Test
+    void endedAssignmentIsDeniedOnNextCurrentEventsRequest() {
+        var authentication = authentication("physician@example.com");
+        authenticatedUser(authentication, RoleName.PHYSICIAN);
+        var patient = patientProfile("UTC");
+        when(accessControl.canViewPatientClinicalData(authentication, PATIENT_ID)).thenReturn(true, false);
+        when(patientProfiles.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(events.findCurrentForPatient(PATIENT_ID)).thenReturn(List.of());
+
+        assertThat(service.currentForClinicalPatient(authentication, PATIENT_ID))
+                .isEqualTo(new ClinicalRedFlagSnapshotResponse(null, List.of()));
+        assertStatus(() -> service.currentForClinicalPatient(authentication, PATIENT_ID), HttpStatus.FORBIDDEN);
     }
 
     @Test

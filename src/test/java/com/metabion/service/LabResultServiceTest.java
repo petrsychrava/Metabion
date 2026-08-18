@@ -190,6 +190,83 @@ class LabResultServiceTest {
     }
 
     @Test
+    void assignedNutritionSpecialistCanListClinicalLabResults() {
+        var specialist = user(5L, RoleName.NUTRITION_SPECIALIST);
+        var specialistAuth = auth("nutrition@example.com");
+        when(users.findByEmail("nutrition@example.com")).thenReturn(Optional.of(specialist));
+        when(accessControl.canViewPatientClinicalData(specialistAuth, 10L)).thenReturn(true);
+        when(resultSets.findActiveByPatientAndCollectionDateBetween(10L,
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 16))).thenReturn(List.of());
+
+        assertThat(service.listForClinicalPatient(specialistAuth, 10L,
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 16))).isEmpty();
+    }
+
+    @Test
+    void unassignedClinicianCannotListClinicalLabResultsBeforePatientLookup() {
+        var clinician = user(2L, RoleName.PHYSICIAN);
+        var clinicianAuth = auth("clinician@example.com");
+        when(users.findByEmail("clinician@example.com")).thenReturn(Optional.of(clinician));
+        when(accessControl.canViewPatientClinicalData(clinicianAuth, 10L)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.listForClinicalPatient(clinicianAuth, 10L,
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 16)))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+
+        verifyNoInteractions(resultSets);
+        verify(patientProfiles, never()).findById(any());
+    }
+
+    @Test
+    void adminCannotListClinicalLabResults() {
+        var admin = user(3L, RoleName.ADMIN);
+        when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+
+        assertThatThrownBy(() -> service.listForClinicalPatient(auth("admin@example.com"), 10L,
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 16)))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+
+        verifyNoInteractions(accessControl, resultSets);
+        verify(patientProfiles, never()).findById(any());
+    }
+
+    @Test
+    void endedAssignmentIsDeniedOnNextClinicalLabResultsRequest() {
+        var clinician = user(2L, RoleName.PHYSICIAN);
+        var clinicianAuth = auth("clinician@example.com");
+        when(users.findByEmail("clinician@example.com")).thenReturn(Optional.of(clinician));
+        when(accessControl.canViewPatientClinicalData(clinicianAuth, 10L)).thenReturn(true, false);
+        when(resultSets.findActiveByPatientAndCollectionDateBetween(10L,
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 16))).thenReturn(List.of());
+
+        assertThat(service.listForClinicalPatient(clinicianAuth, 10L,
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 16))).isEmpty();
+        assertThatThrownBy(() -> service.listForClinicalPatient(clinicianAuth, 10L,
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 16)))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
+    @Test
+    void clinicalResultSetIdCannotCrossPatients() {
+        var patient = mock(PatientProfile.class);
+        when(patient.getId()).thenReturn(11L);
+        var clinician = user(2L, RoleName.PHYSICIAN);
+        var clinicianAuth = auth("clinician@example.com");
+        var set = mock(LabResultSet.class);
+        when(set.getPatientProfile()).thenReturn(patient);
+        when(users.findByEmail("clinician@example.com")).thenReturn(Optional.of(clinician));
+        when(accessControl.canViewPatientClinicalData(clinicianAuth, 10L)).thenReturn(true);
+        when(resultSets.findActiveById(90L)).thenReturn(Optional.of(set));
+
+        assertThatThrownBy(() -> service.getForClinicalPatient(clinicianAuth, 10L, 90L))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
+    @Test
     void saveForClinicalPatientWithRedFlagsReturnsDetailedClinicalOutcomeWithoutSecondEvaluation() {
         var patient = mock(PatientProfile.class);
         var clinician = user(2L, RoleName.PHYSICIAN);

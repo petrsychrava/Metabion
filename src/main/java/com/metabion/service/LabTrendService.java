@@ -61,8 +61,7 @@ public class LabTrendService {
         if (patientProfileId == null) {
             throw badRequest("patientProfileId is required");
         }
-        if (!actor.hasRole(RoleName.ADMIN)
-                && !accessControl.canViewPatientClinicalData(authentication, patientProfileId)) {
+        if (!accessControl.canViewPatientClinicalData(authentication, patientProfileId)) {
             throw forbidden("Patient profile is not assigned to current user");
         }
         var patient = patientProfiles.findById(patientProfileId)
@@ -110,7 +109,7 @@ public class LabTrendService {
     }
 
     private void requireClinicalActor(User actor) {
-        if (!actor.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN, RoleName.ADMIN)) {
+        if (!actor.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN)) {
             throw forbidden("Current user cannot access clinical data");
         }
     }

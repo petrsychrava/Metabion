@@ -1,8 +1,11 @@
 package com.metabion.integration;
 
 import com.metabion.domain.PatientAccessClientType;
+import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
+import com.metabion.repository.ClinicalAccessTokenRepository;
+import com.metabion.repository.OAuthRefreshTokenRepository;
 import com.metabion.repository.PatientAccessTokenRepository;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.PatientAccessTokenService;
@@ -58,6 +61,12 @@ class McpOAuthFlowIT {
     @Autowired
     PatientAccessTokenRepository tokens;
 
+    @Autowired
+    ClinicalAccessTokenRepository clinicalTokens;
+
+    @Autowired
+    OAuthRefreshTokenRepository refreshTokens;
+
     @MockitoBean
     FindByIndexNameSessionRepository<Session> sessions;
 
@@ -72,7 +81,9 @@ class McpOAuthFlowIT {
                 .apply(SecurityMockMvcConfigurers.springSecurity())
                 .build();
 
+        clinicalTokens.deleteAll();
         tokens.deleteAll();
+        refreshTokens.deleteAll();
         users.deleteAll();
         var patient = new User(EMAIL, "hash");
         patient.setEnabled(true);
@@ -128,8 +139,12 @@ class McpOAuthFlowIT {
         assertThat(stored.getFirst().getClientType()).isEqualTo(PatientAccessClientType.MCP_CODEX);
         assertThat(stored.getFirst().getDisplayLabel()).isEqualTo("Codex");
         assertThat(stored.getFirst().getResource()).isEqualTo(RESOURCE);
+        assertThat(clinicalTokens.findAll()).isEmpty();
+        assertThat(refreshTokens.findAll()).singleElement()
+                .satisfies(storedRefresh -> assertThat(storedRefresh.getSubjectType())
+                        .isEqualTo(McpTokenSubject.PATIENT));
 
-        mvc.perform(post("/oauth/token")
+        var refreshResponse = mvc.perform(post("/oauth/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .param("grant_type", "refresh_token")
                         .param("refresh_token", refreshToken)
@@ -138,7 +153,16 @@ class McpOAuthFlowIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.access_token", org.hamcrest.Matchers.startsWith("pat_")))
                 .andExpect(jsonPath("$.refresh_token").isNotEmpty())
-                .andExpect(jsonPath("$.scope").value("patient:profile:read"));
+                .andExpect(jsonPath("$.scope").value("patient:profile:read"))
+                .andReturn();
+        var rotatedRefreshToken = com.jayway.jsonpath.JsonPath
+                .read(refreshResponse.getResponse().getContentAsString(), "$.refresh_token")
+                .toString();
+        assertThat(rotatedRefreshToken).isNotEqualTo(refreshToken);
+        assertThat(refreshTokens.findAll())
+                .extracting(storedRefresh -> storedRefresh.getSubjectType())
+                .containsOnly(McpTokenSubject.PATIENT);
+        assertThat(clinicalTokens.findAll()).isEmpty();
     }
 
     private String registerClient() throws Exception {

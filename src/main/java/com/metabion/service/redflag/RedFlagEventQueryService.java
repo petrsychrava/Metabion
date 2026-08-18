@@ -207,13 +207,11 @@ public class RedFlagEventQueryService {
         var user = currentUser(authentication);
         if (!user.hasAnyRole(
                 RoleName.NUTRITION_SPECIALIST,
-                RoleName.PHYSICIAN,
-                RoleName.ADMIN)) {
+                RoleName.PHYSICIAN)) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN, "Current user cannot access clinical data");
         }
-        if (!user.hasRole(RoleName.ADMIN)
-                && !accessControl.canViewPatientClinicalData(authentication, patientProfileId)) {
+        if (!accessControl.canViewPatientClinicalData(authentication, patientProfileId)) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN, "Patient profile is not assigned to current user");
         }

@@ -35,9 +35,6 @@ public class ClinicalPatientDirectoryService {
 
     public List<PatientOptionResponse> listAccessible(Authentication authentication) {
         var user = currentUser(authentication);
-        if (user.hasRole(RoleName.ADMIN)) {
-            return patientProfiles.findAllPatientOptions();
-        }
         if (!user.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user cannot access clinical data");
         }
@@ -48,7 +45,7 @@ public class ClinicalPatientDirectoryService {
 
     public PatientOptionResponse getAccessible(Authentication authentication, Long patientProfileId) {
         var user = currentUser(authentication);
-        if (!user.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN, RoleName.ADMIN)) {
+        if (!user.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Current user cannot access clinical data");
         }
         // 403 regardless of existence — the caller learns nothing about other patients.
