@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -21,6 +22,7 @@ public class OAuthRefreshToken {
     @Enumerated(EnumType.STRING) @Column(name = "client_type", nullable = false, length = 40) private PatientAccessClientType clientType;
     @Column(name = "display_label", nullable = false, length = 120) private String displayLabel;
     @Column(name = "\"resource\"", nullable = false, length = 255) private String resource;
+    @Enumerated(EnumType.STRING) @Column(name = "subject_type", nullable = false, length = 16) private McpTokenSubject subjectType;
     @Column(name = "created_at", nullable = false, updatable = false) private Instant createdAt;
     @Column(name = "expires_at", nullable = false) private Instant expiresAt;
     @Column(name = "consumed_at") private Instant consumedAt;
@@ -36,9 +38,18 @@ public class OAuthRefreshToken {
     public OAuthRefreshToken(String tokenHash, String familyId, User user, String clientId,
                              OAuthClientSource clientSource, PatientAccessClientType clientType,
                              String displayLabel, String resource, Instant createdAt, Instant expiresAt,
-                             Set<PatientAccessTokenScope> scopes) {
+                             Set<?> scopes) {
+        this(tokenHash, familyId, McpTokenSubject.PATIENT, user, clientId, clientSource, clientType, displayLabel,
+                resource, createdAt, expiresAt, scopes);
+    }
+
+    public OAuthRefreshToken(String tokenHash, String familyId, McpTokenSubject subjectType, User user, String clientId,
+                             OAuthClientSource clientSource, PatientAccessClientType clientType,
+                             String displayLabel, String resource, Instant createdAt, Instant expiresAt,
+                             Set<?> scopes) {
         this.tokenHash = requireTokenHash(tokenHash);
         this.familyId = require(familyId, "family id");
+        this.subjectType = Objects.requireNonNull(subjectType, "subjectType is required");
         this.user = Objects.requireNonNull(user, "user is required");
         this.clientId = require(clientId, "client id");
         this.clientSource = Objects.requireNonNull(clientSource, "client source is required");
@@ -49,7 +60,8 @@ public class OAuthRefreshToken {
         this.expiresAt = Objects.requireNonNull(expiresAt, "expiresAt is required");
         if (!expiresAt.isAfter(createdAt)) throw new IllegalArgumentException("expiresAt must be after createdAt");
         if (scopes == null || scopes.isEmpty()) throw new IllegalArgumentException("scopes are required");
-        this.scopeGrants = scopes.stream().map(OAuthRefreshTokenScopeGrant::new)
+        this.scopeGrants = scopes.stream().map(OAuthRefreshToken::normalizeScopeAuthority)
+                .map(OAuthRefreshTokenScopeGrant::new)
                 .collect(Collectors.toCollection(HashSet::new));
     }
 
@@ -65,16 +77,33 @@ public class OAuthRefreshToken {
     public boolean isExpired(Instant now) { return !expiresAt.isAfter(now); }
     public boolean isConsumed() { return consumedAt != null; }
     public boolean isRevoked() { return revokedAt != null; }
-    public Set<PatientAccessTokenScope> scopes() { return scopeGrants.stream().map(OAuthRefreshTokenScopeGrant::getScope).collect(Collectors.toUnmodifiableSet()); }
+    public Set<String> scopes() { return scopeAuthorities(); }
+    public Set<String> scopeAuthorities() {
+        return scopeGrants.stream().map(OAuthRefreshTokenScopeGrant::getScope)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
     private static String require(String value, String label) { if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " is required"); return value.trim(); }
     private static String requireTokenHash(String tokenHash) {
         var value = require(tokenHash, "token hash");
         if (!value.matches("[0-9a-fA-F]{64}")) throw new IllegalArgumentException("token hash must be 64 hexadecimal characters");
         return value;
     }
+    private static String normalizeScopeAuthority(Object scope) {
+        if (scope instanceof String authority) {
+            return require(authority, "scope");
+        }
+        if (scope instanceof PatientAccessTokenScope patientScope) {
+            return patientScope.authority();
+        }
+        if (scope instanceof ClinicalAccessTokenScope clinicalScope) {
+            return clinicalScope.authority();
+        }
+        throw new IllegalArgumentException("unsupported scope type");
+    }
     public Long getId() { return id; } public String getTokenHash() { return tokenHash; } public String getFamilyId() { return familyId; }
     public User getUser() { return user; } public String getClientId() { return clientId; } public OAuthClientSource getClientSource() { return clientSource; }
     public PatientAccessClientType getClientType() { return clientType; } public String getDisplayLabel() { return displayLabel; } public String getResource() { return resource; }
+    public McpTokenSubject getSubjectType() { return subjectType; }
     public Instant getCreatedAt() { return createdAt; } public Instant getExpiresAt() { return expiresAt; } public Instant getConsumedAt() { return consumedAt; }
     public Long getReplacementTokenId() { return replacementTokenId; } public Instant getRevokedAt() { return revokedAt; } public String getRevocationReason() { return revocationReason; }
 }

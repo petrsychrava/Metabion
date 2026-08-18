@@ -2,6 +2,7 @@ package com.metabion.repository;
 
 import com.metabion.domain.OAuthRefreshToken;
 import com.metabion.domain.OAuthRefreshTokenFamily;
+import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.RoleName;
@@ -54,9 +55,10 @@ class OAuthRefreshTokenRepositoryTest {
         assertThat(persistence.isLoaded(loaded, "scopeGrants")).isTrue();
         assertThat(loaded.getUser().hasRole(RoleName.PATIENT)).isTrue();
         assertThat(loaded.getClientSource()).isEqualTo(OAuthClientSource.DYNAMIC);
+        assertThat(loaded.getSubjectType()).isEqualTo(McpTokenSubject.PATIENT);
         assertThat(loaded.scopes()).containsExactlyInAnyOrder(
-                PatientAccessTokenScope.PATIENT_PROFILE_READ,
-                PatientAccessTokenScope.PATIENT_DIET_LOG_WRITE);
+                PatientAccessTokenScope.PATIENT_PROFILE_READ.authority(),
+                PatientAccessTokenScope.PATIENT_DIET_LOG_WRITE.authority());
         assertThat(loaded.isExpired(createdAt.plusSeconds(3599))).isFalse();
         assertThat(loaded.isExpired(createdAt.plusSeconds(3600))).isTrue();
 
@@ -78,6 +80,22 @@ class OAuthRefreshTokenRepositoryTest {
         assertThat(consumed.getReplacementTokenId()).isEqualTo(replacement.getId());
         assertThat(consumed.isRevoked()).isTrue();
         assertThat(consumed.getRevocationReason()).isEqualTo("family_reuse");
+    }
+
+    @Test
+    void constructorNormalizesPatientScopesToAuthorities() {
+        var user = users.saveAndFlush(patient("normalized-refresh@example.com"));
+        var createdAt = Instant.parse("2026-07-04T10:00:00Z");
+        families.saveAndFlush(new OAuthRefreshTokenFamily("family-normalized", createdAt));
+        tokens.saveAndFlush(new OAuthRefreshToken(
+                "c".repeat(64), "family-normalized", user, "codex-client", OAuthClientSource.DYNAMIC,
+                PatientAccessClientType.MCP_CODEX, "Codex", "http://localhost:8080/api/mcp",
+                createdAt, createdAt.plusSeconds(3600),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ)));
+        entityManager.clear();
+
+        assertThat(tokens.findByTokenHash("c".repeat(64)).orElseThrow().scopes())
+                .containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority());
     }
 
     @Test

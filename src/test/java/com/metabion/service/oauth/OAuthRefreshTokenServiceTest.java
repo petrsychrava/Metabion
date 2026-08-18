@@ -11,6 +11,7 @@ import com.metabion.dto.oauth.OAuthClientSource;
 import com.metabion.dto.IssuePatientAccessTokenResponse;
 import com.metabion.repository.OAuthRefreshTokenRepository;
 import com.metabion.repository.OAuthRefreshTokenFamilyRepository;
+import com.metabion.service.McpScopeCatalog;
 import com.metabion.service.PatientAccessTokenService;
 import com.metabion.service.PatientAccessTokenService;
 import org.junit.jupiter.api.Test;
@@ -79,7 +80,7 @@ class OAuthRefreshTokenServiceTest {
         assertThat(saved.getCreatedAt()).isEqualTo(NOW);
         assertThat(saved.getExpiresAt()).isEqualTo(NOW.plus(Duration.ofDays(30)));
         assertThat(saved.getClientSource()).isEqualTo(OAuthClientSource.CONFIGURED);
-        assertThat(saved.scopes()).containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ);
+        assertThat(saved.scopeAuthorities()).containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority());
     }
 
     @Test
@@ -108,7 +109,7 @@ class OAuthRefreshTokenServiceTest {
         assertThat(replacement.getFamilyId()).isEqualTo("family-1");
         assertThat(replacement.getCreatedAt()).isEqualTo(NOW);
         assertThat(replacement.getExpiresAt()).isEqualTo(NOW.plus(Duration.ofDays(30)));
-        assertThat(replacement.scopes()).containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ);
+        assertThat(replacement.scopeAuthorities()).containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority());
         assertThat(old.getConsumedAt()).isEqualTo(NOW);
         assertThat(old.getReplacementTokenId()).isEqualTo(42L);
         assertThat(service.refreshGrant("old-refresh", "mobile-app", "http://localhost:8080/api/mcp").isInvalid()).isTrue();
@@ -141,7 +142,8 @@ class OAuthRefreshTokenServiceTest {
         assertThat(response.response().scope()).isEqualTo("patient:lab:read");
         var replacement = org.mockito.ArgumentCaptor.forClass(OAuthRefreshToken.class);
         verify(tokens).save(replacement.capture());
-        assertThat(replacement.getValue().scopes()).containsExactly(PatientAccessTokenScope.PATIENT_LAB_READ);
+        assertThat(McpScopeCatalog.patientScopes(replacement.getValue().scopeAuthorities()))
+                .containsExactly(PatientAccessTokenScope.PATIENT_LAB_READ);
     }
 
     @Test
@@ -180,7 +182,7 @@ class OAuthRefreshTokenServiceTest {
         assertThat(response.response().scope()).isEqualTo("patient:profile:read patient:red-flags:read");
         var replacement = ArgumentCaptor.forClass(OAuthRefreshToken.class);
         verify(tokens).save(replacement.capture());
-        assertThat(replacement.getValue().scopes())
+        assertThat(McpScopeCatalog.patientScopes(replacement.getValue().scopeAuthorities()))
                 .containsExactlyInAnyOrder(
                         PatientAccessTokenScope.PATIENT_PROFILE_READ,
                         PatientAccessTokenScope.PATIENT_RED_FLAG_READ);

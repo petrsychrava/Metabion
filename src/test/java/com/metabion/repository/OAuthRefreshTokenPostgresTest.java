@@ -2,6 +2,7 @@ package com.metabion.repository;
 
 import com.metabion.domain.OAuthRefreshToken;
 import com.metabion.domain.OAuthRefreshTokenFamily;
+import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.RoleName;
@@ -61,7 +62,8 @@ class OAuthRefreshTokenPostgresTest {
         var loaded = refreshTokens.findByTokenHash(PatientAccessTokenService.sha256Hex("postgres-refresh"))
                 .orElseThrow();
         assertThat(loaded.getFamilyId()).isEqualTo("postgres-family");
-        assertThat(loaded.scopes()).containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ);
+        assertThat(loaded.getSubjectType()).isEqualTo(McpTokenSubject.PATIENT);
+        assertThat(loaded.scopes()).containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority());
         assertThat(families.findByIdForUpdate("postgres-family")).isPresent();
     }
 }

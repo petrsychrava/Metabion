@@ -47,7 +47,11 @@ class DatabasePortableMappingTest {
 
     @Test
     void quotes_lowercase_resource_columns_without_changing_their_other_metadata() throws Exception {
-        List<Class<?>> types = List.of(PatientAccessToken.class, OAuthAuthorizationCode.class, OAuthRefreshToken.class);
+        List<Class<?>> types = List.of(
+                PatientAccessToken.class,
+                ClinicalAccessToken.class,
+                OAuthAuthorizationCode.class,
+                OAuthRefreshToken.class);
 
         for (Class<?> type : types) {
             Column column = type.getDeclaredField("resource").getAnnotation(Column.class);

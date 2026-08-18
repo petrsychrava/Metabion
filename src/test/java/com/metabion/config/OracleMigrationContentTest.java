@@ -88,6 +88,7 @@ class OracleMigrationContentTest {
     void resourceColumnsUseLowercaseQuotedIdentifier() throws IOException {
         assertResourceReferencesQuoted("V15__mcp_oauth_authorization.sql", 5);
         assertResourceReferencesQuoted("V17__oauth_client_capabilities.sql", 1);
+        assertResourceReferencesQuoted("V22__clinical_mcp_token_storage.sql", 1);
     }
 
     @Test
@@ -138,7 +139,7 @@ class OracleMigrationContentTest {
 
     private void assertNoMigrationContains(Pattern prohibitedSyntax, String description) throws IOException {
         Resource[] migrations = resolver.getResources("classpath*:db/migration/oracle/V*.sql");
-        assertThat(migrations).as("Oracle migration resources").hasSize(21);
+        assertThat(migrations).as("Oracle migration resources").hasSize(22);
 
         Arrays.stream(migrations).forEach(migration -> {
             String sql;

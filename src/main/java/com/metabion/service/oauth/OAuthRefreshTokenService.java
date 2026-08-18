@@ -13,6 +13,7 @@ import com.metabion.dto.oauth.OAuthRefreshGrantResult;
 import com.metabion.dto.oauth.OAuthTokenResponse;
 import com.metabion.repository.OAuthRefreshTokenRepository;
 import com.metabion.repository.OAuthRefreshTokenFamilyRepository;
+import com.metabion.service.McpScopeCatalog;
 import com.metabion.service.PatientAccessTokenService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -105,8 +106,7 @@ public class OAuthRefreshTokenService {
         if (client.source() != current.getClientSource()
                 || !client.supportsGrant(OAuthClientMetadata.REFRESH_TOKEN)
                 || !properties.resource().equals(resource)
-                || !allowedScopes.containsAll(current.scopes().stream()
-                        .map(PatientAccessTokenScope::authority).toList())) {
+                || !allowedScopes.containsAll(current.scopeAuthorities())) {
             return OAuthRefreshGrantResult.invalid();
         }
         var user = current.getUser();
@@ -120,13 +120,14 @@ public class OAuthRefreshTokenService {
                 PatientAccessTokenService.sha256Hex(replacementPlain),
                 current.getFamilyId(), user, current.getClientId(), current.getClientSource(),
                 current.getClientType(), current.getDisplayLabel(), current.getResource(), now,
-                now.plus(properties.refreshTokenTtl()), current.scopes()));
+                now.plus(properties.refreshTokenTtl()), current.scopeAuthorities()));
+        var patientScopes = McpScopeCatalog.patientScopes(current.scopeAuthorities());
         current.consume(replacement.getId(), now);
         var access = accessTokens.issueForPatient(
                 user, replacement.getClientType(), replacement.getDisplayLabel(), properties.accessTokenTtl(),
-                replacement.scopes(), replacement.getResource(), replacement.getFamilyId());
+                patientScopes, replacement.getResource(), replacement.getFamilyId());
         var expiresIn = Math.max(0, Duration.between(now, access.expiresAt()).toSeconds());
-        var scope = replacement.scopes().stream().map(PatientAccessTokenScope::authority).sorted()
+        var scope = replacement.scopeAuthorities().stream().sorted()
                 .collect(java.util.stream.Collectors.joining(" "));
         return OAuthRefreshGrantResult.success(new OAuthTokenResponse(
                 access.plainToken(), "Bearer", expiresIn, scope, replacementPlain));
