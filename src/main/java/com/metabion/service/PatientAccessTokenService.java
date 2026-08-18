@@ -251,11 +251,6 @@ public class PatientAccessTokenService {
     }
 
     public static String sha256Hex(String plaintext) {
-        try {
-            var digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(plaintext.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
+        return McpTokenCodec.sha256Hex(plaintext);
     }
 }
