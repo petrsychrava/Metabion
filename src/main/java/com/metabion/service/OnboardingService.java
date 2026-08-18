@@ -115,8 +115,8 @@ public class OnboardingService {
         }
 
         return candidates.stream()
-                .filter(submission -> accessControl.canViewPatientClinicalData(
-                        currentUser, submission.getPatientProfile().getId()))
+                .filter(submission -> currentUser.hasRole(RoleName.ADMIN)
+                        || accessControl.canViewPatientClinicalData(currentUser, submission.getPatientProfile().getId()))
                 .map(OnboardingSubmissionSummaryResponse::from)
                 .toList();
     }
@@ -143,7 +143,8 @@ public class OnboardingService {
     private void requireClinicalReviewer(User user) {
         if (!user.hasAnyRole(
                 RoleName.NUTRITION_SPECIALIST,
-                RoleName.PHYSICIAN)) {
+                RoleName.PHYSICIAN,
+                RoleName.ADMIN)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Current user cannot access clinical data");
         }

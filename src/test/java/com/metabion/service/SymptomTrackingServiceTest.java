@@ -130,6 +130,100 @@ class SymptomTrackingServiceTest {
     }
 
     @Test
+    void assignedPhysicianCanListClinicalCheckIns() {
+        var physician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var physicianAuth = auth("doctor@example.com");
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(physician));
+        when(accessControl.canViewPatientClinicalData(physicianAuth, 10L)).thenReturn(true);
+        when(checkIns.findByPatientProfileIdAndCheckInDateBetweenOrderByCheckInDateDesc(
+                10L, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30)))
+                .thenReturn(List.of());
+
+        assertThat(service.listClinicalCheckIns(
+                physicianAuth,
+                10L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30))).isEmpty();
+    }
+
+    @Test
+    void assignedNutritionSpecialistCanListClinicalCheckIns() {
+        var specialist = user(3L, "nutrition@example.com", RoleName.NUTRITION_SPECIALIST);
+        var specialistAuth = auth("nutrition@example.com");
+        when(users.findByEmail("nutrition@example.com")).thenReturn(Optional.of(specialist));
+        when(accessControl.canViewPatientClinicalData(specialistAuth, 10L)).thenReturn(true);
+        when(checkIns.findByPatientProfileIdAndCheckInDateBetweenOrderByCheckInDateDesc(
+                10L, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30)))
+                .thenReturn(List.of());
+
+        assertThat(service.listClinicalCheckIns(
+                specialistAuth,
+                10L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30))).isEmpty();
+    }
+
+    @Test
+    void unassignedClinicianCannotListClinicalCheckInsBeforeRepositoryLookup() {
+        var physician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var physicianAuth = auth("doctor@example.com");
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(physician));
+        when(accessControl.canViewPatientClinicalData(physicianAuth, 10L)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.listClinicalCheckIns(
+                physicianAuth,
+                10L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403 FORBIDDEN");
+
+        verifyNoInteractions(checkIns);
+    }
+
+    @Test
+    void endedAssignmentIsDeniedOnNextClinicalCheckInListRequest() {
+        var physician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var physicianAuth = auth("doctor@example.com");
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(physician));
+        when(accessControl.canViewPatientClinicalData(physicianAuth, 10L)).thenReturn(true, false);
+        when(checkIns.findByPatientProfileIdAndCheckInDateBetweenOrderByCheckInDateDesc(
+                10L, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30)))
+                .thenReturn(List.of());
+
+        assertThat(service.listClinicalCheckIns(
+                physicianAuth,
+                10L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30))).isEmpty();
+        assertThatThrownBy(() -> service.listClinicalCheckIns(
+                physicianAuth,
+                10L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403 FORBIDDEN");
+    }
+
+    @Test
+    void crossPatientClinicalCheckInListIsRejectedBeforeRepositoryLookup() {
+        var physician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var physicianAuth = auth("doctor@example.com");
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(physician));
+        when(accessControl.canViewPatientClinicalData(physicianAuth, 20L)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.listClinicalCheckIns(
+                physicianAuth,
+                20L,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 6, 30)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403 FORBIDDEN");
+
+        verifyNoInteractions(checkIns);
+    }
+
+    @Test
     void saveForCurrentPatientScoresAnswersAndReplacesSameDayCheckIn() {
         var date = LocalDate.of(2026, 6, 26);
         var first = completeRequest(date, FlareState.SUSPECTED_FLARE, "mild");
@@ -434,6 +528,12 @@ class SymptomTrackingServiceTest {
         user.setEnabled(true);
         user.addRole(role);
         return user;
+    }
+
+    private Authentication auth(String email) {
+        var authentication = new TestingAuthenticationToken(email, "password");
+        authentication.setAuthenticated(true);
+        return authentication;
     }
 
     private PatientProfile patientProfile(Long id, User user) {

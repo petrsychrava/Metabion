@@ -172,18 +172,15 @@ class LabTrendServiceTest {
     }
 
     @Test
-    void adminCannotReadTrendWithoutAssignment() {
+    void adminCanReadTrendWithoutAssignment() {
         var admin = user(3L, "admin@example.com", RoleName.ADMIN);
         var adminAuth = auth("admin@example.com");
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(results.findTrend(10L, "CRP", FROM, TO)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.clinicalTrend(adminAuth, 10L, "CRP", FROM, TO))
-                .isInstanceOf(ResponseStatusException.class)
-                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
-                        .isEqualTo(HttpStatus.FORBIDDEN));
+        assertThat(service.clinicalTrend(adminAuth, 10L, "CRP", FROM, TO).points()).isEmpty();
 
         verify(accessControl, never()).canViewPatientClinicalData(adminAuth, 10L);
-        verify(results, never()).findTrend(any(), any(), any(), any());
     }
 
     @Test

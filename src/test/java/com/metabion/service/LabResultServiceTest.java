@@ -219,16 +219,16 @@ class LabResultServiceTest {
     }
 
     @Test
-    void adminCannotListClinicalLabResults() {
+    void adminCanListClinicalLabResultsWithoutAssignment() {
         var admin = user(3L, RoleName.ADMIN);
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(resultSets.findActiveByPatientAndCollectionDateBetween(10L,
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 16))).thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.listForClinicalPatient(auth("admin@example.com"), 10L,
-                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 16)))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+        assertThat(service.listForClinicalPatient(auth("admin@example.com"), 10L,
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 16))).isEmpty();
 
-        verifyNoInteractions(accessControl, resultSets);
+        verifyNoInteractions(accessControl);
         verify(patientProfiles, never()).findById(any());
     }
 

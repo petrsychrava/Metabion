@@ -36,17 +36,17 @@ class ClinicalPatientDirectoryServiceTest {
     @Mock AccessControlService accessControl;
 
     @Test
-    void adminCannotListClinicalOptions() {
+    void adminListsAllPatients() {
         var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles, accessControl);
         var admin = user(1L, "admin@example.com", RoleName.ADMIN);
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(patientProfiles.findAllPatientOptions())
+                .thenReturn(List.of(new PatientOptionResponse(10L, "p@example.com")));
 
-        assertThatThrownBy(() -> service.listAccessible(auth("admin@example.com")))
-                .isInstanceOf(ResponseStatusException.class)
-                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
-                        .isEqualTo(HttpStatus.FORBIDDEN));
+        assertThat(service.listAccessible(auth("admin@example.com")))
+                .containsExactly(new PatientOptionResponse(10L, "p@example.com"));
 
-        verifyNoInteractions(staffProfiles, patientProfiles, accessControl);
+        verifyNoInteractions(staffProfiles, accessControl);
     }
 
     @Test

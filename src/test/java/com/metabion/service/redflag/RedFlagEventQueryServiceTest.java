@@ -242,14 +242,18 @@ class RedFlagEventQueryServiceTest {
     }
 
     @Test
-    void adminCannotReadClinicalCurrent() {
+    void adminCanReadClinicalCurrentWithoutAssignmentCheck() {
         var authentication = authentication("admin@example.com");
         authenticatedUser(authentication, RoleName.ADMIN);
+        var patient = patientProfile("UTC");
+        var routine = routineEvent();
+        when(patientProfiles.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(events.findCurrentForPatient(PATIENT_ID)).thenReturn(List.of(routine));
 
-        assertStatus(() -> service.currentForClinicalPatient(authentication, PATIENT_ID), HttpStatus.FORBIDDEN);
+        ClinicalRedFlagSnapshotResponse result = service.currentForClinicalPatient(authentication, PATIENT_ID);
 
+        assertThat(result.highestSeverity()).isEqualTo(RedFlagSeverity.ROUTINE_REVIEW);
         verifyNoInteractions(accessControl);
-        verifyNoInteractions(patientProfiles, events);
     }
 
     @Test

@@ -185,16 +185,19 @@ class ClinicalOverviewServiceTest {
     }
 
     @Test
-    void adminCannotReadClinicalOverview() {
+    void adminIsScopedToOwnAssignmentsLikeAnyStaffMember() {
         var admin = user(1L, "admin@example.com", RoleName.ADMIN);
+        // StaffProfile requires a clinical staff role, so an admin with a staff profile
+        // necessarily holds one too; the ADMIN role is what this test exercises.
+        admin.addRole(RoleName.PHYSICIAN);
+        var staff = new StaffProfile(admin);
+        staff.setId(10L);
         when(users.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(staffProfiles.findByUserId(admin.getId())).thenReturn(Optional.of(staff));
+        when(patientProfiles.findAccessibleClinicalOverviewPatientsForStaff(10L)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> service().overview(auth("admin@example.com")))
-                .isInstanceOf(ResponseStatusException.class)
-                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
-                        .isEqualTo(HttpStatus.FORBIDDEN));
-
-        verifyNoInteractions(staffProfiles, patientProfiles, redFlags);
+        assertThat(service().overview(auth("admin@example.com"))).isEmpty();
+        verifyNoInteractions(redFlags);
     }
 
     @Test

@@ -448,14 +448,16 @@ class OnboardingServiceTest {
     }
 
     @Test
-    void adminCannotUseClinicalReviewReadPath() {
+    void adminCanUseClinicalReviewReadPath() {
         var admin = user(26L, "admin-read@example.com", RoleName.ADMIN);
+        var patient = patientProfile(260L, user(29L, "admin-readable-patient@example.com", RoleName.PATIENT));
+        var submission = submission(patient, "default", 1);
         when(users.findByEmail("admin-read@example.com")).thenReturn(Optional.of(admin));
+        when(submissions.findById(101L)).thenReturn(Optional.of(submission));
+        when(accessControl.canViewPatientClinicalData(any(Authentication.class), eq(260L))).thenReturn(true);
 
-        assertThatThrownBy(() -> service.getReviewable(auth("admin-read@example.com"), 101L))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("403 FORBIDDEN");
-        verify(submissions, never()).findById(101L);
+        assertThat(service.getReviewable(auth("admin-read@example.com"), 101L).patientProfileId())
+                .isEqualTo(260L);
     }
 
     @Test
@@ -497,15 +499,20 @@ class OnboardingServiceTest {
     }
 
     @Test
-    void listReviewableRejectsAdminBeforeQueryingSubmissions() {
+    void listReviewableAllowsAdminToSeeAllCandidatesWithoutAssignmentChecks() {
         var admin = user(12L, "admin-list@example.com", RoleName.ADMIN);
+        var first = submission(patientProfile(120L, user(13L, "first-list@example.com", RoleName.PATIENT)),
+                "default", 1);
+        var second = submission(patientProfile(121L, user(14L, "second-list@example.com", RoleName.PATIENT)),
+                "study-a", 1);
         when(users.findByEmail("admin-list@example.com")).thenReturn(Optional.of(admin));
+        when(submissions.findAllByOrderBySubmittedAtDesc()).thenReturn(List.of(first, second));
 
-        assertThatThrownBy(() -> service.listReviewable(auth("admin-list@example.com"), null, null))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("403 FORBIDDEN");
+        var summaries = service.listReviewable(auth("admin-list@example.com"), null, null);
 
-        verify(submissions, never()).findAllByOrderBySubmittedAtDesc();
+        assertThat(summaries)
+                .extracting(OnboardingSubmissionSummaryResponse::patientProfileId)
+                .containsExactly(120L, 121L);
         verify(accessControl, never()).canViewPatientClinicalData(any(Authentication.class), any());
         verify(accessControl, never()).canViewPatientClinicalData(any(User.class), any());
     }

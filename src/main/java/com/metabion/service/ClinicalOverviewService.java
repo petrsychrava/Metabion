@@ -62,7 +62,7 @@ public class ClinicalOverviewService {
 
     public List<ClinicalPatientOverviewResponse> overview(Authentication authentication) {
         var user = currentUser(authentication);
-        if (!user.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN)) {
+        if (!user.hasAnyRole(RoleName.NUTRITION_SPECIALIST, RoleName.PHYSICIAN, RoleName.ADMIN)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Current user cannot access clinical data");
         }

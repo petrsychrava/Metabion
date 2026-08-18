@@ -273,6 +273,106 @@ class DietLogPhotoServiceTest {
     }
 
     @Test
+    void assignedPhysicianCanReadAttachedPhotoContent() throws Exception {
+        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patient(10L, patientUser);
+        var physician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var photo = attachedPhoto(50L, patient, patientUser, log, "plate", 0);
+        var physicianAuth = auth("doctor@example.com");
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(physician));
+        when(photos.findById(50L)).thenReturn(Optional.of(photo));
+        when(accessControl.canViewPatientClinicalData(physicianAuth, 10L)).thenReturn(true);
+        when(storage.read("diet-log-photos/10/plate-50.jpg"))
+                .thenReturn(new FileStorageResource(new ByteArrayInputStream(new byte[]{1, 2, 3}), 3));
+
+        var content = service.readContent(physicianAuth, 50L);
+
+        assertThat(content.contentType()).isEqualTo("image/jpeg");
+        assertThat(content.resource().sizeBytes()).isEqualTo(3);
+    }
+
+    @Test
+    void assignedNutritionSpecialistCanReadAttachedPhotoContent() throws Exception {
+        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patient(10L, patientUser);
+        var specialist = user(3L, "nutrition@example.com", RoleName.NUTRITION_SPECIALIST);
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var photo = attachedPhoto(51L, patient, patientUser, log, "plate", 0);
+        var specialistAuth = auth("nutrition@example.com");
+        when(users.findByEmail("nutrition@example.com")).thenReturn(Optional.of(specialist));
+        when(photos.findById(51L)).thenReturn(Optional.of(photo));
+        when(accessControl.canViewPatientClinicalData(specialistAuth, 10L)).thenReturn(true);
+        when(storage.read("diet-log-photos/10/plate-51.jpg"))
+                .thenReturn(new FileStorageResource(new ByteArrayInputStream(new byte[]{1, 2, 3}), 3));
+
+        var content = service.readContent(specialistAuth, 51L);
+
+        assertThat(content.contentType()).isEqualTo("image/jpeg");
+        assertThat(content.resource().sizeBytes()).isEqualTo(3);
+    }
+
+    @Test
+    void unassignedClinicianCannotReadAttachedPhotoContentBeforeStorageRead() throws Exception {
+        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patient(10L, patientUser);
+        var physician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var photo = attachedPhoto(50L, patient, patientUser, log, "plate", 0);
+        var physicianAuth = auth("doctor@example.com");
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(physician));
+        when(photos.findById(50L)).thenReturn(Optional.of(photo));
+        when(accessControl.canViewPatientClinicalData(physicianAuth, 10L)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.readContent(physicianAuth, 50L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403 FORBIDDEN");
+
+        verify(storage, never()).read(anyString());
+    }
+
+    @Test
+    void endedAssignmentIsDeniedOnNextAttachedPhotoContentReadBeforeStorageRead() throws Exception {
+        var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
+        var patient = patient(10L, patientUser);
+        var physician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var log = new DailyDietLog(patient, LocalDate.of(2026, 6, 10));
+        var photo = attachedPhoto(50L, patient, patientUser, log, "plate", 0);
+        var physicianAuth = auth("doctor@example.com");
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(physician));
+        when(photos.findById(50L)).thenReturn(Optional.of(photo));
+        when(accessControl.canViewPatientClinicalData(physicianAuth, 10L)).thenReturn(true, false);
+        when(storage.read("diet-log-photos/10/plate-50.jpg"))
+                .thenReturn(new FileStorageResource(new ByteArrayInputStream(new byte[]{1, 2, 3}), 3));
+
+        assertThat(service.readContent(physicianAuth, 50L).resource().sizeBytes()).isEqualTo(3);
+        assertThatThrownBy(() -> service.readContent(physicianAuth, 50L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403 FORBIDDEN");
+
+        verify(storage).read("diet-log-photos/10/plate-50.jpg");
+    }
+
+    @Test
+    void crossPatientClinicianCannotReadAttachedPhotoContentBeforeStorageRead() throws Exception {
+        var otherPatientUser = user(4L, "other@example.com", RoleName.PATIENT);
+        var otherPatient = patient(20L, otherPatientUser);
+        var physician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var log = new DailyDietLog(otherPatient, LocalDate.of(2026, 6, 10));
+        var photo = attachedPhoto(50L, otherPatient, otherPatientUser, log, "plate", 0);
+        var physicianAuth = auth("doctor@example.com");
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(physician));
+        when(photos.findById(50L)).thenReturn(Optional.of(photo));
+        when(accessControl.canViewPatientClinicalData(physicianAuth, 20L)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.readContent(physicianAuth, 50L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403 FORBIDDEN");
+
+        verify(storage, never()).read(anyString());
+    }
+
+    @Test
     void clinicalUserCannotReadPendingPhotoContent() throws Exception {
         var patientUser = user(1L, "patient@example.com", RoleName.PATIENT);
         var clinician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
