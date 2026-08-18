@@ -1,7 +1,7 @@
 # Clinician MCP Tools Design
 
 Date: 2026-08-18
-Status: Design approved in chat; pending written-spec review
+Status: Approved for implementation planning
 
 ## Goal
 
@@ -344,8 +344,8 @@ session IDs, photo bytes, or complete clinical request bodies.
 
 ## Persistence and Migration
 
-Add the next migration after the current `V17__oauth_client_capabilities.sql`
-for both PostgreSQL and Oracle. The migration must:
+Add `V22__clinical_mcp_token_storage.sql` for both PostgreSQL and Oracle. The
+migration must:
 
 1. Create `clinical_access_tokens` with the same lifecycle columns as
    `patient_access_tokens`, including resource binding and nullable
