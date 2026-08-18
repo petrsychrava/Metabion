@@ -2,7 +2,9 @@ package com.metabion.service.oauth;
 
 import com.metabion.domain.*;
 import com.metabion.dto.oauth.OAuthClientSource;
+import com.metabion.repository.ClinicalAccessTokenRepository;
 import com.metabion.repository.*;
+import com.metabion.service.ClinicalAccessTokenService;
 import com.metabion.service.PatientAccessTokenService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,7 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
         "metabion.oauth.issuer=http://localhost:8080",
         "metabion.oauth.resource=http://localhost:8080/api/mcp"})
 @Import({OAuthRefreshTokenService.class, OAuthTokenFamilyRevocationService.class,
-        PatientAccessTokenService.class, OAuthAccountTokenFamilyRevocationIntegrationTest.Config.class})
+        PatientAccessTokenService.class, ClinicalAccessTokenService.class,
+        OAuthAccountTokenFamilyRevocationIntegrationTest.Config.class})
 class OAuthAccountTokenFamilyRevocationIntegrationTest {
     private static final Instant NOW = Instant.parse("2026-07-12T10:00:00Z");
     private static final String RESOURCE = "http://localhost:8080/api/mcp";
@@ -39,7 +42,9 @@ class OAuthAccountTokenFamilyRevocationIntegrationTest {
     @Autowired OAuthRefreshTokenFamilyRepository families;
     @Autowired OAuthRefreshTokenRepository refreshTokens;
     @Autowired PatientAccessTokenRepository accessTokens;
+    @Autowired ClinicalAccessTokenRepository clinicalAccessTokens;
     @Autowired PatientAccessTokenService patientAccessTokens;
+    @Autowired ClinicalAccessTokenService clinicianAccessTokens;
     @Autowired OAuthRefreshTokenService refreshService;
 
     @Test
@@ -76,5 +81,73 @@ class OAuthAccountTokenFamilyRevocationIntegrationTest {
         var memberCount = refreshTokens.findByFamilyId("family-delete").size();
         assertThat(refreshService.refreshGrant("retained-refresh", "mobile-app", RESOURCE).isInvalid()).isTrue();
         assertThat(refreshTokens.findByFamilyId("family-delete")).hasSize(memberCount);
+    }
+
+    @Test
+    void deletingOwnedClinicalFamilyBoundTokenRevokesOnlyClinicalAccessRows() {
+        var clinician = new User("physician@example.com", "hash");
+        clinician.setEnabled(true);
+        clinician.addRole(RoleName.PHYSICIAN);
+        users.save(clinician);
+
+        var patient = new User("patient-family@example.com", "hash");
+        patient.setEnabled(true);
+        patient.addRole(RoleName.PATIENT);
+        users.save(patient);
+
+        families.save(new OAuthRefreshTokenFamily("clinical-family-delete", NOW.minusSeconds(120)));
+        refreshTokens.save(new OAuthRefreshToken(
+                PatientAccessTokenService.sha256Hex("clinical-refresh"),
+                "clinical-family-delete",
+                McpTokenSubject.CLINICIAN,
+                clinician,
+                "mobile-app",
+                OAuthClientSource.CONFIGURED,
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                RESOURCE,
+                NOW.minusSeconds(120),
+                NOW.plus(Duration.ofDays(30)),
+                Set.of(ClinicalAccessTokenScope.CLINICIAN_PATIENTS_READ)));
+        var clinicalAccess = clinicalAccessTokens.save(new ClinicalAccessToken(
+                clinician,
+                PatientAccessTokenService.sha256Hex("listed-clinical-access"),
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                NOW.minusSeconds(60),
+                NOW.plusSeconds(3600),
+                RESOURCE,
+                Set.of(ClinicalAccessTokenScope.CLINICIAN_PATIENTS_READ),
+                "clinical-family-delete"));
+        accessTokens.save(new PatientAccessToken(
+                patient,
+                PatientAccessTokenService.sha256Hex("stray-patient-access"),
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                NOW.minusSeconds(60),
+                NOW.plusSeconds(3600),
+                RESOURCE,
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
+                "clinical-family-delete"));
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+
+        var auth = new TestingAuthenticationToken(clinician.getEmail(), "password", RoleName.PHYSICIAN.authority());
+        auth.setAuthenticated(true);
+        clinicianAccessTokens.revokeForCurrentClinician(auth, clinicalAccess.getId());
+
+        assertThat(families.findById("clinical-family-delete").orElseThrow().getRevocationReason())
+                .isEqualTo("clinician_request");
+        assertThat(refreshTokens.findByFamilyId("clinical-family-delete")).allSatisfy(token -> {
+            assertThat(token.isRevoked()).isTrue();
+            assertThat(token.getRevocationReason()).isEqualTo("clinician_request");
+        });
+        assertThat(clinicalAccessTokens.findByTokenHash(PatientAccessTokenService.sha256Hex("listed-clinical-access"))
+                .orElseThrow().getRevocationReason()).isEqualTo("clinician_request");
+        assertThat(accessTokens.findByTokenHash(PatientAccessTokenService.sha256Hex("stray-patient-access"))
+                .orElseThrow().getRevocationReason()).isNull();
+        var memberCount = refreshTokens.findByFamilyId("clinical-family-delete").size();
+        assertThat(refreshService.refreshGrant("clinical-refresh", "mobile-app", RESOURCE).isInvalid()).isTrue();
+        assertThat(refreshTokens.findByFamilyId("clinical-family-delete")).hasSize(memberCount);
     }
 }

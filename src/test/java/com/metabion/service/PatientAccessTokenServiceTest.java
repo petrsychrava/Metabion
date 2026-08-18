@@ -90,6 +90,7 @@ class PatientAccessTokenServiceTest {
                 Set.of("patient:profile:read", "patient:diet-log:write")));
 
         assertThat(response.plainToken()).isNotBlank();
+        assertThat(response.plainToken()).startsWith("pat_");
         assertThat(response.tokenId()).isEqualTo(50L);
         assertThat(response.scopes()).containsExactlyInAnyOrder("patient:profile:read", "patient:diet-log:write");
 
@@ -169,6 +170,17 @@ class PatientAccessTokenServiceTest {
         assertThat(service.authenticate("plain")).contains(token);
 
         assertThat(token.getLastUsedAt()).isEqualTo(Instant.parse("2026-07-04T10:00:00Z"));
+    }
+
+    @Test
+    void authenticateAcceptsLegacyUnprefixedPatientTokens() {
+        var legacyPlainToken = "legacy-unprefixed-value";
+        var token = token("valid", Instant.parse("2026-08-03T10:00:00Z"));
+        when(tokens.findByTokenHash(PatientAccessTokenService.sha256Hex(legacyPlainToken))).thenReturn(Optional.of(token));
+
+        assertThat(service.authenticate(legacyPlainToken)).contains(token);
+
+        verify(tokens).findByTokenHash(PatientAccessTokenService.sha256Hex(legacyPlainToken));
     }
 
     @Test
