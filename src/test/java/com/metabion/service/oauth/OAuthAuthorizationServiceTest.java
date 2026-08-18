@@ -1,22 +1,27 @@
 package com.metabion.service.oauth;
 
 import com.metabion.config.OAuthAuthorizationProperties;
+import com.metabion.domain.ClinicalAccessTokenScope;
+import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.OAuthAuthorizationCode;
 import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
-import com.metabion.dto.IssuePatientAccessTokenResponse;
 import com.metabion.dto.oauth.OAuthAuthorizationRequest;
 import com.metabion.dto.oauth.OAuthClientMetadata;
 import com.metabion.dto.oauth.IssuedOAuthRefreshToken;
 import com.metabion.dto.oauth.OAuthTokenResponse;
+import com.metabion.dto.oauth.IssuedMcpAccessToken;
 import com.metabion.repository.OAuthAuthorizationCodeRepository;
 import com.metabion.repository.OAuthRegisteredClientRepository;
 import com.metabion.repository.UserRepository;
+import com.metabion.service.ClinicalAccessTokenService;
 import com.metabion.service.PatientAccessTokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -60,6 +65,9 @@ class OAuthAuthorizationServiceTest {
 
     @Mock
     PatientAccessTokenService patientAccessTokens;
+
+    @Mock
+    ClinicalAccessTokenService clinicalAccessTokens;
 
     @Mock
     OAuthRefreshTokenService refreshTokens;
@@ -123,6 +131,68 @@ class OAuthAuthorizationServiceTest {
         assertThatThrownBy(() -> service.consentView(request("S256"), auth()))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RoleName.class, names = {"PHYSICIAN", "NUTRITION_SPECIALIST"})
+    void clinicianCanApproveClinicianScopeRequest(RoleName role) {
+        var clinician = enabledUser("clinician@example.com", role);
+        when(users.findByEmail(clinician.getEmail())).thenReturn(Optional.of(clinician));
+        service = serviceWith(clinicalProperties(), resolverFor(clinicalProperties()));
+
+        var view = service.consentView(requestFor("clinician:patients:read"), auth(clinician, role));
+
+        assertThat(view.subjectType()).isEqualTo(McpTokenSubject.CLINICIAN);
+    }
+
+    @Test
+    void existingPatientOnlyClientDoesNotGainClinicianScopes() {
+        var clinician = enabledUser("clinician@example.com", RoleName.PHYSICIAN);
+
+        assertThatThrownBy(() -> service.consentView(
+                requestFor("clinician:patients:read"), auth(clinician, RoleName.PHYSICIAN)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("unsupported scope");
+    }
+
+    @Test
+    void patientAndClinicalScopesCannotBeApprovedTogether() {
+        var mixedProperties = propertiesWithScopes(
+                List.of("patient:profile:read", "clinician:patients:read"),
+                List.of("authorization_code"));
+        service = serviceWith(mixedProperties, resolverFor(mixedProperties));
+
+        assertThatThrownBy(() -> service.consentView(
+                requestFor("patient:profile:read clinician:patients:read"), auth()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("patient and clinician scopes cannot be mixed");
+    }
+
+    @Test
+    void clinicianApprovalPersistsClinicalSubject() {
+        var clinician = enabledUser("clinician@example.com", RoleName.PHYSICIAN);
+        when(users.findByEmail(clinician.getEmail())).thenReturn(Optional.of(clinician));
+        when(codes.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        service = serviceWith(clinicalProperties(), resolverFor(clinicalProperties()));
+
+        service.approve(requestFor("clinician:patients:read"), auth(clinician, RoleName.PHYSICIAN));
+
+        var captor = ArgumentCaptor.forClass(OAuthAuthorizationCode.class);
+        verify(codes).save(captor.capture());
+        assertThat(captor.getValue().getSubjectType()).isEqualTo(McpTokenSubject.CLINICIAN);
+        assertThat(captor.getValue().scopes()).containsExactly("clinician:patients:read");
+    }
+
+    @Test
+    void coordinatorCannotApproveClinicianScopeRequest() {
+        var coordinator = enabledUser("coordinator@example.com", RoleName.COORDINATOR);
+        when(users.findByEmail(coordinator.getEmail())).thenReturn(Optional.of(coordinator));
+        service = serviceWith(clinicalProperties(), resolverFor(clinicalProperties()));
+
+        assertThatThrownBy(() -> service.consentView(
+                requestFor("clinician:patients:read"), auth(coordinator, RoleName.COORDINATOR)))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
     }
 
     @Test
@@ -255,7 +325,7 @@ class OAuthAuthorizationServiceTest {
                 .isInstanceOfSatisfying(OAuthTokenException.class,
                         ex -> assertThat(ex.error()).isEqualTo("invalid_grant"));
         assertThat(authorizationCode.getConsumedAt()).isNull();
-        verify(patientAccessTokens, never()).issueForPatient(any(), any(), any(), any(), any(), any());
+        verify(patientAccessTokens, never()).issueForOAuth(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -266,18 +336,16 @@ class OAuthAuthorizationServiceTest {
                 Set.of("patient:profile:read", "patient:red-flags:read"));
         when(codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("plain-code")))
                 .thenReturn(Optional.of(authorizationCode));
-        when(patientAccessTokens.issueForPatient(
+        when(patientAccessTokens.issueForOAuth(
                 patient,
                 PatientAccessClientType.MCP_CODEX,
                 "Codex",
                 Duration.ofHours(1),
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ, PatientAccessTokenScope.PATIENT_RED_FLAG_READ),
-                RESOURCE))
-                .thenReturn(new IssuePatientAccessTokenResponse(
-                        99L,
+                RESOURCE,
+                null))
+                .thenReturn(new IssuedMcpAccessToken(
                         "access-token",
-                        PatientAccessClientType.MCP_CODEX,
-                        "Codex",
                         NOW.plus(Duration.ofHours(1)),
                         Set.of("patient:profile:read", "patient:red-flags:read")));
 
@@ -295,13 +363,91 @@ class OAuthAuthorizationServiceTest {
         assertThat(response.expiresIn()).isEqualTo(3600);
         assertThat(response.scope()).isEqualTo("patient:profile:read patient:red-flags:read");
         assertThat(response.refreshToken()).isNull();
-        verify(refreshTokens, never()).issueInitial(any(), any(), any(), any(), any(), any());
-        verify(patientAccessTokens).issueForPatient(
+        verify(refreshTokens, never()).issueInitial(any(), any(), any(), any(), any(), any(), any());
+        verify(patientAccessTokens).issueForOAuth(
                 patient, PatientAccessClientType.MCP_CODEX, "Codex", Duration.ofHours(1),
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ, PatientAccessTokenScope.PATIENT_RED_FLAG_READ),
-                RESOURCE);
+                RESOURCE, null);
         verify(codes).findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("plain-code"));
         verify(codes, never()).findByCodeHash(any());
+    }
+
+    @Test
+    void clinicianAuthorizationCodeIssuesClinicalAccessToken() {
+        var clinician = enabledUser("clinician@example.com", RoleName.NUTRITION_SPECIALIST);
+        var clinicalProperties = clinicalProperties();
+        service = serviceWith(clinicalProperties, resolverFor(clinicalProperties));
+        var authorizationCode = new OAuthAuthorizationCode(
+                PatientAccessTokenService.sha256Hex("clinical-code"),
+                McpTokenSubject.CLINICIAN,
+                clinician,
+                "codex",
+                "Codex",
+                REDIRECT_URI,
+                RESOURCE,
+                CHALLENGE,
+                "S256",
+                Set.of("clinician:patients:read"),
+                NOW.minusSeconds(60),
+                NOW.plus(Duration.ofMinutes(5)));
+        when(codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("clinical-code")))
+                .thenReturn(Optional.of(authorizationCode));
+        when(clinicalAccessTokens.issueForOAuth(
+                clinician,
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                Duration.ofHours(1),
+                Set.of(ClinicalAccessTokenScope.CLINICIAN_PATIENTS_READ),
+                RESOURCE,
+                null))
+                .thenReturn(new IssuedMcpAccessToken(
+                        "clin_access-token",
+                        NOW.plus(Duration.ofHours(1)),
+                        Set.of("clinician:patients:read")));
+
+        var response = service.exchangeAuthorizationCode(
+                "clinical-code", REDIRECT_URI, "codex", VERIFIER, RESOURCE);
+
+        assertThat(response.accessToken()).startsWith("clin_");
+        assertThat(response.scope()).isEqualTo("clinician:patients:read");
+        assertThat(authorizationCode.getConsumedAt()).isEqualTo(NOW);
+        verify(clinicalAccessTokens).issueForOAuth(
+                clinician,
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                Duration.ofHours(1),
+                Set.of(ClinicalAccessTokenScope.CLINICIAN_PATIENTS_READ),
+                RESOURCE,
+                null);
+        verify(patientAccessTokens, never()).issueForOAuth(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void exchangeRejectsPersistedScopeFamilyThatDoesNotMatchSubjectWithoutConsumingCode() {
+        var authorizationCode = new OAuthAuthorizationCode(
+                PatientAccessTokenService.sha256Hex("mismatched-code"),
+                McpTokenSubject.CLINICIAN,
+                patient,
+                "codex",
+                "Codex",
+                REDIRECT_URI,
+                RESOURCE,
+                CHALLENGE,
+                "S256",
+                Set.of("patient:profile:read"),
+                NOW.minusSeconds(60),
+                NOW.plus(Duration.ofMinutes(5)));
+        when(codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("mismatched-code")))
+                .thenReturn(Optional.of(authorizationCode));
+
+        assertThatThrownBy(() -> service.exchangeAuthorizationCode(
+                "mismatched-code", REDIRECT_URI, "codex", VERIFIER, RESOURCE))
+                .isInstanceOfSatisfying(OAuthTokenException.class,
+                        ex -> assertThat(ex.error()).isEqualTo("invalid_grant"));
+
+        assertThat(authorizationCode.getConsumedAt()).isNull();
+        verify(patientAccessTokens, never()).issueForOAuth(any(), any(), any(), any(), any(), any(), any());
+        verify(clinicalAccessTokens, never()).issueForOAuth(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -315,17 +461,17 @@ class OAuthAuthorizationServiceTest {
         var authorizationCode = authorizationCode("mobile-code", NOW.plus(Duration.ofMinutes(5)));
         when(codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("mobile-code")))
                 .thenReturn(Optional.of(authorizationCode));
-        when(refreshTokens.issueInitial(any(), any(), any(), any(), any(), any()))
+        when(refreshTokens.issueInitial(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(issuedRefreshToken("codex", PatientAccessClientType.MCP_CODEX, "Codex"));
-        when(patientAccessTokens.issueForPatient(any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(new IssuePatientAccessTokenResponse(99L, "access-token", PatientAccessClientType.MCP_CODEX,
-                        "Codex", NOW.plus(Duration.ofHours(1)), Set.of("patient:profile:read")));
+        when(patientAccessTokens.issueForOAuth(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new IssuedMcpAccessToken(
+                        "access-token", NOW.plus(Duration.ofHours(1)), Set.of("patient:profile:read")));
 
         var response = service.exchangeAuthorizationCode(
                 "mobile-code", REDIRECT_URI, "codex", VERIFIER, RESOURCE);
 
         assertThat(response.refreshToken()).isEqualTo("refresh-token");
-        verify(patientAccessTokens).issueForPatient(any(), any(), any(), any(), any(), any(),
+        verify(patientAccessTokens).issueForOAuth(any(), any(), any(), any(), any(), any(),
                 org.mockito.ArgumentMatchers.eq("refresh-family"));
     }
 
@@ -373,7 +519,7 @@ class OAuthAuthorizationServiceTest {
                 RESOURCE))
                 .isInstanceOfSatisfying(OAuthTokenException.class,
                         ex -> assertThat(ex.error()).isEqualTo("invalid_grant"));
-        verify(patientAccessTokens, never()).issueForPatient(any(), any(), any(), any(), any(), any());
+        verify(patientAccessTokens, never()).issueForOAuth(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -408,7 +554,7 @@ class OAuthAuthorizationServiceTest {
                 RESOURCE))
                 .isInstanceOfSatisfying(OAuthTokenException.class,
                         ex -> assertThat(ex.error()).isEqualTo("invalid_grant"));
-        verify(patientAccessTokens, never()).issueForPatient(any(), any(), any(), any(), any(), any());
+        verify(patientAccessTokens, never()).issueForOAuth(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -443,9 +589,9 @@ class OAuthAuthorizationServiceTest {
                 NOW.plus(Duration.ofMinutes(5)));
         when(codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("metadata-code")))
                 .thenReturn(Optional.of(authorizationCode));
-        when(refreshTokens.issueInitial(any(), any(), any(), any(), any(), any()))
+        when(refreshTokens.issueInitial(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(issuedRefreshToken(clientId, PatientAccessClientType.MCP_OTHER, "External MCP"));
-        when(patientAccessTokens.issueForPatient(
+        when(patientAccessTokens.issueForOAuth(
                 patient,
                 PatientAccessClientType.MCP_OTHER,
                 "External MCP",
@@ -453,11 +599,8 @@ class OAuthAuthorizationServiceTest {
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
                 RESOURCE,
                 "refresh-family"))
-                .thenReturn(new IssuePatientAccessTokenResponse(
-                        99L,
+                .thenReturn(new IssuedMcpAccessToken(
                         "access-token",
-                        PatientAccessClientType.MCP_OTHER,
-                        "External MCP",
                         NOW.plus(Duration.ofHours(1)),
                         Set.of("patient:profile:read")));
 
@@ -469,7 +612,7 @@ class OAuthAuthorizationServiceTest {
                 VERIFIER,
                 RESOURCE);
 
-        verify(patientAccessTokens).issueForPatient(
+        verify(patientAccessTokens).issueForOAuth(
                 patient,
                 PatientAccessClientType.MCP_OTHER,
                 "External MCP",
@@ -502,14 +645,11 @@ class OAuthAuthorizationServiceTest {
                 NOW.plus(Duration.ofMinutes(5)));
         when(codes.findByCodeHashForUpdate(PatientAccessTokenService.sha256Hex("dynamic-code")))
                 .thenReturn(Optional.of(authorizationCode));
-        when(refreshTokens.issueInitial(any(), any(), any(), any(), any(), any()))
+        when(refreshTokens.issueInitial(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(issuedRefreshToken(clientId, PatientAccessClientType.MCP_CODEX, "Codex"));
-        when(patientAccessTokens.issueForPatient(any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(new IssuePatientAccessTokenResponse(
-                        100L,
+        when(patientAccessTokens.issueForOAuth(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new IssuedMcpAccessToken(
                         "access-token",
-                        PatientAccessClientType.MCP_CODEX,
-                        "Codex",
                         NOW.plus(Duration.ofHours(1)),
                         Set.of("patient:profile:read")));
 
@@ -521,7 +661,7 @@ class OAuthAuthorizationServiceTest {
                 VERIFIER,
                 RESOURCE);
 
-        verify(patientAccessTokens).issueForPatient(
+        verify(patientAccessTokens).issueForOAuth(
                 patient,
                 PatientAccessClientType.MCP_CODEX,
                 "Codex",
@@ -592,6 +732,32 @@ class OAuthAuthorizationServiceTest {
                 RESOURCE);
     }
 
+    private OAuthAuthorizationRequest requestFor(String scopes) {
+        return new OAuthAuthorizationRequest(
+                "code", "codex", REDIRECT_URI, scopes, "state-123", CHALLENGE, "S256", RESOURCE);
+    }
+
+    private OAuthAuthorizationProperties clinicalProperties() {
+        return propertiesWithScopes(
+                List.of("clinician:patients:read", "clinician:overview:read"),
+                List.of("authorization_code"));
+    }
+
+    private OAuthAuthorizationProperties propertiesWithScopes(List<String> scopes, List<String> grants) {
+        return new OAuthAuthorizationProperties(
+                "http://localhost:8080",
+                RESOURCE,
+                Duration.ofMinutes(5),
+                Duration.ofHours(1),
+                new OAuthAuthorizationProperties.ClientMetadataProperties(true, Duration.ofSeconds(2), 32768),
+                Map.of("codex", new OAuthAuthorizationProperties.RegisteredClient(
+                        "Codex", "native", List.of(REDIRECT_URI), scopes, grants)));
+    }
+
+    private OAuthClientResolver resolverFor(OAuthAuthorizationProperties properties) {
+        return new OAuthClientResolver(properties, clientId -> Optional.empty(), emptyRegisteredClients());
+    }
+
     private OAuthAuthorizationService serviceWith(OAuthAuthorizationProperties properties, OAuthClientResolver resolver) {
         return new OAuthAuthorizationService(
                 properties,
@@ -600,6 +766,7 @@ class OAuthAuthorizationServiceTest {
                 users,
                 codes,
                 patientAccessTokens,
+                clinicalAccessTokens,
                 refreshTokens,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
@@ -608,6 +775,19 @@ class OAuthAuthorizationServiceTest {
         var auth = new TestingAuthenticationToken("patient@example.com", "password", RoleName.PATIENT.authority());
         auth.setAuthenticated(true);
         return auth;
+    }
+
+    private TestingAuthenticationToken auth(User user, RoleName role) {
+        var auth = new TestingAuthenticationToken(user.getEmail(), "password", role.authority());
+        auth.setAuthenticated(true);
+        return auth;
+    }
+
+    private User enabledUser(String email, RoleName role) {
+        var user = new User(email, "hash");
+        user.setEnabled(true);
+        user.addRole(role);
+        return user;
     }
 
     private OAuthAuthorizationCode authorizationCode(String plainCode, Instant expiresAt) {

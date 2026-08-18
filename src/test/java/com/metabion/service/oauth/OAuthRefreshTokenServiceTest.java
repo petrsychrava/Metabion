@@ -1,6 +1,8 @@
 package com.metabion.service.oauth;
 
 import com.metabion.config.OAuthAuthorizationProperties;
+import com.metabion.domain.ClinicalAccessTokenScope;
+import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.OAuthRefreshToken;
 import com.metabion.domain.OAuthRefreshTokenFamily;
 import com.metabion.domain.PatientAccessClientType;
@@ -8,11 +10,11 @@ import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.User;
 import com.metabion.dto.oauth.OAuthClientMetadata;
 import com.metabion.dto.oauth.OAuthClientSource;
-import com.metabion.dto.IssuePatientAccessTokenResponse;
+import com.metabion.dto.oauth.IssuedMcpAccessToken;
 import com.metabion.repository.OAuthRefreshTokenRepository;
 import com.metabion.repository.OAuthRefreshTokenFamilyRepository;
+import com.metabion.service.ClinicalAccessTokenService;
 import com.metabion.service.McpScopeCatalog;
-import com.metabion.service.PatientAccessTokenService;
 import com.metabion.service.PatientAccessTokenService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,6 +49,7 @@ class OAuthRefreshTokenServiceTest {
     @Mock OAuthRefreshTokenFamilyRepository families;
     @Mock OAuthTokenFamilyRevocationService familyRevocations;
     @Mock PatientAccessTokenService accessTokens;
+    @Mock ClinicalAccessTokenService clinicalAccessTokens;
 
     @Test
     void issueInitialPersistsOnlyHashWithIndependentFamilyAndConfiguredExpiry() {
@@ -54,7 +57,8 @@ class OAuthRefreshTokenServiceTest {
                 "http://localhost:8080", "http://localhost:8080/api/mcp",
                 Duration.ofMinutes(5), Duration.ofHours(1), Duration.ofDays(30),
                 null, null);
-        var service = new OAuthRefreshTokenService(tokens, families, clients, accessTokens, familyRevocations,
+        var service = new OAuthRefreshTokenService(tokens, families, clients, accessTokens, clinicalAccessTokens,
+                familyRevocations,
                 Clock.fixed(NOW, ZoneOffset.UTC), properties);
         var user = new User("patient@example.com", "hash");
         var client = new OAuthClientMetadata(
@@ -66,7 +70,8 @@ class OAuthRefreshTokenServiceTest {
 
         var issued = service.issueInitial(
                 user, client, PatientAccessClientType.MCP_CODEX, "Codex",
-                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
+                McpTokenSubject.PATIENT,
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority()),
                 "http://localhost:8080/api/mcp");
 
         assertThat(issued.plainToken()).isNotBlank();
@@ -80,7 +85,31 @@ class OAuthRefreshTokenServiceTest {
         assertThat(saved.getCreatedAt()).isEqualTo(NOW);
         assertThat(saved.getExpiresAt()).isEqualTo(NOW.plus(Duration.ofDays(30)));
         assertThat(saved.getClientSource()).isEqualTo(OAuthClientSource.CONFIGURED);
+        assertThat(saved.getSubjectType()).isEqualTo(McpTokenSubject.PATIENT);
         assertThat(saved.scopeAuthorities()).containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority());
+    }
+
+    @Test
+    void issueInitialRejectsSubjectThatDoesNotMatchScopeFamily() {
+        var client = new OAuthClientMetadata(
+                "codex", "Codex", "native", OAuthClientSource.CONFIGURED,
+                List.of("http://127.0.0.1/callback"),
+                List.of("patient:profile:read"),
+                List.of("authorization_code", "refresh_token"));
+
+        assertThatThrownBy(() -> service().issueInitial(
+                new User("patient@example.com", "hash"),
+                client,
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                McpTokenSubject.CLINICIAN,
+                Set.of("patient:profile:read"),
+                "http://localhost:8080/api/mcp"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("scope family");
+
+        verify(families, never()).save(any());
+        verify(tokens, never()).save(any());
     }
 
     @Test
@@ -95,9 +124,9 @@ class OAuthRefreshTokenServiceTest {
             ReflectionTestUtils.setField(saved, "id", 42L);
             return saved;
         });
-        when(accessTokens.issueForPatient(any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(new IssuePatientAccessTokenResponse(7L, "new-access", PatientAccessClientType.MCP_OTHER,
-                        "Mobile", NOW.plus(Duration.ofHours(1)), Set.of("patient:profile:read")));
+        when(accessTokens.issueForOAuth(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new IssuedMcpAccessToken(
+                        "new-access", NOW.plus(Duration.ofHours(1)), Set.of("patient:profile:read")));
 
         var rotated = service.refreshGrant("old-refresh", "mobile-app", "http://localhost:8080/api/mcp");
 
@@ -133,9 +162,9 @@ class OAuthRefreshTokenServiceTest {
             ReflectionTestUtils.setField(saved, "id", 43L);
             return saved;
         });
-        when(accessTokens.issueForPatient(any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(new IssuePatientAccessTokenResponse(7L, "new-access", PatientAccessClientType.MCP_OTHER,
-                        "Mobile", NOW.plus(Duration.ofHours(1)), Set.of("patient:lab:read")));
+        when(accessTokens.issueForOAuth(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new IssuedMcpAccessToken(
+                        "new-access", NOW.plus(Duration.ofHours(1)), Set.of("patient:lab:read")));
 
         var response = service.refreshGrant("lab-refresh", "mobile-app", "http://localhost:8080/api/mcp");
 
@@ -168,12 +197,9 @@ class OAuthRefreshTokenServiceTest {
             ReflectionTestUtils.setField(saved, "id", 44L);
             return saved;
         });
-        when(accessTokens.issueForPatient(any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(new IssuePatientAccessTokenResponse(
-                        7L,
+        when(accessTokens.issueForOAuth(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new IssuedMcpAccessToken(
                         "new-access",
-                        PatientAccessClientType.MCP_OTHER,
-                        "Mobile",
                         NOW.plus(Duration.ofHours(1)),
                         Set.of("patient:profile:read", "patient:red-flags:read")));
 
@@ -242,15 +268,97 @@ class OAuthRefreshTokenServiceTest {
             ReflectionTestUtils.setField(saved, "id", 99L);
             return saved;
         });
-        org.mockito.Mockito.lenient().when(accessTokens.issueForPatient(any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(new IssuePatientAccessTokenResponse(7L, "new-access", PatientAccessClientType.MCP_OTHER,
-                        "Mobile", NOW.plus(Duration.ofHours(1)), Set.of("patient:profile:read")));
+        org.mockito.Mockito.lenient().when(accessTokens.issueForOAuth(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new IssuedMcpAccessToken(
+                        "new-access", NOW.plus(Duration.ofHours(1)), Set.of("patient:profile:read")));
 
         assertThat(service().refreshGrant(
                 "revoked-family", "mobile-app", "http://localhost:8080/api/mcp").isInvalid()).isTrue();
 
         verify(tokens, never()).save(any());
-        verify(accessTokens, never()).issueForPatient(any(), any(), any(), any(), any(), any(), any());
+        verify(accessTokens, never()).issueForOAuth(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void clinicianRefreshRotatesAndIssuesClinicalAccessToken() {
+        var service = service();
+        var clinician = new User("clinician@example.com", "hash");
+        clinician.setEnabled(true);
+        clinician.addRole(com.metabion.domain.RoleName.PHYSICIAN);
+        var current = new OAuthRefreshToken(
+                PatientAccessTokenService.sha256Hex("clinical-refresh"),
+                "family-clinical",
+                McpTokenSubject.CLINICIAN,
+                clinician,
+                "mobile-app",
+                OAuthClientSource.CONFIGURED,
+                PatientAccessClientType.MCP_OTHER,
+                "Mobile",
+                "http://localhost:8080/api/mcp",
+                NOW.minusSeconds(60),
+                NOW.plus(Duration.ofDays(1)),
+                Set.of("clinician:patients:read"));
+        mockLookup("clinical-refresh", Optional.of(current));
+        when(clients.resolve("mobile-app")).thenReturn(Optional.of(clinicalClient()));
+        when(tokens.save(any())).thenAnswer(invocation -> {
+            var saved = invocation.getArgument(0, OAuthRefreshToken.class);
+            ReflectionTestUtils.setField(saved, "id", 51L);
+            return saved;
+        });
+        when(clinicalAccessTokens.issueForOAuth(
+                any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new IssuedMcpAccessToken(
+                        "clin_rotated-access",
+                        NOW.plus(Duration.ofHours(1)),
+                        Set.of("clinician:patients:read")));
+
+        var result = service.refreshGrant(
+                "clinical-refresh", "mobile-app", "http://localhost:8080/api/mcp");
+
+        assertThat(result.isInvalid()).isFalse();
+        assertThat(result.response().accessToken()).startsWith("clin_");
+        assertThat(result.response().scope()).isEqualTo("clinician:patients:read");
+        var replacement = ArgumentCaptor.forClass(OAuthRefreshToken.class);
+        verify(tokens).save(replacement.capture());
+        assertThat(replacement.getValue().getSubjectType()).isEqualTo(McpTokenSubject.CLINICIAN);
+        verify(clinicalAccessTokens).issueForOAuth(
+                clinician,
+                PatientAccessClientType.MCP_OTHER,
+                "Mobile",
+                Duration.ofHours(1),
+                Set.of(ClinicalAccessTokenScope.CLINICIAN_PATIENTS_READ),
+                "http://localhost:8080/api/mcp",
+                "family-clinical");
+        verify(accessTokens, never()).issueForOAuth(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void clinicianRefreshRejectsRoleRemovedAfterConsent() {
+        var clinician = new User("former-clinician@example.com", "hash");
+        clinician.setEnabled(true);
+        var current = new OAuthRefreshToken(
+                PatientAccessTokenService.sha256Hex("removed-role-refresh"),
+                "family-clinical",
+                McpTokenSubject.CLINICIAN,
+                clinician,
+                "mobile-app",
+                OAuthClientSource.CONFIGURED,
+                PatientAccessClientType.MCP_OTHER,
+                "Mobile",
+                "http://localhost:8080/api/mcp",
+                NOW.minusSeconds(60),
+                NOW.plus(Duration.ofDays(1)),
+                Set.of("clinician:patients:read"));
+        mockLookup("removed-role-refresh", Optional.of(current));
+        when(clients.resolve("mobile-app")).thenReturn(Optional.of(clinicalClient()));
+
+        var result = service().refreshGrant(
+                "removed-role-refresh", "mobile-app", "http://localhost:8080/api/mcp");
+
+        assertThat(result.isInvalid()).isTrue();
+        verify(tokens, never()).save(any());
+        verify(accessTokens, never()).issueForOAuth(any(), any(), any(), any(), any(), any(), any());
+        verify(clinicalAccessTokens, never()).issueForOAuth(any(), any(), any(), any(), any(), any(), any());
     }
 
     private void assertRejected(String plain, Optional<OAuthRefreshToken> found, OAuthClientMetadata client,
@@ -271,7 +379,8 @@ class OAuthRefreshTokenServiceTest {
     }
 
     private OAuthRefreshTokenService service() {
-        return new OAuthRefreshTokenService(tokens, families, clients, accessTokens, familyRevocations, Clock.fixed(NOW, ZoneOffset.UTC),
+        return new OAuthRefreshTokenService(tokens, families, clients, accessTokens, clinicalAccessTokens,
+                familyRevocations, Clock.fixed(NOW, ZoneOffset.UTC),
                 new OAuthAuthorizationProperties("http://localhost:8080", "http://localhost:8080/api/mcp",
                         Duration.ofMinutes(5), Duration.ofHours(1), Duration.ofDays(30), null, null));
     }
@@ -289,6 +398,12 @@ class OAuthRefreshTokenServiceTest {
     private OAuthClientMetadata mobileClient() {
         return new OAuthClientMetadata("mobile-app", "Mobile", "native", OAuthClientSource.CONFIGURED,
                 List.of("myapp:/callback"), List.of("patient:profile:read"),
+                List.of("authorization_code", "refresh_token"));
+    }
+
+    private OAuthClientMetadata clinicalClient() {
+        return new OAuthClientMetadata("mobile-app", "Mobile", "native", OAuthClientSource.CONFIGURED,
+                List.of("myapp:/callback"), List.of("clinician:patients:read"),
                 List.of("authorization_code", "refresh_token"));
     }
 

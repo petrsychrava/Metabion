@@ -93,6 +93,32 @@ class OAuthClientRegistrationServiceTest {
     }
 
     @Test
+    void registersClinicianScopes() {
+        var response = service.register(new OAuthClientRegistrationRequest(
+                List.of("http://127.0.0.1:49152/callback"), "Clinical MCP", null,
+                "clinician:overview:read clinician:patients:read", "none",
+                List.of("authorization_code", "refresh_token"), "native", List.of("code")));
+
+        assertThat(response.scope()).isEqualTo("clinician:overview:read clinician:patients:read");
+        var captor = ArgumentCaptor.forClass(OAuthRegisteredClient.class);
+        verify(clients).save(captor.capture());
+        assertThat(captor.getValue().scopes())
+                .containsExactlyInAnyOrder("clinician:overview:read", "clinician:patients:read");
+    }
+
+    @Test
+    void rejectsMixedPatientAndClinicianScopeFamilies() {
+        assertThatThrownBy(() -> service.register(new OAuthClientRegistrationRequest(
+                List.of("http://127.0.0.1:49152/callback"), "Mixed MCP", null,
+                "patient:profile:read clinician:patients:read", "none",
+                List.of("authorization_code"), "native", List.of("code"))))
+                .isInstanceOfSatisfying(OAuthClientRegistrationException.class, ex -> {
+                    assertThat(ex.error()).isEqualTo("invalid_scope");
+                    assertThat(ex.description()).contains("patient and clinician scopes cannot be mixed");
+                });
+    }
+
+    @Test
     void registersHttpsClient() {
         var response = service.register(new OAuthClientRegistrationRequest(
                 List.of("https://client.example/callback"),

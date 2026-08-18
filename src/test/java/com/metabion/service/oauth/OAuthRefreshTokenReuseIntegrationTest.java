@@ -15,6 +15,7 @@ import com.metabion.repository.OAuthRefreshTokenRepository;
 import com.metabion.repository.PatientAccessTokenRepository;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.PatientAccessTokenService;
+import com.metabion.service.ClinicalAccessTokenService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -38,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "metabion.oauth.issuer=http://localhost:8080",
         "metabion.oauth.resource=http://localhost:8080/api/mcp"})
 @Import({OAuthRefreshTokenService.class, OAuthTokenFamilyRevocationService.class, PatientAccessTokenService.class,
+        ClinicalAccessTokenService.class,
         OAuthRefreshTokenReuseIntegrationTest.Config.class})
 class OAuthRefreshTokenReuseIntegrationTest {
     private static final Instant NOW = Instant.parse("2026-07-06T10:00:00Z");

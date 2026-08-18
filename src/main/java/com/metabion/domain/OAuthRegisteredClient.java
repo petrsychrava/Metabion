@@ -1,5 +1,6 @@
 package com.metabion.domain;
 
+import com.metabion.service.McpScopeCatalog;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -180,9 +181,9 @@ public class OAuthRegisteredClient {
         var values = new LinkedHashSet<String>();
         for (var scope : scopes) {
             var value = require(scope, "scope");
-            PatientAccessTokenScope.fromAuthority(value);
             values.add(value);
         }
+        McpScopeCatalog.parse(values);
         return values;
     }
 
@@ -199,9 +200,7 @@ public class OAuthRegisteredClient {
         if (scopes == null || scopes.isEmpty()) {
             throw new IllegalArgumentException("scopes are required");
         }
-        for (var scope : scopes) {
-            PatientAccessTokenScope.fromAuthority(require(scope, "scope"));
-        }
+        McpScopeCatalog.parse(scopes.stream().map(scope -> require(scope, "scope")).toList());
     }
 
     private void validateRedirectUri(String redirectUri) {

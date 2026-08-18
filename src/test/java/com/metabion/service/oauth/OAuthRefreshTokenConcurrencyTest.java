@@ -15,6 +15,7 @@ import com.metabion.repository.OAuthRefreshTokenRepository;
 import com.metabion.repository.PatientAccessTokenRepository;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.PatientAccessTokenService;
+import com.metabion.service.ClinicalAccessTokenService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -49,6 +50,7 @@ import static org.mockito.Mockito.when;
         "metabion.oauth.resource=http://localhost:8080/api/mcp"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({OAuthRefreshTokenService.class, OAuthTokenFamilyRevocationService.class, PatientAccessTokenService.class,
+        ClinicalAccessTokenService.class,
         OAuthRefreshTokenConcurrencyTest.Config.class})
 @Testcontainers
 class OAuthRefreshTokenConcurrencyTest {
