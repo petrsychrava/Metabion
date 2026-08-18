@@ -55,6 +55,15 @@ class ClinicalAccessTokenRepositoryTest {
         tokens.saveAndFlush(token);
         entityManager.clear();
 
+        var persistedScope = entityManager.createNativeQuery("""
+                        SELECT scope
+                        FROM clinical_access_token_scopes
+                        WHERE token_id = :tokenId
+                        """)
+                .setParameter("tokenId", token.getId())
+                .getSingleResult();
+        assertThat(persistedScope).isEqualTo("clinician:patients:read");
+
         var loaded = tokens.findByTokenHash("c".repeat(64)).orElseThrow();
         var persistence = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
         assertThat(persistence.isLoaded(loaded, "user")).isTrue();
