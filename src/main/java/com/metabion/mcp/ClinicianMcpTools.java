@@ -321,9 +321,12 @@ public class ClinicianMcpTools {
             var response = request.get();
             audit.recordToolSuccess(auth, operation);
             return response;
-        } catch (RuntimeException ex) {
+        } catch (ResponseStatusException ex) {
             audit.recordToolFailure(auth, operation, "request_failed");
             throw ex;
+        } catch (RuntimeException ex) {
+            audit.recordToolFailure(auth, operation, "request_failed");
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "clinical MCP request failed");
         }
     }
 
@@ -337,7 +340,7 @@ public class ClinicianMcpTools {
                     Base64.getEncoder().encodeToString(bytes));
         } catch (IOException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "photo content could not be read", ex);
+                    "photo content could not be read");
         }
     }
 }

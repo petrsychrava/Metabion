@@ -55,6 +55,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -289,14 +291,65 @@ class ClinicianMcpToolsTest {
     }
 
     @Test
-    void facadeFailuresAreAuditedWithoutClinicalValues() {
+    void unexpectedFacadeFailuresReturnGenericSafeInternalServerError() {
         authenticate(ClinicalAccessTokenScope.CLINICIAN_OVERVIEW_READ);
         when(facade.clinicalOverview(any())).thenThrow(new IllegalArgumentException("sensitive clinical value"));
 
         assertThatThrownBy(() -> tools.metabionGetClinicalOverview())
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
+                    assertThat(error.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+                    assertThat(error.getReason()).isEqualTo("clinical MCP request failed");
+                    assertThat(error.getCause()).isNull();
+                    assertThat(error).hasMessageNotContaining("sensitive clinical value");
+                });
         verify(audit).recordToolFailure(any(ClinicalAccessTokenAuthentication.class),
                 eq("metabion_get_clinical_overview"), eq("request_failed"));
+    }
+
+    @Test
+    void safeFacadeResponseStatusFailuresArePreservedAfterAudit() {
+        authenticate(ClinicalAccessTokenScope.CLINICIAN_LABS_READ);
+        when(facade.clinicalLabTrend(any(), eq(41L), eq("CRP"),
+                eq(LocalDate.of(2026, 1, 1)), eq(LocalDate.of(2026, 1, 31))))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "date range cannot exceed 370 days"));
+
+        assertThatThrownBy(() -> tools.metabionGetClinicalLabTrend(41L, "CRP",
+                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31)))
+                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
+                    assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(error.getReason()).isEqualTo("date range cannot exceed 370 days");
+                });
+        verify(audit).recordToolFailure(any(ClinicalAccessTokenAuthentication.class),
+                eq("metabion_get_clinical_lab_trend"), eq("request_failed"));
+    }
+
+    @Test
+    void photoReadFailuresReturnGenericSafeInternalServerErrorWithoutCause() {
+        authenticate(ClinicalAccessTokenScope.CLINICIAN_PHOTOS_READ);
+        var content = new DietLogPhotoService.PhotoContent(
+                "image/png",
+                new FileStorageResource(new InputStream() {
+                    @Override
+                    public int read() {
+                        return -1;
+                    }
+
+                    @Override
+                    public byte[] readAllBytes() throws IOException {
+                        throw new IOException("sensitive storage path /private/patient-photo.png");
+                    }
+                }, 128));
+        when(facade.clinicalDietPhotoContent(any(), eq(99L))).thenReturn(content);
+
+        assertThatThrownBy(() -> tools.metabionGetClinicalDietPhotoContent(99L))
+                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
+                    assertThat(error.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+                    assertThat(error.getReason()).isEqualTo("photo content could not be read");
+                    assertThat(error.getCause()).isNull();
+                    assertThat(error).hasMessageNotContaining("sensitive storage path");
+                });
+        verify(audit).recordToolFailure(any(ClinicalAccessTokenAuthentication.class),
+                eq("metabion_get_clinical_diet_photo_content"), eq("request_failed"));
     }
 
     @Test
@@ -316,6 +369,20 @@ class ClinicianMcpToolsTest {
         for (var parameter : onboarding.getParameters()) {
             assertThat(parameter.getAnnotation(McpToolParam.class).required()).isFalse();
         }
+    }
+
+    @Test
+    void serviceRequiredDateRangeParametersRemainRequiredInToolSchema() throws Exception {
+        assertRequiredDateRange("metabionListClinicalDailyCheckIns",
+                Long.class, LocalDate.class, LocalDate.class);
+        assertRequiredDateRange("metabionListClinicalSymptomCheckIns",
+                Long.class, LocalDate.class, LocalDate.class);
+        assertRequiredDateRange("metabionGetClinicalDailyTrends",
+                Long.class, LocalDate.class, LocalDate.class);
+        assertRequiredDateRange("metabionListClinicalLabResultSets",
+                Long.class, LocalDate.class, LocalDate.class);
+        assertRequiredDateRange("metabionGetClinicalLabTrend",
+                Long.class, String.class, LocalDate.class, LocalDate.class);
     }
 
     @Test
@@ -385,6 +452,16 @@ class ClinicianMcpToolsTest {
         assertThat(method.getAnnotation(McpTool.class).description())
                 .contains("returned red flags are clinical data")
                 .contains("MCP host must not invent medical guidance");
+    }
+
+    private static void assertRequiredDateRange(String methodName, Class<?>... parameterTypes) throws Exception {
+        Method method = ClinicianMcpTools.class.getMethod(methodName, parameterTypes);
+        for (var parameter : method.getParameters()) {
+            if (parameter.getType().equals(LocalDate.class)) {
+                var annotation = parameter.getAnnotation(McpToolParam.class);
+                assertThat(annotation == null || annotation.required()).isTrue();
+            }
+        }
     }
 
     private static ApplicationContextRunner contextRunner() {
