@@ -22,7 +22,7 @@ contract, and reuse the current clinical REST services and authorization rules.
 | Writes | Clinical laboratory create/update/removal and onboarding review only |
 | Authentication | Existing OAuth authorization-code + PKCE flow |
 | MCP transport | Existing `/api/mcp` Streamable HTTP endpoint |
-| Token architecture | Role-neutral MCP token substrate with patient and clinician subject types |
+| Token architecture | Separate patient and clinical access-token tables with shared OAuth protocol tables |
 | Tool registration | Separate patient and clinician tool beans with subject-specific guards |
 | Assignments | Checked on every patient-data call through existing clinical services |
 | Admin/assignment operations | Out of scope |
@@ -95,33 +95,40 @@ MCP client
   -> AccessControlService and domain repositories
 ```
 
-### Role-neutral token substrate
+### Subject-specific access-token tables
 
-Refactor the Java token/authentication path currently named for patients into a
-role-neutral MCP model. The external OAuth and MCP protocol remains unchanged.
-The model has:
+Keep patient and clinical bearer credentials in separate physical tables and
+entities:
 
-- `McpTokenSubject`: `PATIENT` or `CLINICIAN`;
-- a common MCP scope type containing the existing patient scopes and the new
-  clinician scopes;
-- the owning `User`, token hash, client type/label, resource, expiry,
-  last-used, revocation, and refresh-family fields;
-- a subject type stored with access tokens, authorization codes, and refresh
-  tokens.
+- `patient_access_tokens` and `patient_access_token_scopes` remain the patient
+  token store;
+- `clinical_access_tokens` and `clinical_access_token_scopes` store physician
+  and nutrition-specialist tokens.
 
-Existing patient-issued rows default to `PATIENT`. The current physical token
-tables may be retained for migration compatibility while the Java model and
-repositories become role-neutral; the migration adds the subject-type column
-and preserves existing token hashes and scope grants. PostgreSQL and Oracle
-migrations must be updated together.
+Both access-token tables contain the common lifecycle fields: owning `User`,
+token hash, client type/label, resource, expiry, last-used timestamp,
+revocation state, and refresh-family ID. The clinical table also has a foreign
+key to `oauth_refresh_token_families` when the token is OAuth refresh-capable.
 
-Patient-facing issuance methods remain as compatibility adapters that call the
-generic token service with `PATIENT`. OAuth clinician issuance calls the same
-service with `CLINICIAN`. Manual clinician token issuance is not added.
+Patient-facing issuance remains in `PatientAccessTokenService`. Add a separate
+`ClinicalAccessTokenService` for OAuth clinician issuance, while sharing token
+generation, hashing, common validation helpers, and response mapping. Manual
+clinician token issuance is not added.
 
-A token must contain one scope family only. Patient scopes and clinician scopes
-cannot be mixed. Subject type is stored explicitly rather than inferred only
-from current roles, so a token cannot silently change purpose after issuance.
+Use distinct plaintext token prefixes, such as `pat_` and `clin_`, so the
+bearer filter can route directly to the correct repository and the two tables
+share one unambiguous token namespace. Only hashes are persisted; the prefix
+is part of the hashed value and is not itself a trust decision.
+
+Scope-family separation is enforced by the table and Java scope type:
+patient scope grants can only be persisted in the patient scope table, and
+clinician scope grants can only be persisted in the clinical scope table. A
+single access token cannot mix patient and clinician scopes.
+
+The OAuth protocol artifacts remain shared. Authorization codes and refresh
+tokens carry an explicit `subject_type` (`PATIENT` or `CLINICIAN`) so the
+shared OAuth flow knows which access-token service to call. This keeps OAuth
+validation and refresh rotation common without mixing bearer-token rows.
 
 ### OAuth authorization and refresh
 
@@ -135,10 +142,12 @@ The existing OAuth authorization service is generalized as follows:
    clinician scopes.
 4. Token exchange revalidates the code, client, redirect URI, resource, PKCE,
    scope family, subject type, and current user eligibility before consuming
-   the code and issuing the access token.
+   the code and dispatching to the patient or clinical access-token service.
 5. Refresh rotation revalidates the same subject eligibility and scope family
-   before issuing a replacement access token.
-6. Existing family-wide reuse revocation and resource binding remain intact.
+   before issuing a replacement access token in the matching table.
+6. Existing family-wide reuse revocation and resource binding remain intact;
+   family revocation dispatches to the patient or clinical access-token
+   repository based on the refresh row's subject type.
 
 Dynamic and configured OAuth clients may advertise clinician scopes in the same
 way they advertise patient scopes. An existing client registration that does
@@ -154,26 +163,31 @@ Replace the patient-only bearer assumption with a common MCP bearer
 authentication/filter that:
 
 - runs only for `/api/mcp` requests;
+- routes by the `pat_`/`clin_` prefix to the patient or clinical token
+  repository;
 - validates the token hash, resource, expiry, revocation, and user status;
-- verifies that the current user still has the role required by the stored
-  subject type;
+- verifies that the current user still has the role required by the selected
+  token domain;
 - exposes current role authorities and `SCOPE_...` authorities;
 - saves the authenticated context to the existing request-attribute MCP
   security-context repository;
 - retains the current `401` challenge, `403` insufficient-scope behavior, and
   metadata-only authentication audit.
 
-`PatientMcpTools` accepts only a `PATIENT` subject. `ClinicianMcpTools` accepts
-only a `CLINICIAN` subject and then requires the appropriate clinician scope.
-Using a token from the wrong subject family never reaches a business service.
+`PatientMcpTools` accepts only a patient authentication. `ClinicianMcpTools`
+accepts only a clinical authentication and then requires the appropriate
+clinician scope. Using a token from the wrong table/domain never reaches a
+business service.
 
 ### Component boundaries
 
 Add `ClinicianMcpTools` as the annotation boundary and `ClinicalMcpFacade` as
-the MCP-facing application boundary. The tool class is responsible only for:
+the MCP-facing application boundary. Add a common token generator/auth
+adapter, but keep patient and clinical token issuers and repositories separate.
+The tool class is responsible only for:
 
 - MCP names, descriptions, and parameters;
-- subject and scope checks;
+- token-domain and scope checks;
 - safe base64 photo adaptation;
 - MCP-specific write-result wrappers;
 - success/failure audit calls.
@@ -321,35 +335,44 @@ session IDs, photo bytes, or complete clinical request bodies.
 Add the next migration after the current `V17__oauth_client_capabilities.sql`
 for both PostgreSQL and Oracle. The migration must:
 
-1. Add a non-null subject-type column to the shared MCP access-token table,
-   defaulting existing rows to `PATIENT`.
-2. Add the same subject type to authorization-code and refresh-token records,
-   defaulting existing rows to `PATIENT`.
-3. Preserve existing token hashes, refresh families, scope rows, indexes, and
-   revocation state.
-4. Keep scope storage compatible with existing patient scope values while
-   allowing the new clinician scope enum values.
-5. Add any required indexes for subject type and active-token lookup.
+1. Create `clinical_access_tokens` with the same lifecycle columns as
+   `patient_access_tokens`, including resource binding and nullable
+   `refresh_family_id`.
+2. Create `clinical_access_token_scopes` with a foreign key to the clinical
+   token table and constraints appropriate for clinician scope values.
+3. Add a non-null `subject_type` to authorization-code and refresh-token
+   records, defaulting existing rows to `PATIENT`.
+4. Preserve existing patient token hashes, patient scope rows, refresh
+   families, indexes, foreign keys, and revocation state.
+5. Keep shared OAuth scope storage compatible with existing patient scope
+   values while allowing the new clinician scope values.
+6. Add clinical indexes for token hash, user ownership, active-token lookup,
+   and refresh-family lookup.
 
-The physical token table names may remain unchanged in this delivery to avoid
-rewriting existing production data; the Java entities and repositories are
-role-neutral despite the historical table names. The migration layout test and
-portable JPA mapping test must cover both database variants.
+Because the application is not yet used, create the clinical tables directly;
+there is no production rename or data migration to justify collapsing the two
+access-token stores. The clinical token table references the shared
+`oauth_refresh_token_families` table in the same way as the patient token
+table. The migration layout test and portable JPA mapping test must cover both
+database variants.
 
 ## Token Management
 
-Generalize the current account access-token service and summaries so an
-authenticated physician or nutrition specialist can list and revoke their own
-MCP tokens through the existing session-authenticated account API. This is an
-API capability only; no staff account page is added here. Revocation remains
-owner-bound and CSRF-protected. OAuth refresh-family revocation continues to
-revoke all related access tokens.
+Keep the current patient account access-token service for patient credentials
+and add a clinical counterpart so an authenticated physician or nutrition
+specialist can list and revoke their own clinical MCP tokens through the
+existing session-authenticated account API. This is an API capability only; no
+staff account page is added here. Revocation remains owner-bound and
+CSRF-protected. OAuth refresh-family revocation dispatches to the matching
+patient or clinical token repository and continues to revoke all related
+access tokens.
 
 ## Testing Strategy
 
 ### Domain and service tests
 
 - subject-type and scope-family invariants;
+- patient and clinical token repository/table isolation;
 - existing patient token issuance, authentication, refresh, and revocation;
 - clinician token issuance only for physician/nutrition-specialist users;
 - rejection of patients, coordinators, administrators, disabled users, locked
@@ -369,6 +392,7 @@ revoke all related access tokens.
 - client scope allow-list enforcement;
 - clinician refresh rotation and refresh-token reuse family revocation;
 - invalid, expired, revoked, wrong-subject, and wrong-resource bearer tokens;
+- `pat_` and `clin_` bearer-token routing to the matching token repository;
 - missing-scope challenge and audit behavior;
 - MCP request-attribute security context across asynchronous/error dispatches;
 - existing patient OAuth/MCP integration tests remaining green.
