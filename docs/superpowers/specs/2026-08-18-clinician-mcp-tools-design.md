@@ -120,6 +120,15 @@ bearer filter can route directly to the correct repository and the two tables
 share one unambiguous token namespace. Only hashes are persisted; the prefix
 is part of the hashed value and is not itself a trust decision.
 
+Patient tokens issued before this change are unprefixed because the current
+issuer generates a raw random value. They remain valid through a legacy
+patient-only lookup path until expiry or revocation; they are never routed to
+the clinical token table. New patient issuance uses `pat_`, and clinician
+issuance uses `clin_`. Existing hashes cannot be rewritten to add a prefix,
+so no token-hash migration is attempted. Existing OAuth refresh-token values
+remain valid, and a subsequent patient refresh issues a new `pat_` access
+token.
+
 Scope-family separation is enforced by the table and Java scope type:
 patient scope grants can only be persisted in the patient scope table, and
 clinician scope grants can only be persisted in the clinical scope table. A
@@ -165,6 +174,9 @@ authentication/filter that:
 - runs only for `/api/mcp` requests;
 - routes by the `pat_`/`clin_` prefix to the patient or clinical token
   repository;
+- treats an unprefixed bearer value as a legacy patient token and checks only
+  the patient repository;
+- rejects an unknown explicit prefix without probing the other token domain;
 - validates the token hash, resource, expiry, revocation, and user status;
 - verifies that the current user still has the role required by the selected
   token domain;
@@ -373,6 +385,8 @@ access tokens.
 
 - subject-type and scope-family invariants;
 - patient and clinical token repository/table isolation;
+- legacy unprefixed patient tokens remain usable and cannot enter the clinical
+  token path;
 - existing patient token issuance, authentication, refresh, and revocation;
 - clinician token issuance only for physician/nutrition-specialist users;
 - rejection of patients, coordinators, administrators, disabled users, locked
@@ -432,6 +446,9 @@ Hibernate validation.
   default it to disabled until OAuth scope metadata and migration deployment
   are complete.
 - Existing patient tokens remain patient-subject tokens and continue to work.
+- Existing unprefixed patient test tokens continue to work through the legacy
+  patient-only lookup path until they expire or are revoked.
+- New patient tokens use `pat_`; new clinician tokens use `clin_`.
 - Existing patient clients do not receive clinician scopes automatically.
 - A client must obtain fresh consent for clinician scopes.
 - Monitor clinician authentication failures, missing-scope failures, and
