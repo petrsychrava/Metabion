@@ -2,6 +2,7 @@ package com.metabion.service.oauth;
 
 import com.metabion.domain.OAuthRefreshToken;
 import com.metabion.domain.OAuthRefreshTokenFamily;
+import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.RoleName;
@@ -107,7 +108,12 @@ class OAuthRefreshTokenConcurrencyTest {
         assertThat(families.findById("concurrent-family").orElseThrow().isRevoked()).isTrue();
         assertThat(refreshTokens.findByFamilyId("concurrent-family"))
                 .hasSize(2)
-                .allSatisfy(token -> assertThat(token.isRevoked()).isTrue());
+                .allSatisfy(token -> {
+                    assertThat(token.isRevoked()).isTrue();
+                    assertThat(token.getSubjectType()).isEqualTo(McpTokenSubject.PATIENT);
+                    assertThat(token.scopeAuthorities())
+                            .containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority());
+                });
         assertThat(accessTokens.findAll())
                 .filteredOn(token -> "concurrent-family".equals(token.getRefreshFamilyId()))
                 .hasSize(1)

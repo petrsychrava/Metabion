@@ -32,4 +32,25 @@ class OAuthRefreshTokenFamilyTest {
         assertThatIllegalArgumentException().isThrownBy(
                 () -> family.revoke("again", CREATED.plusSeconds(31)));
     }
+
+    @Test
+    void refreshTokensDefaultSubjectTypeToPatientAndPersistAuthoritiesAsStrings() {
+        var user = new User("family-refresh@example.com", "hash");
+        var token = new OAuthRefreshToken(
+                "a".repeat(64),
+                "family-1",
+                user,
+                "codex-client",
+                com.metabion.dto.oauth.OAuthClientSource.DYNAMIC,
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                "http://localhost:8080/api/mcp",
+                CREATED,
+                CREATED.plusSeconds(3600),
+                java.util.Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
+
+        assertThat(token.getSubjectType()).isEqualTo(McpTokenSubject.PATIENT);
+        assertThat(token.scopeAuthorities()).containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority());
+        assertThat(token.scopes()).containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority());
+    }
 }

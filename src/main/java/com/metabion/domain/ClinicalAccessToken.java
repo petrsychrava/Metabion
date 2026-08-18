@@ -14,6 +14,8 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -120,7 +122,8 @@ public class ClinicalAccessToken {
         if (resource == null || resource.isBlank()) {
             throw new IllegalArgumentException("resource is required");
         }
-        if (scopes == null || scopes.isEmpty()) {
+        var validatedScopes = validateClinicalScopes(scopes);
+        if (validatedScopes.isEmpty()) {
             throw new IllegalArgumentException("at least one scope is required");
         }
         this.user = user;
@@ -134,9 +137,23 @@ public class ClinicalAccessToken {
             throw new IllegalArgumentException("refresh family id is required");
         }
         this.refreshFamilyId = manualIssuance ? null : refreshFamilyId.trim();
-        this.scopeGrants = scopes.stream()
+        this.scopeGrants = validatedScopes.stream()
                 .map(ClinicalAccessTokenScopeGrant::new)
                 .collect(Collectors.toCollection(HashSet::new));
+    }
+
+    private static Set<ClinicalAccessTokenScope> validateClinicalScopes(Set<ClinicalAccessTokenScope> scopes) {
+        if (scopes == null) {
+            return Set.of();
+        }
+        var validated = new LinkedHashSet<ClinicalAccessTokenScope>();
+        for (Object scope : scopes) {
+            if (!(scope instanceof ClinicalAccessTokenScope clinicalScope)) {
+                throw new IllegalArgumentException("clinical scope is required");
+            }
+            validated.add(Objects.requireNonNull(clinicalScope, "clinical scope is required"));
+        }
+        return validated;
     }
 
     public boolean isExpired(Instant now) {

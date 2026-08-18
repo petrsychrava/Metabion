@@ -2,8 +2,9 @@ package com.metabion.repository;
 
 import com.metabion.domain.ClinicalAccessToken;
 import com.metabion.domain.ClinicalAccessTokenScope;
-import com.metabion.domain.ClinicalAccessTokenScopeGrant;
 import com.metabion.domain.PatientAccessClientType;
+import com.metabion.domain.PatientAccessToken;
+import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import jakarta.persistence.EntityManager;
@@ -15,6 +16,8 @@ import java.time.Instant;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+
 @DataJpaTest(properties = {
         "spring.profiles.active=dev",
         "spring.flyway.enabled=false",
@@ -28,6 +31,9 @@ class ClinicalAccessTokenRepositoryTest {
 
     @Autowired
     ClinicalAccessTokenRepository tokens;
+
+    @Autowired
+    PatientAccessTokenRepository patientTokens;
 
     @Autowired
     EntityManager entityManager;
@@ -59,8 +65,9 @@ class ClinicalAccessTokenRepositoryTest {
     }
 
     @Test
-    void familyRevocationOnlyTouchesClinicalRows() {
+    void familyRevocationOnlyTouchesClinicalRowsAndLeavesPatientRowsBoundToSameFamilyUntouched() {
         var user = users.saveAndFlush(clinician("family-clinician@example.com"));
+        var patient = users.saveAndFlush(patient("family-patient@example.com"));
         var createdAt = Instant.parse("2026-07-04T10:00:00Z");
         var familyToken = new ClinicalAccessToken(
                 user,
@@ -81,6 +88,17 @@ class ClinicalAccessTokenRepositoryTest {
                 createdAt.plusSeconds(3600),
                 "http://localhost:8080/api/mcp",
                 Set.of(ClinicalAccessTokenScope.CLINICIAN_PATIENTS_READ));
+        var patientToken = new PatientAccessToken(
+                patient,
+                "patient-family-hash",
+                PatientAccessClientType.MCP_OTHER,
+                "Patient app",
+                createdAt,
+                createdAt.plusSeconds(3600),
+                "http://localhost:8080/api/mcp",
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
+                "family-1");
+        patientTokens.save(patientToken);
         tokens.saveAllAndFlush(Set.of(familyToken, manualToken));
 
         assertThat(tokens.revokeActiveByRefreshFamilyId("family-1", "refresh_reuse", createdAt.plusSeconds(30)))
@@ -89,12 +107,39 @@ class ClinicalAccessTokenRepositoryTest {
 
         assertThat(tokens.findByTokenHash("family-hash").orElseThrow().isRevoked()).isTrue();
         assertThat(tokens.findByTokenHash("manual-hash").orElseThrow().isRevoked()).isFalse();
+        assertThat(patientTokens.findByTokenHash("patient-family-hash").orElseThrow().isRevoked()).isFalse();
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void rejectsRawPatientScopeAuthoritiesWhenConstructingClinicalTokens() {
+        var clinician = clinician("scope-guard@example.com");
+        var createdAt = Instant.parse("2026-07-04T10:00:00Z");
+        Set rawPatientScopes = Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ);
+
+        assertThatIllegalArgumentException().isThrownBy(() -> new ClinicalAccessToken(
+                clinician,
+                "scope-guard-hash",
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                createdAt,
+                createdAt.plusSeconds(3600),
+                "http://localhost:8080/api/mcp",
+                (Set<ClinicalAccessTokenScope>) rawPatientScopes))
+                .withMessage("clinical scope is required");
     }
 
     private static User clinician(String email) {
         var user = new User(email, "hash");
         user.setEnabled(true);
         user.addRole(RoleName.PHYSICIAN);
+        return user;
+    }
+
+    private static User patient(String email) {
+        var user = new User(email, "hash");
+        user.setEnabled(true);
+        user.addRole(RoleName.PATIENT);
         return user;
     }
 }
