@@ -22,8 +22,30 @@ class McpTokenEligibilityTest {
     }
 
     @Test
+    void allowsEnabledUnlockedNutritionSpecialistForClinicianTokens() {
+        var user = userWithRole(RoleName.NUTRITION_SPECIALIST);
+
+        assertThat(McpTokenEligibility.isAllowedClinician(user, NOW)).isTrue();
+    }
+
+    @Test
     void rejectsCoordinatorForClinicianTokens() {
         var user = userWithRole(RoleName.COORDINATOR);
+
+        assertThat(McpTokenEligibility.isAllowedClinician(user, NOW)).isFalse();
+    }
+
+    @Test
+    void rejectsAdminEvenWithClinicianRoleForClinicianTokens() {
+        var user = userWithRoles(RoleName.ADMIN, RoleName.PHYSICIAN);
+
+        assertThat(McpTokenEligibility.isAllowedClinician(user, NOW)).isFalse();
+    }
+
+    @Test
+    void rejectsDisabledUserForClinicianTokens() {
+        var user = userWithRole(RoleName.PHYSICIAN);
+        user.setEnabled(false);
 
         assertThat(McpTokenEligibility.isAllowedClinician(user, NOW)).isFalse();
     }
@@ -37,10 +59,17 @@ class McpTokenEligibilityTest {
     }
 
     private static User userWithRole(RoleName role) {
-        var user = new User(role.name().toLowerCase() + "@example.com", "hash");
+        return userWithRoles(role);
+    }
+
+    private static User userWithRoles(RoleName... roles) {
+        var primaryRole = roles[0];
+        var user = new User(primaryRole.name().toLowerCase() + "@example.com", "hash");
         ReflectionTestUtils.setField(user, "id", 1L);
         user.setEnabled(true);
-        user.addRole(role);
+        for (var roleName : roles) {
+            user.addRole(roleName);
+        }
         return user;
     }
 }

@@ -25,6 +25,7 @@ class McpTokenCodecTest {
         assertThat(codec.route(body)).isEqualTo(McpTokenCodec.Route.LEGACY_PATIENT);
         assertThat(codec.route("clin_" + body)).isEqualTo(McpTokenCodec.Route.CLINICIAN);
         assertThat(codec.route("pat_short")).isEqualTo(McpTokenCodec.Route.INVALID);
+        assertThat(codec.route("bogus_" + body)).isEqualTo(McpTokenCodec.Route.INVALID);
     }
 
     @Test
