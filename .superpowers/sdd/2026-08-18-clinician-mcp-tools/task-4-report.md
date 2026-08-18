@@ -127,3 +127,37 @@ Run from `/Users/petrsychrava/IdeaProjects/Metabion/.worktrees/clinician-mcp-too
   - `SymptomRedFlagIntegrationTest`
 - One additional non-Docker assertion failed: `OAuthRegisteredClientRepositoryTest.rejectsUnsupportedScope` expected the legacy message fragment `Unsupported patient token scope`, while the subject-aware `McpScopeCatalog` now produced `unsupported scope: patient:unknown:scope`. The rejection behavior itself occurred; only the exact message assertion differed. Per review instructions, no production code or tests were changed in this follow-up.
 - The Docker/Testcontainers environment limitation remains for final Task 9 verification.
+
+## Stale role-specific assertion fix
+
+RED reproduction before changing the assertion:
+
+```bash
+./gradlew test --tests 'com.metabion.repository.OAuthRegisteredClientRepositoryTest.rejectsUnsupportedScope'
+```
+
+- Exit status: `1` (`BUILD FAILED`).
+- Result: `1 test completed, 1 failed`.
+- Failure: `OAuthRegisteredClientRepositoryTest.rejectsUnsupportedScope` expected `Unsupported patient token scope`; the actual role-neutral catalog message was `unsupported scope: patient:unknown:scope`.
+
+The only test change replaced the stale patient-specific expected fragment with `unsupported scope: patient:unknown:scope`. No production code changed.
+
+Focused GREEN command:
+
+```bash
+./gradlew test --tests 'com.metabion.repository.OAuthRegisteredClientRepositoryTest'
+```
+
+- Exit status: `0` (`BUILD SUCCESSFUL`).
+- Result: `8 tests`, `0 failures`.
+
+Unfiltered verification after the assertion fix:
+
+```bash
+./gradlew test
+```
+
+- Exit status: `1` (`BUILD FAILED`).
+- Gradle summary: `1188 tests completed, 29 failed, 9 skipped`.
+- All 29 remaining failures were Docker/Testcontainers `initializationError` failures from `DockerClientProviderStrategy` (`Could not find a valid Docker environment` / `Previous attempts to find a Docker environment failed. Will not retry.`).
+- There were no remaining non-Docker test failures. The Docker/Testcontainers limitation is carried to final Task 9 verification.
