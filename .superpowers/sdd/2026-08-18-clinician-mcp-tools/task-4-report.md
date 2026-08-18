@@ -84,3 +84,46 @@ The production `OAuthTokenFamilyRevocationService` already contained the require
 - Reviewed the final diff against every Task 4 requirement; no SDD ledger, bearer filter, security routing, or MCP tool-surface files were changed.
 - `OAuthTokenFamilyRevocationService` remains fail-closed for absent/mixed families and dispatches to exactly one subject repository.
 - Concern: PostgreSQL concurrency/locking verification remains unexecuted because Docker is unavailable. Its Spring context was updated for the new clinical service dependency, but the Testcontainers test itself could not initialize locally.
+
+## Unfiltered completion verification (review follow-up)
+
+Run from `/Users/petrsychrava/IdeaProjects/Metabion/.worktrees/clinician-mcp-tools` on 2026-08-19:
+
+```bash
+./gradlew test
+```
+
+- Exit status: `1` (`BUILD FAILED`).
+- Gradle summary: `1188 tests completed, 30 failed, 9 skipped`.
+- Docker/Testcontainers evidence: 29 failures were test-class `initializationError` failures from `DockerClientProviderStrategy`; the first reported `Could not find a valid Docker environment`, and subsequent classes reported `Previous attempts to find a Docker environment failed. Will not retry.` Testcontainers reported version `2.0.5`. Affected classes were:
+  - `AssignmentManagementApiIT`
+  - `AssignmentManagementIT`
+  - `AuthFlowIT`
+  - `CsrfIT`
+  - `EducationContentIT`
+  - `EnumerationIT`
+  - `LoginTimingIT`
+  - `MfaSeamIT`
+  - `OnboardingReviewIT`
+  - `PasswordResetSessionIT`
+  - `SessionFixationIT`
+  - `WebAuthIT`
+  - `DailyDietLogRepositoryTest`
+  - `EducationContentRepositoryTest`
+  - `LabRepositoryTest`
+  - `OAuthRefreshTokenPostgresTest`
+  - `OnboardingSubmissionRepositoryTest`
+  - `RbacAssignmentRepositoryTest`
+  - `RedFlagEvaluationRepositoryTest`
+  - `RedFlagRuleRepositoryTest`
+  - `RedFlagTriggerEventQueryRepositoryTest`
+  - `StaffInvitationRepositoryTest`
+  - `SymptomTrackingRepositoryTest`
+  - `DailyCheckInServicePersistenceTest`
+  - `LabResultServicePersistenceTest`
+  - `SymptomTrackingServicePersistenceTest`
+  - `OAuthRefreshTokenConcurrencyTest`
+  - `LabRedFlagIntegrationTest`
+  - `SymptomRedFlagIntegrationTest`
+- One additional non-Docker assertion failed: `OAuthRegisteredClientRepositoryTest.rejectsUnsupportedScope` expected the legacy message fragment `Unsupported patient token scope`, while the subject-aware `McpScopeCatalog` now produced `unsupported scope: patient:unknown:scope`. The rejection behavior itself occurred; only the exact message assertion differed. Per review instructions, no production code or tests were changed in this follow-up.
+- The Docker/Testcontainers environment limitation remains for final Task 9 verification.
