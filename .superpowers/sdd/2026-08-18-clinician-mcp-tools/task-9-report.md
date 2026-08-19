@@ -218,6 +218,88 @@ Results:
 - Sensitive-data scan: no matches.
 - `git diff --check`: exit code `0`, no whitespace errors.
 
+## MCP auditability follow-up
+
+Finding:
+
+- `McpAccessAuditService` tool-action logs included subject, operation, email, token ID, client, and coarse reason, but not the actor user ID, current role metadata, request path, or target patient profile ID required by the approved clinician MCP design.
+- `ClinicianMcpTools` used a generic audited wrapper for patient-scoped clinical tools, so the `patientProfileId` argument was dropped before success/failure audit logging.
+- Missing-scope failures for patient-specific clinician tools had the same target-ID loss because the scope guard only accepted the operation name.
+
+TDD red step:
+
+```bash
+./gradlew test --tests 'com.metabion.mcp.ClinicianMcpToolsTest' --tests 'com.metabion.service.McpAccessAuditServiceTest'
+```
+
+Result before the fix:
+
+- Exit code: `1`
+- Failure mode: `compileTestJava` failed because the target-aware `recordToolSuccess(authentication, operation, targetPatientProfileId)` and `recordToolFailure(authentication, operation, reason, targetPatientProfileId)` overloads did not exist.
+
+Fix:
+
+- Added backward-compatible enriched overloads to `McpAccessAuditService` for tool success/failure logging.
+- Existing two-argument success and three-argument failure methods remain and delegate with a null target patient profile ID.
+- Tool audit logs now include actor user ID, actor email, actor roles, token ID, client label, request path when a servlet request is available, optional target patient profile ID, status, operation, and coarse failure reason.
+- `ClinicianMcpTools` now has target-aware `require` and `audited` overloads and passes only already-present `patientProfileId` tool arguments for patient-specific get-patient, daily check-in, symptom, trend, lab, and red-flag operations.
+- Null target auditing is retained for assigned-patient panel/list, clinical overview, photo-by-ID, lab catalog, and onboarding submission-ID operations.
+- No request payloads, token values, refresh tokens, SQL, photo bytes, or clinical values were added to audit logs.
+
+Regression coverage:
+
+- `ClinicianMcpToolsTest.patientSpecificClinicalSuccessAuditsTargetPatientProfileId` verifies a patient-specific success invokes the enriched audit overload with the target ID.
+- `ClinicianMcpToolsTest.patientSpecificMissingScopeAuditsTargetPatientProfileId` verifies a missing-scope failure preserves the target ID before throwing.
+- Existing clinician MCP tests continue to verify the exact 20-tool contract, safe error handling, and null-target tool behavior.
+- `McpAccessAuditServiceTest.enrichedToolAuditLogsMetadataOnlyWithRequestPathAndTarget` verifies metadata-only log contents, request-path capture, target ID, actor ID/email/role metadata, coarse reason, no throw, and no fake bearer token value in the formatted log message.
+
+Focused red-to-green proof:
+
+```bash
+./gradlew test --tests 'com.metabion.mcp.ClinicianMcpToolsTest' --tests 'com.metabion.service.McpAccessAuditServiceTest'
+```
+
+Result after the fix:
+
+- Exit code: `0`
+- `BUILD SUCCESSFUL`
+
+Focused MCP/audit/filter proof:
+
+```bash
+./gradlew test --tests 'com.metabion.mcp.*' --tests 'com.metabion.service.McpAccessAuditServiceTest' --tests 'com.metabion.config.McpBearerTokenAuthenticationFilterTest' --tests 'com.metabion.config.McpSecurityContextRepositoryTest' --tests 'com.metabion.config.McpLocalhostFilterTest'
+```
+
+Result:
+
+- Exit code: `0`
+- `BUILD SUCCESSFUL`
+
+Filtered non-Docker proof:
+
+```bash
+./gradlew test -I /private/tmp/metabion-non-docker-tests.gradle
+```
+
+Result:
+
+- Exit code: `0`
+- `BUILD SUCCESSFUL`
+- XML report count: `total=1235 failures=0 errors=0 skipped=9 passed=1226`
+- `jacocoTestReport` finalized successfully.
+
+Sensitive-data and whitespace checks:
+
+```bash
+rg -n "log\.(info|warn|error).*(plainToken|refreshToken|authorizationCode|requestBody|payload|tokenHash|credentials|sql|clinical)" src/main/java/com/metabion/config src/main/java/com/metabion/service src/main/java/com/metabion/mcp
+git diff --check
+```
+
+Results:
+
+- Sensitive-data scan: no matches.
+- `git diff --check`: exit code `0`, no whitespace errors.
+
 ## Full verification command
 
 Command run exactly as specified:

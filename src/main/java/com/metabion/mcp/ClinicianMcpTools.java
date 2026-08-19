@@ -98,8 +98,9 @@ public class ClinicianMcpTools {
             description = "Get a Metabion patient target accessible to the current clinician.")
     public PatientOptionResponse metabionGetClinicalPatient(Long patientProfileId) {
         var auth = clinicalAuth();
-        require(auth, ClinicalAccessTokenScope.CLINICIAN_PATIENTS_READ, "metabion_get_clinical_patient");
-        return audited(auth, "metabion_get_clinical_patient",
+        require(auth, ClinicalAccessTokenScope.CLINICIAN_PATIENTS_READ,
+                "metabion_get_clinical_patient", patientProfileId);
+        return audited(auth, "metabion_get_clinical_patient", patientProfileId,
                 () -> clinical.getClinicalPatient(auth, patientProfileId));
     }
 
@@ -111,8 +112,8 @@ public class ClinicianMcpTools {
             LocalDate to) {
         var auth = clinicalAuth();
         require(auth, ClinicalAccessTokenScope.CLINICIAN_CHECK_INS_READ,
-                "metabion_list_clinical_daily_check_ins");
-        return audited(auth, "metabion_list_clinical_daily_check_ins",
+                "metabion_list_clinical_daily_check_ins", patientProfileId);
+        return audited(auth, "metabion_list_clinical_daily_check_ins", patientProfileId,
                 () -> clinical.listClinicalDailyCheckIns(auth, patientProfileId, from, to));
     }
 
@@ -122,8 +123,8 @@ public class ClinicianMcpTools {
                                                                               LocalDate date) {
         var auth = clinicalAuth();
         require(auth, ClinicalAccessTokenScope.CLINICIAN_CHECK_INS_READ,
-                "metabion_get_clinical_daily_check_in");
-        return audited(auth, "metabion_get_clinical_daily_check_in",
+                "metabion_get_clinical_daily_check_in", patientProfileId);
+        return audited(auth, "metabion_get_clinical_daily_check_in", patientProfileId,
                 () -> clinical.getClinicalDailyCheckIn(auth, patientProfileId, date));
     }
 
@@ -134,8 +135,8 @@ public class ClinicianMcpTools {
                                                                             LocalDate to) {
         var auth = clinicalAuth();
         require(auth, ClinicalAccessTokenScope.CLINICIAN_SYMPTOMS_READ,
-                "metabion_list_clinical_symptom_check_ins");
-        return audited(auth, "metabion_list_clinical_symptom_check_ins",
+                "metabion_list_clinical_symptom_check_ins", patientProfileId);
+        return audited(auth, "metabion_list_clinical_symptom_check_ins", patientProfileId,
                 () -> clinical.listClinicalSymptoms(auth, patientProfileId, from, to));
     }
 
@@ -146,8 +147,8 @@ public class ClinicianMcpTools {
                                                              LocalDate to) {
         var auth = clinicalAuth();
         require(auth, ClinicalAccessTokenScope.CLINICIAN_TRENDS_READ,
-                "metabion_get_clinical_daily_trends");
-        return audited(auth, "metabion_get_clinical_daily_trends",
+                "metabion_get_clinical_daily_trends", patientProfileId);
+        return audited(auth, "metabion_get_clinical_daily_trends", patientProfileId,
                 () -> clinical.clinicalDailyTrend(auth, patientProfileId, from, to));
     }
 
@@ -176,8 +177,8 @@ public class ClinicianMcpTools {
                                                                         LocalDate to) {
         var auth = clinicalAuth();
         require(auth, ClinicalAccessTokenScope.CLINICIAN_LABS_READ,
-                "metabion_list_clinical_lab_result_sets");
-        return audited(auth, "metabion_list_clinical_lab_result_sets",
+                "metabion_list_clinical_lab_result_sets", patientProfileId);
+        return audited(auth, "metabion_list_clinical_lab_result_sets", patientProfileId,
                 () -> clinical.listClinicalLabResultSets(auth, patientProfileId, from, to));
     }
 
@@ -186,8 +187,8 @@ public class ClinicianMcpTools {
     public LabResultSetResponse metabionGetClinicalLabResultSet(Long patientProfileId, Long resultSetId) {
         var auth = clinicalAuth();
         require(auth, ClinicalAccessTokenScope.CLINICIAN_LABS_READ,
-                "metabion_get_clinical_lab_result_set");
-        return audited(auth, "metabion_get_clinical_lab_result_set",
+                "metabion_get_clinical_lab_result_set", patientProfileId);
+        return audited(auth, "metabion_get_clinical_lab_result_set", patientProfileId,
                 () -> clinical.getClinicalLabResultSet(auth, patientProfileId, resultSetId));
     }
 
@@ -198,8 +199,9 @@ public class ClinicianMcpTools {
                                                         LocalDate from,
                                                         LocalDate to) {
         var auth = clinicalAuth();
-        require(auth, ClinicalAccessTokenScope.CLINICIAN_LABS_READ, "metabion_get_clinical_lab_trend");
-        return audited(auth, "metabion_get_clinical_lab_trend",
+        require(auth, ClinicalAccessTokenScope.CLINICIAN_LABS_READ,
+                "metabion_get_clinical_lab_trend", patientProfileId);
+        return audited(auth, "metabion_get_clinical_lab_trend", patientProfileId,
                 () -> clinical.clinicalLabTrend(auth, patientProfileId, testCode, from, to));
     }
 
@@ -212,8 +214,8 @@ public class ClinicianMcpTools {
             LabResultSetRequest request) {
         var auth = clinicalAuth();
         require(auth, ClinicalAccessTokenScope.CLINICIAN_LABS_WRITE,
-                "metabion_save_clinical_lab_result_set");
-        return audited(auth, "metabion_save_clinical_lab_result_set",
+                "metabion_save_clinical_lab_result_set", patientProfileId);
+        return audited(auth, "metabion_save_clinical_lab_result_set", patientProfileId,
                 () -> clinical.saveClinicalLabResultSetWithRedFlags(auth, patientProfileId, request));
     }
 
@@ -226,8 +228,8 @@ public class ClinicianMcpTools {
             LabResultRemovalRequest request) {
         var auth = clinicalAuth();
         require(auth, ClinicalAccessTokenScope.CLINICIAN_LABS_WRITE,
-                "metabion_remove_clinical_lab_result_set");
-        return audited(auth, "metabion_remove_clinical_lab_result_set",
+                "metabion_remove_clinical_lab_result_set", patientProfileId);
+        return audited(auth, "metabion_remove_clinical_lab_result_set", patientProfileId,
                 () -> clinical.removeClinicalLabResultSetWithRedFlags(auth, patientProfileId, request));
     }
 
@@ -238,8 +240,8 @@ public class ClinicianMcpTools {
     public ClinicalRedFlagSnapshotResponse metabionGetClinicalCurrentRedFlags(Long patientProfileId) {
         var auth = clinicalAuth();
         require(auth, ClinicalAccessTokenScope.CLINICIAN_RED_FLAGS_READ,
-                "metabion_get_clinical_current_red_flags");
-        return audited(auth, "metabion_get_clinical_current_red_flags",
+                "metabion_get_clinical_current_red_flags", patientProfileId);
+        return audited(auth, "metabion_get_clinical_current_red_flags", patientProfileId,
                 () -> clinical.clinicalCurrentRedFlags(auth, patientProfileId));
     }
 
@@ -256,9 +258,9 @@ public class ClinicianMcpTools {
             @McpToolParam(required = false) Integer size) {
         var auth = clinicalAuth();
         require(auth, ClinicalAccessTokenScope.CLINICIAN_RED_FLAGS_READ,
-                "metabion_list_clinical_red_flag_history");
+                "metabion_list_clinical_red_flag_history", patientProfileId);
         var query = new RedFlagHistoryQuery(from, to, severity, cursor, size);
-        return audited(auth, "metabion_list_clinical_red_flag_history",
+        return audited(auth, "metabion_list_clinical_red_flag_history", patientProfileId,
                 () -> clinical.clinicalRedFlagHistory(auth, patientProfileId, query));
     }
 
@@ -307,27 +309,62 @@ public class ClinicianMcpTools {
     private void require(ClinicalAccessTokenAuthentication auth,
                          ClinicalAccessTokenScope scope,
                          String operation) {
+        require(auth, scope, operation, null);
+    }
+
+    private void require(ClinicalAccessTokenAuthentication auth,
+                         ClinicalAccessTokenScope scope,
+                         String operation,
+                         Long targetPatientProfileId) {
         var authority = "SCOPE_" + scope.authority();
         var hasScope = auth.getAuthorities().stream()
                 .anyMatch(granted -> authority.equals(granted.getAuthority()));
         if (!hasScope) {
-            audit.recordToolFailure(auth, operation, "missing_scope");
+            recordFailure(auth, operation, "missing_scope", targetPatientProfileId);
             throw new InsufficientScopeException(scope.authority());
         }
     }
 
     private <T> T audited(ClinicalAccessTokenAuthentication auth, String operation, Supplier<T> request) {
+        return audited(auth, operation, null, request);
+    }
+
+    private <T> T audited(ClinicalAccessTokenAuthentication auth,
+                          String operation,
+                          Long targetPatientProfileId,
+                          Supplier<T> request) {
         try {
             var response = request.get();
-            audit.recordToolSuccess(auth, operation);
+            recordSuccess(auth, operation, targetPatientProfileId);
             return response;
         } catch (ResponseStatusException ex) {
-            audit.recordToolFailure(auth, operation, "request_failed");
+            recordFailure(auth, operation, "request_failed", targetPatientProfileId);
             throw ex;
         } catch (RuntimeException ex) {
-            audit.recordToolFailure(auth, operation, "request_failed");
+            recordFailure(auth, operation, "request_failed", targetPatientProfileId);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "clinical MCP request failed");
         }
+    }
+
+    private void recordSuccess(ClinicalAccessTokenAuthentication auth,
+                               String operation,
+                               Long targetPatientProfileId) {
+        if (targetPatientProfileId == null) {
+            audit.recordToolSuccess(auth, operation);
+            return;
+        }
+        audit.recordToolSuccess(auth, operation, targetPatientProfileId);
+    }
+
+    private void recordFailure(ClinicalAccessTokenAuthentication auth,
+                               String operation,
+                               String reason,
+                               Long targetPatientProfileId) {
+        if (targetPatientProfileId == null) {
+            audit.recordToolFailure(auth, operation, reason);
+            return;
+        }
+        audit.recordToolFailure(auth, operation, reason, targetPatientProfileId);
     }
 
     private static DietPhotoContentResponse photoContent(Long photoId, DietLogPhotoService.PhotoContent content) {

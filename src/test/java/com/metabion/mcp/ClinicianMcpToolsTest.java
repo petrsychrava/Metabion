@@ -113,6 +113,33 @@ class ClinicianMcpToolsTest {
     }
 
     @Test
+    void patientSpecificClinicalSuccessAuditsTargetPatientProfileId() {
+        authenticate(ClinicalAccessTokenScope.CLINICIAN_PATIENTS_READ);
+        var patient = mock(PatientOptionResponse.class);
+        when(facade.getClinicalPatient(any(), eq(41L))).thenReturn(patient);
+
+        assertThat(tools.metabionGetClinicalPatient(41L)).isSameAs(patient);
+
+        verify(audit).recordToolSuccess(any(ClinicalAccessTokenAuthentication.class),
+                eq("metabion_get_clinical_patient"), eq(41L));
+    }
+
+    @Test
+    void patientSpecificMissingScopeAuditsTargetPatientProfileId() {
+        authenticate(allExcept(ClinicalAccessTokenScope.CLINICIAN_RED_FLAGS_READ));
+
+        assertThatThrownBy(() -> tools.metabionGetClinicalCurrentRedFlags(41L))
+                .isInstanceOfSatisfying(InsufficientScopeException.class, error -> {
+                    assertThat(error.scope()).isEqualTo("clinician:red-flags:read");
+                    assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+                });
+
+        verify(audit).recordToolFailure(any(ClinicalAccessTokenAuthentication.class),
+                eq("metabion_get_clinical_current_red_flags"), eq("missing_scope"), eq(41L));
+        verifyNoInteractions(facade);
+    }
+
+    @Test
     void toolAnnotationsUseExactContractNames() throws Exception {
         assertThat(toolName("metabionClinicianMe")).isEqualTo("metabion_clinician_me");
         assertThat(toolName("metabionListAssignedPatients")).isEqualTo("metabion_list_assigned_patients");
@@ -207,8 +234,14 @@ class ClinicianMcpToolsTest {
                     assertThat(error.scope()).isEqualTo(scope.authority());
                     assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
                 });
-        verify(audit).recordToolFailure(any(ClinicalAccessTokenAuthentication.class),
-                eq(operationFor(scope)), eq("missing_scope"));
+        var targetPatientProfileId = auditTargetForInvokedMissingScopeTool(scope);
+        if (targetPatientProfileId == null) {
+            verify(audit).recordToolFailure(any(ClinicalAccessTokenAuthentication.class),
+                    eq(operationFor(scope)), eq("missing_scope"));
+        } else {
+            verify(audit).recordToolFailure(any(ClinicalAccessTokenAuthentication.class),
+                    eq(operationFor(scope)), eq("missing_scope"), eq(targetPatientProfileId));
+        }
         verifyNoInteractions(facade);
     }
 
@@ -320,7 +353,7 @@ class ClinicianMcpToolsTest {
                     assertThat(error.getReason()).isEqualTo("date range cannot exceed 370 days");
                 });
         verify(audit).recordToolFailure(any(ClinicalAccessTokenAuthentication.class),
-                eq("metabion_get_clinical_lab_trend"), eq("request_failed"));
+                eq("metabion_get_clinical_lab_trend"), eq("request_failed"), eq(41L));
     }
 
     @Test
@@ -439,6 +472,22 @@ class ClinicianMcpToolsTest {
             case CLINICIAN_RED_FLAGS_READ -> "metabion_get_clinical_current_red_flags";
             case CLINICIAN_ONBOARDING_READ -> "metabion_list_clinical_onboarding_submissions";
             case CLINICIAN_ONBOARDING_WRITE -> "metabion_review_clinical_onboarding_submission";
+        };
+    }
+
+    private static Long auditTargetForInvokedMissingScopeTool(ClinicalAccessTokenScope scope) {
+        return switch (scope) {
+            case CLINICIAN_CHECK_INS_READ,
+                 CLINICIAN_SYMPTOMS_READ,
+                 CLINICIAN_TRENDS_READ,
+                 CLINICIAN_LABS_WRITE,
+                 CLINICIAN_RED_FLAGS_READ -> 41L;
+            case CLINICIAN_PATIENTS_READ,
+                 CLINICIAN_OVERVIEW_READ,
+                 CLINICIAN_PHOTOS_READ,
+                 CLINICIAN_LABS_READ,
+                 CLINICIAN_ONBOARDING_READ,
+                 CLINICIAN_ONBOARDING_WRITE -> null;
         };
     }
 
