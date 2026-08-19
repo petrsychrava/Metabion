@@ -58,16 +58,26 @@ public class ClinicalAccessTokenService {
         var now = Instant.now(clock);
         assertUsableClinician(user, now);
         var plain = TOKEN_CODEC.generate(McpTokenSubject.CLINICIAN);
-        var token = tokens.save(new ClinicalAccessToken(
-                user,
-                McpTokenCodec.sha256Hex(plain),
-                clientType,
-                displayLabel,
-                now,
-                now.plus(ttl),
-                resource,
-                scopes,
-                refreshFamilyId));
+        var token = tokens.save(refreshFamilyId == null
+                ? new ClinicalAccessToken(
+                        user,
+                        McpTokenCodec.sha256Hex(plain),
+                        clientType,
+                        displayLabel,
+                        now,
+                        now.plus(ttl),
+                        resource,
+                        scopes)
+                : new ClinicalAccessToken(
+                        user,
+                        McpTokenCodec.sha256Hex(plain),
+                        clientType,
+                        displayLabel,
+                        now,
+                        now.plus(ttl),
+                        resource,
+                        scopes,
+                        refreshFamilyId));
         return new IssuedMcpAccessToken(plain, token.getExpiresAt(), scopeAuthorities(scopes));
     }
 

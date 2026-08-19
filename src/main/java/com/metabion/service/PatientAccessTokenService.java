@@ -112,16 +112,26 @@ public class PatientAccessTokenService {
                                               String refreshFamilyId) {
         var now = Instant.now(clock);
         var plain = generateToken();
-        var token = tokens.save(new PatientAccessToken(
-                user,
-                sha256Hex(plain),
-                clientType,
-                displayLabel,
-                now,
-                now.plus(ttl),
-                resource,
-                scopes,
-                refreshFamilyId));
+        var token = tokens.save(refreshFamilyId == null
+                ? new PatientAccessToken(
+                        user,
+                        sha256Hex(plain),
+                        clientType,
+                        displayLabel,
+                        now,
+                        now.plus(ttl),
+                        resource,
+                        scopes)
+                : new PatientAccessToken(
+                        user,
+                        sha256Hex(plain),
+                        clientType,
+                        displayLabel,
+                        now,
+                        now.plus(ttl),
+                        resource,
+                        scopes,
+                        refreshFamilyId));
         return new IssuedMcpAccessToken(
                 plain,
                 token.getExpiresAt(),

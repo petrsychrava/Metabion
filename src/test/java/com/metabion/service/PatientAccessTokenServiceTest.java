@@ -125,6 +125,31 @@ class PatientAccessTokenServiceTest {
     }
 
     @Test
+    void issueForOAuthStoresNoFamilyAccessTokenWhenRefreshGrantAbsent() {
+        when(tokens.save(any(PatientAccessToken.class))).thenAnswer(invocation -> {
+            var token = invocation.getArgument(0, PatientAccessToken.class);
+            ReflectionTestUtils.setField(token, "id", 52L);
+            return token;
+        });
+
+        var issued = service.issueForOAuth(
+                patient,
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                java.time.Duration.ofHours(1),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
+                "http://localhost:8080/api/mcp",
+                null);
+
+        assertThat(issued.plainToken()).startsWith("pat_");
+        assertThat(issued.scopes()).containsExactly("patient:profile:read");
+        var captor = ArgumentCaptor.forClass(PatientAccessToken.class);
+        verify(tokens).save(captor.capture());
+        assertThat(captor.getValue().getRefreshFamilyId()).isNull();
+        assertThat(captor.getValue().getTokenHash()).isEqualTo(PatientAccessTokenService.sha256Hex(issued.plainToken()));
+    }
+
+    @Test
     void authenticateRejectsExpiredToken() {
         var token = token("expired", Instant.parse("2026-07-03T10:00:00Z"));
         when(tokens.findByTokenHash(PatientAccessTokenService.sha256Hex("plain"))).thenReturn(Optional.of(token));

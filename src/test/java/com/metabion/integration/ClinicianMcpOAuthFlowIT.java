@@ -4,6 +4,7 @@ import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.repository.ClinicalAccessTokenRepository;
+import com.metabion.repository.OAuthAuthorizationCodeRepository;
 import com.metabion.repository.OAuthRefreshTokenRepository;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.PatientAccessTokenService;
@@ -57,6 +58,7 @@ class ClinicianMcpOAuthFlowIT {
     @Autowired UserRepository users;
     @Autowired ClinicalAccessTokenRepository accessTokens;
     @Autowired OAuthRefreshTokenRepository refreshTokens;
+    @Autowired OAuthAuthorizationCodeRepository codes;
 
     @MockitoBean
     FindByIndexNameSessionRepository<Session> sessions;
@@ -72,6 +74,8 @@ class ClinicianMcpOAuthFlowIT {
                 .build();
 
         accessTokens.deleteAll();
+        refreshTokens.deleteAll();
+        codes.deleteAll();
         users.deleteAll();
         var clinician = new User(EMAIL, "hash");
         clinician.setEnabled(true);
@@ -132,7 +136,51 @@ class ClinicianMcpOAuthFlowIT {
                 .andExpect(jsonPath("$.scope").value("clinician:patients:read"));
     }
 
+    @Test
+    void authorizationCodeOnlyClinicianClientReceivesClinicalAccessTokenWithoutRefreshFamily() throws Exception {
+        var clientId = registerClient("""
+                ["authorization_code"]
+                """);
+
+        var approval = mvc.perform(authorizePost(clientId))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern(REDIRECT_URI + "?code=*&state=state-123"))
+                .andReturn();
+        var code = UriComponentsBuilder.fromUriString(approval.getResponse().getHeader("Location"))
+                .build().getQueryParams().getFirst("code");
+        assertThat(code).isNotBlank();
+
+        var exchange = mvc.perform(post("/oauth/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "authorization_code")
+                        .param("code", code)
+                        .param("redirect_uri", REDIRECT_URI)
+                        .param("client_id", clientId)
+                        .param("code_verifier", VERIFIER)
+                        .param("resource", RESOURCE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.access_token", startsWith("clin_")))
+                .andExpect(jsonPath("$.refresh_token").doesNotExist())
+                .andExpect(jsonPath("$.scope").value("clinician:patients:read"))
+                .andReturn();
+
+        var accessToken = com.jayway.jsonpath.JsonPath
+                .read(exchange.getResponse().getContentAsString(), "$.access_token").toString();
+        assertThat(accessTokens.findAll()).singleElement().satisfies(stored -> {
+            assertThat(stored.getTokenHash()).isEqualTo(PatientAccessTokenService.sha256Hex(accessToken));
+            assertThat(stored.getRefreshFamilyId()).isNull();
+            assertThat(stored.getResource()).isEqualTo(RESOURCE);
+        });
+        assertThat(refreshTokens.findAll()).isEmpty();
+    }
+
     private String registerClient() throws Exception {
+        return registerClient("""
+                ["authorization_code", "refresh_token"]
+                """);
+    }
+
+    private String registerClient(String grantTypesJson) throws Exception {
         var registration = mvc.perform(post("/oauth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -141,10 +189,10 @@ class ClinicianMcpOAuthFlowIT {
                                   "client_name": "Clinical Codex",
                                   "scope": "clinician:patients:read",
                                   "token_endpoint_auth_method": "none",
-                                  "grant_types": ["authorization_code", "refresh_token"],
+                                  "grant_types": %s,
                                   "response_types": ["code"]
                                 }
-                                """))
+                                """.formatted(grantTypesJson)))
                 .andExpect(status().isCreated())
                 .andReturn();
         return com.jayway.jsonpath.JsonPath

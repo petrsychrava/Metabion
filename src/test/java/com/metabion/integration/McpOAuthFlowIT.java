@@ -5,6 +5,7 @@ import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.repository.ClinicalAccessTokenRepository;
+import com.metabion.repository.OAuthAuthorizationCodeRepository;
 import com.metabion.repository.OAuthRefreshTokenRepository;
 import com.metabion.repository.PatientAccessTokenRepository;
 import com.metabion.repository.UserRepository;
@@ -67,6 +68,9 @@ class McpOAuthFlowIT {
     @Autowired
     OAuthRefreshTokenRepository refreshTokens;
 
+    @Autowired
+    OAuthAuthorizationCodeRepository codes;
+
     @MockitoBean
     FindByIndexNameSessionRepository<Session> sessions;
 
@@ -84,6 +88,7 @@ class McpOAuthFlowIT {
         clinicalTokens.deleteAll();
         tokens.deleteAll();
         refreshTokens.deleteAll();
+        codes.deleteAll();
         users.deleteAll();
         var patient = new User(EMAIL, "hash");
         patient.setEnabled(true);
@@ -165,7 +170,56 @@ class McpOAuthFlowIT {
         assertThat(clinicalTokens.findAll()).isEmpty();
     }
 
+    @Test
+    void authorizationCodeOnlyPatientClientReceivesAccessTokenWithoutRefreshFamily() throws Exception {
+        var clientId = registerClient("""
+                ["authorization_code"]
+                """);
+
+        var approval = mvc.perform(authorizePost(clientId))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern(REDIRECT_URI + "?code=*&state=state-123"))
+                .andReturn();
+        var code = UriComponentsBuilder.fromUriString(approval.getResponse().getHeader("Location"))
+                .build()
+                .getQueryParams()
+                .getFirst("code");
+        assertThat(code).isNotBlank();
+
+        var tokenResponse = mvc.perform(post("/oauth/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "authorization_code")
+                        .param("code", code)
+                        .param("redirect_uri", REDIRECT_URI)
+                        .param("client_id", clientId)
+                        .param("code_verifier", VERIFIER)
+                        .param("resource", RESOURCE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.access_token").isNotEmpty())
+                .andExpect(jsonPath("$.refresh_token").doesNotExist())
+                .andExpect(jsonPath("$.token_type").value("Bearer"))
+                .andReturn();
+
+        var accessToken = com.jayway.jsonpath.JsonPath
+                .read(tokenResponse.getResponse().getContentAsString(), "$.access_token")
+                .toString();
+        assertThat(accessToken).startsWith("pat_");
+        assertThat(tokens.findAll()).singleElement().satisfies(stored -> {
+            assertThat(stored.getTokenHash()).isEqualTo(PatientAccessTokenService.sha256Hex(accessToken));
+            assertThat(stored.getRefreshFamilyId()).isNull();
+            assertThat(stored.getResource()).isEqualTo(RESOURCE);
+        });
+        assertThat(refreshTokens.findAll()).isEmpty();
+        assertThat(clinicalTokens.findAll()).isEmpty();
+    }
+
     private String registerClient() throws Exception {
+        return registerClient("""
+                ["authorization_code", "refresh_token"]
+                """);
+    }
+
+    private String registerClient(String grantTypesJson) throws Exception {
         var registration = mvc.perform(post("/oauth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -174,10 +228,10 @@ class McpOAuthFlowIT {
                                   "client_name": "Codex",
                                   "scope": "patient:profile:read",
                                   "token_endpoint_auth_method": "none",
-                                  "grant_types": ["authorization_code", "refresh_token"],
+                                  "grant_types": %s,
                                   "response_types": ["code"]
                                 }
-                                """))
+                                """.formatted(grantTypesJson)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.client_id").isNotEmpty())
                 .andExpect(jsonPath("$.client_secret").doesNotExist())

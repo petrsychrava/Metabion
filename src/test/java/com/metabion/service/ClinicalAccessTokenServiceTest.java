@@ -107,6 +107,26 @@ class ClinicalAccessTokenServiceTest {
     }
 
     @Test
+    void issueForOAuthStoresNoFamilyClinicalAccessTokenWhenRefreshGrantAbsent() {
+        when(tokens.save(any(ClinicalAccessToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var issued = service.issueForOAuth(
+                physician,
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                Duration.ofHours(1),
+                Set.of(ClinicalAccessTokenScope.CLINICIAN_PATIENTS_READ),
+                RESOURCE,
+                null);
+
+        assertThat(issued.plainToken()).startsWith("clin_");
+        assertThat(issued.scopes()).containsExactly("clinician:patients:read");
+        verify(tokens).save(org.mockito.ArgumentMatchers.argThat(token ->
+                token.getRefreshFamilyId() == null
+                        && token.getTokenHash().equals(PatientAccessTokenService.sha256Hex(issued.plainToken()))));
+    }
+
+    @Test
     void administratorsCannotIssueClinicalTokens() {
         assertThatThrownBy(() -> service.issueForOAuth(
                 administrator,

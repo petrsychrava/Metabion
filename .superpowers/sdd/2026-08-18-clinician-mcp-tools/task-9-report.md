@@ -7,6 +7,95 @@
 - Initial `git status --short`: clean
 - Scope: final verification gate plus the final-review clinical scope persistence defect fix. No production behavior redesign was performed.
 
+## OAuth authorization-code-only compatibility follow-up
+
+Finding:
+
+- `OAuthAuthorizationService.exchangeAuthorizationCode` correctly sets `refreshFamilyId = null` when the resolved client does not support `refresh_token`.
+- `PatientAccessTokenService.issueForOAuth` and `ClinicalAccessTokenService.issueForOAuth` always used the family-bound token constructors, which reject null or blank refresh family IDs.
+- The existing mocked `OAuthAuthorizationServiceTest` coverage verified that `null` was passed across the OAuth boundary, but it did not exercise real access-token construction or persistence.
+- Dynamically registered clients may omit `grant_types`, and registration metadata defaults that case to authorization-code-only, so no-refresh OAuth clients are valid and must still receive access tokens.
+
+TDD red step:
+
+```bash
+./gradlew test --tests 'com.metabion.service.PatientAccessTokenServiceTest' --tests 'com.metabion.service.ClinicalAccessTokenServiceTest' --tests 'com.metabion.integration.McpOAuthFlowIT' --tests 'com.metabion.integration.ClinicianMcpOAuthFlowIT'
+```
+
+Result before the fix:
+
+- Exit code: `1`
+- Final red result after test cleanup: `33 tests completed, 4 failed`
+- New failures:
+  - `PatientAccessTokenServiceTest.issueForOAuthStoresNoFamilyAccessTokenWhenRefreshGrantAbsent`
+  - `ClinicalAccessTokenServiceTest.issueForOAuthStoresNoFamilyClinicalAccessTokenWhenRefreshGrantAbsent`
+  - `McpOAuthFlowIT.authorizationCodeOnlyPatientClientReceivesAccessTokenWithoutRefreshFamily`
+  - `ClinicianMcpOAuthFlowIT.authorizationCodeOnlyClinicianClientReceivesClinicalAccessTokenWithoutRefreshFamily`
+- Failure cause: `IllegalArgumentException: refresh family id is required`
+
+Fix:
+
+- `PatientAccessTokenService.issueForOAuth` now uses the existing no-family `PatientAccessToken` constructor only when `refreshFamilyId == null`.
+- `ClinicalAccessTokenService.issueForOAuth` now uses the existing no-family `ClinicalAccessToken` constructor only when `refreshFamilyId == null`.
+- Non-null refresh family IDs still go through the family-bound constructors, so blank family IDs remain rejected by the existing invariant.
+- No fake refresh family is created, no role/scope/resource checks changed, and no migration constraints changed.
+
+Regression coverage:
+
+- Patient service coverage constructs and saves a real no-family OAuth access token, asserting the `pat_` token prefix, persisted hash, returned scope, and null refresh family.
+- Clinical service coverage constructs and saves a real no-family OAuth access token, asserting the `clin_` token prefix, persisted hash, returned clinical scope, and null refresh family.
+- Patient OAuth H2 flow coverage dynamically registers an authorization-code-only client, approves and exchanges a code through `/oauth/token`, and asserts there is no refresh token, one no-family patient access token, no clinical token, and no refresh-token row.
+- Clinician OAuth H2 flow coverage does the same for `clinician:patients:read`, asserting a `clin_` access token and a no-family clinical access token.
+- Existing refresh-enabled patient and clinician OAuth integration tests remain in place and continue covering refresh-family issuance, rotation, and family-bound access tokens.
+
+Focused green step:
+
+```bash
+./gradlew test --tests 'com.metabion.service.PatientAccessTokenServiceTest' --tests 'com.metabion.service.ClinicalAccessTokenServiceTest' --tests 'com.metabion.integration.McpOAuthFlowIT' --tests 'com.metabion.integration.ClinicianMcpOAuthFlowIT'
+```
+
+Result after the fix:
+
+- Exit code: `0`
+- `BUILD SUCCESSFUL`
+
+Broader OAuth/token/MCP proof:
+
+```bash
+./gradlew test --tests 'com.metabion.service.PatientAccessTokenServiceTest' --tests 'com.metabion.service.ClinicalAccessTokenServiceTest' --tests 'com.metabion.service.oauth.*' --tests 'com.metabion.mcp.*' --tests 'com.metabion.integration.Mcp*' --tests 'com.metabion.integration.Clinician*'
+```
+
+Result:
+
+- Exit code: `1`
+- Summary: `176 tests completed, 1 failed`
+- Failure class: Docker/Testcontainers initialization only.
+- Failed class: `OAuthRefreshTokenConcurrencyTest`
+- Representative failure: `java.lang.IllegalStateException` from Testcontainers `DockerClientProviderStrategy`.
+
+Filtered non-Docker proof:
+
+```bash
+./gradlew test -I /private/tmp/metabion-non-docker-tests.gradle
+```
+
+Result:
+
+- Exit code: `0`
+- XML report count: `total=1232 failures=0 errors=0 skipped=9 passed=1223`
+- `jacocoTestReport` finalized successfully.
+
+Whitespace check:
+
+```bash
+git diff --check
+```
+
+Result:
+
+- Exit code: `0`
+- No whitespace errors.
+
 ## Final-review defect fix
 
 Finding:
