@@ -4,6 +4,7 @@ import com.metabion.domain.AppetiteLevel;
 import com.metabion.domain.DietAdherenceLevel;
 import com.metabion.domain.FlareState;
 import com.metabion.domain.SymptomAnswerType;
+import com.metabion.dto.ClinicalDailyCheckInSummaryResponse;
 import com.metabion.dto.DailyDietLogResponse;
 import com.metabion.dto.DailyDietLogSummaryResponse;
 import com.metabion.dto.PatientOptionResponse;
@@ -73,6 +74,36 @@ class ClinicalDailyCheckInServiceTest {
         when(dietLogService.listClinicalLogs(authentication, 10L, DATE, DATE)).thenThrow(forbidden);
 
         assertThatThrownBy(() -> service.list(authentication, 10L, DATE, DATE))
+                .isSameAs(forbidden);
+
+        verify(symptomTrackingService, never()).listClinicalCheckIns(any(), any(), any(), any());
+    }
+
+    @Test
+    void listPropagatesEndedAssignmentDenialOnNextRequest() {
+        var service = new ClinicalDailyCheckInService(dietLogService, symptomTrackingService, clinicalPatientDirectory);
+        var forbidden = new ResponseStatusException(HttpStatus.FORBIDDEN, "Patient profile is not assigned to current user");
+        when(dietLogService.listClinicalLogs(authentication, 10L, DATE, DATE))
+                .thenReturn(List.of(dietSummary(10L, "patient@example.com", DATE)))
+                .thenThrow(forbidden);
+        when(symptomTrackingService.listClinicalCheckIns(authentication, 10L, DATE, DATE))
+                .thenReturn(List.of());
+
+        assertThat(service.list(authentication, 10L, DATE, DATE))
+                .singleElement()
+                .extracting(ClinicalDailyCheckInSummaryResponse::patientProfileId)
+                .isEqualTo(10L);
+        assertThatThrownBy(() -> service.list(authentication, 10L, DATE, DATE))
+                .isSameAs(forbidden);
+    }
+
+    @Test
+    void getDoesNotReadSymptomSideWhenDietBoundaryRejectsCrossPatient() {
+        var service = new ClinicalDailyCheckInService(dietLogService, symptomTrackingService, clinicalPatientDirectory);
+        var forbidden = new ResponseStatusException(HttpStatus.FORBIDDEN, "Patient profile is not assigned to current user");
+        when(dietLogService.listClinicalLogs(authentication, 99L, DATE, DATE)).thenThrow(forbidden);
+
+        assertThatThrownBy(() -> service.get(authentication, 99L, DATE))
                 .isSameAs(forbidden);
 
         verify(symptomTrackingService, never()).listClinicalCheckIns(any(), any(), any(), any());

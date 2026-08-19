@@ -3,8 +3,13 @@
       xmlns:th="http://www.thymeleaf.org">
 <section class="panel">
     <h1 th:text="#{oauth.consent.title}">Authorize MCP client</h1>
-    <p th:text="#{oauth.consent.message(${consent.clientDisplayLabel()})}">
+    <p th:if="${consent.subjectType().name() == 'PATIENT'}"
+       th:text="#{oauth.consent.patientMessage(${consent.clientDisplayLabel()})}">
         A client is requesting access to your Metabion patient data.
+    </p>
+    <p th:if="${consent.subjectType().name() == 'CLINICIAN'}"
+       th:text="#{oauth.consent.clinicianMessage(${consent.clientDisplayLabel()})}">
+        A client is requesting access to clinical patient data available to your professional account.
     </p>
     <dl class="summary-list">
         <dt th:text="#{oauth.consent.client}">Client</dt>

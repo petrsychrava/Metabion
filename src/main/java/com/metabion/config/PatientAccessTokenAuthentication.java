@@ -1,14 +1,18 @@
 package com.metabion.config;
 
+import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.PatientAccessToken;
+import com.metabion.domain.User;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.util.Collection;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class PatientAccessTokenAuthentication extends AbstractAuthenticationToken {
+public class PatientAccessTokenAuthentication extends AbstractAuthenticationToken implements McpTokenAuthentication {
 
     private final PatientAccessToken token;
 
@@ -31,6 +35,33 @@ public class PatientAccessTokenAuthentication extends AbstractAuthenticationToke
     @Override
     public String getName() {
         return token.getUser().getEmail();
+    }
+
+    @Override
+    public McpTokenSubject subject() {
+        return McpTokenSubject.PATIENT;
+    }
+
+    @Override
+    public User user() {
+        return token.getUser();
+    }
+
+    @Override
+    public Long tokenId() {
+        return token.getId();
+    }
+
+    @Override
+    public String clientLabel() {
+        return token.getDisplayLabel();
+    }
+
+    @Override
+    public Set<String> scopeAuthorities() {
+        return token.scopes().stream()
+                .map(scope -> scope.authority())
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     public PatientAccessToken token() {

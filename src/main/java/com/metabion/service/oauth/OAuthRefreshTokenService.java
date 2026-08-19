@@ -3,9 +3,8 @@ package com.metabion.service.oauth;
 import com.metabion.config.OAuthAuthorizationProperties;
 import com.metabion.domain.OAuthRefreshToken;
 import com.metabion.domain.OAuthRefreshTokenFamily;
+import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.PatientAccessClientType;
-import com.metabion.domain.PatientAccessTokenScope;
-import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.oauth.IssuedOAuthRefreshToken;
 import com.metabion.dto.oauth.OAuthClientMetadata;
@@ -13,6 +12,9 @@ import com.metabion.dto.oauth.OAuthRefreshGrantResult;
 import com.metabion.dto.oauth.OAuthTokenResponse;
 import com.metabion.repository.OAuthRefreshTokenRepository;
 import com.metabion.repository.OAuthRefreshTokenFamilyRepository;
+import com.metabion.service.ClinicalAccessTokenService;
+import com.metabion.service.McpScopeCatalog;
+import com.metabion.service.McpTokenEligibility;
 import com.metabion.service.PatientAccessTokenService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,7 +35,8 @@ public class OAuthRefreshTokenService {
     private final OAuthRefreshTokenRepository tokens;
     private final OAuthRefreshTokenFamilyRepository families;
     private final OAuthClientResolver clients;
-    private final PatientAccessTokenService accessTokens;
+    private final PatientAccessTokenService patientAccessTokens;
+    private final ClinicalAccessTokenService clinicalAccessTokens;
     private final OAuthTokenFamilyRevocationService familyRevocations;
     private final Clock clock;
     private final OAuthAuthorizationProperties properties;
@@ -41,14 +44,16 @@ public class OAuthRefreshTokenService {
     public OAuthRefreshTokenService(OAuthRefreshTokenRepository tokens,
                                     OAuthRefreshTokenFamilyRepository families,
                                     OAuthClientResolver clients,
-                                    PatientAccessTokenService accessTokens,
+                                    PatientAccessTokenService patientAccessTokens,
+                                    ClinicalAccessTokenService clinicalAccessTokens,
                                     OAuthTokenFamilyRevocationService familyRevocations,
                                     Clock clock,
                                     OAuthAuthorizationProperties properties) {
         this.tokens = tokens;
         this.families = families;
         this.clients = clients;
-        this.accessTokens = accessTokens;
+        this.patientAccessTokens = patientAccessTokens;
+        this.clinicalAccessTokens = clinicalAccessTokens;
         this.familyRevocations = familyRevocations;
         this.clock = clock;
         this.properties = properties;
@@ -58,8 +63,13 @@ public class OAuthRefreshTokenService {
                                                 OAuthClientMetadata client,
                                                 PatientAccessClientType clientType,
                                                 String displayLabel,
-                                                Set<PatientAccessTokenScope> scopes,
+                                                McpTokenSubject subject,
+                                                Set<String> scopes,
                                                 String resource) {
+        var parsed = McpScopeCatalog.parse(scopes);
+        if (parsed.subjectType() != subject) {
+            throw new IllegalArgumentException("scope family does not match subject");
+        }
         var plainToken = generateValue();
         var familyId = generateValue();
         var now = Instant.now(clock);
@@ -67,6 +77,7 @@ public class OAuthRefreshTokenService {
         var token = tokens.save(new OAuthRefreshToken(
                 PatientAccessTokenService.sha256Hex(plainToken),
                 familyId,
+                subject,
                 user,
                 client.clientId(),
                 client.source(),
@@ -75,7 +86,7 @@ public class OAuthRefreshTokenService {
                 resource,
                 now,
                 now.plus(properties.refreshTokenTtl()),
-                scopes));
+                parsed.authorities()));
         return new IssuedOAuthRefreshToken(plainToken, token);
     }
 
@@ -101,32 +112,41 @@ public class OAuthRefreshTokenService {
         }
         var client = clients.resolve(clientId).orElse(null);
         if (client == null) return OAuthRefreshGrantResult.invalid();
-        var allowedScopes = Set.copyOf(client.scopes());
+        McpScopeCatalog.ParsedScopes parsed;
+        try {
+            parsed = McpScopeCatalog.parse(current.scopeAuthorities());
+        } catch (IllegalArgumentException ex) {
+            return OAuthRefreshGrantResult.invalid();
+        }
         if (client.source() != current.getClientSource()
                 || !client.supportsGrant(OAuthClientMetadata.REFRESH_TOKEN)
                 || !properties.resource().equals(resource)
-                || !allowedScopes.containsAll(current.scopes().stream()
-                        .map(PatientAccessTokenScope::authority).toList())) {
+                || parsed.subjectType() != current.getSubjectType()
+                || !Set.copyOf(client.scopes()).containsAll(parsed.authorities())) {
             return OAuthRefreshGrantResult.invalid();
         }
         var user = current.getUser();
-        if (!user.isEnabled()
-                || (user.getLockedUntil() != null && user.getLockedUntil().isAfter(now))
-                || !user.hasRole(RoleName.PATIENT)) {
+        if (!McpTokenEligibility.isAllowed(user, current.getSubjectType(), now)) {
             return OAuthRefreshGrantResult.invalid();
         }
         var replacementPlain = generateValue();
         var replacement = tokens.save(new OAuthRefreshToken(
                 PatientAccessTokenService.sha256Hex(replacementPlain),
-                current.getFamilyId(), user, current.getClientId(), current.getClientSource(),
+                current.getFamilyId(), current.getSubjectType(), user, current.getClientId(), current.getClientSource(),
                 current.getClientType(), current.getDisplayLabel(), current.getResource(), now,
-                now.plus(properties.refreshTokenTtl()), current.scopes()));
+                now.plus(properties.refreshTokenTtl()), current.scopeAuthorities()));
         current.consume(replacement.getId(), now);
-        var access = accessTokens.issueForPatient(
-                user, replacement.getClientType(), replacement.getDisplayLabel(), properties.accessTokenTtl(),
-                replacement.scopes(), replacement.getResource(), replacement.getFamilyId());
+        var access = current.getSubjectType() == McpTokenSubject.PATIENT
+                ? patientAccessTokens.issueForOAuth(
+                        user, replacement.getClientType(), replacement.getDisplayLabel(), properties.accessTokenTtl(),
+                        McpScopeCatalog.patientScopes(parsed.authorities()), replacement.getResource(),
+                        replacement.getFamilyId())
+                : clinicalAccessTokens.issueForOAuth(
+                        user, replacement.getClientType(), replacement.getDisplayLabel(), properties.accessTokenTtl(),
+                        McpScopeCatalog.clinicalScopes(parsed.authorities()), replacement.getResource(),
+                        replacement.getFamilyId());
         var expiresIn = Math.max(0, Duration.between(now, access.expiresAt()).toSeconds());
-        var scope = replacement.scopes().stream().map(PatientAccessTokenScope::authority).sorted()
+        var scope = replacement.scopeAuthorities().stream().sorted()
                 .collect(java.util.stream.Collectors.joining(" "));
         return OAuthRefreshGrantResult.success(new OAuthTokenResponse(
                 access.plainToken(), "Bearer", expiresIn, scope, replacementPlain));

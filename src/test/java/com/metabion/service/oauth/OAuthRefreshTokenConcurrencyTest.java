@@ -2,6 +2,7 @@ package com.metabion.service.oauth;
 
 import com.metabion.domain.OAuthRefreshToken;
 import com.metabion.domain.OAuthRefreshTokenFamily;
+import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.RoleName;
@@ -14,6 +15,7 @@ import com.metabion.repository.OAuthRefreshTokenRepository;
 import com.metabion.repository.PatientAccessTokenRepository;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.PatientAccessTokenService;
+import com.metabion.service.ClinicalAccessTokenService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -48,6 +50,7 @@ import static org.mockito.Mockito.when;
         "metabion.oauth.resource=http://localhost:8080/api/mcp"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({OAuthRefreshTokenService.class, OAuthTokenFamilyRevocationService.class, PatientAccessTokenService.class,
+        ClinicalAccessTokenService.class,
         OAuthRefreshTokenConcurrencyTest.Config.class})
 @Testcontainers
 class OAuthRefreshTokenConcurrencyTest {
@@ -107,7 +110,12 @@ class OAuthRefreshTokenConcurrencyTest {
         assertThat(families.findById("concurrent-family").orElseThrow().isRevoked()).isTrue();
         assertThat(refreshTokens.findByFamilyId("concurrent-family"))
                 .hasSize(2)
-                .allSatisfy(token -> assertThat(token.isRevoked()).isTrue());
+                .allSatisfy(token -> {
+                    assertThat(token.isRevoked()).isTrue();
+                    assertThat(token.getSubjectType()).isEqualTo(McpTokenSubject.PATIENT);
+                    assertThat(token.scopeAuthorities())
+                            .containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority());
+                });
         assertThat(accessTokens.findAll())
                 .filteredOn(token -> "concurrent-family".equals(token.getRefreshFamilyId()))
                 .hasSize(1)

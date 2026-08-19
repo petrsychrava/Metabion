@@ -2,6 +2,7 @@ package com.metabion.service;
 
 import com.metabion.config.OAuthAuthorizationProperties;
 import com.metabion.domain.PatientAccessClientType;
+import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.PatientAccessToken;
 import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.RoleName;
@@ -9,6 +10,7 @@ import com.metabion.domain.User;
 import com.metabion.dto.IssuePatientAccessTokenRequest;
 import com.metabion.dto.IssuePatientAccessTokenResponse;
 import com.metabion.dto.PatientAccessTokenSummaryResponse;
+import com.metabion.dto.oauth.IssuedMcpAccessToken;
 import com.metabion.repository.PatientAccessTokenRepository;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.oauth.OAuthTokenFamilyRevocationService;
@@ -18,15 +20,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -36,7 +32,7 @@ import java.util.stream.Collectors;
 @Transactional
 public class PatientAccessTokenService {
 
-    private static final SecureRandom RANDOM = new SecureRandom();
+    private static final McpTokenCodec TOKEN_CODEC = new McpTokenCodec();
 
     private final UserRepository users;
     private final PatientAccessTokenRepository tokens;
@@ -103,6 +99,41 @@ public class PatientAccessTokenService {
                 plain,
                 token.getClientType(),
                 token.getDisplayLabel(),
+                token.getExpiresAt(),
+                scopeAuthorities(scopes));
+    }
+
+    public IssuedMcpAccessToken issueForOAuth(User user,
+                                              PatientAccessClientType clientType,
+                                              String displayLabel,
+                                              Duration ttl,
+                                              Set<PatientAccessTokenScope> scopes,
+                                              String resource,
+                                              String refreshFamilyId) {
+        var now = Instant.now(clock);
+        var plain = generateToken();
+        var token = tokens.save(refreshFamilyId == null
+                ? new PatientAccessToken(
+                        user,
+                        sha256Hex(plain),
+                        clientType,
+                        displayLabel,
+                        now,
+                        now.plus(ttl),
+                        resource,
+                        scopes)
+                : new PatientAccessToken(
+                        user,
+                        sha256Hex(plain),
+                        clientType,
+                        displayLabel,
+                        now,
+                        now.plus(ttl),
+                        resource,
+                        scopes,
+                        refreshFamilyId));
+        return new IssuedMcpAccessToken(
+                plain,
                 token.getExpiresAt(),
                 scopeAuthorities(scopes));
     }
@@ -245,17 +276,10 @@ public class PatientAccessTokenService {
     }
 
     private String generateToken() {
-        var bytes = new byte[32];
-        RANDOM.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        return TOKEN_CODEC.generate(McpTokenSubject.PATIENT);
     }
 
     public static String sha256Hex(String plaintext) {
-        try {
-            var digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(plaintext.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
+        return McpTokenCodec.sha256Hex(plaintext);
     }
 }

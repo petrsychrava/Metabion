@@ -23,6 +23,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,6 +45,8 @@ class ClinicalPatientDirectoryServiceTest {
 
         assertThat(service.listAccessible(auth("admin@example.com")))
                 .containsExactly(new PatientOptionResponse(10L, "p@example.com"));
+
+        verifyNoInteractions(staffProfiles, accessControl);
     }
 
     @Test
@@ -58,6 +62,21 @@ class ClinicalPatientDirectoryServiceTest {
 
         assertThat(service.listAccessible(auth("doctor@example.com")))
                 .extracting(PatientOptionResponse::id).containsExactly(11L);
+    }
+
+    @Test
+    void assignedNutritionSpecialistListsRepositoryAuthorizedPatients() {
+        var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles, accessControl);
+        var specialist = user(5L, "nutrition@example.com", RoleName.NUTRITION_SPECIALIST);
+        var staff = new StaffProfile(specialist);
+        staff.setId(50L);
+        when(users.findByEmail("nutrition@example.com")).thenReturn(Optional.of(specialist));
+        when(staffProfiles.findByUserId(specialist.getId())).thenReturn(Optional.of(staff));
+        when(patientProfiles.findAccessiblePatientOptionsForStaff(staff.getId()))
+                .thenReturn(List.of(new PatientOptionResponse(12L, "assigned-nutrition@example.com")));
+
+        assertThat(service.listAccessible(auth("nutrition@example.com")))
+                .extracting(PatientOptionResponse::id).containsExactly(12L);
     }
 
     @Test
@@ -110,6 +129,29 @@ class ClinicalPatientDirectoryServiceTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
                         .isEqualTo(HttpStatus.FORBIDDEN));
+
+        verify(accessControl).canViewPatientClinicalData(doctor, 41L);
+        verifyNoInteractions(patientProfiles);
+    }
+
+    @Test
+    void endedAssignmentIsDeniedOnNextIdentityRequest() {
+        var service = new ClinicalPatientDirectoryService(users, staffProfiles, patientProfiles, accessControl);
+        var doctor = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(doctor));
+        when(accessControl.canViewPatientClinicalData(doctor, 41L)).thenReturn(true, false);
+        var profile = mock(PatientProfile.class);
+        when(profile.getId()).thenReturn(41L);
+        when(profile.getUser()).thenReturn(new User("patient@example.com", "hash"));
+        when(patientProfiles.findById(41L)).thenReturn(Optional.of(profile));
+
+        assertThat(service.getAccessible(auth("doctor@example.com"), 41L).id()).isEqualTo(41L);
+        assertThatThrownBy(() -> service.getAccessible(auth("doctor@example.com"), 41L))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+                        .isEqualTo(HttpStatus.FORBIDDEN));
+
+        verify(patientProfiles).findById(41L);
     }
 
     @Test

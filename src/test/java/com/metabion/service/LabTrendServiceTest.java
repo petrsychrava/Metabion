@@ -125,6 +125,9 @@ class LabTrendServiceTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
                         .isEqualTo(HttpStatus.FORBIDDEN));
+
+        verify(patientProfiles, never()).findById(10L);
+        verify(results, never()).findTrend(any(), any(), any(), any());
     }
 
     @Test
@@ -154,6 +157,21 @@ class LabTrendServiceTest {
     }
 
     @Test
+    void assignedNutritionSpecialistCanReadRequestedPatientTrend() {
+        var specialist = user(5L, "nutrition@example.com", RoleName.NUTRITION_SPECIALIST);
+        var specialistAuth = auth("nutrition@example.com");
+        when(users.findByEmail("nutrition@example.com")).thenReturn(Optional.of(specialist));
+        when(accessControl.canViewPatientClinicalData(specialistAuth, 10L)).thenReturn(true);
+        when(results.findTrend(10L, "CRP", FROM, TO))
+                .thenReturn(List.of(result(patient, specialist, LocalDate.of(2026, 1, 10), "5.00", "0.5")));
+
+        var trend = service.clinicalTrend(specialistAuth, 10L, "CRP", FROM, TO);
+
+        assertThat(trend.patientProfileId()).isEqualTo(10L);
+        assertThat(trend.points()).singleElement().extracting(LabTrendResponse.Point::editable).isEqualTo(true);
+    }
+
+    @Test
     void adminCanReadTrendWithoutAssignment() {
         var admin = user(3L, "admin@example.com", RoleName.ADMIN);
         var adminAuth = auth("admin@example.com");
@@ -163,6 +181,21 @@ class LabTrendServiceTest {
         assertThat(service.clinicalTrend(adminAuth, 10L, "CRP", FROM, TO).points()).isEmpty();
 
         verify(accessControl, never()).canViewPatientClinicalData(adminAuth, 10L);
+    }
+
+    @Test
+    void endedAssignmentIsDeniedOnNextTrendRequest() {
+        var clinician = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(clinician));
+        when(accessControl.canViewPatientClinicalData(clinicalAuth, 10L)).thenReturn(true, false);
+        when(results.findTrend(10L, "CRP", FROM, TO))
+                .thenReturn(List.of(result(patient, clinician, LocalDate.of(2026, 1, 10), "5.00", "0.5")));
+
+        assertThat(service.clinicalTrend(clinicalAuth, 10L, "CRP", FROM, TO).points()).hasSize(1);
+        assertThatThrownBy(() -> service.clinicalTrend(clinicalAuth, 10L, "CRP", FROM, TO))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+                        .isEqualTo(HttpStatus.FORBIDDEN));
     }
 
     private LabResult result(PatientProfile owner, User creator, LocalDate date, String canonical, String reported) {

@@ -2,10 +2,9 @@ package com.metabion.service.oauth;
 
 import com.metabion.config.OAuthAuthorizationProperties;
 import com.metabion.config.PatientAccessTokenAuthentication;
+import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.OAuthAuthorizationCode;
 import com.metabion.domain.PatientAccessClientType;
-import com.metabion.domain.PatientAccessTokenScope;
-import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
 import com.metabion.dto.oauth.OAuthAuthorizationRequest;
 import com.metabion.dto.oauth.OAuthClientMetadata;
@@ -13,6 +12,9 @@ import com.metabion.dto.oauth.OAuthConsentView;
 import com.metabion.dto.oauth.OAuthTokenResponse;
 import com.metabion.repository.OAuthAuthorizationCodeRepository;
 import com.metabion.repository.UserRepository;
+import com.metabion.service.ClinicalAccessTokenService;
+import com.metabion.service.McpScopeCatalog;
+import com.metabion.service.McpTokenEligibility;
 import com.metabion.service.PatientAccessTokenService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -28,7 +30,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -51,6 +52,7 @@ public class OAuthAuthorizationService {
     private final UserRepository users;
     private final OAuthAuthorizationCodeRepository codes;
     private final PatientAccessTokenService patientAccessTokens;
+    private final ClinicalAccessTokenService clinicalAccessTokens;
     private final OAuthRefreshTokenService refreshTokens;
     private final Clock clock;
 
@@ -60,6 +62,7 @@ public class OAuthAuthorizationService {
                                      UserRepository users,
                                      OAuthAuthorizationCodeRepository codes,
                                      PatientAccessTokenService patientAccessTokens,
+                                     ClinicalAccessTokenService clinicalAccessTokens,
                                      OAuthRefreshTokenService refreshTokens,
                                      Clock clock) {
         this.properties = properties;
@@ -68,6 +71,7 @@ public class OAuthAuthorizationService {
         this.users = users;
         this.codes = codes;
         this.patientAccessTokens = patientAccessTokens;
+        this.clinicalAccessTokens = clinicalAccessTokens;
         this.refreshTokens = refreshTokens;
         this.clock = clock;
     }
@@ -75,13 +79,14 @@ public class OAuthAuthorizationService {
     @Transactional(readOnly = true)
     public OAuthConsentView consentView(OAuthAuthorizationRequest request, Authentication authentication) {
         var validated = validateAuthorizationRequest(request);
-        currentSessionPatient(authentication);
+        currentSessionSubject(authentication, validated.scopes().subjectType());
         return new OAuthConsentView(
                 validated.client().clientId(),
                 displayLabel(validated.client()),
                 request.redirectUri(),
                 request.resource(),
-                scopeAuthorities(validated.scopes()),
+                validated.scopes().authorities(),
+                validated.scopes().subjectType(),
                 request.state(),
                 request.codeChallenge(),
                 request.codeChallengeMethod());
@@ -89,19 +94,20 @@ public class OAuthAuthorizationService {
 
     public URI approve(OAuthAuthorizationRequest request, Authentication authentication) {
         var validated = validateAuthorizationRequest(request);
-        var patient = currentSessionPatient(authentication);
+        var user = currentSessionSubject(authentication, validated.scopes().subjectType());
         var plainCode = generateCode();
         var now = Instant.now(clock);
         codes.save(new OAuthAuthorizationCode(
                 PatientAccessTokenService.sha256Hex(plainCode),
-                patient,
+                validated.scopes().subjectType(),
+                user,
                 validated.client().clientId(),
                 displayLabel(validated.client()),
                 request.redirectUri(),
                 request.resource(),
                 request.codeChallenge(),
                 request.codeChallengeMethod(),
-                scopeAuthorities(validated.scopes()),
+                validated.scopes().authorities(),
                 now,
                 now.plus(properties.authorizationCodeTtl())));
         return redirectWith(request.redirectUri(), "code", plainCode, request.state());
@@ -151,8 +157,9 @@ public class OAuthAuthorizationService {
         if (!pkce.matches(authorizationCode.getCodeChallengeMethod(), authorizationCode.getCodeChallenge(), verifier)) {
             throw OAuthTokenException.invalidAuthorizationCodeGrant();
         }
-        var scopes = parseScopeAuthorities(authorizationCode.scopes());
-        if (!isAllowedPatient(authorizationCode.getUser(), now)) {
+        var scopes = parsePersistedScopes(authorizationCode.scopes());
+        if (scopes.subjectType() != authorizationCode.getSubjectType()
+                || !McpTokenEligibility.isAllowed(authorizationCode.getUser(), scopes.subjectType(), now)) {
             throw OAuthTokenException.invalidAuthorizationCodeGrant();
         }
         authorizationCode.consume(now);
@@ -160,16 +167,18 @@ public class OAuthAuthorizationService {
         var refresh = client.supportsGrant(OAuthClientMetadata.REFRESH_TOKEN)
                 ? refreshTokens.issueInitial(
                         authorizationCode.getUser(), client, clientType,
-                        authorizationCode.getClientDisplayLabel(), scopes, resource)
+                        authorizationCode.getClientDisplayLabel(), scopes.subjectType(), scopes.authorities(), resource)
                 : null;
         var refreshFamilyId = refresh == null ? null : refresh.token().getFamilyId();
-        var token = refreshFamilyId == null
-                ? patientAccessTokens.issueForPatient(
+        var token = scopes.subjectType() == McpTokenSubject.PATIENT
+                ? patientAccessTokens.issueForOAuth(
                         authorizationCode.getUser(), clientType, authorizationCode.getClientDisplayLabel(),
-                        properties.accessTokenTtl(), scopes, resource)
-                : patientAccessTokens.issueForPatient(
+                        properties.accessTokenTtl(), McpScopeCatalog.patientScopes(scopes.authorities()), resource,
+                        refreshFamilyId)
+                : clinicalAccessTokens.issueForOAuth(
                         authorizationCode.getUser(), clientType, authorizationCode.getClientDisplayLabel(),
-                        properties.accessTokenTtl(), scopes, resource, refreshFamilyId);
+                        properties.accessTokenTtl(), McpScopeCatalog.clinicalScopes(scopes.authorities()), resource,
+                        refreshFamilyId);
         var expiresIn = Math.max(0, Duration.between(now, token.expiresAt()).toSeconds());
         return new OAuthTokenResponse(
                 token.plainToken(),
@@ -220,40 +229,36 @@ public class OAuthAuthorizationService {
         }
     }
 
-    private Set<PatientAccessTokenScope> parseScopeString(String scope) {
+    private McpScopeCatalog.ParsedScopes parseScopeString(String scope) {
         if (isBlank(scope)) {
             throw badRequest("scope is required");
         }
-        return parseScopeAuthorities(List.of(scope.trim().split("\\s+")));
-    }
-
-    private Set<PatientAccessTokenScope> parseScopeAuthorities(Iterable<String> scopes) {
-        var parsed = new LinkedHashSet<PatientAccessTokenScope>();
         try {
-            for (var scope : scopes) {
-                if (isBlank(scope)) {
-                    throw badRequest("scope is required");
-                }
-                parsed.add(PatientAccessTokenScope.fromAuthority(scope));
-            }
+            return McpScopeCatalog.parse(List.of(scope.trim().split("\\s+")));
         } catch (IllegalArgumentException ex) {
-            throw badRequest("unsupported scope");
-        }
-        if (parsed.isEmpty()) {
-            throw badRequest("scope is required");
-        }
-        return Set.copyOf(parsed);
-    }
-
-    private void validateClientScopes(OAuthClientMetadata client, Set<PatientAccessTokenScope> requestedScopes) {
-        var allowed = Set.copyOf(client.scopes());
-        var requested = scopeAuthorities(requestedScopes);
-        if (!allowed.containsAll(requested)) {
-            throw badRequest("unsupported scope");
+            throw badRequest(ex.getMessage());
         }
     }
 
-    private User currentSessionPatient(Authentication authentication) {
+    private McpScopeCatalog.ParsedScopes parsePersistedScopes(Iterable<String> scopes) {
+        try {
+            return McpScopeCatalog.parse(scopes);
+        } catch (IllegalArgumentException ex) {
+            throw OAuthTokenException.invalidAuthorizationCodeGrant();
+        }
+    }
+
+    private void validateClientScopes(OAuthClientMetadata client, McpScopeCatalog.ParsedScopes requestedScopes) {
+        if (!clientAllowsAll(client, requestedScopes.authorities())) {
+            throw badRequest("unsupported scope");
+        }
+    }
+
+    private boolean clientAllowsAll(OAuthClientMetadata client, Set<String> requestedScopes) {
+        return Set.copyOf(client.scopes()).containsAll(requestedScopes);
+    }
+
+    private User currentSessionSubject(Authentication authentication, McpTokenSubject subject) {
         if (authentication == null || !authentication.isAuthenticated() || authentication.getName() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "authentication required");
         }
@@ -262,23 +267,11 @@ public class OAuthAuthorizationService {
         }
         var user = users.findByEmail(authentication.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "user not found"));
-        if (!isAllowedPatient(user, Instant.now(clock))) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "patient access required");
+        if (!McpTokenEligibility.isAllowed(user, subject, Instant.now(clock))) {
+            var reason = subject == McpTokenSubject.PATIENT ? "patient access required" : "clinical access required";
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, reason);
         }
         return user;
-    }
-
-    private void assertAllowedPatient(User user, Instant now) {
-        if (!isAllowedPatient(user, now)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "patient access required");
-        }
-    }
-
-    private boolean isAllowedPatient(User user, Instant now) {
-        return user != null
-                && user.isEnabled()
-                && (user.getLockedUntil() == null || !user.getLockedUntil().isAfter(now))
-                && user.hasRole(RoleName.PATIENT);
     }
 
     private URI redirectWith(String redirectUri, String parameterName, String parameterValue, String state) {
@@ -322,12 +315,6 @@ public class OAuthAuthorizationService {
         return codeChallenge != null && CODE_CHALLENGE.matcher(codeChallenge).matches();
     }
 
-    private Set<String> scopeAuthorities(Set<PatientAccessTokenScope> scopes) {
-        return scopes.stream()
-                .map(PatientAccessTokenScope::authority)
-                .collect(Collectors.toUnmodifiableSet());
-    }
-
     private String sortedScopeString(Set<String> scopes) {
         return scopes.stream()
                 .sorted()
@@ -344,7 +331,7 @@ public class OAuthAuthorizationService {
 
     private record ValidatedAuthorizationRequest(
             OAuthClientMetadata client,
-            Set<PatientAccessTokenScope> scopes
+            McpScopeCatalog.ParsedScopes scopes
     ) {
     }
 }

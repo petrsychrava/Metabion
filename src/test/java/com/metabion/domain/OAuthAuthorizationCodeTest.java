@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class OAuthAuthorizationCodeTest {
@@ -50,6 +51,30 @@ class OAuthAuthorizationCodeTest {
         assertThatThrownBy(() -> code.consume(Instant.parse("2026-07-06T10:02:00Z")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("authorization code is already consumed");
+    }
+
+    @Test
+    void constructorDefaultsSubjectTypeToPatient() {
+        assertThat(code(Set.of("patient:profile:read")).getSubjectType()).isEqualTo(McpTokenSubject.PATIENT);
+    }
+
+    @Test
+    void subjectAwareConstructorRetainsExplicitClinicianSubject() {
+        var clinicianCode = new OAuthAuthorizationCode(
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                McpTokenSubject.CLINICIAN,
+                new User("clinician@example.com", "hash"),
+                "codex",
+                "Codex",
+                "http://127.0.0.1:1455/oauth/callback",
+                "http://localhost:8080/api/mcp",
+                "challenge",
+                "S256",
+                Set.of("clinician:patients:read"),
+                CREATED_AT,
+                EXPIRES_AT);
+
+        assertThat(clinicianCode.getSubjectType()).isEqualTo(McpTokenSubject.CLINICIAN);
     }
 
     private static OAuthAuthorizationCode code(Set<String> scopes) {

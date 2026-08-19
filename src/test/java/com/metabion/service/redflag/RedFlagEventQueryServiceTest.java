@@ -269,6 +269,20 @@ class RedFlagEventQueryServiceTest {
     }
 
     @Test
+    void endedAssignmentIsDeniedOnNextCurrentEventsRequest() {
+        var authentication = authentication("physician@example.com");
+        authenticatedUser(authentication, RoleName.PHYSICIAN);
+        var patient = patientProfile("UTC");
+        when(accessControl.canViewPatientClinicalData(authentication, PATIENT_ID)).thenReturn(true, false);
+        when(patientProfiles.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(events.findCurrentForPatient(PATIENT_ID)).thenReturn(List.of());
+
+        assertThat(service.currentForClinicalPatient(authentication, PATIENT_ID))
+                .isEqualTo(new ClinicalRedFlagSnapshotResponse(null, List.of()));
+        assertStatus(() -> service.currentForClinicalPatient(authentication, PATIENT_ID), HttpStatus.FORBIDDEN);
+    }
+
+    @Test
     void coordinatorIsForbiddenBeforeAssignmentPatientLookupOrRepositoryRead() {
         var authentication = authentication("coordinator@example.com");
         authenticatedUser(authentication, RoleName.COORDINATOR);
@@ -307,7 +321,8 @@ class RedFlagEventQueryServiceTest {
                 RedFlagSeverity.EMERGENCY,
                 List.of(new RedFlagEvaluationOutcome.Flag(
                         901L, "SYM_SEVERE_ABDOMINAL_PAIN", RedFlagSeverity.EMERGENCY,
-                        DETECTED_AT, RedFlagSourceType.SYMPTOM_CHECK_IN, 601L)),
+                        DETECTED_AT, RedFlagSourceType.SYMPTOM_CHECK_IN, 601L,
+                        1, "{\"facts\":[]}")),
                 List.of("SYM_SUSPECTED_FLARE"));
 
         var response = new PatientRedFlagResponseAssembler().outcome(outcome);

@@ -131,6 +131,32 @@ class ClinicalOverviewServiceTest {
     }
 
     @Test
+    void nutritionSpecialistGetsAggregatedRowPerMonitoredPatient() {
+        var specialist = user(12L, "nutrition@example.com", RoleName.NUTRITION_SPECIALIST);
+        var staff = new StaffProfile(specialist);
+        staff.setId(120L);
+        when(users.findByEmail("nutrition@example.com")).thenReturn(Optional.of(specialist));
+        when(staffProfiles.findByUserId(specialist.getId())).thenReturn(Optional.of(staff));
+        when(patientProfiles.findAccessibleClinicalOverviewPatientsForStaff(120L))
+                .thenReturn(List.of(new ClinicalOverviewPatientTarget(41L, "patient@example.com", "UTC")));
+        when(redFlags.currentForClinicalPatient(any(), eq(41L))).thenReturn(
+                new ClinicalRedFlagSnapshotResponse(null, List.of()));
+        when(symptomCheckIns.findFirstByPatientProfileIdOrderByCheckInDateDesc(41L))
+                .thenReturn(Optional.empty());
+        when(dietLogs.findFirstByPatientProfileIdOrderByLogDateDesc(41L))
+                .thenReturn(Optional.empty());
+        when(measurements.findFirstByPatientProfileIdAndMeasurementTypeOrderByMeasuredAtDesc(
+                41L, MeasurementType.KETONE)).thenReturn(Optional.empty());
+        when(onboardingSubmissions.countByPatientProfileIdAndReviewStatus(
+                41L, OnboardingReviewStatus.PENDING_REVIEW)).thenReturn(0L);
+
+        assertThat(service().overview(auth("nutrition@example.com")))
+                .singleElement()
+                .extracting(ClinicalPatientOverviewResponse::patientProfileId)
+                .isEqualTo(41L);
+    }
+
+    @Test
     void staleFlagUsesThePatientTimezone() {
         var doctor = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
         var staff = new StaffProfile(doctor);
@@ -171,8 +197,34 @@ class ClinicalOverviewServiceTest {
         when(patientProfiles.findAccessibleClinicalOverviewPatientsForStaff(10L)).thenReturn(List.of());
 
         assertThat(service().overview(auth("admin@example.com"))).isEmpty();
-        // Deliberate: no admin bypass on the overview aggregate.
         verifyNoInteractions(redFlags);
+    }
+
+    @Test
+    void endedAssignmentDropsPatientFromNextOverview() {
+        var doctor = user(2L, "doctor@example.com", RoleName.PHYSICIAN);
+        var staff = new StaffProfile(doctor);
+        staff.setId(20L);
+        when(users.findByEmail("doctor@example.com")).thenReturn(Optional.of(doctor));
+        when(staffProfiles.findByUserId(doctor.getId())).thenReturn(Optional.of(staff));
+        when(patientProfiles.findAccessibleClinicalOverviewPatientsForStaff(20L))
+                .thenReturn(List.of(new ClinicalOverviewPatientTarget(41L, "patient@example.com", "UTC")))
+                .thenReturn(List.of());
+        when(redFlags.currentForClinicalPatient(any(), eq(41L))).thenReturn(
+                new ClinicalRedFlagSnapshotResponse(null, List.of()));
+        when(symptomCheckIns.findFirstByPatientProfileIdOrderByCheckInDateDesc(41L))
+                .thenReturn(Optional.empty());
+        when(dietLogs.findFirstByPatientProfileIdOrderByLogDateDesc(41L))
+                .thenReturn(Optional.empty());
+        when(measurements.findFirstByPatientProfileIdAndMeasurementTypeOrderByMeasuredAtDesc(
+                41L, MeasurementType.KETONE)).thenReturn(Optional.empty());
+        when(onboardingSubmissions.countByPatientProfileIdAndReviewStatus(
+                41L, OnboardingReviewStatus.PENDING_REVIEW)).thenReturn(0L);
+
+        assertThat(service().overview(auth("doctor@example.com")))
+                .extracting(ClinicalPatientOverviewResponse::patientProfileId)
+                .containsExactly(41L);
+        assertThat(service().overview(auth("doctor@example.com"))).isEmpty();
     }
 
     @Test

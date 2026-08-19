@@ -14,6 +14,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 @Entity
@@ -49,6 +50,10 @@ public class OAuthAuthorizationCode {
     @Column(name = "code_challenge_method", nullable = false, length = 16)
     private String codeChallengeMethod;
 
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "subject_type", nullable = false, length = 16)
+    private McpTokenSubject subjectType;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "oauth_authorization_code_scopes",
             joinColumns = @JoinColumn(name = "authorization_code_id"))
@@ -78,8 +83,25 @@ public class OAuthAuthorizationCode {
                                   Set<String> scopes,
                                   Instant createdAt,
                                   Instant expiresAt) {
+        this(codeHash, McpTokenSubject.PATIENT, user, clientId, clientDisplayLabel, redirectUri, resource,
+                codeChallenge, codeChallengeMethod, scopes, createdAt, expiresAt);
+    }
+
+    public OAuthAuthorizationCode(String codeHash,
+                                  McpTokenSubject subjectType,
+                                  User user,
+                                  String clientId,
+                                  String clientDisplayLabel,
+                                  String redirectUri,
+                                  String resource,
+                                  String codeChallenge,
+                                  String codeChallengeMethod,
+                                  Set<String> scopes,
+                                  Instant createdAt,
+                                  Instant expiresAt) {
         this.codeHash = require(codeHash, "code hash");
-        this.user = java.util.Objects.requireNonNull(user, "user is required");
+        this.subjectType = Objects.requireNonNull(subjectType, "subjectType is required");
+        this.user = Objects.requireNonNull(user, "user is required");
         this.clientId = require(clientId, "client id");
         this.clientDisplayLabel = require(clientDisplayLabel, "client display label");
         this.redirectUri = require(redirectUri, "redirect uri");
@@ -93,8 +115,8 @@ public class OAuthAuthorizationCode {
             throw new IllegalArgumentException("scopes are required");
         }
         this.scopes = new HashSet<>(scopes);
-        this.createdAt = java.util.Objects.requireNonNull(createdAt, "createdAt is required");
-        this.expiresAt = java.util.Objects.requireNonNull(expiresAt, "expiresAt is required");
+        this.createdAt = Objects.requireNonNull(createdAt, "createdAt is required");
+        this.expiresAt = Objects.requireNonNull(expiresAt, "expiresAt is required");
         if (!this.expiresAt.isAfter(this.createdAt)) {
             throw new IllegalArgumentException("expiresAt must be after createdAt");
         }
@@ -135,6 +157,7 @@ public class OAuthAuthorizationCode {
     public String getResource() { return resource; }
     public String getCodeChallenge() { return codeChallenge; }
     public String getCodeChallengeMethod() { return codeChallengeMethod; }
+    public McpTokenSubject getSubjectType() { return subjectType; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getExpiresAt() { return expiresAt; }
     public Instant getConsumedAt() { return consumedAt; }

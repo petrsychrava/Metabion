@@ -4,6 +4,7 @@ import com.metabion.domain.RedFlagSeverity;
 import com.metabion.dto.redflag.ClinicalRedFlagEventResponse;
 import com.metabion.dto.redflag.ClinicalRedFlagHistoryResponse;
 import com.metabion.dto.redflag.ClinicalRedFlagSnapshotResponse;
+import com.metabion.dto.redflag.ClinicalRedFlagWriteOutcomeResponse;
 import com.metabion.dto.redflag.RedFlagMatchedInputsResponse;
 import org.springframework.stereotype.Component;
 
@@ -26,6 +27,25 @@ public class ClinicalRedFlagResponseAssembler {
 
     public ClinicalRedFlagHistoryResponse history(List<RedFlagEventReadModel> events, String nextCursor) {
         return new ClinicalRedFlagHistoryResponse(events.stream().map(this::event).toList(), nextCursor);
+    }
+
+    public ClinicalRedFlagWriteOutcomeResponse outcome(RedFlagEvaluationOutcome outcome) {
+        return new ClinicalRedFlagWriteOutcomeResponse(
+                outcome.highestSeverity(),
+                outcome.currentFlags().stream()
+                        .map(flag -> new ClinicalRedFlagEventResponse(
+                                flag.eventId(),
+                                flag.ruleKey(),
+                                flag.severity(),
+                                flag.detectedAt(),
+                                flag.sourceType(),
+                                flag.sourceId(),
+                                true,
+                                null,
+                                flag.ruleVersion(),
+                                matchedInputs(flag.matchedInputs())))
+                        .toList(),
+                outcome.clearedRuleKeys());
     }
 
     private ClinicalRedFlagEventResponse event(RedFlagEventReadModel event) {

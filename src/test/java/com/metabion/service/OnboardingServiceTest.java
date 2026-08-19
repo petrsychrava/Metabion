@@ -413,6 +413,19 @@ class OnboardingServiceTest {
     }
 
     @Test
+    void nutritionSpecialistCanReadReviewableSubmissionWhenAssigned() {
+        var reviewer = user(19L, "assigned-nutrition@example.com", RoleName.NUTRITION_SPECIALIST);
+        var patient = patientProfile(190L, user(20L, "assigned-nutrition-patient@example.com", RoleName.PATIENT));
+        var submission = submission(patient, "default", 1);
+        when(users.findByEmail("assigned-nutrition@example.com")).thenReturn(Optional.of(reviewer));
+        when(submissions.findById(1900L)).thenReturn(Optional.of(submission));
+        when(accessControl.canViewPatientClinicalData(any(Authentication.class), eq(190L))).thenReturn(true);
+
+        assertThat(service.getReviewable(auth("assigned-nutrition@example.com"), 1900L).patientProfileId())
+                .isEqualTo(190L);
+    }
+
+    @Test
     void patientCannotUseClinicalReviewReadPathEvenForOwnSubmission() {
         var patientUser = user(7L, "patient-clinical@example.com", RoleName.PATIENT);
         when(users.findByEmail("patient-clinical@example.com")).thenReturn(Optional.of(patientUser));
@@ -432,6 +445,19 @@ class OnboardingServiceTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("403 FORBIDDEN");
         verify(submissions, never()).findById(101L);
+    }
+
+    @Test
+    void adminCanUseClinicalReviewReadPath() {
+        var admin = user(26L, "admin-read@example.com", RoleName.ADMIN);
+        var patient = patientProfile(260L, user(29L, "admin-readable-patient@example.com", RoleName.PATIENT));
+        var submission = submission(patient, "default", 1);
+        when(users.findByEmail("admin-read@example.com")).thenReturn(Optional.of(admin));
+        when(submissions.findById(101L)).thenReturn(Optional.of(submission));
+        when(accessControl.canViewPatientClinicalData(any(Authentication.class), eq(260L))).thenReturn(true);
+
+        assertThat(service.getReviewable(auth("admin-read@example.com"), 101L).patientProfileId())
+                .isEqualTo(260L);
     }
 
     @Test
@@ -489,6 +515,23 @@ class OnboardingServiceTest {
                 .containsExactly(120L, 121L);
         verify(accessControl, never()).canViewPatientClinicalData(any(Authentication.class), any());
         verify(accessControl, never()).canViewPatientClinicalData(any(User.class), any());
+    }
+
+    @Test
+    void endedAssignmentIsDeniedOnNextReviewableRead() {
+        var reviewer = user(27L, "ended-doctor@example.com", RoleName.PHYSICIAN);
+        var patient = patientProfile(270L, user(28L, "ended-patient@example.com", RoleName.PATIENT));
+        var submission = submission(patient, "default", 1);
+        when(users.findByEmail("ended-doctor@example.com")).thenReturn(Optional.of(reviewer));
+        when(submissions.findById(2700L)).thenReturn(Optional.of(submission));
+        when(accessControl.canViewPatientClinicalData(any(Authentication.class), eq(270L)))
+                .thenReturn(true, false);
+
+        assertThat(service.getReviewable(auth("ended-doctor@example.com"), 2700L).patientProfileId())
+                .isEqualTo(270L);
+        assertThatThrownBy(() -> service.getReviewable(auth("ended-doctor@example.com"), 2700L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403 FORBIDDEN");
     }
 
     @Test

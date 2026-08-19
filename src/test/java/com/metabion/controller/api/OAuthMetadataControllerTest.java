@@ -88,7 +88,9 @@ class OAuthMetadataControllerTest {
                         "patient:lab:read",
                         "patient:lab:write",
                         "patient:red-flags:read",
-                        "patient:trend:read")))
+                        "patient:trend:read",
+                        "clinician:patients:read",
+                        "clinician:overview:read")))
                 .andExpect(jsonPath("$.scopes_supported", not(hasItem("admin"))));
     }
 
@@ -110,7 +112,9 @@ class OAuthMetadataControllerTest {
                         "patient:lab:read",
                         "patient:lab:write",
                         "patient:red-flags:read",
-                        "patient:trend:read")))
+                        "patient:trend:read",
+                        "clinician:patients:read",
+                        "clinician:overview:read")))
                 .andExpect(jsonPath("$.scopes_supported", not(hasItem("admin"))));
     }
 }

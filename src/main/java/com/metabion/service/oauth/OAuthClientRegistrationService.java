@@ -2,10 +2,10 @@ package com.metabion.service.oauth;
 
 import com.metabion.config.OAuthAuthorizationProperties;
 import com.metabion.domain.OAuthRegisteredClient;
-import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.dto.oauth.OAuthClientRegistrationRequest;
 import com.metabion.dto.oauth.OAuthClientRegistrationResponse;
 import com.metabion.repository.OAuthRegisteredClientRepository;
+import com.metabion.service.McpScopeCatalog;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -91,20 +90,11 @@ public class OAuthClientRegistrationService {
         if (scope == null || scope.isBlank()) {
             throw invalidScope("scope is required");
         }
-        var supported = Arrays.stream(PatientAccessTokenScope.values())
-                .map(PatientAccessTokenScope::authority)
-                .collect(Collectors.toUnmodifiableSet());
-        var parsed = new LinkedHashSet<String>();
-        for (var value : scope.trim().split("\\s+")) {
-            if (!supported.contains(value)) {
-                throw invalidScope("unsupported scope");
-            }
-            parsed.add(value);
+        try {
+            return McpScopeCatalog.parse(List.of(scope.trim().split("\\s+"))).authorities();
+        } catch (IllegalArgumentException ex) {
+            throw invalidScope(ex.getMessage());
         }
-        if (parsed.isEmpty()) {
-            throw invalidScope("scope is required");
-        }
-        return Set.copyOf(parsed);
     }
 
     private void validateAuthMethod(String authMethod) {

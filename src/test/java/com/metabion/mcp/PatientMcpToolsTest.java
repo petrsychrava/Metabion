@@ -1,6 +1,9 @@
 package com.metabion.mcp;
 
+import com.metabion.config.ClinicalAccessTokenAuthentication;
 import com.metabion.config.PatientAccessTokenAuthentication;
+import com.metabion.domain.ClinicalAccessToken;
+import com.metabion.domain.ClinicalAccessTokenScope;
 import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessToken;
 import com.metabion.domain.PatientAccessTokenScope;
@@ -23,7 +26,7 @@ import com.metabion.dto.redflag.PatientRedFlagHistoryResponse;
 import com.metabion.dto.redflag.PatientRedFlagSnapshotResponse;
 import com.metabion.dto.redflag.RedFlagHistoryQuery;
 import com.metabion.exception.InsufficientScopeException;
-import com.metabion.service.PatientAccessAuditService;
+import com.metabion.service.McpAccessAuditService;
 import com.metabion.service.PatientAppFacade;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,7 +64,7 @@ class PatientMcpToolsTest {
     PatientAppFacade patientApp;
 
     @Mock
-    PatientAccessAuditService audit;
+    McpAccessAuditService audit;
 
     PatientMcpTools tools;
 
@@ -117,6 +120,16 @@ class PatientMcpToolsTest {
                         });
         verify(audit).recordToolFailure(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("metabion_save_diet_log"),
                 org.mockito.ArgumentMatchers.eq("missing_scope"));
+    }
+
+    @Test
+    void clinicalTokenAuthenticationCannotInvokePatientTools() {
+        authenticateClinical();
+
+        assertThatThrownBy(() -> tools.metabionPatientMe())
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+        verifyNoInteractions(patientApp, audit);
     }
 
     @Test
@@ -429,13 +442,18 @@ class PatientMcpToolsTest {
         }
 
         @Bean
-        PatientAccessAuditService patientAccessAuditService() {
-            return mock(PatientAccessAuditService.class);
+        McpAccessAuditService mcpAccessAuditService() {
+            return mock(McpAccessAuditService.class);
         }
     }
 
     private static void authenticate(PatientAccessTokenScope... scopes) {
         var authentication = new PatientAccessTokenAuthentication(token(scopes));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    private static void authenticateClinical() {
+        var authentication = new ClinicalAccessTokenAuthentication(clinicalToken());
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
@@ -454,6 +472,24 @@ class PatientMcpToolsTest {
                 "http://localhost:8080/api/mcp",
                 Set.of(scopes));
         ReflectionTestUtils.setField(token, "id", 50L);
+        return token;
+    }
+
+    private static ClinicalAccessToken clinicalToken() {
+        var user = new User("clinician@example.com", "hash");
+        ReflectionTestUtils.setField(user, "id", 20L);
+        user.setEnabled(true);
+        user.addRole(RoleName.PHYSICIAN);
+        var token = new ClinicalAccessToken(
+                user,
+                "hash",
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                Instant.parse("2026-07-04T10:00:00Z"),
+                Instant.parse("2026-08-03T10:00:00Z"),
+                "http://localhost:8080/api/mcp",
+                Set.of(ClinicalAccessTokenScope.CLINICIAN_PATIENTS_READ));
+        ReflectionTestUtils.setField(token, "id", 60L);
         return token;
     }
 }

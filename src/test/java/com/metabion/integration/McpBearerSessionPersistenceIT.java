@@ -5,7 +5,8 @@ import com.metabion.domain.PatientAccessToken;
 import com.metabion.domain.PatientAccessTokenScope;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
-import com.metabion.service.PatientAccessAuditService;
+import com.metabion.service.ClinicalAccessTokenService;
+import com.metabion.service.McpAccessAuditService;
 import com.metabion.service.PatientAccessTokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 class McpBearerSessionPersistenceIT {
 
+    private static final String RESOURCE = "http://localhost:8080/api/mcp";
+    private static final String PATIENT_TOKEN = "pat_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi_0123456";
+
     @Autowired
     WebApplicationContext context;
 
@@ -56,7 +60,10 @@ class McpBearerSessionPersistenceIT {
     PatientAccessTokenService patientAccessTokenService;
 
     @MockitoBean
-    PatientAccessAuditService patientAccessAuditService;
+    ClinicalAccessTokenService clinicalAccessTokenService;
+
+    @MockitoBean
+    McpAccessAuditService mcpAccessAuditService;
 
     MockMvc mvc;
 
@@ -70,10 +77,11 @@ class McpBearerSessionPersistenceIT {
 
     @Test
     void bearerAuthenticatedMcpRequestDoesNotFailWhenJdbcSessionCommits() throws Exception {
-        when(patientAccessTokenService.authenticate("valid-token")).thenReturn(Optional.of(patientToken()));
+        when(patientAccessTokenService.authenticateForResource(PATIENT_TOKEN, RESOURCE))
+                .thenReturn(Optional.of(patientToken()));
 
         var initializeResult = mvc.perform(post("/api/mcp")
-                        .header("Authorization", "Bearer valid-token")
+                        .header("Authorization", "Bearer " + PATIENT_TOKEN)
                         .accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -84,7 +92,7 @@ class McpBearerSessionPersistenceIT {
         assertNoSessionSecurityContext(initializeResult);
 
         var result = mvc.perform(post("/api/mcp")
-                        .header("Authorization", "Bearer valid-token")
+                        .header("Authorization", "Bearer " + PATIENT_TOKEN)
                         .header("Mcp-Session-Id", initializeResult.getResponse().getHeader("Mcp-Session-Id"))
                         .accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -120,7 +128,7 @@ class McpBearerSessionPersistenceIT {
                 "LM Studio",
                 Instant.parse("2026-07-04T10:00:00Z"),
                 Instant.parse("2026-08-03T10:00:00Z"),
-                "http://localhost:8080/api/mcp",
+                RESOURCE,
                 Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ));
         ReflectionTestUtils.setField(token, "id", 50L);
         return token;

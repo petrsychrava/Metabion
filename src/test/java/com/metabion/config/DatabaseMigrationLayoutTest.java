@@ -1,10 +1,12 @@
 package com.metabion.config;
 
+import com.metabion.domain.ClinicalAccessTokenScope;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -36,7 +38,8 @@ class DatabaseMigrationLayoutTest {
             Map.entry(18, "remove_food_category_from_diet_log_meals"),
             Map.entry(19, "laboratory_biomarker_tracking"),
             Map.entry(20, "cohort_assignment_management"),
-            Map.entry(21, "red_flag_detection_foundation"));
+            Map.entry(21, "red_flag_detection_foundation"),
+            Map.entry(22, "clinical_mcp_token_storage"));
 
     private final PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
 
@@ -52,6 +55,21 @@ class DatabaseMigrationLayoutTest {
         assertExpectedInventory("oracle");
     }
 
+    @Test
+    void clinicalScopeTableConstraintMatchesAuthorityShape() throws IOException {
+        assertClinicalScopeConstraint("postgresql", "scope VARCHAR(80) NOT NULL CHECK (scope LIKE 'clinician:%')");
+        assertClinicalScopeConstraint("oracle", "scope VARCHAR2(80) NOT NULL CHECK (scope LIKE 'clinician:%')");
+
+        assertThat(Arrays.stream(ClinicalAccessTokenScope.values())
+                .map(ClinicalAccessTokenScope::authority)
+                .toList())
+                .as("clinical scope authorities persisted in clinical_access_token_scopes")
+                .allSatisfy(authority -> assertThat(authority).startsWith("clinician:"))
+                .doesNotContain(Arrays.stream(ClinicalAccessTokenScope.values())
+                        .map(Enum::name)
+                        .toArray(String[]::new));
+    }
+
     private void assertExpectedInventory(String vendor) throws IOException {
         Resource[] migrations = resolver.getResources("classpath*:db/migration/" + vendor + "/V*.sql");
 
@@ -65,11 +83,21 @@ class DatabaseMigrationLayoutTest {
                 .sorted(Map.Entry.comparingByKey())
                 .toList();
 
-        assertThat(parsed).hasSize(21);
+        assertThat(parsed).hasSize(22);
         assertThat(parsed.stream().map(Map.Entry::getKey).toList())
                 .containsExactlyElementsOf(EXPECTED_DESCRIPTIONS.keySet().stream().sorted().toList());
         parsed.forEach(entry -> assertThat(entry.getValue())
                 .as("description for %s migration V%s", vendor, entry.getKey())
                 .isEqualTo(EXPECTED_DESCRIPTIONS.get(entry.getKey())));
+    }
+
+    private void assertClinicalScopeConstraint(String vendor, String expectedPredicate) throws IOException {
+        Resource migration = resolver.getResource(
+                "classpath:db/migration/" + vendor + "/V22__clinical_mcp_token_storage.sql");
+        assertThat(migration.exists()).as("%s V22 migration", vendor).isTrue();
+
+        assertThat(migration.getContentAsString(StandardCharsets.UTF_8))
+                .as("%s V22 clinical scope predicate", vendor)
+                .contains(expectedPredicate);
     }
 }

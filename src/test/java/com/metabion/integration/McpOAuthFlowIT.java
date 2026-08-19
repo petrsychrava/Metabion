@@ -1,8 +1,12 @@
 package com.metabion.integration;
 
 import com.metabion.domain.PatientAccessClientType;
+import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
+import com.metabion.repository.ClinicalAccessTokenRepository;
+import com.metabion.repository.OAuthAuthorizationCodeRepository;
+import com.metabion.repository.OAuthRefreshTokenRepository;
 import com.metabion.repository.PatientAccessTokenRepository;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.PatientAccessTokenService;
@@ -58,6 +62,15 @@ class McpOAuthFlowIT {
     @Autowired
     PatientAccessTokenRepository tokens;
 
+    @Autowired
+    ClinicalAccessTokenRepository clinicalTokens;
+
+    @Autowired
+    OAuthRefreshTokenRepository refreshTokens;
+
+    @Autowired
+    OAuthAuthorizationCodeRepository codes;
+
     @MockitoBean
     FindByIndexNameSessionRepository<Session> sessions;
 
@@ -72,7 +85,10 @@ class McpOAuthFlowIT {
                 .apply(SecurityMockMvcConfigurers.springSecurity())
                 .build();
 
+        clinicalTokens.deleteAll();
         tokens.deleteAll();
+        refreshTokens.deleteAll();
+        codes.deleteAll();
         users.deleteAll();
         var patient = new User(EMAIL, "hash");
         patient.setEnabled(true);
@@ -85,7 +101,9 @@ class McpOAuthFlowIT {
         var clientId = registerClient();
 
         mvc.perform(authorizeGet(clientId))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .string(org.hamcrest.Matchers.containsString("Metabion patient data")));
 
         var approval = mvc.perform(authorizePost(clientId))
                 .andExpect(status().is3xxRedirection())
@@ -108,12 +126,17 @@ class McpOAuthFlowIT {
                         .param("resource", RESOURCE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.access_token").isNotEmpty())
+                .andExpect(jsonPath("$.refresh_token").isNotEmpty())
                 .andExpect(jsonPath("$.token_type").value("Bearer"))
                 .andReturn();
 
         var accessToken = com.jayway.jsonpath.JsonPath
                 .read(tokenResponse.getResponse().getContentAsString(), "$.access_token")
                 .toString();
+        var refreshToken = com.jayway.jsonpath.JsonPath
+                .read(tokenResponse.getResponse().getContentAsString(), "$.refresh_token")
+                .toString();
+        assertThat(accessToken).startsWith("pat_");
         var stored = tokens.findAll();
         assertThat(stored).hasSize(1);
         assertThat(stored.getFirst().getTokenHash()).isEqualTo(PatientAccessTokenService.sha256Hex(accessToken));
@@ -121,9 +144,82 @@ class McpOAuthFlowIT {
         assertThat(stored.getFirst().getClientType()).isEqualTo(PatientAccessClientType.MCP_CODEX);
         assertThat(stored.getFirst().getDisplayLabel()).isEqualTo("Codex");
         assertThat(stored.getFirst().getResource()).isEqualTo(RESOURCE);
+        assertThat(clinicalTokens.findAll()).isEmpty();
+        assertThat(refreshTokens.findAll()).singleElement()
+                .satisfies(storedRefresh -> assertThat(storedRefresh.getSubjectType())
+                        .isEqualTo(McpTokenSubject.PATIENT));
+
+        var refreshResponse = mvc.perform(post("/oauth/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "refresh_token")
+                        .param("refresh_token", refreshToken)
+                        .param("client_id", clientId)
+                        .param("resource", RESOURCE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.access_token", org.hamcrest.Matchers.startsWith("pat_")))
+                .andExpect(jsonPath("$.refresh_token").isNotEmpty())
+                .andExpect(jsonPath("$.scope").value("patient:profile:read"))
+                .andReturn();
+        var rotatedRefreshToken = com.jayway.jsonpath.JsonPath
+                .read(refreshResponse.getResponse().getContentAsString(), "$.refresh_token")
+                .toString();
+        assertThat(rotatedRefreshToken).isNotEqualTo(refreshToken);
+        assertThat(refreshTokens.findAll())
+                .extracting(storedRefresh -> storedRefresh.getSubjectType())
+                .containsOnly(McpTokenSubject.PATIENT);
+        assertThat(clinicalTokens.findAll()).isEmpty();
+    }
+
+    @Test
+    void authorizationCodeOnlyPatientClientReceivesAccessTokenWithoutRefreshFamily() throws Exception {
+        var clientId = registerClient("""
+                ["authorization_code"]
+                """);
+
+        var approval = mvc.perform(authorizePost(clientId))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern(REDIRECT_URI + "?code=*&state=state-123"))
+                .andReturn();
+        var code = UriComponentsBuilder.fromUriString(approval.getResponse().getHeader("Location"))
+                .build()
+                .getQueryParams()
+                .getFirst("code");
+        assertThat(code).isNotBlank();
+
+        var tokenResponse = mvc.perform(post("/oauth/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "authorization_code")
+                        .param("code", code)
+                        .param("redirect_uri", REDIRECT_URI)
+                        .param("client_id", clientId)
+                        .param("code_verifier", VERIFIER)
+                        .param("resource", RESOURCE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.access_token").isNotEmpty())
+                .andExpect(jsonPath("$.refresh_token").doesNotExist())
+                .andExpect(jsonPath("$.token_type").value("Bearer"))
+                .andReturn();
+
+        var accessToken = com.jayway.jsonpath.JsonPath
+                .read(tokenResponse.getResponse().getContentAsString(), "$.access_token")
+                .toString();
+        assertThat(accessToken).startsWith("pat_");
+        assertThat(tokens.findAll()).singleElement().satisfies(stored -> {
+            assertThat(stored.getTokenHash()).isEqualTo(PatientAccessTokenService.sha256Hex(accessToken));
+            assertThat(stored.getRefreshFamilyId()).isNull();
+            assertThat(stored.getResource()).isEqualTo(RESOURCE);
+        });
+        assertThat(refreshTokens.findAll()).isEmpty();
+        assertThat(clinicalTokens.findAll()).isEmpty();
     }
 
     private String registerClient() throws Exception {
+        return registerClient("""
+                ["authorization_code", "refresh_token"]
+                """);
+    }
+
+    private String registerClient(String grantTypesJson) throws Exception {
         var registration = mvc.perform(post("/oauth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -132,10 +228,10 @@ class McpOAuthFlowIT {
                                   "client_name": "Codex",
                                   "scope": "patient:profile:read",
                                   "token_endpoint_auth_method": "none",
-                                  "grant_types": ["authorization_code"],
+                                  "grant_types": %s,
                                   "response_types": ["code"]
                                 }
-                                """))
+                                """.formatted(grantTypesJson)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.client_id").isNotEmpty())
                 .andExpect(jsonPath("$.client_secret").doesNotExist())

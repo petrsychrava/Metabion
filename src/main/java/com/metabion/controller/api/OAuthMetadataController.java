@@ -1,11 +1,10 @@
 package com.metabion.controller.api;
 
 import com.metabion.config.OAuthAuthorizationProperties;
-import com.metabion.domain.PatientAccessTokenScope;
+import com.metabion.service.McpScopeCatalog;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,9 +43,6 @@ public class OAuthMetadataController {
     }
 
     private List<String> scopes() {
-        return Arrays.stream(PatientAccessTokenScope.values())
-                .map(PatientAccessTokenScope::authority)
-                .sorted()
-                .toList();
+        return McpScopeCatalog.supportedAuthorities().stream().toList();
     }
 }

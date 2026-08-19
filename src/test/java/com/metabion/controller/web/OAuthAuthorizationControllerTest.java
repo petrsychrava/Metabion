@@ -1,6 +1,7 @@
 package com.metabion.controller.web;
 
 import com.metabion.domain.RoleName;
+import com.metabion.domain.McpTokenSubject;
 import com.metabion.dto.oauth.OAuthAuthorizationRequest;
 import com.metabion.dto.oauth.OAuthConsentView;
 import com.metabion.service.oauth.OAuthAuthorizationService;
@@ -70,6 +71,7 @@ class OAuthAuthorizationControllerTest {
                 REDIRECT_URI,
                 RESOURCE,
                 Set.of("patient:profile:read"),
+                McpTokenSubject.PATIENT,
                 "state-123",
                 "challenge",
                 "S256");

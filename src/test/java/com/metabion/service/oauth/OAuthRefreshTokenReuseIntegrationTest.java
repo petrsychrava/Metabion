@@ -2,6 +2,7 @@ package com.metabion.service.oauth;
 
 import com.metabion.domain.OAuthRefreshToken;
 import com.metabion.domain.OAuthRefreshTokenFamily;
+import com.metabion.domain.McpTokenSubject;
 import com.metabion.domain.PatientAccessClientType;
 import com.metabion.domain.PatientAccessToken;
 import com.metabion.domain.PatientAccessTokenScope;
@@ -14,6 +15,7 @@ import com.metabion.repository.OAuthRefreshTokenRepository;
 import com.metabion.repository.PatientAccessTokenRepository;
 import com.metabion.repository.UserRepository;
 import com.metabion.service.PatientAccessTokenService;
+import com.metabion.service.ClinicalAccessTokenService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -37,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "metabion.oauth.issuer=http://localhost:8080",
         "metabion.oauth.resource=http://localhost:8080/api/mcp"})
 @Import({OAuthRefreshTokenService.class, OAuthTokenFamilyRevocationService.class, PatientAccessTokenService.class,
+        ClinicalAccessTokenService.class,
         OAuthRefreshTokenReuseIntegrationTest.Config.class})
 class OAuthRefreshTokenReuseIntegrationTest {
     private static final Instant NOW = Instant.parse("2026-07-06T10:00:00Z");
@@ -76,7 +79,12 @@ class OAuthRefreshTokenReuseIntegrationTest {
         }).isInstanceOf(OAuthTokenException.class);
 
         assertThat(families.findById("family-1").orElseThrow().isRevoked()).isTrue();
-        assertThat(refreshTokens.findByFamilyId("family-1")).allSatisfy(token -> assertThat(token.isRevoked()).isTrue());
+        assertThat(refreshTokens.findByFamilyId("family-1")).allSatisfy(token -> {
+            assertThat(token.isRevoked()).isTrue();
+            assertThat(token.getSubjectType()).isEqualTo(McpTokenSubject.PATIENT);
+            assertThat(token.scopeAuthorities())
+                    .containsExactly(PatientAccessTokenScope.PATIENT_PROFILE_READ.authority());
+        });
         assertThat(accessTokens.findByTokenHash("active-access").orElseThrow().getRevokedAt()).isEqualTo(NOW);
         var memberCount = refreshTokens.findByFamilyId("family-1").size();
         assertThat(service.refreshGrant("new-refresh", "mobile-app", "http://localhost:8080/api/mcp").isInvalid())

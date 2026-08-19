@@ -90,6 +90,7 @@ class PatientAccessTokenServiceTest {
                 Set.of("patient:profile:read", "patient:diet-log:write")));
 
         assertThat(response.plainToken()).isNotBlank();
+        assertThat(response.plainToken()).startsWith("pat_");
         assertThat(response.tokenId()).isEqualTo(50L);
         assertThat(response.scopes()).containsExactlyInAnyOrder("patient:profile:read", "patient:diet-log:write");
 
@@ -121,6 +122,31 @@ class PatientAccessTokenServiceTest {
         var captor = ArgumentCaptor.forClass(PatientAccessToken.class);
         verify(tokens).save(captor.capture());
         assertThat(captor.getValue().scopes()).containsExactly(PatientAccessTokenScope.PATIENT_RED_FLAG_READ);
+    }
+
+    @Test
+    void issueForOAuthStoresNoFamilyAccessTokenWhenRefreshGrantAbsent() {
+        when(tokens.save(any(PatientAccessToken.class))).thenAnswer(invocation -> {
+            var token = invocation.getArgument(0, PatientAccessToken.class);
+            ReflectionTestUtils.setField(token, "id", 52L);
+            return token;
+        });
+
+        var issued = service.issueForOAuth(
+                patient,
+                PatientAccessClientType.MCP_CODEX,
+                "Codex",
+                java.time.Duration.ofHours(1),
+                Set.of(PatientAccessTokenScope.PATIENT_PROFILE_READ),
+                "http://localhost:8080/api/mcp",
+                null);
+
+        assertThat(issued.plainToken()).startsWith("pat_");
+        assertThat(issued.scopes()).containsExactly("patient:profile:read");
+        var captor = ArgumentCaptor.forClass(PatientAccessToken.class);
+        verify(tokens).save(captor.capture());
+        assertThat(captor.getValue().getRefreshFamilyId()).isNull();
+        assertThat(captor.getValue().getTokenHash()).isEqualTo(PatientAccessTokenService.sha256Hex(issued.plainToken()));
     }
 
     @Test
@@ -169,6 +195,17 @@ class PatientAccessTokenServiceTest {
         assertThat(service.authenticate("plain")).contains(token);
 
         assertThat(token.getLastUsedAt()).isEqualTo(Instant.parse("2026-07-04T10:00:00Z"));
+    }
+
+    @Test
+    void authenticateAcceptsLegacyUnprefixedPatientTokens() {
+        var legacyPlainToken = "legacy-unprefixed-value";
+        var token = token("valid", Instant.parse("2026-08-03T10:00:00Z"));
+        when(tokens.findByTokenHash(PatientAccessTokenService.sha256Hex(legacyPlainToken))).thenReturn(Optional.of(token));
+
+        assertThat(service.authenticate(legacyPlainToken)).contains(token);
+
+        verify(tokens).findByTokenHash(PatientAccessTokenService.sha256Hex(legacyPlainToken));
     }
 
     @Test

@@ -112,7 +112,7 @@ class OAuthRegisteredClientRepositoryTest {
                 List.of("https://example.com/callback"),
                 Set.of("patient:unknown:scope")))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Unsupported patient token scope");
+                .hasMessageContaining("unsupported scope: patient:unknown:scope");
     }
 
     private OAuthRegisteredClient client(List<String> redirectUris, Set<String> scopes) {
