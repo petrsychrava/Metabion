@@ -29,6 +29,7 @@ import com.metabion.exception.InsufficientScopeException;
 import com.metabion.service.ClinicalMcpFacade;
 import com.metabion.service.DietLogPhotoService;
 import com.metabion.service.McpAccessAuditService;
+import jakarta.validation.Validator;
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -55,10 +56,14 @@ public class ClinicianMcpTools {
 
     private final ClinicalMcpFacade clinical;
     private final McpAccessAuditService audit;
+    private final Validator validator;
 
-    public ClinicianMcpTools(ClinicalMcpFacade clinical, McpAccessAuditService audit) {
+    public ClinicianMcpTools(ClinicalMcpFacade clinical,
+                             McpAccessAuditService audit,
+                             Validator validator) {
         this.clinical = clinical;
         this.audit = audit;
+        this.validator = validator;
     }
 
     @McpTool(name = "metabion_clinician_me",
@@ -295,7 +300,16 @@ public class ClinicianMcpTools {
         require(auth, ClinicalAccessTokenScope.CLINICIAN_ONBOARDING_WRITE,
                 "metabion_review_clinical_onboarding_submission");
         return audited(auth, "metabion_review_clinical_onboarding_submission",
-                () -> clinical.reviewClinicalOnboarding(auth, submissionId, request));
+                () -> {
+                    validateOnboardingReviewRequest(request);
+                    return clinical.reviewClinicalOnboarding(auth, submissionId, request);
+                });
+    }
+
+    private void validateOnboardingReviewRequest(OnboardingReviewRequest request) {
+        if (request == null || !validator.validate(request).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid onboarding review request");
+        }
     }
 
     private ClinicalAccessTokenAuthentication clinicalAuth() {

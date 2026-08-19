@@ -36,7 +36,11 @@ import com.metabion.exception.InsufficientScopeException;
 import com.metabion.service.ClinicalMcpFacade;
 import com.metabion.service.DietLogPhotoService;
 import com.metabion.service.McpAccessAuditService;
+import jakarta.validation.Validation;
+import jakarta.validation.ValidatorFactory;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,6 +56,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.ByteArrayInputStream;
@@ -83,11 +88,23 @@ class ClinicianMcpToolsTest {
     @Mock
     McpAccessAuditService audit;
 
+    static ValidatorFactory validatorFactory;
+
     ClinicianMcpTools tools;
+
+    @BeforeAll
+    static void setUpValidator() {
+        validatorFactory = Validation.buildDefaultValidatorFactory();
+    }
+
+    @AfterAll
+    static void tearDownValidator() {
+        validatorFactory.close();
+    }
 
     @BeforeEach
     void setUp() {
-        tools = new ClinicianMcpTools(facade, audit);
+        tools = new ClinicianMcpTools(facade, audit, validatorFactory.getValidator());
         SecurityContextHolder.clearContext();
     }
 
@@ -268,7 +285,7 @@ class ClinicianMcpToolsTest {
         var redFlagHistory = mock(ClinicalRedFlagHistoryResponse.class);
         var onboardingSummary = mock(OnboardingSubmissionSummaryResponse.class);
         var onboardingDetail = mock(OnboardingSubmissionResponse.class);
-        var reviewRequest = mock(OnboardingReviewRequest.class);
+        var reviewRequest = new OnboardingReviewRequest(OnboardingReviewStatus.REVIEWED, "ok");
         var photoContent = new DietLogPhotoService.PhotoContent(
                 "image/png",
                 new FileStorageResource(new ByteArrayInputStream(new byte[]{10, 11, 12}), 3));
@@ -321,6 +338,36 @@ class ClinicianMcpToolsTest {
 
         verify(audit).recordToolSuccess(any(ClinicalAccessTokenAuthentication.class),
                 eq("metabion_review_clinical_onboarding_submission"));
+    }
+
+    @Test
+    void rejectsPendingReviewStatusBeforeFacadeDelegation() {
+        authenticate(ClinicalAccessTokenScope.CLINICIAN_ONBOARDING_WRITE);
+        var request = new OnboardingReviewRequest(OnboardingReviewStatus.PENDING_REVIEW, "still pending");
+
+        assertThatThrownBy(() -> tools.metabionReviewClinicalOnboardingSubmission(13L, request))
+                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
+                    assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(error.getReason()).isEqualTo("invalid onboarding review request");
+                });
+        verifyNoInteractions(facade);
+        verify(audit).recordToolFailure(any(ClinicalAccessTokenAuthentication.class),
+                eq("metabion_review_clinical_onboarding_submission"), eq("request_failed"));
+    }
+
+    @Test
+    void rejectsOversizedReviewNotesBeforeFacadeDelegation() {
+        authenticate(ClinicalAccessTokenScope.CLINICIAN_ONBOARDING_WRITE);
+        var request = new OnboardingReviewRequest(OnboardingReviewStatus.REVIEWED, "x".repeat(1001));
+
+        assertThatThrownBy(() -> tools.metabionReviewClinicalOnboardingSubmission(13L, request))
+                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
+                    assertThat(error.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(error.getReason()).isEqualTo("invalid onboarding review request");
+                });
+        verifyNoInteractions(facade);
+        verify(audit).recordToolFailure(any(ClinicalAccessTokenAuthentication.class),
+                eq("metabion_review_clinical_onboarding_submission"), eq("request_failed"));
     }
 
     @Test
@@ -529,6 +576,11 @@ class ClinicianMcpToolsTest {
         @Bean
         McpAccessAuditService mcpAccessAuditService() {
             return mock(McpAccessAuditService.class);
+        }
+
+        @Bean
+        LocalValidatorFactoryBean validator() {
+            return new LocalValidatorFactoryBean();
         }
     }
 
