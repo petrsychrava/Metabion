@@ -181,7 +181,6 @@
       "newVersion": "New version",
       "empty": "No module versions yet.",
       "filterModule": "Module",
-      "allModules": "All modules",
       "filterStatus": "Status",
       "allStatuses": "All statuses",
       "colModule": "Module",
@@ -204,7 +203,7 @@
       "reviewNotes": "Review notes",
       "notesPlaceholder": "Notes for the author (optional)",
       "reviewBypassed": "Review bypassed",
-      "notPublishable": "Publishing requires at least one lesson with an English title, summary, and body, plus an English module title and summary.",
+      "notPublishable": "Publishing requires at least one lesson with an English localization, plus an English module title.",
       "meta": {
         "author": "Author",
         "reviewedBy": "Reviewer",
@@ -220,10 +219,8 @@
         "reject": "Reject",
         "publish": "Publish",
         "copy": "Copy as new version",
-        "edit": "Edit content",
-        "reload": "Reload"
+        "edit": "Edit content"
       },
-      "notEditable": "This version is no longer editable.",
       "fields": {
         "slug": "Slug",
         "topic": "Topic",

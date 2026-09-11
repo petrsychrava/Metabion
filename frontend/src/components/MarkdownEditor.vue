@@ -50,7 +50,7 @@ watch(() => props.modelValue, () => {
               :class="tab === 'preview' ? 'font-semibold' : 'text-gray-500'"
               @click="showPreview">{{ t('clinical.content.editor.previewTab') }}</button>
     </div>
-    <textarea v-if="tab === 'edit'" :value="modelValue" rows="8" data-testid="markdown-source"
+    <textarea v-if="tab === 'edit'" :value="modelValue" rows="8" maxlength="20000" data-testid="markdown-source"
               class="mt-1 w-full rounded border border-gray-300 px-2 py-1 font-mono text-sm dark:border-gray-600 dark:bg-gray-800"
               @input="emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"></textarea>
     <div v-else class="prose mt-1 max-w-none rounded border border-gray-300 p-2 dark:border-gray-600">

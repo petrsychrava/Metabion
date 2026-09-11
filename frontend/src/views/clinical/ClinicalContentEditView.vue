@@ -72,12 +72,13 @@ async function save() {
   saving.value = true
   clear()
   try {
-    await contentEducationApi.updateVersion(moduleSlug, version, { ...form.value, lessons: lessons.value })
+    await contentEducationApi.updateVersion(moduleSlug, version, { ...form.value, lessons: lessons.value.filter(rowPopulated) })
     initialSnapshot.value = JSON.stringify(snapshot())
     await router.push(`/clinical/content/${moduleSlug}/${version}`)
   } catch (e) {
-    if (e instanceof ApiError && e.status === 400) {
-      // The version left the editable state meanwhile (e.g. submitted for review); resync.
+    // Only a state-change 400 (no field errors) means the version left the editable state; resync then.
+    // Validation 400s carry a fields map: keep the author's edits intact and just show the banner.
+    if (e instanceof ApiError && e.status === 400 && !e.fields) {
       await load()
       capture(e)
     } else {

@@ -148,4 +148,59 @@ describe('ClinicalContentEditView', () => {
     expect(wrapper.find('[data-testid="save"]').attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain('Populated lessons need')
   })
+
+  it('keeps author edits and shows a banner on a validation 400 with field errors', async () => {
+    let formLoads = 0
+    server.use(
+      http.get('/api/content/education/modules/ibd-basics/versions/2/form', () => {
+        formLoads += 1
+        return HttpResponse.json(form())
+      }),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', () =>
+        HttpResponse.json(
+          { error: 'validation_failed', fields: { 'lessons[0].englishTitle': 'required' } },
+          { status: 400 },
+        )),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('input[data-testid="english-title"]').setValue('Edited Title')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(formLoads).toBe(1)
+    expect((wrapper.find('input[data-testid="english-title"]').element as HTMLInputElement).value).toBe('Edited Title')
+    expect(wrapper.text()).toContain('Please check the highlighted fields.')
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
+  })
+
+  it('omits a freshly added blank lesson row from the save payload', async () => {
+    let putBody: unknown
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', async ({ request }) => {
+        putBody = await request.json()
+        return HttpResponse.json({})
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="add-lesson"]').trigger('click')
+    expect(wrapper.find('[data-testid="save"]').attributes('disabled')).toBeUndefined()
+
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    const lessons = (putBody as { lessons: { slug: string }[] }).lessons
+    expect(lessons).toHaveLength(1)
+    expect(lessons[0].slug).toBe('intro')
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
+  })
 })

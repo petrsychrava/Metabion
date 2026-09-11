@@ -181,7 +181,6 @@
       "newVersion": "Nová verze",
       "empty": "Zatím nejsou žádné verze modulů.",
       "filterModule": "Modul",
-      "allModules": "Všechny moduly",
       "filterStatus": "Stav",
       "allStatuses": "Všechny stavy",
       "colModule": "Modul",
@@ -204,7 +203,7 @@
       "reviewNotes": "Poznámky k recenzi",
       "notesPlaceholder": "Poznámky pro autora (nepovinné)",
       "reviewBypassed": "Recenze vynechána",
-      "notPublishable": "Publikování vyžaduje alespoň jednu lekci s anglickým názvem, shrnutím a textem a anglický název a shrnutí modulu.",
+      "notPublishable": "Publikování vyžaduje alespoň jednu lekci s anglickou lokalizací a anglický název modulu.",
       "meta": {
         "author": "Autor",
         "reviewedBy": "Recenzent",
@@ -220,10 +219,8 @@
         "reject": "Zamítnout",
         "publish": "Publikovat",
         "copy": "Kopírovat jako novou verzi",
-        "edit": "Upravit obsah",
-        "reload": "Znovu načíst"
+        "edit": "Upravit obsah"
       },
-      "notEditable": "Tato verze již není upravitelná.",
       "fields": {
         "slug": "Slug",
         "topic": "Téma",
