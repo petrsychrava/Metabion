@@ -16,6 +16,7 @@ import com.metabion.dto.EducationLessonResponse;
 import com.metabion.dto.EducationLessonUpsertRequest;
 import com.metabion.dto.EducationManagementDetailResponse;
 import com.metabion.dto.EducationManagementSummaryResponse;
+import com.metabion.dto.EducationMarkdownPreviewResponse;
 import com.metabion.dto.EducationModuleDetailResponse;
 import com.metabion.dto.EducationModuleRequest;
 import com.metabion.dto.EducationModuleSummaryResponse;
@@ -262,11 +263,20 @@ public class EducationContentService {
         var version = versionOrNotFound(moduleSlug, versionNumber);
         fetchPublishedVersionGraph(List.of(version));
         requireEditable(version);
+        if (!version.getModule().getSlug().equals(normalizeSlug(form.getSlug()))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Module slug does not match the request path");
+        }
 
         replaceModuleLocalizations(version, form);
         replaceLessons(version, form);
 
         return managementDetail(versions.save(version));
+    }
+
+    public EducationMarkdownPreviewResponse previewMarkdown(Authentication authentication, String source) {
+        var user = currentUser(authentication);
+        requireContentManager(user);
+        return new EducationMarkdownPreviewResponse(markdown.render(trim(source)));
     }
 
     public EducationModuleDetailResponse getPublishedModule(Authentication authentication, String moduleSlug) {

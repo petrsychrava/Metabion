@@ -2,6 +2,8 @@ package com.metabion.controller.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.metabion.domain.RoleName;
+import com.metabion.dto.EducationContentForm;
+import com.metabion.dto.EducationMarkdownPreviewRequest;
 import com.metabion.dto.EducationModuleRequest;
 import com.metabion.dto.EducationReviewRequest;
 import com.metabion.service.EducationContentService;
@@ -29,7 +31,9 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
@@ -107,6 +111,66 @@ class EducationContentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(validModuleRequest())))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void staffCanGetManagedVersion() throws Exception {
+        mvc.perform(get("/api/content/education/modules/ibd-basics/versions/2")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name())))
+                .andExpect(status().isOk());
+
+        verify(educationContentService).getManagedVersion(any(), eq("ibd-basics"), eq(2));
+    }
+
+    @Test
+    void staffCanGetManagedVersionForm() throws Exception {
+        mvc.perform(get("/api/content/education/modules/ibd-basics/versions/2/form")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name())))
+                .andExpect(status().isOk());
+
+        verify(educationContentService).getManagedVersionForm(any(), eq("ibd-basics"), eq(2));
+    }
+
+    @Test
+    void staffCanUpdateDraftWithCsrf() throws Exception {
+        var form = new EducationContentForm();
+        form.setSlug("ibd-basics");
+        form.setTopic("IBD");
+        form.setSortOrder(10);
+        form.setEnglishTitle("IBD Basics");
+        form.setEnglishSummary("Overview.");
+
+        mvc.perform(put("/api/content/education/modules/ibd-basics/versions/2")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(form)))
+                .andExpect(status().isOk());
+
+        verify(educationContentService).updateDraft(any(), eq("ibd-basics"), eq(2), any(EducationContentForm.class));
+    }
+
+    @Test
+    void staffCanPreviewMarkdownWithCsrf() throws Exception {
+        mvc.perform(post("/api/content/education/markdown-preview")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new EducationMarkdownPreviewRequest("# Hello"))))
+                .andExpect(status().isOk());
+
+        verify(educationContentService).previewMarkdown(any(), eq("# Hello"));
+    }
+
+    @Test
+    void markdownPreviewRejectsOversizedInput() throws Exception {
+        mvc.perform(post("/api/content/education/markdown-preview")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new EducationMarkdownPreviewRequest("x".repeat(20001)))))
+                .andExpect(status().isBadRequest());
     }
 
     private EducationModuleRequest validModuleRequest() {
