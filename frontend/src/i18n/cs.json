@@ -173,7 +173,84 @@
     "alreadyReviewed": "Tato žádost již byla posouzena.",
     "crpMgL": "CRP (mg/L)",
     "labNotes": "Poznámky k laboratořím",
-    "reviewedBy": "Posoudil"
+    "reviewedBy": "Posoudil",
+    "content": {
+      "nav": "Obsah",
+      "title": "Správa obsahu",
+      "newModule": "Nový modul",
+      "newVersion": "Nová verze",
+      "empty": "Zatím nejsou žádné verze modulů.",
+      "filterModule": "Modul",
+      "allModules": "Všechny moduly",
+      "filterStatus": "Stav",
+      "allStatuses": "Všechny stavy",
+      "colModule": "Modul",
+      "colVersion": "Verze",
+      "colStatus": "Stav",
+      "colTitle": "Název",
+      "colAuthor": "Autor",
+      "colCreated": "Vytvořeno",
+      "status": {
+        "DRAFT": "Koncept",
+        "IN_REVIEW": "V recenzi",
+        "APPROVED": "Schváleno",
+        "PUBLISHED": "Publikováno",
+        "ARCHIVED": "Archivováno",
+        "REJECTED": "Zamítnuto"
+      },
+      "detailTitle": "Verze modulu",
+      "backToList": "Všechny verze",
+      "lessonsTitle": "Lekce",
+      "reviewNotes": "Poznámky k recenzi",
+      "notesPlaceholder": "Poznámky pro autora (nepovinné)",
+      "reviewBypassed": "Recenze vynechána",
+      "notPublishable": "Publikování vyžaduje alespoň jednu lekci s anglickým názvem, shrnutím a textem a anglický název a shrnutí modulu.",
+      "meta": {
+        "author": "Autor",
+        "reviewedBy": "Recenzent",
+        "publishedBy": "Publikoval",
+        "createdAt": "Vytvořeno",
+        "submittedAt": "Odesláno",
+        "reviewedAt": "Recenzováno",
+        "publishedAt": "Publikováno"
+      },
+      "actions": {
+        "submitReview": "Odeslat k recenzi",
+        "approve": "Schválit",
+        "reject": "Zamítnout",
+        "publish": "Publikovat",
+        "copy": "Kopírovat jako novou verzi",
+        "edit": "Upravit obsah",
+        "reload": "Znovu načíst"
+      },
+      "notEditable": "Tato verze již není upravitelná.",
+      "fields": {
+        "slug": "Slug",
+        "topic": "Téma",
+        "sortOrder": "Pořadí",
+        "englishTitle": "Anglický název",
+        "englishSummary": "Anglické shrnutí",
+        "czechTitle": "Český název",
+        "czechSummary": "České shrnutí",
+        "englishBody": "Anglický text",
+        "czechBody": "Český text"
+      },
+      "create": {
+        "title": "Nový vzdělávací modul",
+        "submit": "Vytvořit a upravit obsah"
+      },
+      "editor": {
+        "title": "Úprava obsahu",
+        "lessons": "Lekce",
+        "addLesson": "Přidat lekci",
+        "lessonSlug": "Slug lekce",
+        "editTab": "Upravit",
+        "previewTab": "Náhled",
+        "markdownHint": "Markdown: # nadpis, **tučné**, *kurzíva*, - položka seznamu, [odkaz](https://…)",
+        "unsaved": "Máte neuložené změny. Opravdu chcete odejít?",
+        "lessonIncomplete": "Vyplněné lekce vyžadují slug, pořadí alespoň 1 a anglický název, shrnutí a text."
+      }
+    }
   },
   "trends": {
     "symptomScore": "Skóre příznaků",
