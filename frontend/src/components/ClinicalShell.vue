@@ -15,6 +15,7 @@ const links = computed(() => [
   { to: '/clinical', label: t('clinical.navOverview') },
   { to: '/clinical/onboarding', label: t('clinical.navReview') },
   { to: '/clinical/education', label: t('nav.education') },
+  { to: '/clinical/content', label: t('clinical.content.nav') },
 ])
 
 async function switchLocale(event: Event) {
