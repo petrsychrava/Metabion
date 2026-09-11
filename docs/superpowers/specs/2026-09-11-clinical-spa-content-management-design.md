@@ -42,7 +42,7 @@ reject, publish, copy) stay as-is.
 
 1. `GET /api/content/education/modules/{moduleSlug}/versions/{version}`
    Management detail. Returns full metadata (status, author/reviewedBy/publishedBy with
-   names, timestamps, review notes) and all lessons with **both EN and CS
+   user ids and display names, timestamps, review notes) and all lessons with **both EN and CS
    localizations** (titles, summaries, body markdown) — today's management DTOs are
    EN-only and cannot round-trip through an editor. New DTO records, e.g.
    `EducationManagedVersionDetail`. 404 when the version does not exist; 403 for
@@ -100,7 +100,8 @@ client are untouched.
 
 - `ContentListView` — table of all module versions: module slug/topic, version, status
   badge, author, last-updated. Client-side filters (module, status). Row → detail.
-  Header action "New module"; per-row "New version" (copy) for published versions.
+  Header action "New module"; per-row "New version" (copy) for every version, matching
+  the detail view's always-available copy.
 - `ContentDetailView` — metadata card (author, reviewer, publisher, timestamps, review
   notes), lifecycle action bar conditioned on status **and** current user
   (submit-review for DRAFT/REJECTED; approve/reject for IN_REVIEW, hidden for own
