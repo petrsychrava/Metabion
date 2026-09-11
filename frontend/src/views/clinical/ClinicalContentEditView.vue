@@ -73,6 +73,7 @@ async function save() {
   clear()
   try {
     await contentEducationApi.updateVersion(moduleSlug, version, { ...form.value, lessons: lessons.value })
+    initialSnapshot.value = JSON.stringify(snapshot())
     await router.push(`/clinical/content/${moduleSlug}/${version}`)
   } catch (e) {
     if (e instanceof ApiError && e.status === 400) {

@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { http, HttpResponse } from 'msw'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import { createRouter, createMemoryHistory } from 'vue-router'
@@ -101,6 +101,41 @@ describe('ClinicalContentEditView', () => {
     await wrapper.find('[data-testid="markdown-preview-tab"]').trigger('click')
     await flushPromises()
     expect(wrapper.html()).toContain('<h1>Hello</h1>')
+  })
+
+  it('does not prompt about unsaved changes after a successful save', async () => {
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', () => HttpResponse.json({})),
+    )
+    // Mount through <router-view> so onBeforeRouteLeave registers; a vetoing confirm must not block
+    // the post-save navigation because the just-saved state is no longer dirty.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/clinical',
+          component: { template: '<router-view />' },
+          children: [
+            { path: 'content/:moduleSlug/:version/edit', component: ClinicalContentEditView, props: true },
+            { path: 'content/:moduleSlug/:version', component: { template: '<div />' } },
+          ],
+        },
+      ],
+    })
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    await router.isReady()
+    const wrapper = mount({ template: '<router-view />' }, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('textarea[data-testid="markdown-source"]').setValue('# Hello edited')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
+    expect(confirmSpy).not.toHaveBeenCalled()
+    confirmSpy.mockRestore()
   })
 
   it('disables saving while a populated lesson row is incomplete', async () => {
