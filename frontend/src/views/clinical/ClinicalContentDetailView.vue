@@ -26,6 +26,7 @@ const openLesson = ref<string | null>(null)
 const isAuthor = computed(() => !!detail.value?.authorEmail && detail.value.authorEmail === auth.email)
 const isAdmin = computed(() => auth.roles.includes('ADMIN'))
 const canSubmitReview = computed(() => detail.value?.status === 'DRAFT' || detail.value?.status === 'REJECTED')
+const editable = computed(() => detail.value?.status === 'DRAFT' || detail.value?.status === 'REJECTED')
 const canReview = computed(() => detail.value?.status === 'IN_REVIEW' && (!isAuthor.value || isAdmin.value))
 const canPublish = computed(() => detail.value?.status === 'APPROVED')
 // Mirrors the server-side validatePublishable invariants: an English module localization always
@@ -152,6 +153,10 @@ onMounted(load)
         <button data-testid="copy" class="rounded border px-3 py-1 text-sm" @click="copy">
           {{ t('clinical.content.actions.copy') }}
         </button>
+        <router-link v-if="editable" :to="`/clinical/content/${moduleSlug}/${version}/edit`"
+                     data-testid="edit-content" class="rounded border px-3 py-1 text-sm">
+          {{ t('clinical.content.actions.edit') }}
+        </router-link>
       </div>
 
       <div v-if="reviewOpen" class="mt-4 rounded border p-3">
