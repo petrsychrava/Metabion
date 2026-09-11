@@ -203,4 +203,89 @@ describe('ClinicalContentEditView', () => {
     expect(lessons[0].slug).toBe('intro')
     expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
   })
+
+  it('disables saving while a lesson has partial Czech content', async () => {
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('textarea[data-testid="czech-summary-0"]').setValue('')
+    await wrapper.findAll('textarea[data-testid="markdown-source"]')[1].setValue('')
+
+    expect(wrapper.find('[data-testid="save"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="lesson-row"]').text())
+      .toContain('Czech fields are all-or-none: fill the Czech title, summary, and body, or clear all three.')
+  })
+
+  it('still allows saving when all Czech fields of a lesson are cleared', async () => {
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('input[data-testid="czech-title-0"]').setValue('')
+    await wrapper.find('textarea[data-testid="czech-summary-0"]').setValue('')
+    await wrapper.findAll('textarea[data-testid="markdown-source"]')[1].setValue('')
+
+    expect(wrapper.find('[data-testid="save"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('disables saving while only one module-level Czech field is filled', async () => {
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('textarea[data-testid="czech-summary"]').setValue('')
+
+    expect(wrapper.find('[data-testid="save"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="czech-module-incomplete"]').exists()).toBe(true)
+    expect(wrapper.text())
+      .toContain('Czech module title and summary must both be filled or both be empty.')
+  })
+
+  it('renders server field errors as a list and keeps the loaded form', async () => {
+    let formLoads = 0
+    server.use(
+      http.get('/api/content/education/modules/ibd-basics/versions/2/form', () => {
+        formLoads += 1
+        return HttpResponse.json(form())
+      }),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', () =>
+        HttpResponse.json(
+          { error: 'validation_failed', fields: { 'lessons[0].slug': 'must be unique' } },
+          { status: 400 },
+        )),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(formLoads).toBe(1)
+    const fieldErrors = wrapper.find('[data-testid="field-errors"]')
+    expect(fieldErrors.exists()).toBe(true)
+    expect(fieldErrors.find('code').text()).toBe('lessons[0].slug')
+    expect(fieldErrors.text()).toContain('must be unique')
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
+  })
+
+  it('keeps module topic and sort order read-only', async () => {
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    const topic = wrapper.find('input[data-testid="topic"]')
+    const sortOrder = wrapper.find('input[data-testid="sort-order"]')
+    expect(topic.attributes('disabled')).toBeDefined()
+    expect(sortOrder.attributes('disabled')).toBeDefined()
+    expect(topic.classes()).toContain('disabled:opacity-60')
+    expect(sortOrder.classes()).toContain('disabled:opacity-60')
+  })
 })

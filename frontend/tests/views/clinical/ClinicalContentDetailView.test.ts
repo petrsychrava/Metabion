@@ -21,6 +21,10 @@ function detail(overrides: Record<string, unknown> = {}) {
     status: 'DRAFT',
     reviewNotes: null,
     reviewBypassed: false,
+    englishTitle: 'IBD Basics',
+    englishSummary: 'English overview.',
+    czechTitle: 'Základy IBD',
+    czechSummary: 'Český přehled.',
     authorEmail: 'author@example.com',
     reviewedByEmail: null,
     publishedByEmail: null,
@@ -30,8 +34,10 @@ function detail(overrides: Record<string, unknown> = {}) {
     publishedAt: null,
     lessons: [
       {
-        lessonSlug: 'intro', sortOrder: 10, requestedLanguage: 'EN', contentLanguage: 'EN',
-        title: 'Intro', summary: null, bodyMarkdown: '# Hi', bodyHtml: '<h1>Hi</h1>', completed: null,
+        lessonSlug: 'intro', sortOrder: 10, title: 'Intro', summary: 'Intro summary.',
+        bodyMarkdown: '# Hi', bodyHtml: '<h1>Hi</h1>',
+        czechTitle: 'Úvod', czechSummary: 'Shrnutí úvodu.',
+        czechBodyMarkdown: 'Ahoj', czechBodyHtml: '<p>Ahoj</p>',
       },
     ],
     ...overrides,
@@ -74,12 +80,17 @@ async function mountDetail(overrides: Record<string, unknown> = {}) {
 describe('ClinicalContentDetailView', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it('shows draft actions and lesson previews', async () => {
+  it('shows draft actions, lesson previews, and both localizations', async () => {
     const wrapper = await mountDetail()
     expect(wrapper.find('[data-testid="submit-review"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="approve"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="publish"]').exists()).toBe(false)
     expect(wrapper.html()).toContain('<h1>Hi</h1>')
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('IBD Basics')
+    expect(wrapper.find('[data-testid="module-czech"]').text()).toContain('Základy IBD')
+    // Accordion opens on the first lesson; the Czech preview rides along.
+    expect(wrapper.html()).toContain('<p>Ahoj</p>')
+    expect(wrapper.text()).toContain('Úvod')
   })
 
   it('hides approval from the author but shows it to another reviewer', async () => {
@@ -142,5 +153,42 @@ describe('ClinicalContentDetailView', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Something went wrong')
     expect(getCalls).toBe(2)
+  })
+
+  it('reloads the detail after copy navigates to a new version on the same route', async () => {
+    const newLesson = {
+      lessonSlug: 'intro', sortOrder: 10, title: 'New intro', summary: null,
+      bodyMarkdown: '# New', bodyHtml: '<h1>New</h1>',
+      czechTitle: null, czechSummary: null, czechBodyMarkdown: null, czechBodyHtml: null,
+    }
+    const getVersions: number[] = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) => {
+        const requested = Number(params.version)
+        getVersions.push(requested)
+        return HttpResponse.json(requested === 2
+          ? detail({ version: 2, englishTitle: 'Old' })
+          : detail({ version: requested, englishTitle: 'New', lessons: [newLesson] }))
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () =>
+        HttpResponse.json(detail({ version: 3, englishTitle: 'New', lessons: [newLesson] }))),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Old')
+
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await flushPromises()
+    await flushPromises()
+
+    expect(getVersions).toContain(3)
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3')
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('New')
+    expect(wrapper.html()).toContain('<h1>New</h1>')
   })
 })

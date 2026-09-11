@@ -206,6 +206,36 @@ class EducationContentServiceLifecycleTest {
     }
 
     @Test
+    void managedVersionDetailExposesBothLocalizations() {
+        var staff = user(10L, "staff@example.com", RoleName.PHYSICIAN);
+        var version = draft("localized-module", staff);
+        version.addLocalization(new EducationModuleLocalization(
+                version,
+                EducationLanguage.CS,
+                "Cesky modul",
+                "Cesky souhrn"));
+        addLocalizedLesson(version);
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        when(versions.findByModuleSlugAndVersion("localized-module", 1)).thenReturn(Optional.of(version));
+        when(markdown.render(any())).thenAnswer(invocation -> "<p>" + invocation.getArgument(0) + "</p>");
+
+        var response = service.getManagedVersion(auth("staff@example.com"), "localized-module", 1);
+
+        assertThat(response.englishTitle()).isEqualTo("Title");
+        assertThat(response.englishSummary()).isEqualTo("Summary");
+        assertThat(response.czechTitle()).isEqualTo("Cesky modul");
+        assertThat(response.czechSummary()).isEqualTo("Cesky souhrn");
+        assertThat(response.lessons()).hasSize(1);
+        var lesson = response.lessons().getFirst();
+        assertThat(lesson.title()).isEqualTo("Lesson title");
+        assertThat(lesson.czechTitle()).isEqualTo("Cesky nazev lekce");
+        assertThat(lesson.czechSummary()).isEqualTo("Cesky souhrn lekce");
+        assertThat(lesson.czechBodyMarkdown()).isEqualTo("Cesky text lekce");
+        assertThat(lesson.czechBodyHtml()).isEqualTo("<p>Cesky text lekce</p>");
+        assertThat(lesson.bodyHtml()).isEqualTo("<p>Lesson body</p>");
+    }
+
+    @Test
     void updateDraftDoesNotMutateStableModuleMetadataAndUpdatesCzechLocalizations() {
         var staff = user(9L, "staff@example.com", RoleName.COORDINATOR);
         var version = draft("editable-module", staff);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { contentEducationApi } from '@/api/contentEducation'
@@ -14,8 +14,8 @@ const router = useRouter()
 const auth = useAuthStore()
 const { message, capture, clear } = useApiError()
 
-const moduleSlug = route.params.moduleSlug as string
-const version = Number(route.params.version)
+const moduleSlug = computed(() => route.params.moduleSlug as string)
+const version = computed(() => Number(route.params.version))
 
 const detail = ref<EducationManagementDetail | null>(null)
 const loading = ref(true)
@@ -40,7 +40,7 @@ async function load() {
   clear()
   loading.value = true
   try {
-    detail.value = await contentEducationApi.getVersion(moduleSlug, version)
+    detail.value = await contentEducationApi.getVersion(moduleSlug.value, version.value)
     openLesson.value ??= detail.value.lessons[0]?.lessonSlug ?? null
   } catch (e) {
     capture(e)
@@ -66,13 +66,18 @@ async function transition(call: () => Promise<EducationManagementDetail>) {
 async function copy() {
   clear()
   try {
-    const draft = await contentEducationApi.copyVersion(moduleSlug, version)
+    const draft = await contentEducationApi.copyVersion(moduleSlug.value, version.value)
     await router.push(`/clinical/content/${draft.moduleSlug}/${draft.version}`)
   } catch (e) {
     await load()
     capture(e)
   }
 }
+
+watch(() => [route.params.moduleSlug, route.params.version], () => {
+  openLesson.value = null
+  void load()
+})
 
 onMounted(load)
 </script>
@@ -95,6 +100,18 @@ onMounted(load)
         </span>
       </div>
       <p class="mt-1 text-gray-600 dark:text-gray-400">{{ detail.topic }}</p>
+
+      <div class="mt-2 rounded border bg-white p-3 text-sm dark:bg-gray-800" data-testid="module-english">
+        <p class="font-medium">{{ detail.englishTitle }}</p>
+        <p class="mt-1 whitespace-pre-line text-gray-600 dark:text-gray-400">{{ detail.englishSummary }}</p>
+      </div>
+      <div v-if="detail.czechTitle !== null" class="mt-2 rounded border bg-white p-3 text-sm dark:bg-gray-800"
+           data-testid="module-czech">
+        <p class="font-medium">
+          <span class="text-gray-500">{{ t('clinical.content.czechLabel') }}:</span> {{ detail.czechTitle }}
+        </p>
+        <p class="mt-1 whitespace-pre-line text-gray-600 dark:text-gray-400">{{ detail.czechSummary }}</p>
+      </div>
 
       <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
 
@@ -195,6 +212,10 @@ onMounted(load)
           <div v-if="openLesson === lesson.lessonSlug" class="border-t p-4">
             <!-- bodyHtml is server-rendered from staff-authored content; same trust model as the patient view -->
             <div class="prose max-w-none" v-html="lesson.bodyHtml" />
+            <div v-if="lesson.czechTitle !== null" class="mt-4 border-t pt-3">
+              <p class="text-sm font-medium text-gray-500">{{ t('clinical.content.czechLabel') }}: {{ lesson.czechTitle }}</p>
+              <div class="prose mt-2 max-w-none" v-html="lesson.czechBodyHtml" />
+            </div>
           </div>
         </div>
       </div>

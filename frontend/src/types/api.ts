@@ -366,6 +366,19 @@ export interface EducationManagementSummary {
   publishedAt: string | null
 }
 
+export interface EducationManagedLesson {
+  lessonSlug: string
+  sortOrder: number
+  title: string | null
+  summary: string | null
+  bodyMarkdown: string | null
+  bodyHtml: string | null
+  czechTitle: string | null
+  czechSummary: string | null
+  czechBodyMarkdown: string | null
+  czechBodyHtml: string | null
+}
+
 export interface EducationManagementDetail {
   moduleSlug: string
   topic: string
@@ -374,6 +387,10 @@ export interface EducationManagementDetail {
   status: EducationContentStatus
   reviewNotes: string | null
   reviewBypassed: boolean
+  englishTitle: string | null
+  englishSummary: string | null
+  czechTitle: string | null
+  czechSummary: string | null
   authorEmail: string | null
   reviewedByEmail: string | null
   publishedByEmail: string | null
@@ -381,7 +398,7 @@ export interface EducationManagementDetail {
   submittedAt: string | null
   reviewedAt: string | null
   publishedAt: string | null
-  lessons: EducationLesson[]
+  lessons: EducationManagedLesson[]
 }
 
 export interface EducationContentLessonRow {

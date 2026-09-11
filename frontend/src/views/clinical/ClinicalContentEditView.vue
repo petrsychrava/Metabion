@@ -11,7 +11,7 @@ import type { EducationContentFormData, EducationContentLessonRow } from '@/type
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { message, capture, clear } = useApiError()
+const { message, fieldErrors, capture, clear } = useApiError()
 
 const moduleSlug = route.params.moduleSlug as string
 const version = Number(route.params.version)
@@ -39,7 +39,24 @@ function rowIncomplete(row: EducationContentLessonRow): boolean {
         || !row.englishSummary.trim() || !row.englishBodyMarkdown.trim())
 }
 
+// The server persists a Czech localization only when all three values are present
+// (addOptionalLessonLocalization / addOptionalModuleLocalization), so partial Czech input
+// would otherwise be silently dropped on save.
+function czechLessonIncomplete(row: EducationContentLessonRow): boolean {
+  const filled = [row.czechTitle, row.czechSummary, row.czechBodyMarkdown]
+    .filter((value) => !!value?.trim()).length
+  return filled > 0 && filled < 3
+}
+
 const hasIncompleteRows = computed(() => lessons.value.some(rowIncomplete))
+const hasCzechLessonGaps = computed(() => lessons.value.some(czechLessonIncomplete))
+const czechModuleIncomplete = computed(() => {
+  const filled = [form.value?.czechTitle, form.value?.czechSummary]
+    .filter((value) => !!value?.trim()).length
+  return filled === 1
+})
+const saveDisabled = computed(() =>
+  hasIncompleteRows.value || hasCzechLessonGaps.value || czechModuleIncomplete.value)
 
 function nextSortOrder(): number {
   return lessons.value.reduce((max, row) => Math.max(max, row.sortOrder), 0) + 10
@@ -68,7 +85,7 @@ async function load() {
 }
 
 async function save() {
-  if (!form.value || hasIncompleteRows.value) return
+  if (!form.value || saveDisabled.value) return
   saving.value = true
   clear()
   try {
@@ -106,17 +123,23 @@ onMounted(load)
     <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ form?.slug }} v{{ version }}</p>
 
     <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
+    <ul v-if="Object.keys(fieldErrors).length > 0" data-testid="field-errors"
+        class="mt-2 list-inside list-disc rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+      <li v-for="(fieldMessage, field) in fieldErrors" :key="field">
+        <code>{{ field }}</code>: {{ fieldMessage }}
+      </li>
+    </ul>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
 
     <form v-else-if="form" class="mt-4 space-y-4" @submit.prevent="save">
       <div class="grid gap-3 sm:grid-cols-2">
         <label class="text-sm">{{ t('clinical.content.fields.topic') }}
-          <input v-model="form.topic" data-testid="topic" type="text"
-                 class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+          <input v-model="form.topic" data-testid="topic" type="text" disabled
+                 class="mt-1 w-full rounded border border-gray-300 px-2 py-1 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800" />
         </label>
         <label class="text-sm">{{ t('clinical.content.fields.sortOrder') }}
-          <input v-model.number="form.sortOrder" data-testid="sort-order" type="number" min="1"
-                 class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+          <input v-model.number="form.sortOrder" data-testid="sort-order" type="number" min="1" disabled
+                 class="mt-1 w-full rounded border border-gray-300 px-2 py-1 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800" />
         </label>
         <label class="text-sm">{{ t('clinical.content.fields.englishTitle') }}
           <input v-model="form.englishTitle" data-testid="english-title" type="text"
@@ -134,6 +157,10 @@ onMounted(load)
           <textarea v-model="form.czechSummary" data-testid="czech-summary" rows="2"
                     class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"></textarea>
         </label>
+        <p v-if="czechModuleIncomplete" data-testid="czech-module-incomplete"
+           class="text-sm text-red-600 sm:col-span-2 dark:text-red-400">
+          {{ t('clinical.content.editor.czechModuleIncomplete') }}
+        </p>
       </div>
 
       <h2 class="font-medium">{{ t('clinical.content.editor.lessons') }}</h2>
@@ -155,6 +182,9 @@ onMounted(load)
         </div>
         <p v-if="rowIncomplete(lesson)" class="text-sm text-red-600 dark:text-red-400">
           {{ t('clinical.content.editor.lessonIncomplete') }}
+        </p>
+        <p v-if="czechLessonIncomplete(lesson)" class="text-sm text-red-600 dark:text-red-400">
+          {{ t('clinical.content.editor.czechIncomplete') }}
         </p>
         <div class="grid gap-3 sm:grid-cols-2">
           <div>
@@ -193,7 +223,7 @@ onMounted(load)
       </button>
 
       <div class="flex gap-2">
-        <button type="submit" data-testid="save" :disabled="saving || hasIncompleteRows"
+        <button type="submit" data-testid="save" :disabled="saving || saveDisabled"
                 class="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50">
           {{ t('common.save') }}
         </button>

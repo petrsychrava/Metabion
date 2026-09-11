@@ -245,8 +245,11 @@
         "previewTab": "Náhled",
         "markdownHint": "Markdown: # nadpis, **tučné**, *kurzíva*, - položka seznamu, [odkaz](https://…)",
         "unsaved": "Máte neuložené změny. Opravdu chcete odejít?",
-        "lessonIncomplete": "Vyplněné lekce vyžadují slug, pořadí alespoň 1 a anglický název, shrnutí a text."
-      }
+        "lessonIncomplete": "Vyplněné lekce vyžadují slug, pořadí alespoň 1 a anglický název, shrnutí a text. České pole jsou vyhrazená: vyplňte český název, shrnutí i text, nebo je všechny smažte.",
+        "czechIncomplete": "České pole jsou vyhrazená: vyplňte český název, shrnutí i text, nebo je všechny smažte.",
+        "czechModuleIncomplete": "Český název a shrnutí modulu musí být vyplněné obě, nebo žádné."
+      },
+      "czechLabel": "Čeština"
     }
   },
   "trends": {
