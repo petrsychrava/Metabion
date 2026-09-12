@@ -209,6 +209,77 @@ describe('ClinicalContentEditView', () => {
     confirmSpy.mockRestore()
   })
 
+  it('keeps mid-flight edits dirty so the leave guard prompts before post-save navigation', async () => {
+    const putResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', () =>
+        new Promise((resolve) => {
+          putResolvers.push(() => resolve(HttpResponse.json({})))
+        })),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/clinical',
+          component: { template: '<router-view />' },
+          children: [
+            { path: 'content/:moduleSlug/:version/edit', component: ClinicalContentEditView, props: true },
+            { path: 'content/:moduleSlug/:version', component: { template: '<div />' } },
+          ],
+        },
+      ],
+    })
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    await router.isReady()
+    const wrapper = mount({ template: '<router-view />' }, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('textarea[data-testid="markdown-source"]').setValue('# Hello edited')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(putResolvers).toHaveLength(1)
+
+    // Edit another field while the PUT is still in flight; that edit is not in the submitted body.
+    await wrapper.find('input[data-testid="english-title"]').setValue('Edited While Saving')
+
+    putResolvers[0]()
+    await flushPromises()
+
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
+    expect((wrapper.find('input[data-testid="english-title"]').element as HTMLInputElement).value)
+      .toBe('Edited While Saving')
+    confirmSpy.mockRestore()
+  })
+
+  it('shows an empty preview for a lesson with a null Czech body instead of throwing', async () => {
+    server.use(
+      http.get('/api/content/education/modules/ibd-basics/versions/2/form', () =>
+        HttpResponse.json({
+          ...form(),
+          lessons: [{ ...form().lessons[0], czechBodyMarkdown: null }],
+        })),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/content/education/markdown-preview', () =>
+        HttpResponse.json({ html: '<h1>Unexpected</h1>' })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    // The Czech body editor is the last MarkdownEditor on the page.
+    const tabs = wrapper.findAll('[data-testid="markdown-preview-tab"]')
+    await tabs[tabs.length - 1].trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Loading…')
+    expect(wrapper.html()).not.toContain('Unexpected')
+  })
+
   it('disables saving while a populated lesson row is incomplete', async () => {
     const router = makeRouter()
     await router.push('/clinical/content/ibd-basics/2/edit')

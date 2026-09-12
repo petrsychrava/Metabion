@@ -21,7 +21,8 @@ let previewSeq = 0
 
 async function showPreview() {
   tab.value = 'preview'
-  if (!props.modelValue.trim()) {
+  const source = props.modelValue ?? ''
+  if (!source.trim()) {
     // Invalidate any in-flight request so a slow response for a previous source cannot
     // clobber the cleared preview.
     previewSeq += 1
@@ -32,7 +33,7 @@ async function showPreview() {
   const seq = ++previewSeq
   loadingPreview.value = true
   try {
-    const result = await contentEducationApi.previewMarkdown(props.modelValue)
+    const result = await contentEducationApi.previewMarkdown(source)
     if (seq === previewSeq) html.value = result.html
   } catch {
     if (seq === previewSeq) html.value = ''

@@ -88,9 +88,12 @@ async function save() {
   if (!form.value || saveDisabled.value) return
   saving.value = true
   clear()
+  // Freeze the snapshot of exactly what is being submitted; edits made while the PUT is in
+  // flight must stay dirty so the leave guard prompts instead of silently discarding them.
+  const submitted = JSON.stringify(snapshot())
   try {
     await contentEducationApi.updateVersion(moduleSlug, version, { ...form.value, lessons: lessons.value.filter(rowPopulated) })
-    initialSnapshot.value = JSON.stringify(snapshot())
+    initialSnapshot.value = submitted
     await router.push(`/clinical/content/${moduleSlug}/${version}`)
   } catch (e) {
     // Only a state-change 400 (no field errors) means the version left the editable state; resync then.
