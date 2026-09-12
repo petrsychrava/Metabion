@@ -509,4 +509,79 @@ describe('ClinicalContentDetailView', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Approved')
   })
+
+  it('resets the open review panel when copy navigates to the new draft', async () => {
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) => {
+        const requested = Number(params.version)
+        return HttpResponse.json(detail({ version: requested, status: requested === 2 ? 'IN_REVIEW' : 'DRAFT' }))
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () =>
+        HttpResponse.json(detail({ version: 3, status: 'DRAFT' }))),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+
+    // Open the review panel as a non-author reviewer, then copy into a new draft version.
+    await wrapper.find('[data-testid="approve"]').trigger('click')
+    await wrapper.find('[data-testid="review-notes"]').setValue('stale notes')
+    expect(wrapper.find('[data-testid="confirm-approve"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await flushPromises()
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3')
+    expect(wrapper.find('[data-testid="status-badge"]').text()).toContain('Draft')
+    // The route-change watcher resets the review state along with the open lesson.
+    expect(wrapper.find('[data-testid="review-notes"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="confirm-approve"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="confirm-reject"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="approve"]').exists()).toBe(false)
+  })
+
+  it('ignores a superseded copy result after navigating away from the source route', async () => {
+    let getCalls = 0
+    const postResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) => {
+        getCalls += 1
+        return HttpResponse.json(detail({ version: Number(params.version) }))
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () =>
+        new Promise((resolve) => {
+          postResolvers.push(() => resolve(HttpResponse.json(detail({ version: 3, status: 'DRAFT' }))))
+        })),
+      // No stub for the departed route: the watcher must not fire a junk load with empty params
+      // (MSW's unhandled-request guard fails the test if it does).
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+    expect(getCalls).toBe(1)
+
+    // Start the copy, leave for the list route before the POST settles, then let it resolve.
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await flushPromises()
+    expect(postResolvers.length).toBe(1)
+    await router.push('/clinical/content')
+    await flushPromises()
+
+    postResolvers[0]()
+    await flushPromises()
+    await flushPromises()
+
+    // The departed route's copy must not yank the user into the draft nor resync the old page.
+    expect(router.currentRoute.value.path).toBe('/clinical/content')
+    expect(getCalls).toBe(1)
+  })
 })

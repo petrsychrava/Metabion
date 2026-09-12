@@ -99,10 +99,15 @@ async function copy() {
   if (transitioning.value) return
   transitioning.value = true
   clear()
+  const slug = moduleSlug.value
+  const ver = version.value
   try {
-    const draft = await contentEducationApi.copyVersion(moduleSlug.value, version.value)
+    const draft = await contentEducationApi.copyVersion(slug, ver)
+    // Navigation away supersedes the copy: only redirect when the source route is still current.
+    if (slug !== moduleSlug.value || ver !== version.value) return
     await router.push(`/clinical/content/${draft.moduleSlug}/${draft.version}`)
   } catch (e) {
+    if (slug !== moduleSlug.value || ver !== version.value) return
     await load()
     capture(e)
   } finally {
@@ -110,8 +115,12 @@ async function copy() {
   }
 }
 
-watch(() => [route.params.moduleSlug, route.params.version], () => {
+watch(() => [route.params.moduleSlug, route.params.version], ([slug]) => {
+  // Leaving the detail route (e.g. back to the list) leaves the params empty; nothing to reload.
+  if (!slug) return
   openLesson.value = null
+  reviewOpen.value = false
+  notes.value = ''
   void load()
 })
 
