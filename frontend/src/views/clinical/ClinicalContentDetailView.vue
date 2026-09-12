@@ -38,18 +38,27 @@ const publishable = computed(() => !!detail.value
   && detail.value.lessons.length > 0
   && detail.value.lessons.every((lesson) => !!lesson.title))
 
+let loadSeq = 0
+
 async function load() {
   // Clear first so a failed reload never leaves the previous version rendered under a new URL.
+  // The sequence guard keeps an older, slower response from clobbering a newer load: only the
+  // latest load touches detail/loading, and only its failure surfaces.
+  const seq = ++loadSeq
+  const slug = moduleSlug.value
+  const ver = version.value
   detail.value = null
   clear()
   loading.value = true
   try {
-    detail.value = await contentEducationApi.getVersion(moduleSlug.value, version.value)
-    openLesson.value ??= detail.value.lessons[0]?.lessonSlug ?? null
+    const data = await contentEducationApi.getVersion(slug, ver)
+    if (seq !== loadSeq) return
+    detail.value = data
+    openLesson.value ??= data.lessons[0]?.lessonSlug ?? null
   } catch (e) {
-    capture(e)
+    if (seq === loadSeq) capture(e)
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -74,6 +83,12 @@ async function transition(call: () => Promise<EducationManagementDetail>) {
 }
 
 async function copy() {
+  // Shares `transitioning` with the lifecycle buttons so both mutation families serialize in
+  // either direction; the backend allocates drafts via maxVersion + 1, so concurrent copies
+  // would race the unique module/version constraint. The flag stays set through the error-path
+  // resync and the post-copy navigation.
+  if (transitioning.value) return
+  transitioning.value = true
   clear()
   try {
     const draft = await contentEducationApi.copyVersion(moduleSlug.value, version.value)
@@ -81,6 +96,8 @@ async function copy() {
   } catch (e) {
     await load()
     capture(e)
+  } finally {
+    transitioning.value = false
   }
 }
 
@@ -183,7 +200,7 @@ onMounted(load)
                 @click="transition(() => contentEducationApi.publish(moduleSlug, version))">
           {{ t('clinical.content.actions.publish') }}
         </button>
-        <button data-testid="copy" class="rounded border px-3 py-1 text-sm" @click="copy">
+        <button data-testid="copy" class="rounded border px-3 py-1 text-sm" :disabled="transitioning" @click="copy">
           {{ t('clinical.content.actions.copy') }}
         </button>
         <router-link v-if="editable" :to="`/clinical/content/${moduleSlug}/${version}/edit`"

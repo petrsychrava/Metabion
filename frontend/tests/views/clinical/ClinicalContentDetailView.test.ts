@@ -275,4 +275,128 @@ describe('ClinicalContentDetailView', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Approved')
   })
+
+  it('ignores a superseded detail response when history returns before the newer load settles', async () => {
+    const pending: Array<{ version: number; respond: () => void }> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) => {
+        const requested = Number(params.version)
+        return new Promise((resolve) => {
+          pending.push({
+            version: requested,
+            respond: () => resolve(HttpResponse.json(
+              detail({ version: requested, englishTitle: requested === 2 ? 'Old' : 'New' }))),
+          })
+        })
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () =>
+        HttpResponse.json(detail({ version: 3, englishTitle: 'New' }))),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+    expect(pending.map((p) => p.version)).toEqual([2])
+
+    pending[0].respond()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Old')
+
+    // Copy resolves immediately and navigates to v3, whose load stays pending.
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await flushPromises()
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3')
+    expect(pending.map((p) => p.version)).toEqual([2, 3])
+
+    // History returns to v2 before either pending load settles.
+    await router.push('/clinical/content/ibd-basics/2')
+    await flushPromises()
+    expect(pending.map((p) => p.version)).toEqual([2, 3, 2])
+
+    // The latest (v2) load resolves first and renders.
+    pending[2].respond()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Old')
+
+    // The superseded v3 response resolving last must not clobber the v2 render or the URL.
+    pending[1].respond()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Old')
+    expect(wrapper.find('[data-testid="module-english"]').text()).not.toContain('New')
+    expect(wrapper.find('[data-testid="status-badge"]').exists()).toBe(true)
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
+  })
+
+  it('ignores a double-clicked copy while the first copy is in flight', async () => {
+    let copyCalls = 0
+    const pending: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) =>
+        HttpResponse.json(detail({ version: Number(params.version), englishTitle: 'New' }))),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () => {
+        copyCalls += 1
+        return new Promise((resolve) => {
+          pending.push(() => resolve(HttpResponse.json(detail({ version: 3, englishTitle: 'New' }))))
+        })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await flushPromises()
+    expect(copyCalls).toBe(1)
+    expect(wrapper.find('[data-testid="copy"]').attributes('disabled')).toBeDefined()
+
+    pending.forEach((resolve) => resolve())
+    await flushPromises()
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3')
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('New')
+  })
+
+  it('blocks copy while a lifecycle transition is in flight', async () => {
+    let copyCalls = 0
+    let reviewCalls = 0
+    const pending: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/approve', () => {
+        reviewCalls += 1
+        return new Promise((resolve) => {
+          pending.push(() => resolve(HttpResponse.json(detail({ status: 'APPROVED' }))))
+        })
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () => {
+        copyCalls += 1
+        return HttpResponse.json(detail({ version: 3 }))
+      }),
+    )
+    const wrapper = await mountAt({ status: 'IN_REVIEW' }, 'someone-else@example.com', ['PHYSICIAN'])
+    await flushPromises()
+
+    await wrapper.find('[data-testid="approve"]').trigger('click')
+    await wrapper.find('[data-testid="confirm-approve"]').trigger('click')
+    await flushPromises()
+    expect(reviewCalls).toBe(1)
+    expect(wrapper.find('[data-testid="copy"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await flushPromises()
+    expect(copyCalls).toBe(0)
+
+    pending.forEach((resolve) => resolve())
+    await flushPromises()
+    expect(wrapper.text()).toContain('Approved')
+  })
 })
