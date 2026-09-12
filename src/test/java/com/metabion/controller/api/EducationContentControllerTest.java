@@ -24,9 +24,12 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -81,6 +84,48 @@ class EducationContentControllerTest {
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(validModuleRequest())))
+                .andExpect(status().isOk());
+
+        verify(educationContentService).createDraft(any(), any(EducationModuleRequest.class));
+    }
+
+    @Test
+    void createDraftRejectsPartialCzechLocalization() throws Exception {
+        var request = new EducationModuleRequest(
+                "ibd-basics",
+                "IBD",
+                1,
+                "IBD Basics",
+                "A short overview of IBD.",
+                "Základy IBD",
+                null);
+
+        mvc.perform(post("/api/content/education/modules")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verify(educationContentService, never()).createDraft(any(), any(EducationModuleRequest.class));
+    }
+
+    @Test
+    void createDraftAcceptsCompleteCzechLocalization() throws Exception {
+        var request = new EducationModuleRequest(
+                "ibd-basics",
+                "IBD",
+                1,
+                "IBD Basics",
+                "A short overview of IBD.",
+                "Základy IBD",
+                "Stručný přehled IBD.");
+
+        mvc.perform(post("/api/content/education/modules")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
 
         verify(educationContentService).createDraft(any(), any(EducationModuleRequest.class));
@@ -151,6 +196,61 @@ class EducationContentControllerTest {
     }
 
     @Test
+    void updateDraftRejectsPartialCzechModuleLocalization() throws Exception {
+        var form = baseForm();
+        form.setCzechTitle("Základy IBD");
+
+        mvc.perform(put("/api/content/education/modules/ibd-basics/versions/2")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(form)))
+                .andExpect(status().isBadRequest());
+
+        verify(educationContentService, never())
+                .updateDraft(any(), eq("ibd-basics"), eq(2), any(EducationContentForm.class));
+    }
+
+    @Test
+    void updateDraftRejectsPartialCzechLessonLocalization() throws Exception {
+        var form = baseForm();
+        var lesson = completeLessonRow();
+        lesson.setCzechSummary("Český souhrn lekce");
+        form.setLessons(List.of(lesson));
+
+        mvc.perform(put("/api/content/education/modules/ibd-basics/versions/2")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(form)))
+                .andExpect(status().isBadRequest());
+
+        verify(educationContentService, never())
+                .updateDraft(any(), eq("ibd-basics"), eq(2), any(EducationContentForm.class));
+    }
+
+    @Test
+    void updateDraftAcceptsCompleteCzechLocalization() throws Exception {
+        var form = baseForm();
+        form.setCzechTitle("Základy IBD");
+        form.setCzechSummary("Stručný přehled IBD.");
+        var lesson = completeLessonRow();
+        lesson.setCzechTitle("Úvod");
+        lesson.setCzechSummary("Český souhrn lekce");
+        lesson.setCzechBodyMarkdown("# Úvod");
+        form.setLessons(List.of(lesson));
+
+        mvc.perform(put("/api/content/education/modules/ibd-basics/versions/2")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(form)))
+                .andExpect(status().isOk());
+
+        verify(educationContentService).updateDraft(any(), eq("ibd-basics"), eq(2), any(EducationContentForm.class));
+    }
+
+    @Test
     void staffCanPreviewMarkdownWithCsrf() throws Exception {
         mvc.perform(post("/api/content/education/markdown-preview")
                         .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
@@ -171,6 +271,26 @@ class EducationContentControllerTest {
                         .content(objectMapper.writeValueAsString(
                                 new EducationMarkdownPreviewRequest("x".repeat(20001)))))
                 .andExpect(status().isBadRequest());
+    }
+
+    private EducationContentForm baseForm() {
+        var form = new EducationContentForm();
+        form.setSlug("ibd-basics");
+        form.setTopic("IBD");
+        form.setSortOrder(10);
+        form.setEnglishTitle("IBD Basics");
+        form.setEnglishSummary("Overview.");
+        return form;
+    }
+
+    private EducationContentForm.LessonRow completeLessonRow() {
+        var lesson = new EducationContentForm.LessonRow();
+        lesson.setSlug("intro");
+        lesson.setSortOrder(1);
+        lesson.setEnglishTitle("Intro");
+        lesson.setEnglishSummary("Intro summary.");
+        lesson.setEnglishBodyMarkdown("# Intro");
+        return lesson;
     }
 
     private EducationModuleRequest validModuleRequest() {

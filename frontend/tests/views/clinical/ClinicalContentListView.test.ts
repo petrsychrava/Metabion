@@ -94,4 +94,34 @@ describe('ClinicalContentListView', () => {
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3')
   })
+
+  it('serializes concurrent copy requests while one is in flight', async () => {
+    let postCalls = 0
+    let resolveHeld: (response: HttpResponse<{ moduleSlug: string; version: number }>) => void = () => undefined
+    server.use(
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () => {
+        postCalls += 1
+        return new Promise<HttpResponse<{ moduleSlug: string; version: number }>>((resolve) => {
+          resolveHeld = resolve
+        })
+      }),
+    )
+    const { wrapper, router } = await mountAt('/clinical/content')
+    const button = wrapper.find('[data-testid="copy-version"]')
+
+    await button.trigger('click')
+    await flushPromises()
+    expect(postCalls).toBe(1)
+    expect(button.attributes('disabled')).toBeDefined()
+
+    // A second click while the copy is in flight must not issue another request.
+    await button.trigger('click')
+    await flushPromises()
+    expect(postCalls).toBe(1)
+
+    resolveHeld(HttpResponse.json({ moduleSlug: 'ibd-basics', version: 3 }))
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3')
+    expect(wrapper.find('[data-testid="copy-version"]').attributes('disabled')).toBeUndefined()
+  })
 })

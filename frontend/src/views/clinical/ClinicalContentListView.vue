@@ -13,6 +13,7 @@ const { message, capture, clear } = useApiError()
 
 const items = ref<EducationManagementSummary[]>([])
 const loading = ref(true)
+const copying = ref(false)
 const moduleFilter = ref('')
 const statusFilter = ref<EducationContentStatus | ''>('')
 
@@ -47,12 +48,18 @@ function open(item: EducationManagementSummary) {
 }
 
 async function copy(item: EducationManagementSummary) {
+  // Copies of any version of a module share the maxVersion + 1 draft allocation, so all rows'
+  // copy buttons serialize on a single flag; it stays set through the post-copy navigation.
+  if (copying.value) return
+  copying.value = true
   clear()
   try {
     const draft = await contentEducationApi.copyVersion(item.moduleSlug, item.version)
     await router.push(`/clinical/content/${draft.moduleSlug}/${draft.version}`)
   } catch (e) {
     capture(e)
+  } finally {
+    copying.value = false
   }
 }
 
@@ -108,7 +115,8 @@ onMounted(load)
           <td class="p-2">{{ item.authorEmail ?? t('clinical.noValue') }}</td>
           <td class="p-2">{{ formatDateTime(item.createdAt, locale) }}</td>
           <td class="p-2">
-            <button data-testid="copy-version" class="rounded border px-2 py-0.5 text-xs" @click.stop="copy(item)">
+            <button data-testid="copy-version" class="rounded border px-2 py-0.5 text-xs" :disabled="copying"
+                    @click.stop="copy(item)">
               {{ t('clinical.content.newVersion') }}
             </button>
           </td>
