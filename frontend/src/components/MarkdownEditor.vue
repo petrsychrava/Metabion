@@ -26,6 +26,7 @@ async function showPreview() {
     // clobber the cleared preview.
     previewSeq += 1
     html.value = ''
+    loadingPreview.value = false
     return
   }
   const seq = ++previewSeq

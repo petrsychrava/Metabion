@@ -141,6 +141,39 @@ describe('ClinicalContentEditView', () => {
     expect(wrapper.html()).not.toContain('<h1>Hello</h1>')
   })
 
+  it('clears the loading state when an empty preview supersedes an in-flight request', async () => {
+    const pending: Array<{ respond: (html: string) => void }> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/content/education/markdown-preview', () =>
+        new Promise((resolve) => {
+          pending.push({ respond: (html) => resolve(HttpResponse.json({ html })) })
+        })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="markdown-preview-tab"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Loading…')
+    expect(pending).toHaveLength(1)
+
+    // Clear the source while the first request is still in flight, then preview the empty source.
+    await wrapper.find('[data-testid="markdown-edit-tab"]').trigger('click')
+    await wrapper.find('textarea[data-testid="markdown-source"]').setValue('')
+    await wrapper.find('[data-testid="markdown-preview-tab"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('Loading…')
+
+    // The stale response must not resurrect the preview or the spinner.
+    pending[0].respond('<h1>Stale</h1>')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('Loading…')
+    expect(wrapper.html()).not.toContain('<h1>Stale</h1>')
+  })
+
   it('does not prompt about unsaved changes after a successful save', async () => {
     server.use(
       http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
