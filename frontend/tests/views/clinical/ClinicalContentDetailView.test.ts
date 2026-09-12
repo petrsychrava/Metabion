@@ -331,6 +331,116 @@ describe('ClinicalContentDetailView', () => {
     expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
   })
 
+  it('ignores a superseded transition result when navigation lands before the POST settles', async () => {
+    const thirdLesson = {
+      lessonSlug: 'intro', sortOrder: 10, title: 'Third intro', summary: 'Third summary.',
+      bodyMarkdown: '# Third', bodyHtml: '<h1>Third body</h1>',
+      czechTitle: null, czechSummary: null, czechBodyMarkdown: null, czechBodyHtml: null,
+    }
+    const pendingGets: Array<{ version: number; respond: () => void }> = []
+    const postResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) => {
+        const requested = Number(params.version)
+        return new Promise((resolve) => {
+          pendingGets.push({
+            version: requested,
+            respond: () => resolve(HttpResponse.json(requested === 2
+              ? detail({ version: 2, englishTitle: 'Second version' })
+              : detail({ version: requested, englishTitle: 'Third version', lessons: [thirdLesson] }))),
+          })
+        })
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/submit-review', () =>
+        new Promise((resolve) => {
+          postResolvers.push(() => resolve(HttpResponse.json(
+            detail({ status: 'IN_REVIEW', englishTitle: 'Transitioned second version' }))))
+        })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+    pendingGets[0].respond()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Second version')
+
+    // Start the v2 lifecycle POST, then navigate to v3 before it settles.
+    await wrapper.find('[data-testid="submit-review"]').trigger('click')
+    await flushPromises()
+    expect(postResolvers.length).toBe(1)
+    await router.push('/clinical/content/ibd-basics/3')
+    await flushPromises()
+    expect(pendingGets.map((p) => p.version)).toEqual([2, 3])
+
+    // The new route's load resolves first and governs the page.
+    pendingGets[1].respond()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Third version')
+
+    // The superseded POST resolving last must not replace the v3 render with the old v2 data.
+    postResolvers[0]()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Third version')
+    expect(wrapper.html()).toContain('<h1>Third body</h1>')
+    expect(wrapper.find('[data-testid="module-english"]').text()).not.toContain('Transitioned second version')
+    expect(wrapper.html()).not.toContain('<h1>Hi</h1>')
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3')
+    expect(wrapper.text()).not.toContain('Something went wrong')
+  })
+
+  it('ignores a superseded transition failure when navigation lands before the POST settles', async () => {
+    const pendingGets: Array<{ version: number; respond: () => void }> = []
+    const postResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) => {
+        const requested = Number(params.version)
+        return new Promise((resolve) => {
+          pendingGets.push({
+            version: requested,
+            respond: () => resolve(HttpResponse.json(
+              detail({ version: requested, englishTitle: requested === 2 ? 'Second version' : 'Third version' }))),
+          })
+        })
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/submit-review', () =>
+        new Promise((resolve) => {
+          postResolvers.push(() => resolve(HttpResponse.json({ error: 'request_failed' }, { status: 400 })))
+        })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+    pendingGets[0].respond()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Second version')
+
+    await wrapper.find('[data-testid="submit-review"]').trigger('click')
+    await flushPromises()
+    expect(postResolvers.length).toBe(1)
+    await router.push('/clinical/content/ibd-basics/3')
+    await flushPromises()
+
+    pendingGets[1].respond()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Third version')
+
+    // The departed v2 page's failure must not surface a banner or trigger a resync load.
+    postResolvers[0]()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Third version')
+    expect(wrapper.text()).not.toContain('Something went wrong')
+    expect(pendingGets.map((p) => p.version)).toEqual([2, 3])
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3')
+  })
+
   it('ignores a double-clicked copy while the first copy is in flight', async () => {
     let copyCalls = 0
     const pending: Array<() => void> = []

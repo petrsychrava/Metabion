@@ -68,11 +68,20 @@ async function transition(call: () => Promise<EducationManagementDetail>) {
   if (transitioning.value) return
   transitioning.value = true
   clear()
+  const slug = moduleSlug.value
+  const ver = version.value
   try {
-    detail.value = await call()
+    const data = await call()
+    // Navigation supersedes the mutation: the watcher's load governs the page; assigning here
+    // would render the old version under the new URL.
+    if (slug !== moduleSlug.value || ver !== version.value) return
+    detail.value = data
     reviewOpen.value = false
     notes.value = ''
   } catch (e) {
+    // Superseded failures belong to the page the user left; the new route's in-flight load
+    // governs state and must not be clobbered by this error.
+    if (slug !== moduleSlug.value || ver !== version.value) return
     // Another manager may have changed the state; resync the action bar instead of going stale,
     // then surface the error (load() clears any previous message first).
     await load()
