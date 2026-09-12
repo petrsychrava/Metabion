@@ -91,6 +91,9 @@ describe('ClinicalContentDetailView', () => {
     // Accordion opens on the first lesson; the Czech preview rides along.
     expect(wrapper.html()).toContain('<p>Ahoj</p>')
     expect(wrapper.text()).toContain('Úvod')
+    // Authored summaries render for both locales.
+    expect(wrapper.text()).toContain('Intro summary.')
+    expect(wrapper.text()).toContain('Shrnutí úvodu.')
   })
 
   it('hides approval from the author but shows it to another reviewer', async () => {
@@ -190,5 +193,34 @@ describe('ClinicalContentDetailView', () => {
     expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3')
     expect(wrapper.find('[data-testid="module-english"]').text()).toContain('New')
     expect(wrapper.html()).toContain('<h1>New</h1>')
+  })
+
+  it('clears the stale detail and shows the error banner when the reload after copy fails', async () => {
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) =>
+        Number(params.version) === 2
+          ? HttpResponse.json(detail({ version: 2, englishTitle: 'Old' }))
+          : HttpResponse.json({ error: 'request_failed' }, { status: 500 })),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () =>
+        HttpResponse.json(detail({ version: 3, englishTitle: 'New' }))),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Old')
+
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await flushPromises()
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3')
+    expect(wrapper.text()).not.toContain('Old')
+    expect(wrapper.find('[data-testid="status-badge"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="module-english"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Something went wrong')
   })
 })

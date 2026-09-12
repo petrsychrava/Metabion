@@ -76,4 +76,32 @@ describe('ClinicalContentNewView', () => {
 
     expect(wrapper.text()).toContain('must be unique')
   })
+
+  it('blocks creation when only one Czech module field is filled', async () => {
+    let posts = 0
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/content/education/modules', () => {
+        posts += 1
+        return HttpResponse.json({ moduleSlug: 'ibd-basics', version: 1 })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/new')
+    const wrapper = mount(ClinicalContentNewView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="slug"]').setValue('ibd-basics')
+    await wrapper.find('[data-testid="topic"]').setValue('IBD')
+    await wrapper.find('[data-testid="english-title"]').setValue('IBD Basics')
+    await wrapper.find('[data-testid="english-summary"]').setValue('Overview.')
+    await wrapper.find('[data-testid="czech-title"]').setValue('Základy IBD')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="czech-module-incomplete"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Czech module title and summary must both be filled or both be empty.')
+    expect(posts).toBe(0)
+    expect(router.currentRoute.value.path).toBe('/clinical/content/new')
+  })
 })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import FieldError from '@/components/FieldError.vue'
@@ -21,7 +21,15 @@ const form = reactive({
 })
 const saving = ref(false)
 
+// The server persists a Czech module localization only when both values are present, so
+// one-sided input would otherwise be silently dropped after a successful create.
+const czechModuleIncomplete = computed(() => {
+  const filled = [form.czechTitle, form.czechSummary].filter((value) => !!value?.trim()).length
+  return filled === 1
+})
+
 async function submit() {
+  if (czechModuleIncomplete.value) return
   saving.value = true
   clear()
   try {
@@ -88,8 +96,12 @@ async function submit() {
                   class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"></textarea>
         <FieldError :message="fieldErrors.czechSummary" />
       </label>
+      <p v-if="czechModuleIncomplete" data-testid="czech-module-incomplete"
+         class="text-sm text-red-600 dark:text-red-400">
+        {{ t('clinical.content.editor.czechModuleIncomplete') }}
+      </p>
 
-      <button type="submit" data-testid="create" :disabled="saving"
+      <button type="submit" data-testid="create" :disabled="saving || czechModuleIncomplete"
               class="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50">
         {{ t('clinical.content.create.submit') }}
       </button>

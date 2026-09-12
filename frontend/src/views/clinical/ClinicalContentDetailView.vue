@@ -37,6 +37,8 @@ const publishable = computed(() => !!detail.value
   && detail.value.lessons.every((lesson) => !!lesson.title))
 
 async function load() {
+  // Clear first so a failed reload never leaves the previous version rendered under a new URL.
+  detail.value = null
   clear()
   loading.value = true
   try {
@@ -88,6 +90,7 @@ onMounted(load)
       ← {{ t('clinical.content.backToList') }}
     </router-link>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
+    <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
     <template v-else-if="detail">
       <div class="mt-2 flex flex-wrap items-center gap-3">
         <h1 class="text-2xl font-semibold">
@@ -112,8 +115,6 @@ onMounted(load)
         </p>
         <p class="mt-1 whitespace-pre-line text-gray-600 dark:text-gray-400">{{ detail.czechSummary }}</p>
       </div>
-
-      <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
 
       <dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
         <div>
@@ -210,10 +211,13 @@ onMounted(load)
             <span class="text-gray-400">{{ openLesson === lesson.lessonSlug ? '−' : '+' }}</span>
           </button>
           <div v-if="openLesson === lesson.lessonSlug" class="border-t p-4">
+            <p v-if="lesson.summary" class="whitespace-pre-line text-gray-600 dark:text-gray-400">{{ lesson.summary }}</p>
             <!-- bodyHtml is server-rendered from staff-authored content; same trust model as the patient view -->
             <div class="prose max-w-none" v-html="lesson.bodyHtml" />
             <div v-if="lesson.czechTitle !== null" class="mt-4 border-t pt-3">
               <p class="text-sm font-medium text-gray-500">{{ t('clinical.content.czechLabel') }}: {{ lesson.czechTitle }}</p>
+              <p v-if="lesson.czechSummary !== null"
+                 class="mt-1 whitespace-pre-line text-gray-600 dark:text-gray-400">{{ lesson.czechSummary }}</p>
               <div class="prose mt-2 max-w-none" v-html="lesson.czechBodyHtml" />
             </div>
           </div>
