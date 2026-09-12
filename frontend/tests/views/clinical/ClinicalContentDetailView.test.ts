@@ -156,6 +156,9 @@ describe('ClinicalContentDetailView', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Something went wrong')
     expect(getCalls).toBe(2)
+    // The resynced detail and action bar stay visible alongside the error banner.
+    expect(wrapper.find('[data-testid="status-badge"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="submit-review"]').exists()).toBe(true)
   })
 
   it('reloads the detail after copy navigates to a new version on the same route', async () => {

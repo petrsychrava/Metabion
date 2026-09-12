@@ -91,7 +91,7 @@ onMounted(load)
     </router-link>
     <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
     <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
-    <template v-else-if="detail">
+    <template v-if="detail">
       <div class="mt-2 flex flex-wrap items-center gap-3">
         <h1 class="text-2xl font-semibold">
           {{ t('clinical.content.detailTitle') }} {{ detail.moduleSlug }} v{{ detail.version }}
