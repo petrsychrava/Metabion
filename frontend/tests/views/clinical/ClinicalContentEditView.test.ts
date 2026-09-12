@@ -357,6 +357,35 @@ describe('ClinicalContentEditView', () => {
     expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
   })
 
+  it('resyncs the form from the server when a fieldless 400 means the state raced', async () => {
+    let formLoads = 0
+    server.use(
+      http.get('/api/content/education/modules/ibd-basics/versions/2/form', () => {
+        formLoads += 1
+        return HttpResponse.json(formLoads === 1 ? form() : { ...form(), englishTitle: 'Resynced Title' })
+      }),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', () =>
+        HttpResponse.json({ error: 'request_failed' }, { status: 400 })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('input[data-testid="english-title"]').setValue('Edited Title')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    // Only a fieldless 400 (state race, e.g. the version left the editable state) resyncs:
+    // the form is replaced by the freshly loaded state and the error is surfaced.
+    expect(formLoads).toBe(2)
+    expect((wrapper.find('input[data-testid="english-title"]').element as HTMLInputElement).value)
+      .toBe('Resynced Title')
+    expect(wrapper.text()).toContain('Something went wrong')
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
+  })
+
   it('omits a freshly added blank lesson row from the save payload', async () => {
     let putBody: unknown
     server.use(
