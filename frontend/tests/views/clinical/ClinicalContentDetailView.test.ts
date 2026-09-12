@@ -226,4 +226,53 @@ describe('ClinicalContentDetailView', () => {
     expect(wrapper.find('[data-testid="module-english"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('Something went wrong')
   })
+
+  it('limits the review notes to 2000 characters and surfaces notes field errors', async () => {
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/approve', () =>
+        HttpResponse.json(
+          { error: 'validation_failed', fields: { notes: 'must not exceed 2000 characters' } },
+          { status: 400 },
+        )),
+    )
+    const wrapper = await mountAt({ status: 'IN_REVIEW' }, 'someone-else@example.com', ['PHYSICIAN'])
+    await flushPromises()
+    await wrapper.find('[data-testid="approve"]').trigger('click')
+
+    const notes = wrapper.find('[data-testid="review-notes"]')
+    expect(notes.attributes('maxlength')).toBe('2000')
+
+    await wrapper.find('[data-testid="confirm-approve"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('must not exceed 2000 characters')
+  })
+
+  it('ignores concurrent lifecycle clicks while a transition is in flight', async () => {
+    let calls = 0
+    const pending: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/approve', () => {
+        calls += 1
+        return new Promise((resolve) =>
+          pending.push(() => resolve(HttpResponse.json(detail({ status: 'APPROVED' })))))
+      }),
+    )
+    const wrapper = await mountAt({ status: 'IN_REVIEW' }, 'someone-else@example.com', ['PHYSICIAN'])
+    await flushPromises()
+    await wrapper.find('[data-testid="approve"]').trigger('click')
+
+    await wrapper.find('[data-testid="confirm-approve"]').trigger('click')
+    await wrapper.find('[data-testid="confirm-approve"]').trigger('click')
+    await flushPromises()
+
+    expect(calls).toBe(1)
+    expect(wrapper.find('[data-testid="confirm-approve"]').attributes('disabled')).toBeDefined()
+
+    pending.forEach((resolve) => resolve())
+    await flushPromises()
+    expect(wrapper.text()).toContain('Approved')
+  })
 })

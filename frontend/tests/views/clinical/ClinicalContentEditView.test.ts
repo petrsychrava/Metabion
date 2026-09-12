@@ -103,6 +103,44 @@ describe('ClinicalContentEditView', () => {
     expect(wrapper.html()).toContain('<h1>Hello</h1>')
   })
 
+  it('keeps the latest source preview when overlapping preview requests resolve out of order', async () => {
+    const pending: Array<{ markdown: string; respond: (html: string) => void }> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/content/education/markdown-preview', async ({ request }) => {
+        const { markdown } = await request.json() as { markdown: string }
+        return new Promise((resolve) => {
+          pending.push({ markdown, respond: (html) => resolve(HttpResponse.json({ html })) })
+        })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="markdown-preview-tab"]').trigger('click')
+    await flushPromises()
+    expect(pending.map((p) => p.markdown)).toEqual(['# Hello'])
+
+    // Back on the edit tab, change the source, then preview again so both requests overlap.
+    await wrapper.find('[data-testid="markdown-edit-tab"]').trigger('click')
+    await wrapper.find('textarea[data-testid="markdown-source"]').setValue('# Hello edited')
+    await wrapper.find('[data-testid="markdown-preview-tab"]').trigger('click')
+    await flushPromises()
+    expect(pending.map((p) => p.markdown)).toEqual(['# Hello', '# Hello edited'])
+
+    // The newer request resolves first; then the stale one resolves last and must be ignored.
+    pending[1].respond('<h1>Hello edited</h1>')
+    await flushPromises()
+    expect(wrapper.html()).toContain('<h1>Hello edited</h1>')
+
+    pending[0].respond('<h1>Hello</h1>')
+    await flushPromises()
+    expect(wrapper.html()).toContain('<h1>Hello edited</h1>')
+    expect(wrapper.html()).not.toContain('<h1>Hello</h1>')
+  })
+
   it('does not prompt about unsaved changes after a successful save', async () => {
     server.use(
       http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),

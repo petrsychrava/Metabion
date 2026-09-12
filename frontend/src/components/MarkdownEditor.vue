@@ -17,20 +17,26 @@ const { t } = useI18n()
 const tab = ref<'edit' | 'preview'>('edit')
 const html = ref('')
 const loadingPreview = ref(false)
+let previewSeq = 0
 
 async function showPreview() {
   tab.value = 'preview'
   if (!props.modelValue.trim()) {
+    // Invalidate any in-flight request so a slow response for a previous source cannot
+    // clobber the cleared preview.
+    previewSeq += 1
     html.value = ''
     return
   }
+  const seq = ++previewSeq
   loadingPreview.value = true
   try {
-    html.value = (await contentEducationApi.previewMarkdown(props.modelValue)).html
+    const result = await contentEducationApi.previewMarkdown(props.modelValue)
+    if (seq === previewSeq) html.value = result.html
   } catch {
-    html.value = ''
+    if (seq === previewSeq) html.value = ''
   } finally {
-    loadingPreview.value = false
+    if (seq === previewSeq) loadingPreview.value = false
   }
 }
 

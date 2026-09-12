@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import FieldError from '@/components/FieldError.vue'
 import { contentEducationApi } from '@/api/contentEducation'
 import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/stores/auth'
@@ -12,7 +13,7 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-const { message, capture, clear } = useApiError()
+const { message, fieldErrors, capture, clear } = useApiError()
 
 const moduleSlug = computed(() => route.params.moduleSlug as string)
 const version = computed(() => Number(route.params.version))
@@ -22,6 +23,7 @@ const loading = ref(true)
 const reviewOpen = ref(false)
 const notes = ref('')
 const openLesson = ref<string | null>(null)
+const transitioning = ref(false)
 
 const isAuthor = computed(() => !!detail.value?.authorEmail && detail.value.authorEmail === auth.email)
 const isAdmin = computed(() => auth.roles.includes('ADMIN'))
@@ -52,6 +54,10 @@ async function load() {
 }
 
 async function transition(call: () => Promise<EducationManagementDetail>) {
+  // Serialize lifecycle decisions: rapid clicks must not issue concurrent POSTs whose commit
+  // order would decide the final status. The flag stays set through the error-path resync.
+  if (transitioning.value) return
+  transitioning.value = true
   clear()
   try {
     detail.value = await call()
@@ -62,6 +68,8 @@ async function transition(call: () => Promise<EducationManagementDetail>) {
     // then surface the error (load() clears any previous message first).
     await load()
     capture(e)
+  } finally {
+    transitioning.value = false
   }
 }
 
@@ -149,21 +157,28 @@ onMounted(load)
 
       <div class="mt-6 flex flex-wrap gap-2">
         <button v-if="canSubmitReview" data-testid="submit-review"
-                class="rounded bg-blue-600 px-3 py-1 text-sm text-white"
+                class="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+                :disabled="transitioning"
                 @click="transition(() => contentEducationApi.submitReview(moduleSlug, version))">
           {{ t('clinical.content.actions.submitReview') }}
         </button>
         <template v-if="canReview">
-          <button data-testid="approve" class="rounded bg-green-600 px-3 py-1 text-sm text-white" @click="reviewOpen = !reviewOpen">
+          <button data-testid="approve"
+                  class="rounded bg-green-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+                  :disabled="transitioning"
+                  @click="reviewOpen = !reviewOpen">
             {{ t('clinical.content.actions.approve') }}
           </button>
-          <button data-testid="reject" class="rounded bg-red-600 px-3 py-1 text-sm text-white" @click="reviewOpen = !reviewOpen">
+          <button data-testid="reject"
+                  class="rounded bg-red-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+                  :disabled="transitioning"
+                  @click="reviewOpen = !reviewOpen">
             {{ t('clinical.content.actions.reject') }}
           </button>
         </template>
         <button v-if="canPublish" data-testid="publish"
                 class="rounded bg-green-700 px-3 py-1 text-sm text-white disabled:opacity-50"
-                :disabled="!publishable"
+                :disabled="transitioning || !publishable"
                 :title="publishable ? undefined : t('clinical.content.notPublishable')"
                 @click="transition(() => contentEducationApi.publish(moduleSlug, version))">
           {{ t('clinical.content.actions.publish') }}
@@ -179,16 +194,21 @@ onMounted(load)
 
       <div v-if="reviewOpen" class="mt-4 rounded border p-3">
         <label class="text-sm">{{ t('clinical.content.reviewNotes') }}
-          <textarea v-model="notes" data-testid="review-notes" rows="3"
+          <textarea v-model="notes" data-testid="review-notes" rows="3" maxlength="2000"
                     :placeholder="t('clinical.content.notesPlaceholder')"
                     class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"></textarea>
+          <FieldError :message="fieldErrors.notes" />
         </label>
         <div class="mt-2 flex gap-2">
-          <button data-testid="confirm-approve" class="rounded bg-green-600 px-3 py-1 text-sm text-white"
+          <button data-testid="confirm-approve"
+                  class="rounded bg-green-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+                  :disabled="transitioning"
                   @click="transition(() => contentEducationApi.review(moduleSlug, version, 'approve', notes))">
             {{ t('clinical.content.actions.approve') }}
           </button>
-          <button data-testid="confirm-reject" class="rounded bg-red-600 px-3 py-1 text-sm text-white"
+          <button data-testid="confirm-reject"
+                  class="rounded bg-red-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+                  :disabled="transitioning"
                   @click="transition(() => contentEducationApi.review(moduleSlug, version, 'reject', notes))">
             {{ t('clinical.content.actions.reject') }}
           </button>
