@@ -320,6 +320,43 @@ describe('ClinicalContentEditView', () => {
     expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
   })
 
+  it('keeps author edits and renders field errors when a lesson slug normalizes to blank', async () => {
+    let formLoads = 0
+    server.use(
+      http.get('/api/content/education/modules/ibd-basics/versions/2/form', () => {
+        formLoads += 1
+        return HttpResponse.json(form())
+      }),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', () =>
+        HttpResponse.json(
+          {
+            error: 'validation_failed',
+            fields: { 'lessons[0].slugNormalizable': 'lesson slug must contain at least one letter or digit' },
+          },
+          { status: 400 },
+        )),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('input[data-testid="lesson-slug-0"]').setValue('---')
+    await wrapper.find('input[data-testid="english-title"]').setValue('Edited Title')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    // A field-carrying validation 400 is not a state race: keep the edits, skip the resync GET.
+    expect(formLoads).toBe(1)
+    expect((wrapper.find('input[data-testid="lesson-slug-0"]').element as HTMLInputElement).value).toBe('---')
+    expect((wrapper.find('input[data-testid="english-title"]').element as HTMLInputElement).value).toBe('Edited Title')
+    const fieldErrors = wrapper.find('[data-testid="field-errors"]')
+    expect(fieldErrors.exists()).toBe(true)
+    expect(fieldErrors.text()).toContain('lesson slug must contain at least one letter or digit')
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
+  })
+
   it('omits a freshly added blank lesson row from the save payload', async () => {
     let putBody: unknown
     server.use(

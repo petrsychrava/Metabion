@@ -37,6 +37,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
@@ -132,6 +133,30 @@ class EducationContentControllerTest {
     }
 
     @Test
+    void createDraftRejectsUnnormalizableSlug() throws Exception {
+        var request = new EducationModuleRequest(
+                "---",
+                "IBD",
+                1,
+                "IBD Basics",
+                "A short overview of IBD.",
+                null,
+                null);
+
+        mvc.perform(post("/api/content/education/modules")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("validation_failed"))
+                .andExpect(jsonPath("$.fields.slugNormalizable")
+                        .value("module slug must contain at least one letter or digit"));
+
+        verify(educationContentService, never()).createDraft(any(), any(EducationModuleRequest.class));
+    }
+
+    @Test
     void staffCanApproveWithCsrf() throws Exception {
         var request = new EducationReviewRequest("Looks good");
 
@@ -224,6 +249,46 @@ class EducationContentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(form)))
                 .andExpect(status().isBadRequest());
+
+        verify(educationContentService, never())
+                .updateDraft(any(), eq("ibd-basics"), eq(2), any(EducationContentForm.class));
+    }
+
+    @Test
+    void updateDraftRejectsUnnormalizableModuleSlug() throws Exception {
+        var form = baseForm();
+        form.setSlug("---");
+
+        mvc.perform(put("/api/content/education/modules/ibd-basics/versions/2")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(form)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("validation_failed"))
+                .andExpect(jsonPath("$.fields.slugNormalizable")
+                        .value("module slug must contain at least one letter or digit"));
+
+        verify(educationContentService, never())
+                .updateDraft(any(), eq("ibd-basics"), eq(2), any(EducationContentForm.class));
+    }
+
+    @Test
+    void updateDraftRejectsUnnormalizableLessonSlug() throws Exception {
+        var form = baseForm();
+        var lesson = completeLessonRow();
+        lesson.setSlug("---");
+        form.setLessons(List.of(lesson));
+
+        mvc.perform(put("/api/content/education/modules/ibd-basics/versions/2")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(form)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("validation_failed"))
+                .andExpect(jsonPath("$.fields['lessons[0].slugNormalizable']")
+                        .value("lesson slug must contain at least one letter or digit"));
 
         verify(educationContentService, never())
                 .updateDraft(any(), eq("ibd-basics"), eq(2), any(EducationContentForm.class));
