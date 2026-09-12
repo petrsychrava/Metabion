@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { contentEducationApi } from '@/api/contentEducation'
 import { useApiError } from '@/composables/useApiError'
@@ -8,6 +8,7 @@ import { formatDateTime } from '@/utils/dateTime'
 import type { EducationContentStatus, EducationManagementSummary } from '@/types/api'
 
 const { t, locale } = useI18n()
+const route = useRoute()
 const router = useRouter()
 const { message, capture, clear } = useApiError()
 
@@ -53,8 +54,11 @@ async function copy(item: EducationManagementSummary) {
   if (copying.value) return
   copying.value = true
   clear()
+  const originPath = route.path
   try {
     const draft = await contentEducationApi.copyVersion(item.moduleSlug, item.version)
+    // The handler outlives unmount: only redirect into the draft while the list is still current.
+    if (route.path !== originPath) return
     await router.push(`/clinical/content/${draft.moduleSlug}/${draft.version}`)
   } catch (e) {
     capture(e)

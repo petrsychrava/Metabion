@@ -77,6 +77,28 @@ describe('ClinicalContentNewView', () => {
     expect(wrapper.text()).toContain('must be unique')
   })
 
+  it('maps a slugNormalizable rejection onto the slug field', async () => {
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/content/education/modules', () =>
+        HttpResponse.json(
+          { error: 'validation_failed', fields: { slugNormalizable: 'module slug must contain at least one letter or digit' } },
+          { status: 400 },
+        )),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/new')
+    const wrapper = mount(ClinicalContentNewView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    const slugLabel = wrapper.find('[data-testid="slug"]').element.closest('label')
+    expect(slugLabel?.textContent).toContain('module slug must contain at least one letter or digit')
+    expect(router.currentRoute.value.path).toBe('/clinical/content/new')
+  })
+
   it('blocks creation when only one Czech module field is filled', async () => {
     let posts = 0
     server.use(

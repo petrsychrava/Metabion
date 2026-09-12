@@ -255,6 +255,106 @@ describe('ClinicalContentEditView', () => {
     confirmSpy.mockRestore()
   })
 
+  it('does not yank the author back to the detail after they leave mid-save', async () => {
+    const putResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', () =>
+        new Promise((resolve) => {
+          putResolvers.push(() => resolve(HttpResponse.json({})))
+        })),
+    )
+    // Mount through <router-view> so the dirty-guarded departure unmounts the editor for real.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/clinical',
+          component: { template: '<router-view />' },
+          children: [
+            { path: 'content', component: { template: '<div />' } },
+            { path: 'content/:moduleSlug/:version/edit', component: ClinicalContentEditView, props: true },
+            { path: 'content/:moduleSlug/:version', component: { template: '<div />' } },
+          ],
+        },
+      ],
+    })
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    await router.isReady()
+    const wrapper = mount({ template: '<router-view />' }, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('textarea[data-testid="markdown-source"]').setValue('# Hello edited')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(putResolvers).toHaveLength(1)
+
+    // The author confirms through the dirty guard and leaves while the PUT is still in flight.
+    await router.push('/clinical/content')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/clinical/content')
+
+    putResolvers[0]()
+    await flushPromises()
+
+    // The completed save must not redirect a departed author back to the old version detail.
+    expect(router.currentRoute.value.path).toBe('/clinical/content')
+    confirmSpy.mockRestore()
+  })
+
+  it('skips the resync GET when a fieldless 400 arrives after the author left', async () => {
+    let formLoads = 0
+    const putResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/content/education/modules/ibd-basics/versions/2/form', () => {
+        formLoads += 1
+        return HttpResponse.json(form())
+      }),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', () =>
+        new Promise((resolve) => {
+          putResolvers.push(() => resolve(HttpResponse.json({ error: 'request_failed' }, { status: 400 })))
+        })),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/clinical',
+          component: { template: '<router-view />' },
+          children: [
+            { path: 'content', component: { template: '<div />' } },
+            { path: 'content/:moduleSlug/:version/edit', component: ClinicalContentEditView, props: true },
+            { path: 'content/:moduleSlug/:version', component: { template: '<div />' } },
+          ],
+        },
+      ],
+    })
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    await router.isReady()
+    const wrapper = mount({ template: '<router-view />' }, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('textarea[data-testid="markdown-source"]').setValue('# Hello edited')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(putResolvers).toHaveLength(1)
+
+    await router.push('/clinical/content')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/clinical/content')
+
+    putResolvers[0]()
+    await flushPromises()
+
+    // The state-race resync belongs to the departed editor: no junk GET, no error clobber.
+    expect(formLoads).toBe(1)
+    expect(router.currentRoute.value.path).toBe('/clinical/content')
+    confirmSpy.mockRestore()
+  })
+
   it('shows an empty preview for a lesson with a null Czech body instead of throwing', async () => {
     server.use(
       http.get('/api/content/education/modules/ibd-basics/versions/2/form', () =>

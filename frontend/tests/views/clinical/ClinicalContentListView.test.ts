@@ -124,4 +124,29 @@ describe('ClinicalContentListView', () => {
     expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3')
     expect(wrapper.find('[data-testid="copy-version"]').attributes('disabled')).toBeUndefined()
   })
+
+  it('ignores a copy result that resolves after leaving the list', async () => {
+    const resolvers: Array<() => void> = []
+    server.use(
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () =>
+        new Promise((resolve) => {
+          resolvers.push(() => resolve(HttpResponse.json({ moduleSlug: 'ibd-basics', version: 3 })))
+        })),
+    )
+    const { wrapper, router } = await mountAt('/clinical/content')
+    await wrapper.find('[data-testid="copy-version"]').trigger('click')
+    await flushPromises()
+    expect(resolvers).toHaveLength(1)
+
+    // The handler outlives unmount: navigate to another clinical screen before the POST resolves.
+    await router.push('/clinical/content/new')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/clinical/content/new')
+
+    resolvers[0]()
+    await flushPromises()
+
+    // The pending copy must not redirect into the draft once the list is no longer current.
+    expect(router.currentRoute.value.path).toBe('/clinical/content/new')
+  })
 })

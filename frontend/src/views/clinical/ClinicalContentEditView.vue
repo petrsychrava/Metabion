@@ -91,14 +91,20 @@ async function save() {
   // Freeze the snapshot of exactly what is being submitted; edits made while the PUT is in
   // flight must stay dirty so the leave guard prompts instead of silently discarding them.
   const submitted = JSON.stringify(snapshot())
+  const originPath = route.path
   try {
     await contentEducationApi.updateVersion(moduleSlug, version, { ...form.value, lessons: lessons.value.filter(rowPopulated) })
     initialSnapshot.value = submitted
+    // The author may have left while the PUT was in flight; only redirect when this
+    // editor is still the current route.
+    if (route.path !== originPath) return
     await router.push(`/clinical/content/${moduleSlug}/${version}`)
   } catch (e) {
     // Only a state-change 400 (no field errors) means the version left the editable state; resync then.
     // Validation 400s carry a fields map: keep the author's edits intact and just show the banner.
     if (e instanceof ApiError && e.status === 400 && !e.fields) {
+      // A departed editor must not fire a resync GET for the route the user already left.
+      if (route.path !== originPath) return
       await load()
       capture(e)
     } else {

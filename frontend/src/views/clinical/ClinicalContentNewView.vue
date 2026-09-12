@@ -64,7 +64,7 @@ async function submit() {
       <label class="block text-sm">{{ t('clinical.content.fields.slug') }}
         <input v-model="form.slug" data-testid="slug" type="text" required
                class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
-        <FieldError :message="fieldErrors.slug" />
+        <FieldError :message="fieldErrors.slug ?? fieldErrors.slugNormalizable" />
       </label>
       <label class="block text-sm">{{ t('clinical.content.fields.topic') }}
         <input v-model="form.topic" data-testid="topic" type="text" required
