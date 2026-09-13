@@ -243,6 +243,7 @@
         "lessonSlug": "Slug lekce",
         "editTab": "Upravit",
         "previewTab": "Náhled",
+        "previewError": "Náhled se nepodařilo zobrazit. Zkuste to znovu.",
         "markdownHint": "Markdown: # nadpis, **tučné**, *kurzíva*, - položka seznamu, [odkaz](https://…)",
         "unsaved": "Máte neuložené změny. Opravdu chcete odejít?",
         "lessonIncomplete": "Vyplněné lekce vyžadují slug, pořadí alespoň 1 a anglický název, shrnutí a text. České pole jsou vyhrazená: vyplňte český název, shrnutí i text, nebo je všechny smažte.",

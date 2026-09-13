@@ -90,6 +90,9 @@ async function transition(call: () => Promise<EducationManagementDetail>) {
     // Another manager may have changed the state; resync the action bar instead of going stale,
     // then surface the error (load() clears any previous message first).
     await load()
+    // The route can change while the resync GET is in flight; only surface the error on the
+    // version that actually failed.
+    if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
     capture(e)
   } finally {
     transitioning.value = false
@@ -115,6 +118,9 @@ async function copy() {
   } catch (e) {
     if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
     await load()
+    // The route can change while the resync GET is in flight; only surface the error on the
+    // version that actually failed.
+    if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
     capture(e)
   } finally {
     transitioning.value = false

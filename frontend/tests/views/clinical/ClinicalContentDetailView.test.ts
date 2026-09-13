@@ -441,6 +441,67 @@ describe('ClinicalContentDetailView', () => {
     expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3')
   })
 
+  it('ignores a superseded transition resync error when navigation lands while the resync GET is in flight', async () => {
+    const pendingGets: Array<{ version: number; respond: () => void }> = []
+    const postResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) => {
+        const requested = Number(params.version)
+        return new Promise((resolve) => {
+          pendingGets.push({
+            version: requested,
+            respond: () => resolve(HttpResponse.json(
+              detail({
+                version: requested, status: 'IN_REVIEW',
+                englishTitle: requested === 2 ? 'Second version' : 'Third version',
+              }))),
+          })
+        })
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/approve', () =>
+        new Promise((resolve) => {
+          postResolvers.push(() => resolve(HttpResponse.json({ error: 'request_failed' }, { status: 400 })))
+        })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'someone-else@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+    pendingGets[0].respond()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Second version')
+
+    // Reject the review as a non-author reviewer; the catch guard passes (still on v2) and the
+    // error path starts the resync GET for v2.
+    await wrapper.find('[data-testid="approve"]').trigger('click')
+    await wrapper.find('[data-testid="confirm-approve"]').trigger('click')
+    await flushPromises()
+    expect(postResolvers.length).toBe(1)
+    postResolvers[0]()
+    await flushPromises()
+    expect(pendingGets.map((p) => p.version)).toEqual([2, 2])
+
+    // Navigate to v3 while the v2 resync GET is still in flight; the watcher's load supersedes it.
+    await router.push('/clinical/content/ibd-basics/3')
+    await flushPromises()
+    expect(pendingGets.map((p) => p.version)).toEqual([2, 2, 3])
+
+    // The new route's load resolves first and governs the page.
+    pendingGets[2].respond()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Third version')
+
+    // The departed v2 resync resolving last must not surface the old version's error on the v3 page.
+    pendingGets[1].respond()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Third version')
+    expect(wrapper.text()).not.toContain('Something went wrong')
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3')
+  })
+
   it('ignores a double-clicked copy while the first copy is in flight', async () => {
     let copyCalls = 0
     const pending: Array<() => void> = []

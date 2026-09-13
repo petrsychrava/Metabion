@@ -17,10 +17,12 @@ const { t } = useI18n()
 const tab = ref<'edit' | 'preview'>('edit')
 const html = ref('')
 const loadingPreview = ref(false)
+const previewError = ref(false)
 let previewSeq = 0
 
 async function showPreview() {
   tab.value = 'preview'
+  previewError.value = false
   const source = props.modelValue ?? ''
   if (!source.trim()) {
     // Invalidate any in-flight request so a slow response for a previous source cannot
@@ -36,7 +38,10 @@ async function showPreview() {
     const result = await contentEducationApi.previewMarkdown(source)
     if (seq === previewSeq) html.value = result.html
   } catch {
-    if (seq === previewSeq) html.value = ''
+    if (seq === previewSeq) {
+      html.value = ''
+      previewError.value = true
+    }
   } finally {
     if (seq === previewSeq) loadingPreview.value = false
   }
@@ -63,6 +68,9 @@ watch(() => props.modelValue, () => {
               @input="emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"></textarea>
     <div v-else class="prose mt-1 max-w-none rounded border border-gray-300 p-2 dark:border-gray-600">
       <p v-if="loadingPreview" class="text-sm text-gray-500">{{ t('common.loading') }}</p>
+      <p v-else-if="previewError" class="text-sm text-red-600 dark:text-red-400">
+        {{ t('clinical.content.editor.previewError') }}
+      </p>
       <!-- html is rendered by the server-side EducationMarkdownService from staff-authored content -->
       <div v-else v-html="html" />
     </div>

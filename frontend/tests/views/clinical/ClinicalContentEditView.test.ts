@@ -103,6 +103,45 @@ describe('ClinicalContentEditView', () => {
     expect(wrapper.html()).toContain('<h1>Hello</h1>')
   })
 
+  it('surfaces a preview request failure and clears it on a successful retry', async () => {
+    const pending: Array<{ respond: (response: Response) => void }> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/content/education/markdown-preview', () =>
+        new Promise((resolve) => {
+          pending.push({ respond: (response) => resolve(response) })
+        })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    // The English body editor is the first MarkdownEditor on the page.
+    await wrapper.find('[data-testid="markdown-preview-tab"]').trigger('click')
+    await flushPromises()
+    expect(pending).toHaveLength(1)
+
+    pending[0].respond(HttpResponse.json({ error: 'request_failed' }, { status: 500 }))
+    await flushPromises()
+
+    const pane = wrapper.find('div.prose')
+    expect(pane.text()).toContain('The preview could not be rendered. Try again.')
+    // The rendered-html slot stays empty; the error line replaces it rather than riding above it.
+    expect(pane.find('div').exists()).toBe(false)
+
+    // Retry against a healthy server: the error clears and the rendered html takes over.
+    await wrapper.find('[data-testid="markdown-preview-tab"]').trigger('click')
+    await flushPromises()
+    expect(pending).toHaveLength(2)
+    expect(pane.text()).not.toContain('The preview could not be rendered. Try again.')
+
+    pending[1].respond(HttpResponse.json({ html: '<h1>Hello</h1>' }))
+    await flushPromises()
+    expect(wrapper.html()).toContain('<h1>Hello</h1>')
+    expect(wrapper.text()).not.toContain('The preview could not be rendered. Try again.')
+  })
+
   it('keeps the latest source preview when overlapping preview requests resolve out of order', async () => {
     const pending: Array<{ markdown: string; respond: (html: string) => void }> = []
     server.use(
