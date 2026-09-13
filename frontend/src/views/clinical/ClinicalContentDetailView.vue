@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import FieldError from '@/components/FieldError.vue'
@@ -39,6 +39,10 @@ const publishable = computed(() => !!detail.value
   && detail.value.lessons.every((lesson) => !!lesson.title))
 
 let loadSeq = 0
+let unmounted = false
+onUnmounted(() => {
+  unmounted = true
+})
 
 async function load() {
   // Clear first so a failed reload never leaves the previous version rendered under a new URL.
@@ -73,15 +77,16 @@ async function transition(call: () => Promise<EducationManagementDetail>) {
   try {
     const data = await call()
     // Navigation supersedes the mutation: the watcher's load governs the page; assigning here
-    // would render the old version under the new URL.
-    if (slug !== moduleSlug.value || ver !== version.value) return
+    // would render the old version under the new URL. The unmount token covers leaving and
+    // returning, which remounts a fresh page that must not be clobbered by this handler.
+    if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
     detail.value = data
     reviewOpen.value = false
     notes.value = ''
   } catch (e) {
     // Superseded failures belong to the page the user left; the new route's in-flight load
     // governs state and must not be clobbered by this error.
-    if (slug !== moduleSlug.value || ver !== version.value) return
+    if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
     // Another manager may have changed the state; resync the action bar instead of going stale,
     // then surface the error (load() clears any previous message first).
     await load()
@@ -103,8 +108,9 @@ async function copy() {
   const ver = version.value
   try {
     const draft = await contentEducationApi.copyVersion(slug, ver)
-    // Navigation away supersedes the copy: only redirect when the source route is still current.
-    if (slug !== moduleSlug.value || ver !== version.value) return
+    // Navigation away supersedes the copy: only redirect when the source route is still
+    // current and this instance is still mounted.
+    if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
     await router.push(`/clinical/content/${draft.moduleSlug}/${draft.version}`)
   } catch (e) {
     if (slug !== moduleSlug.value || ver !== version.value) return

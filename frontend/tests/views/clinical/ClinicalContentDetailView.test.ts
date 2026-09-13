@@ -584,4 +584,46 @@ describe('ClinicalContentDetailView', () => {
     expect(router.currentRoute.value.path).toBe('/clinical/content')
     expect(getCalls).toBe(1)
   })
+
+  it('ignores a superseded copy result after leaving and returning to the source route', async () => {
+    const postResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) =>
+        HttpResponse.json(detail({ version: Number(params.version) }))),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () =>
+        new Promise((resolve) => {
+          postResolvers.push(() => resolve(HttpResponse.json(detail({ version: 3, status: 'DRAFT' }))))
+        })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+
+    // Start the copy, leave for the list route, then return: the same params satisfy the
+    // departed handler's route-identity check on a fresh instance.
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await flushPromises()
+    expect(postResolvers.length).toBe(1)
+    await router.push('/clinical/content')
+    await flushPromises()
+    wrapper.unmount()
+
+    await router.push('/clinical/content/ibd-basics/2')
+    await flushPromises()
+    const freshPinia = createPinia()
+    mount(ClinicalContentDetailView, { global: { plugins: [freshPinia, i18n, router] } })
+    useAuthStore(freshPinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+
+    // The departed instance's copy must not yank the fresh v2 page into the v3 draft.
+    postResolvers[0]()
+    await flushPromises()
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
+  })
 })

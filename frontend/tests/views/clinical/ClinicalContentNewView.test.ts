@@ -89,6 +89,76 @@ describe('ClinicalContentNewView', () => {
     expect(router.currentRoute.value.path).toBe('/clinical/content')
   })
 
+  it('disables all inputs and the submit button while the create request is pending', async () => {
+    const postResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/content/education/modules', () =>
+        new Promise((resolve) => {
+          postResolvers.push(() => resolve(HttpResponse.json({ moduleSlug: 'ibd-basics', version: 1 })))
+        })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/new')
+    const wrapper = mount(ClinicalContentNewView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="slug"]').setValue('ibd-basics')
+    await wrapper.find('[data-testid="topic"]').setValue('IBD')
+    await wrapper.find('[data-testid="english-title"]').setValue('IBD Basics')
+    await wrapper.find('[data-testid="english-summary"]').setValue('Overview.')
+    await wrapper.find('[data-testid="create"]').trigger('submit')
+    await flushPromises()
+    expect(postResolvers).toHaveLength(1)
+
+    // The request body is captured at submit time, so edits during the POST would be
+    // silently discarded by the redirect; every field locks until the request settles.
+    for (const testid of ['slug', 'topic', 'sort-order', 'english-title', 'english-summary', 'czech-title', 'czech-summary']) {
+      expect(wrapper.find(`[data-testid="${testid}"]`).attributes('disabled')).toBeDefined()
+    }
+    expect(wrapper.find('[data-testid="create"]').attributes('disabled')).toBeDefined()
+
+    postResolvers[0]()
+    await flushPromises()
+  })
+
+  it('ignores a create result that resolves after leaving and returning to the form', async () => {
+    const postResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/content/education/modules', () =>
+        new Promise((resolve) => {
+          postResolvers.push(() => resolve(HttpResponse.json({ moduleSlug: 'ibd-basics', version: 1 })))
+        })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/new')
+    const wrapper = mount(ClinicalContentNewView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="slug"]').setValue('ibd-basics')
+    await wrapper.find('[data-testid="create"]').trigger('submit')
+    await flushPromises()
+    expect(postResolvers).toHaveLength(1)
+
+    // Leave for the list, unmount the old form, and return: the same URL mounts a fresh
+    // instance whose path matches the departed handler's originPath.
+    await router.push('/clinical/content')
+    await flushPromises()
+    wrapper.unmount()
+    await router.push('/clinical/content/new')
+    await flushPromises()
+    mount(ClinicalContentNewView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    // The departed handler must not redirect the fresh instance into the draft.
+    postResolvers[0]()
+    await flushPromises()
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/clinical/content/new')
+  })
+
   it('shows field errors from the server', async () => {
     server.use(
       http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),

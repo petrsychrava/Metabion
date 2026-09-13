@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onUnmounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import FieldError from '@/components/FieldError.vue'
@@ -21,6 +21,11 @@ const form = reactive({
   czechSummary: '',
 })
 const saving = ref(false)
+
+let unmounted = false
+onUnmounted(() => {
+  unmounted = true
+})
 
 // The server persists a Czech module localization only when both values are present, so
 // one-sided input would otherwise be silently dropped after a successful create.
@@ -45,8 +50,8 @@ async function submit() {
       czechSummary: form.czechSummary.trim() || null,
     })
     // The user may have navigated away while the POST was in flight; only redirect
-    // when the creation form is still the current route.
-    if (route.path !== originPath) return
+    // when the creation form is still the current route and this instance is still mounted.
+    if (unmounted || route.path !== originPath) return
     await router.push(`/clinical/content/${created.moduleSlug}/${created.version}/edit`)
   } catch (e) {
     capture(e)
@@ -67,37 +72,37 @@ async function submit() {
 
     <form class="mt-4 space-y-3" @submit.prevent="submit">
       <label class="block text-sm">{{ t('clinical.content.fields.slug') }}
-        <input v-model="form.slug" data-testid="slug" type="text" required
+        <input v-model="form.slug" data-testid="slug" type="text" required :disabled="saving"
                class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
         <FieldError :message="fieldErrors.slug ?? fieldErrors.slugNormalizable" />
       </label>
       <label class="block text-sm">{{ t('clinical.content.fields.topic') }}
-        <input v-model="form.topic" data-testid="topic" type="text" required
+        <input v-model="form.topic" data-testid="topic" type="text" required :disabled="saving"
                class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
         <FieldError :message="fieldErrors.topic" />
       </label>
       <label class="block text-sm">{{ t('clinical.content.fields.sortOrder') }}
-        <input v-model.number="form.sortOrder" data-testid="sort-order" type="number" min="1" required
+        <input v-model.number="form.sortOrder" data-testid="sort-order" type="number" min="1" required :disabled="saving"
                class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
         <FieldError :message="fieldErrors.sortOrder" />
       </label>
       <label class="block text-sm">{{ t('clinical.content.fields.englishTitle') }}
-        <input v-model="form.englishTitle" data-testid="english-title" type="text" required
+        <input v-model="form.englishTitle" data-testid="english-title" type="text" required :disabled="saving"
                class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
         <FieldError :message="fieldErrors.englishTitle" />
       </label>
       <label class="block text-sm">{{ t('clinical.content.fields.englishSummary') }}
-        <textarea v-model="form.englishSummary" data-testid="english-summary" rows="3" required
+        <textarea v-model="form.englishSummary" data-testid="english-summary" rows="3" required :disabled="saving"
                   class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"></textarea>
         <FieldError :message="fieldErrors.englishSummary" />
       </label>
       <label class="block text-sm">{{ t('clinical.content.fields.czechTitle') }}
-        <input v-model="form.czechTitle" data-testid="czech-title" type="text"
+        <input v-model="form.czechTitle" data-testid="czech-title" type="text" :disabled="saving"
                class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
         <FieldError :message="fieldErrors.czechTitle" />
       </label>
       <label class="block text-sm">{{ t('clinical.content.fields.czechSummary') }}
-        <textarea v-model="form.czechSummary" data-testid="czech-summary" rows="3"
+        <textarea v-model="form.czechSummary" data-testid="czech-summary" rows="3" :disabled="saving"
                   class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"></textarea>
         <FieldError :message="fieldErrors.czechSummary" />
       </label>

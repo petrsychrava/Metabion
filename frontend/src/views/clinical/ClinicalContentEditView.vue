@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
@@ -21,6 +21,11 @@ const lessons = ref<EducationContentLessonRow[]>([])
 const loading = ref(true)
 const saving = ref(false)
 const initialSnapshot = ref('')
+
+let unmounted = false
+onUnmounted(() => {
+  unmounted = true
+})
 
 function snapshot(): unknown {
   return form.value ? { ...form.value, lessons: lessons.value } : null
@@ -96,15 +101,15 @@ async function save() {
     await contentEducationApi.updateVersion(moduleSlug, version, { ...form.value, lessons: lessons.value.filter(rowPopulated) })
     initialSnapshot.value = submitted
     // The author may have left while the PUT was in flight; only redirect when this
-    // editor is still the current route.
-    if (route.path !== originPath) return
+    // editor is still the current route and this instance is still mounted.
+    if (unmounted || route.path !== originPath) return
     await router.push(`/clinical/content/${moduleSlug}/${version}`)
   } catch (e) {
     // Only a state-change 400 (no field errors) means the version left the editable state; resync then.
     // Validation 400s carry a fields map: keep the author's edits intact and just show the banner.
     if (e instanceof ApiError && e.status === 400 && !e.fields) {
       // A departed editor must not fire a resync GET for the route the user already left.
-      if (route.path !== originPath) return
+      if (unmounted || route.path !== originPath) return
       await load()
       capture(e)
     } else {

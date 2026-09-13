@@ -303,6 +303,61 @@ describe('ClinicalContentEditView', () => {
     confirmSpy.mockRestore()
   })
 
+  it('does not redirect a freshly remounted editor after a mid-save leave-and-return', async () => {
+    const putResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', () =>
+        new Promise((resolve) => {
+          putResolvers.push(() => resolve(HttpResponse.json({})))
+        })),
+    )
+    // Mount through <router-view> so the dirty-guarded departure unmounts the editor; returning
+    // to the same URL remounts a fresh editor instance that the old handler must not hijack.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/clinical',
+          component: { template: '<router-view />' },
+          children: [
+            { path: 'content', component: { template: '<div />' } },
+            { path: 'content/:moduleSlug/:version/edit', component: ClinicalContentEditView, props: true },
+            { path: 'content/:moduleSlug/:version', component: { template: '<div />' } },
+          ],
+        },
+      ],
+    })
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    await router.isReady()
+    const wrapper = mount({ template: '<router-view />' }, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('textarea[data-testid="markdown-source"]').setValue('# Hello edited')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(putResolvers).toHaveLength(1)
+
+    // The author confirms through the dirty guard and leaves while the PUT is still in flight.
+    await router.push('/clinical/content')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/clinical/content')
+
+    // Returning to the same URL mounts a fresh editor instance at the departed originPath.
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
+
+    putResolvers[0]()
+    await flushPromises()
+    await flushPromises()
+
+    // The departed editor's save must not push the fresh instance on to the detail route.
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
+    confirmSpy.mockRestore()
+  })
+
   it('skips the resync GET when a fieldless 400 arrives after the author left', async () => {
     let formLoads = 0
     const putResolvers: Array<() => void> = []

@@ -149,4 +149,35 @@ describe('ClinicalContentListView', () => {
     // The pending copy must not redirect into the draft once the list is no longer current.
     expect(router.currentRoute.value.path).toBe('/clinical/content/new')
   })
+
+  it('ignores a copy result that resolves after leaving and returning to the list', async () => {
+    const resolvers: Array<() => void> = []
+    server.use(
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () =>
+        new Promise((resolve) => {
+          resolvers.push(() => resolve(HttpResponse.json({ moduleSlug: 'ibd-basics', version: 3 })))
+        })),
+    )
+    const { wrapper, router } = await mountAt('/clinical/content')
+    await wrapper.find('[data-testid="copy-version"]').trigger('click')
+    await flushPromises()
+    expect(resolvers).toHaveLength(1)
+
+    // Leave for the new-module route, unmount the old list, and return: the same URL mounts
+    // a fresh list instance whose path matches the departed handler's originPath.
+    await router.push('/clinical/content/new')
+    await flushPromises()
+    wrapper.unmount()
+    await router.push('/clinical/content')
+    await flushPromises()
+    mount(ClinicalContentListView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    // The departed handler must not redirect the fresh list into the draft.
+    resolvers[0]()
+    await flushPromises()
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/clinical/content')
+  })
 })

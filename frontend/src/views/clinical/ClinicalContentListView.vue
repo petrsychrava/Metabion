@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { contentEducationApi } from '@/api/contentEducation'
@@ -15,6 +15,11 @@ const { message, capture, clear } = useApiError()
 const items = ref<EducationManagementSummary[]>([])
 const loading = ref(true)
 const copying = ref(false)
+
+let unmounted = false
+onUnmounted(() => {
+  unmounted = true
+})
 const moduleFilter = ref('')
 const statusFilter = ref<EducationContentStatus | ''>('')
 
@@ -57,8 +62,9 @@ async function copy(item: EducationManagementSummary) {
   const originPath = route.path
   try {
     const draft = await contentEducationApi.copyVersion(item.moduleSlug, item.version)
-    // The handler outlives unmount: only redirect into the draft while the list is still current.
-    if (route.path !== originPath) return
+    // The handler outlives unmount: only redirect into the draft while the list is still
+    // current and this instance is still mounted.
+    if (unmounted || route.path !== originPath) return
     await router.push(`/clinical/content/${draft.moduleSlug}/${draft.version}`)
   } catch (e) {
     capture(e)
