@@ -626,4 +626,50 @@ describe('ClinicalContentDetailView', () => {
 
     expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
   })
+
+  it('ignores a rejected copy resync after leaving and returning to the source route', async () => {
+    let getCalls = 0
+    const postResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) => {
+        getCalls += 1
+        return HttpResponse.json(detail({ version: Number(params.version) }))
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () =>
+        new Promise((resolve, reject) => {
+          postResolvers.push(() => reject(HttpResponse.json({ error: 'request_failed' }, { status: 500 })))
+        })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+    expect(getCalls).toBe(1)
+
+    // Leave, unmount the old instance, and return on a fresh one (same params).
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await flushPromises()
+    await router.push('/clinical/content')
+    await flushPromises()
+    wrapper.unmount()
+    await router.push('/clinical/content/ibd-basics/2')
+    await flushPromises()
+    const freshPinia = createPinia()
+    const fresh = mount(ClinicalContentDetailView, { global: { plugins: [freshPinia, i18n, router] } })
+    useAuthStore(freshPinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+    expect(getCalls).toBe(2)
+
+    // The departed instance's rejection must not fire its resync load() against the fresh page.
+    postResolvers[0]()
+    await flushPromises()
+    await flushPromises()
+
+    expect(getCalls).toBe(2)
+    expect(fresh.text()).not.toContain('Something went wrong')
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
+  })
 })

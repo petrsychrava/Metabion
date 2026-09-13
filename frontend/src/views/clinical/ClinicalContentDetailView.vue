@@ -113,7 +113,7 @@ async function copy() {
     if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
     await router.push(`/clinical/content/${draft.moduleSlug}/${draft.version}`)
   } catch (e) {
-    if (slug !== moduleSlug.value || ver !== version.value) return
+    if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
     await load()
     capture(e)
   } finally {
