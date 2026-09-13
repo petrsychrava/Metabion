@@ -173,7 +173,86 @@
     "alreadyReviewed": "This submission has already been reviewed.",
     "crpMgL": "CRP (mg/L)",
     "labNotes": "Lab notes",
-    "reviewedBy": "Reviewed by"
+    "reviewedBy": "Reviewed by",
+    "content": {
+      "nav": "Content",
+      "title": "Content management",
+      "newModule": "New module",
+      "newVersion": "New version",
+      "empty": "No module versions yet.",
+      "filterModule": "Module",
+      "filterStatus": "Status",
+      "allStatuses": "All statuses",
+      "colModule": "Module",
+      "colVersion": "Version",
+      "colStatus": "Status",
+      "colTitle": "Title",
+      "colAuthor": "Author",
+      "colCreated": "Created",
+      "status": {
+        "DRAFT": "Draft",
+        "IN_REVIEW": "In review",
+        "APPROVED": "Approved",
+        "PUBLISHED": "Published",
+        "ARCHIVED": "Archived",
+        "REJECTED": "Rejected"
+      },
+      "detailTitle": "Module version",
+      "backToList": "All versions",
+      "lessonsTitle": "Lessons",
+      "reviewNotes": "Review notes",
+      "notesPlaceholder": "Notes for the author (optional)",
+      "reviewBypassed": "Review bypassed",
+      "notPublishable": "Publishing requires at least one lesson with an English localization, plus an English module title.",
+      "meta": {
+        "author": "Author",
+        "reviewedBy": "Reviewer",
+        "publishedBy": "Published by",
+        "createdAt": "Created",
+        "submittedAt": "Submitted",
+        "reviewedAt": "Reviewed",
+        "publishedAt": "Published"
+      },
+      "actions": {
+        "submitReview": "Submit for review",
+        "approve": "Approve",
+        "reject": "Reject",
+        "publish": "Publish",
+        "copy": "Copy as new version",
+        "edit": "Edit content"
+      },
+      "fields": {
+        "slug": "Slug",
+        "topic": "Topic",
+        "sortOrder": "Sort order",
+        "englishTitle": "English title",
+        "englishSummary": "English summary",
+        "czechTitle": "Czech title",
+        "czechSummary": "Czech summary",
+        "englishBody": "English body",
+        "czechBody": "Czech body"
+      },
+      "create": {
+        "title": "New education module",
+        "submit": "Create and edit content"
+      },
+      "editor": {
+        "title": "Edit content",
+        "lessons": "Lessons",
+        "addLesson": "Add lesson",
+        "lessonSlug": "Lesson slug",
+        "editTab": "Edit",
+        "previewTab": "Preview",
+        "previewError": "The preview could not be rendered. Try again.",
+        "markdownHint": "Markdown: # heading, **bold**, *italic*, - list item, [link](https://…)",
+        "unsaved": "You have unsaved changes. Leave anyway?",
+        "lessonIncomplete": "Populated lessons need a slug, a sort order of 1 or more, and an English title, summary, and body. Czech fields are all-or-none: fill the Czech title, summary, and body, or clear all three.",
+        "czechIncomplete": "Czech fields are all-or-none: fill the Czech title, summary, and body, or clear all three.",
+        "czechModuleIncomplete": "Czech module title and summary must both be filled or both be empty.",
+        "stateConflict": "The version is no longer editable because its status changed. Return to the version detail to see the current state."
+      },
+      "czechLabel": "Czech"
+    }
   },
   "trends": {
     "symptomScore": "Symptom score",

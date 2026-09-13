@@ -14,8 +14,10 @@ import com.metabion.domain.User;
 import com.metabion.dto.EducationContentForm;
 import com.metabion.dto.EducationLessonResponse;
 import com.metabion.dto.EducationLessonUpsertRequest;
+import com.metabion.dto.EducationManagedLessonResponse;
 import com.metabion.dto.EducationManagementDetailResponse;
 import com.metabion.dto.EducationManagementSummaryResponse;
+import com.metabion.dto.EducationMarkdownPreviewResponse;
 import com.metabion.dto.EducationModuleDetailResponse;
 import com.metabion.dto.EducationModuleRequest;
 import com.metabion.dto.EducationModuleSummaryResponse;
@@ -262,11 +264,20 @@ public class EducationContentService {
         var version = versionOrNotFound(moduleSlug, versionNumber);
         fetchPublishedVersionGraph(List.of(version));
         requireEditable(version);
+        if (!version.getModule().getSlug().equals(normalizeSlug(form.getSlug()))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Module slug does not match the request path");
+        }
 
         replaceModuleLocalizations(version, form);
         replaceLessons(version, form);
 
         return managementDetail(versions.save(version));
+    }
+
+    public EducationMarkdownPreviewResponse previewMarkdown(Authentication authentication, String source) {
+        var user = currentUser(authentication);
+        requireContentManager(user);
+        return new EducationMarkdownPreviewResponse(markdown.render(trim(source)));
     }
 
     public EducationModuleDetailResponse getPublishedModule(Authentication authentication, String moduleSlug) {
@@ -616,6 +627,8 @@ public class EducationContentService {
 
     EducationManagementDetailResponse managementDetail(EducationModuleVersion version) {
         var module = version.getModule();
+        var english = localization(version, EducationLanguage.EN);
+        var czech = localization(version, EducationLanguage.CS);
         return new EducationManagementDetailResponse(
                 module.getSlug(),
                 module.getTopic(),
@@ -624,6 +637,10 @@ public class EducationContentService {
                 version.getStatus(),
                 version.getReviewNotes(),
                 version.isReviewBypassed(),
+                english == null ? null : english.getTitle(),
+                english == null ? null : english.getSummary(),
+                czech == null ? null : czech.getTitle(),
+                czech == null ? null : czech.getSummary(),
                 email(version.getAuthor()),
                 email(version.getReviewedBy()),
                 email(version.getPublishedBy()),
@@ -631,8 +648,8 @@ public class EducationContentService {
                 version.getSubmittedAt(),
                 version.getReviewedAt(),
                 version.getPublishedAt(),
-                version.getLessons().stream()
-                        .map(this::lessonResponse)
+                orderedLessons(version).stream()
+                        .map(this::managedLessonResponse)
                         .toList());
     }
 
@@ -660,6 +677,22 @@ public class EducationContentService {
 
     EducationLessonResponse lessonResponse(EducationLessonVersion lesson) {
         return lessonResponse(lesson, EducationLanguage.EN, null);
+    }
+
+    private EducationManagedLessonResponse managedLessonResponse(EducationLessonVersion lesson) {
+        var english = localization(lesson, EducationLanguage.EN);
+        var czech = localization(lesson, EducationLanguage.CS);
+        return new EducationManagedLessonResponse(
+                lesson.getLesson().getSlug(),
+                lesson.getSortOrder(),
+                english == null ? null : english.getTitle(),
+                english == null ? null : english.getSummary(),
+                english == null ? null : english.getBodyMarkdown(),
+                english == null ? null : markdown.render(english.getBodyMarkdown()),
+                czech == null ? null : czech.getTitle(),
+                czech == null ? null : czech.getSummary(),
+                czech == null ? null : czech.getBodyMarkdown(),
+                czech == null ? null : markdown.render(czech.getBodyMarkdown()));
     }
 
     EducationLessonResponse lessonResponse(

@@ -348,6 +348,95 @@ export interface EducationModuleDetail extends Omit<EducationModuleSummary, neve
   lessons: EducationLesson[]
 }
 
+// Education content management (staff)
+export type EducationContentStatus = 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'PUBLISHED' | 'ARCHIVED' | 'REJECTED'
+
+export interface EducationManagementSummary {
+  moduleSlug: string
+  topic: string
+  version: number
+  status: EducationContentStatus
+  title: string | null
+  authorEmail: string | null
+  reviewedByEmail: string | null
+  publishedByEmail: string | null
+  createdAt: string
+  submittedAt: string | null
+  reviewedAt: string | null
+  publishedAt: string | null
+}
+
+export interface EducationManagedLesson {
+  lessonSlug: string
+  sortOrder: number
+  title: string | null
+  summary: string | null
+  bodyMarkdown: string | null
+  bodyHtml: string | null
+  czechTitle: string | null
+  czechSummary: string | null
+  czechBodyMarkdown: string | null
+  czechBodyHtml: string | null
+}
+
+export interface EducationManagementDetail {
+  moduleSlug: string
+  topic: string
+  sortOrder: number
+  version: number
+  status: EducationContentStatus
+  reviewNotes: string | null
+  reviewBypassed: boolean
+  englishTitle: string | null
+  englishSummary: string | null
+  czechTitle: string | null
+  czechSummary: string | null
+  authorEmail: string | null
+  reviewedByEmail: string | null
+  publishedByEmail: string | null
+  createdAt: string
+  submittedAt: string | null
+  reviewedAt: string | null
+  publishedAt: string | null
+  lessons: EducationManagedLesson[]
+}
+
+export interface EducationContentLessonRow {
+  slug: string
+  sortOrder: number
+  englishTitle: string
+  englishSummary: string
+  englishBodyMarkdown: string
+  czechTitle: string
+  czechSummary: string
+  czechBodyMarkdown: string
+}
+
+export interface EducationContentFormData {
+  slug: string
+  topic: string
+  sortOrder: number
+  englishTitle: string
+  englishSummary: string
+  czechTitle: string
+  czechSummary: string
+  lessons: EducationContentLessonRow[]
+}
+
+export interface EducationModuleCreateRequest {
+  slug: string
+  topic: string
+  sortOrder: number
+  englishTitle: string
+  englishSummary: string
+  czechTitle: string | null
+  czechSummary: string | null
+}
+
+export interface MarkdownPreviewResponse {
+  html: string
+}
+
 // Red flags (mirror src/main/java/com/metabion/dto/redflag/)
 export type RedFlagSeverity = 'ROUTINE_REVIEW' | 'URGENT_REVIEW' | 'EMERGENCY'
 export type RedFlagSourceType = 'SYMPTOM_CHECK_IN' | 'LAB_RESULT_SET'

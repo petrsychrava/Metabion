@@ -1,10 +1,9 @@
 package com.metabion.controller.web;
 
 import com.metabion.domain.EducationContentStatus;
-import com.metabion.domain.EducationLanguage;
 import com.metabion.domain.RoleName;
 import com.metabion.dto.EducationContentForm;
-import com.metabion.dto.EducationLessonResponse;
+import com.metabion.dto.EducationManagedLessonResponse;
 import com.metabion.dto.EducationManagementDetailResponse;
 import com.metabion.dto.EducationManagementSummaryResponse;
 import com.metabion.service.EducationContentService;
@@ -328,6 +327,10 @@ class WebEducationContentControllerTest {
                 EducationContentStatus.DRAFT,
                 null,
                 false,
+                "IBD basics",
+                "A short overview.",
+                "Zaklady IBD",
+                "Cesky souhrn",
                 "author@example.com",
                 null,
                 null,
@@ -335,16 +338,7 @@ class WebEducationContentControllerTest {
                 null,
                 null,
                 null,
-                List.of(new EducationLessonResponse(
-                        "what-is-ibd",
-                        1,
-                        EducationLanguage.EN,
-                        EducationLanguage.EN,
-                        "What is IBD?",
-                        "A short introduction.",
-                        "**IBD**",
-                        "<p><strong>IBD</strong></p>",
-                        null)));
+                List.of(managedLesson()));
     }
 
     private EducationManagementDetailResponse inReviewDetailResponse() {
@@ -356,6 +350,10 @@ class WebEducationContentControllerTest {
                 EducationContentStatus.IN_REVIEW,
                 null,
                 false,
+                "IBD basics",
+                "A short overview.",
+                "Zaklady IBD",
+                "Cesky souhrn",
                 "author@example.com",
                 null,
                 null,
@@ -363,16 +361,7 @@ class WebEducationContentControllerTest {
                 Instant.parse("2026-06-11T10:00:00Z"),
                 null,
                 null,
-                List.of(new EducationLessonResponse(
-                        "what-is-ibd",
-                        1,
-                        EducationLanguage.EN,
-                        EducationLanguage.EN,
-                        "What is IBD?",
-                        "A short introduction.",
-                        "**IBD**",
-                        "<p><strong>IBD</strong></p>",
-                        null)));
+                List.of(managedLesson()));
     }
 
     private EducationManagementDetailResponse approvedDetailResponse() {
@@ -384,6 +373,10 @@ class WebEducationContentControllerTest {
                 EducationContentStatus.APPROVED,
                 "approved",
                 false,
+                "IBD basics",
+                "A short overview.",
+                "Zaklady IBD",
+                "Cesky souhrn",
                 "author@example.com",
                 "reviewer@example.com",
                 null,
@@ -391,16 +384,21 @@ class WebEducationContentControllerTest {
                 Instant.parse("2026-06-11T10:00:00Z"),
                 Instant.parse("2026-06-12T10:00:00Z"),
                 null,
-                List.of(new EducationLessonResponse(
-                        "what-is-ibd",
-                        1,
-                        EducationLanguage.EN,
-                        EducationLanguage.EN,
-                        "What is IBD?",
-                        "A short introduction.",
-                        "**IBD**",
-                        "<p><strong>IBD</strong></p>",
-                        null)));
+                List.of(managedLesson()));
+    }
+
+    private EducationManagedLessonResponse managedLesson() {
+        return new EducationManagedLessonResponse(
+                "what-is-ibd",
+                1,
+                "What is IBD?",
+                "A short introduction.",
+                "**IBD**",
+                "<p><strong>IBD</strong></p>",
+                "Co je IBD?",
+                "Kratky uvod.",
+                "Cesky text lekce",
+                "<p>Cesky text lekce</p>");
     }
 
     private EducationContentForm fullForm() {

@@ -68,6 +68,11 @@ public class EducationContentForm {
         }
     }
 
+    @AssertTrue(message = "module slug must contain at least one letter or digit")
+    public boolean isSlugNormalizable() {
+        return blank(slug) || !normalizeSlugForUniqueness(slug).isBlank();
+    }
+
     @AssertTrue(message = "lesson slugs must be unique")
     public boolean isLessonSlugsUnique() {
         var seen = new HashSet<String>();
@@ -95,6 +100,12 @@ public class EducationContentForm {
             }
         }
         return true;
+    }
+
+    @AssertTrue(message = "czechTitle and czechSummary must both be provided or both be omitted")
+    public boolean isCzechModuleLocalizationComplete() {
+        var provided = (blank(czechTitle) ? 0 : 1) + (blank(czechSummary) ? 0 : 1);
+        return provided == 0 || provided == 2;
     }
 
     public String getSlug() {
@@ -232,6 +243,19 @@ public class EducationContentForm {
                     && !blank(englishTitle)
                     && !blank(englishSummary)
                     && !blank(englishBodyMarkdown));
+        }
+
+        @AssertTrue(message = "lesson slug must contain at least one letter or digit")
+        public boolean isSlugNormalizable() {
+            return blank(slug) || !normalizeSlugForUniqueness(slug).isBlank();
+        }
+
+        @AssertTrue(message = "czechTitle, czechSummary, and czechBodyMarkdown must all be provided or all be omitted")
+        public boolean isCzechLessonLocalizationComplete() {
+            var provided = (blank(czechTitle) ? 0 : 1)
+                    + (blank(czechSummary) ? 0 : 1)
+                    + (blank(czechBodyMarkdown) ? 0 : 1);
+            return provided == 0 || provided == 3;
         }
 
         public String getSlug() {
