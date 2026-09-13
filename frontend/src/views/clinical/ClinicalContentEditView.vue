@@ -105,13 +105,14 @@ async function save() {
     if (unmounted || route.path !== originPath) return
     await router.push(`/clinical/content/${moduleSlug}/${version}`)
   } catch (e) {
-    // Only a state-change 400 (no field errors) means the version left the editable state; resync then.
-    // Validation 400s carry a fields map: keep the author's edits intact and just show the banner.
+    // Only a state-change 400 (no field errors) means the version left the editable state; bail
+    // to the detail page, which shows the current status and valid actions. Validation 400s carry
+    // a fields map: keep the author's edits intact and just show the banner.
     if (e instanceof ApiError && e.status === 400 && !e.fields) {
-      // A departed editor must not fire a resync GET for the route the user already left.
+      // A departed editor must not yank the author back; the push IS the bail-out departure, so
+      // nothing else runs after it.
       if (unmounted || route.path !== originPath) return
-      await load()
-      capture(e)
+      await router.push(`/clinical/content/${moduleSlug}/${version}`)
     } else {
       capture(e)
     }

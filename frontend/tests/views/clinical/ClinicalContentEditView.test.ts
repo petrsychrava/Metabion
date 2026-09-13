@@ -551,33 +551,48 @@ describe('ClinicalContentEditView', () => {
     expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
   })
 
-  it('resyncs the form from the server when a fieldless 400 means the state raced', async () => {
+  it('bails to the detail page when a fieldless 400 means the state raced', async () => {
     let formLoads = 0
     server.use(
       http.get('/api/content/education/modules/ibd-basics/versions/2/form', () => {
         formLoads += 1
-        return HttpResponse.json(formLoads === 1 ? form() : { ...form(), englishTitle: 'Resynced Title' })
+        return HttpResponse.json(form())
       }),
       http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
       http.put('/api/content/education/modules/ibd-basics/versions/2', () =>
         HttpResponse.json({ error: 'request_failed' }, { status: 400 })),
     )
-    const router = makeRouter()
+    // Mount through <router-view> so the dirty guard runs on the bail-out navigation; the
+    // author confirms, keeping agency over edits they can no longer save.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/clinical',
+          component: { template: '<router-view />' },
+          children: [
+            { path: 'content/:moduleSlug/:version/edit', component: ClinicalContentEditView, props: true },
+            { path: 'content/:moduleSlug/:version', component: { template: '<div />' } },
+          ],
+        },
+      ],
+    })
     await router.push('/clinical/content/ibd-basics/2/edit')
-    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await router.isReady()
+    const wrapper = mount({ template: '<router-view />' }, { global: { plugins: [createPinia(), i18n, router] } })
     await flushPromises()
 
     await wrapper.find('input[data-testid="english-title"]').setValue('Edited Title')
     await wrapper.find('form').trigger('submit.prevent')
     await flushPromises()
 
-    // Only a fieldless 400 (state race, e.g. the version left the editable state) resyncs:
-    // the form is replaced by the freshly loaded state and the error is surfaced.
-    expect(formLoads).toBe(2)
-    expect((wrapper.find('input[data-testid="english-title"]').element as HTMLInputElement).value)
-      .toBe('Resynced Title')
-    expect(wrapper.text()).toContain('Something went wrong')
-    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
+    // A fieldless 400 (state race, e.g. the version left the editable state) bails to the detail
+    // page, which shows the current status and valid actions: no resync GET, no stranded form.
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(formLoads).toBe(1)
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
+    confirmSpy.mockRestore()
   })
 
   it('omits a freshly added blank lesson row from the save payload', async () => {

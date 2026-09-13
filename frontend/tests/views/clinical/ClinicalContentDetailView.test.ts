@@ -249,6 +249,38 @@ describe('ClinicalContentDetailView', () => {
     expect(wrapper.text()).toContain('must not exceed 2000 characters')
   })
 
+  it('closes the review panel when a rejected review resyncs to a non-reviewable status', async () => {
+    let getCalls = 0
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/2', () => {
+        getCalls += 1
+        return HttpResponse.json(detail(getCalls === 1 ? { status: 'IN_REVIEW' } : { status: 'APPROVED' }))
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/approve', () =>
+        HttpResponse.json({ error: 'request_failed' }, { status: 400 })),
+    )
+    const wrapper = await mountAt(undefined, 'someone-else@example.com', ['PHYSICIAN'])
+    await flushPromises()
+
+    // Open the review panel and enter notes, then confirm: the POST rejects (state race) and the
+    // resync GET returns the version already APPROVED by someone else.
+    await wrapper.find('[data-testid="approve"]').trigger('click')
+    await wrapper.find('[data-testid="review-notes"]').setValue('stale notes')
+    expect(wrapper.find('[data-testid="confirm-approve"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="confirm-approve"]').trigger('click')
+    await flushPromises()
+
+    expect(getCalls).toBe(2)
+    expect(wrapper.find('[data-testid="status-badge"]').text()).toContain('Approved')
+    // The panel had been open, but the resynced status is not reviewable: it closes along with
+    // its confirm buttons, and the error still surfaces on the version that failed.
+    expect(wrapper.find('[data-testid="review-notes"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="confirm-approve"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="confirm-reject"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Something went wrong')
+  })
+
   it('ignores concurrent lifecycle clicks while a transition is in flight', async () => {
     let calls = 0
     const pending: Array<() => void> = []

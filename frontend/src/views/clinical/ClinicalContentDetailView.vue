@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import FieldError from '@/components/FieldError.vue'
 import { contentEducationApi } from '@/api/contentEducation'
+import { ApiError } from '@/api/http'
 import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime } from '@/utils/dateTime'
@@ -93,6 +94,14 @@ async function transition(call: () => Promise<EducationManagementDetail>) {
     // The route can change while the resync GET is in flight; only surface the error on the
     // version that actually failed.
     if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
+    // The resync may have moved the version out of a reviewable state; close an open review
+    // panel so its confirm buttons cannot submit stale notes against the new status. A
+    // field-validation 400 keeps the panel open: the failure does not change the state, and the
+    // reviewer's notes stay editable for a fix-up.
+    if (!(e instanceof ApiError && e.fields)) {
+      reviewOpen.value = false
+      notes.value = ''
+    }
     capture(e)
   } finally {
     transitioning.value = false
@@ -239,7 +248,9 @@ onMounted(load)
         </router-link>
       </div>
 
-      <div v-if="reviewOpen" class="mt-4 rounded border p-3">
+      <!-- Defensive: the resync after a failed transition may move the version out of a
+           reviewable state while the panel is open. -->
+      <div v-if="reviewOpen && canReview" class="mt-4 rounded border p-3">
         <label class="text-sm">{{ t('clinical.content.reviewNotes') }}
           <textarea v-model="notes" data-testid="review-notes" rows="3" maxlength="2000"
                     :placeholder="t('clinical.content.notesPlaceholder')"
