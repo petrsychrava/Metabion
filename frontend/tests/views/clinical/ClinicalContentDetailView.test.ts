@@ -474,8 +474,8 @@ describe('ClinicalContentDetailView', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Second version')
 
-    // Reject the review as a non-author reviewer; the catch guard passes (still on v2) and the
-    // error path starts the resync GET for v2.
+    // Approve as a non-author reviewer; the POST rejects, the catch guard passes (still on v2),
+    // and the error path starts the resync GET for v2.
     await wrapper.find('[data-testid="approve"]').trigger('click')
     await wrapper.find('[data-testid="confirm-approve"]').trigger('click')
     await flushPromises()
