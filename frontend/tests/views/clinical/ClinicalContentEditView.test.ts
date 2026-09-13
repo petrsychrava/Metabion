@@ -397,7 +397,7 @@ describe('ClinicalContentEditView', () => {
     confirmSpy.mockRestore()
   })
 
-  it('skips the resync GET when a fieldless 400 arrives after the author left', async () => {
+  it('skips the bail-out navigation when a fieldless 400 arrives after the author left', async () => {
     let formLoads = 0
     const putResolvers: Array<() => void> = []
     server.use(
@@ -443,7 +443,7 @@ describe('ClinicalContentEditView', () => {
     putResolvers[0]()
     await flushPromises()
 
-    // The state-race resync belongs to the departed editor: no junk GET, no error clobber.
+    // The bail-out belongs to the live editor only: no redirect, no junk GET, no error clobber.
     expect(formLoads).toBe(1)
     expect(router.currentRoute.value.path).toBe('/clinical/content')
     confirmSpy.mockRestore()
