@@ -16,6 +16,7 @@ function makeRouter() {
     history: createMemoryHistory(),
     routes: [
       { path: '/clinical/content/new', component: ClinicalContentNewView },
+      { path: '/clinical/content', component: { template: '<div />' } },
       { path: '/clinical/content/:moduleSlug/:version/edit', component: { template: '<div />' } },
     ],
   })
@@ -55,6 +56,37 @@ describe('ClinicalContentNewView', () => {
       czechSummary: null,
     })
     expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/1/edit')
+  })
+
+  it('ignores a create result after navigating away from the form', async () => {
+    const postResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/content/education/modules', () =>
+        new Promise((resolve) => {
+          postResolvers.push(() => resolve(HttpResponse.json({ moduleSlug: 'ibd-basics', version: 1 })))
+        })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/new')
+    const wrapper = mount(ClinicalContentNewView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="slug"]').setValue('ibd-basics')
+    await wrapper.find('[data-testid="create"]').trigger('submit')
+    await flushPromises()
+    expect(postResolvers).toHaveLength(1)
+
+    // Leave for the list route before the POST settles, then let it resolve.
+    await router.push('/clinical/content')
+    await flushPromises()
+
+    postResolvers[0]()
+    await flushPromises()
+    await flushPromises()
+
+    // A completed background create must not override the user's later navigation.
+    expect(router.currentRoute.value.path).toBe('/clinical/content')
   })
 
   it('shows field errors from the server', async () => {

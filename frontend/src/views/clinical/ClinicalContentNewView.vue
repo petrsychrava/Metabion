@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import FieldError from '@/components/FieldError.vue'
 import { contentEducationApi } from '@/api/contentEducation'
 import { useApiError } from '@/composables/useApiError'
 
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
 const { message, fieldErrors, capture, clear } = useApiError()
 
@@ -32,6 +33,7 @@ async function submit() {
   if (czechModuleIncomplete.value) return
   saving.value = true
   clear()
+  const originPath = route.path
   try {
     const created = await contentEducationApi.createModule({
       slug: form.slug.trim(),
@@ -42,6 +44,9 @@ async function submit() {
       czechTitle: form.czechTitle.trim() || null,
       czechSummary: form.czechSummary.trim() || null,
     })
+    // The user may have navigated away while the POST was in flight; only redirect
+    // when the creation form is still the current route.
+    if (route.path !== originPath) return
     await router.push(`/clinical/content/${created.moduleSlug}/${created.version}/edit`)
   } catch (e) {
     capture(e)
