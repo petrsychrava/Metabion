@@ -21,6 +21,7 @@ const lessons = ref<EducationContentLessonRow[]>([])
 const loading = ref(true)
 const saving = ref(false)
 const initialSnapshot = ref('')
+const stateConflict = ref(false)
 
 let unmounted = false
 onUnmounted(() => {
@@ -90,7 +91,7 @@ async function load() {
 }
 
 async function save() {
-  if (!form.value || saveDisabled.value) return
+  if (!form.value || saveDisabled.value || stateConflict.value) return
   saving.value = true
   clear()
   // Freeze the snapshot of exactly what is being submitted; edits made while the PUT is in
@@ -109,10 +110,16 @@ async function save() {
     // to the detail page, which shows the current status and valid actions. Validation 400s carry
     // a fields map: keep the author's edits intact and just show the banner.
     if (e instanceof ApiError && e.status === 400 && !e.fields) {
-      // A departed editor must not yank the author back; the push IS the bail-out departure, so
-      // nothing else runs after it.
+      // A departed editor must not yank the author back; the push IS the bail-out departure.
       if (unmounted || route.path !== originPath) return
       await router.push(`/clinical/content/${moduleSlug}/${version}`)
+      if (unmounted || route.path !== originPath) return
+      // The dirty guard vetoed the forced exit (Vue Router aborts without throwing). The
+      // version can no longer be saved, so lock the editor and surface the state change
+      // instead of leaving a dead, enabled form whose every save fails silently.
+      stateConflict.value = true
+      capture(e)
+      message.value = t('clinical.content.editor.stateConflict')
     } else {
       capture(e)
     }
@@ -157,19 +164,19 @@ onMounted(load)
                  class="mt-1 w-full rounded border border-gray-300 px-2 py-1 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800" />
         </label>
         <label class="text-sm">{{ t('clinical.content.fields.englishTitle') }}
-          <input v-model="form.englishTitle" data-testid="english-title" type="text"
+          <input v-model="form.englishTitle" data-testid="english-title" type="text" :disabled="stateConflict"
                  class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
         </label>
         <label class="text-sm">{{ t('clinical.content.fields.czechTitle') }}
-          <input v-model="form.czechTitle" data-testid="czech-title" type="text"
+          <input v-model="form.czechTitle" data-testid="czech-title" type="text" :disabled="stateConflict"
                  class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
         </label>
         <label class="text-sm sm:col-span-2">{{ t('clinical.content.fields.englishSummary') }}
-          <textarea v-model="form.englishSummary" data-testid="english-summary" rows="2"
+          <textarea v-model="form.englishSummary" data-testid="english-summary" rows="2" :disabled="stateConflict"
                     class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"></textarea>
         </label>
         <label class="text-sm sm:col-span-2">{{ t('clinical.content.fields.czechSummary') }}
-          <textarea v-model="form.czechSummary" data-testid="czech-summary" rows="2"
+          <textarea v-model="form.czechSummary" data-testid="czech-summary" rows="2" :disabled="stateConflict"
                     class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"></textarea>
         </label>
         <p v-if="czechModuleIncomplete" data-testid="czech-module-incomplete"
@@ -183,14 +190,15 @@ onMounted(load)
            class="space-y-3 rounded border p-3">
         <div class="flex items-end justify-between gap-3">
           <label class="flex-1 text-sm">{{ t('clinical.content.editor.lessonSlug') }}
-            <input v-model="lesson.slug" :data-testid="`lesson-slug-${index}`" type="text"
+            <input v-model="lesson.slug" :data-testid="`lesson-slug-${index}`" type="text" :disabled="stateConflict"
                    class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
           </label>
           <label class="w-28 text-sm">{{ t('clinical.content.fields.sortOrder') }}
             <input v-model.number="lesson.sortOrder" :data-testid="`lesson-sort-${index}`" type="number" min="1"
+                   :disabled="stateConflict"
                    class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
           </label>
-          <button type="button" :data-testid="`remove-lesson-${index}`"
+          <button type="button" :data-testid="`remove-lesson-${index}`" :disabled="stateConflict"
                   class="rounded border px-2 py-1 text-sm" @click="lessons.splice(index, 1)">
             {{ t('common.remove') }}
           </button>
@@ -205,40 +213,45 @@ onMounted(load)
           <div>
             <label class="text-sm">{{ t('clinical.content.fields.englishTitle') }}
               <input v-model="lesson.englishTitle" :data-testid="`english-title-${index}`" type="text"
+                     :disabled="stateConflict"
                      class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
             </label>
             <label class="mt-2 block text-sm">{{ t('clinical.content.fields.englishSummary') }}
               <textarea v-model="lesson.englishSummary" :data-testid="`english-summary-${index}`" rows="2"
+                        :disabled="stateConflict"
                         class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"></textarea>
             </label>
             <div class="mt-2">
               <p class="text-sm">{{ t('clinical.content.fields.englishBody') }}</p>
-              <MarkdownEditor v-model="lesson.englishBodyMarkdown" />
+              <MarkdownEditor v-model="lesson.englishBodyMarkdown" :disabled="stateConflict" />
             </div>
           </div>
           <div>
             <label class="text-sm">{{ t('clinical.content.fields.czechTitle') }}
               <input v-model="lesson.czechTitle" :data-testid="`czech-title-${index}`" type="text"
+                     :disabled="stateConflict"
                      class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
             </label>
             <label class="mt-2 block text-sm">{{ t('clinical.content.fields.czechSummary') }}
               <textarea v-model="lesson.czechSummary" :data-testid="`czech-summary-${index}`" rows="2"
+                        :disabled="stateConflict"
                         class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"></textarea>
             </label>
             <div class="mt-2">
               <p class="text-sm">{{ t('clinical.content.fields.czechBody') }}</p>
-              <MarkdownEditor v-model="lesson.czechBodyMarkdown" />
+              <MarkdownEditor v-model="lesson.czechBodyMarkdown" :disabled="stateConflict" />
             </div>
           </div>
         </div>
       </div>
 
-      <button type="button" data-testid="add-lesson" class="rounded border px-3 py-1 text-sm" @click="addLesson">
+      <button type="button" data-testid="add-lesson" class="rounded border px-3 py-1 text-sm"
+              :disabled="stateConflict" @click="addLesson">
         {{ t('clinical.content.editor.addLesson') }}
       </button>
 
       <div class="flex gap-2">
-        <button type="submit" data-testid="save" :disabled="saving || saveDisabled"
+        <button type="submit" data-testid="save" :disabled="saving || saveDisabled || stateConflict"
                 class="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50">
           {{ t('common.save') }}
         </button>

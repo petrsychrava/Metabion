@@ -248,7 +248,8 @@
         "unsaved": "You have unsaved changes. Leave anyway?",
         "lessonIncomplete": "Populated lessons need a slug, a sort order of 1 or more, and an English title, summary, and body. Czech fields are all-or-none: fill the Czech title, summary, and body, or clear all three.",
         "czechIncomplete": "Czech fields are all-or-none: fill the Czech title, summary, and body, or clear all three.",
-        "czechModuleIncomplete": "Czech module title and summary must both be filled or both be empty."
+        "czechModuleIncomplete": "Czech module title and summary must both be filled or both be empty.",
+        "stateConflict": "The version is no longer editable because its status changed. Return to the version detail to see the current state."
       },
       "czechLabel": "Czech"
     }
