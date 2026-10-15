@@ -752,4 +752,72 @@ describe('ClinicalContentEditView', () => {
     expect(topic.classes()).toContain('disabled:opacity-60')
     expect(sortOrder.classes()).toContain('disabled:opacity-60')
   })
+
+  it('reloads the editor when the route parameters change', async () => {
+    let v2Loads = 0
+    let v3Loads = 0
+    let putUrl: string | null = null
+    let putBody: unknown
+    const v3Form = {
+      ...form(),
+      englishTitle: 'IBD Basics v3',
+      lessons: [{ ...form().lessons[0], slug: 'intro-v3' }],
+    }
+    server.use(
+      http.get('/api/content/education/modules/ibd-basics/versions/2/form', () => {
+        v2Loads += 1
+        return HttpResponse.json(form())
+      }),
+      http.get('/api/content/education/modules/ibd-basics/versions/3/form', () => {
+        v3Loads += 1
+        return HttpResponse.json(v3Form)
+      }),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/3', async ({ request }) => {
+        putUrl = new URL(request.url).pathname
+        putBody = await request.json()
+        return HttpResponse.json({})
+      }),
+    )
+    // Mount through <router-view> so the same editor instance is reused across the two edit URLs.
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/clinical',
+          component: { template: '<router-view />' },
+          children: [
+            { path: 'content/:moduleSlug/:version/edit', component: ClinicalContentEditView, props: true },
+            { path: 'content/:moduleSlug/:version', component: { template: '<div />' } },
+          ],
+        },
+      ],
+    })
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    await router.isReady()
+    const wrapper = mount({ template: '<router-view />' }, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    expect((wrapper.find('input[data-testid="english-title"]').element as HTMLInputElement).value)
+      .toBe('IBD Basics')
+
+    await router.push('/clinical/content/ibd-basics/3/edit')
+    await flushPromises()
+    await flushPromises()
+
+    // The v3 form replaces the v2 form under the new URL; the v2 values are gone.
+    expect((wrapper.find('input[data-testid="english-title"]').element as HTMLInputElement).value)
+      .toBe('IBD Basics v3')
+    expect((wrapper.find('input[data-testid="lesson-slug-0"]').element as HTMLInputElement).value)
+      .toBe('intro-v3')
+    expect(v2Loads).toBe(1)
+    expect(v3Loads).toBe(1)
+
+    await wrapper.find('input[data-testid="english-title"]').setValue('IBD Basics v3 edited')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(putUrl).toBe('/api/content/education/modules/ibd-basics/versions/3')
+    expect(putBody).toEqual({ ...v3Form, englishTitle: 'IBD Basics v3 edited' })
+  })
 })

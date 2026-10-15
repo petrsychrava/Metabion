@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
@@ -13,8 +13,8 @@ const route = useRoute()
 const router = useRouter()
 const { message, fieldErrors, capture, clear } = useApiError()
 
-const moduleSlug = route.params.moduleSlug as string
-const version = Number(route.params.version)
+const moduleSlug = computed(() => route.params.moduleSlug as string)
+const version = computed(() => Number(route.params.version))
 
 const form = ref<EducationContentFormData | null>(null)
 const lessons = ref<EducationContentLessonRow[]>([])
@@ -23,6 +23,7 @@ const saving = ref(false)
 const initialSnapshot = ref('')
 const stateConflict = ref(false)
 
+let loadSeq = 0
 let unmounted = false
 onUnmounted(() => {
   unmounted = true
@@ -76,17 +77,26 @@ function addLesson() {
 }
 
 async function load() {
+  // Clear first so a failed reload never leaves the previous version's form rendered under a new
+  // URL. The sequence guard keeps an older, slower response from clobbering a newer load: only the
+  // latest load touches form/lessons/loading, and only its failure surfaces.
+  const seq = ++loadSeq
+  const slug = moduleSlug.value
+  const ver = version.value
+  form.value = null
   clear()
   loading.value = true
+  stateConflict.value = false
   try {
-    const data = await contentEducationApi.getVersionForm(moduleSlug, version)
+    const data = await contentEducationApi.getVersionForm(slug, ver)
+    if (seq !== loadSeq || unmounted) return
     form.value = data
     lessons.value = data.lessons.map((row) => ({ ...row }))
     initialSnapshot.value = JSON.stringify(snapshot())
   } catch (e) {
-    capture(e)
+    if (seq === loadSeq && !unmounted) capture(e)
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -99,12 +109,13 @@ async function save() {
   const submitted = JSON.stringify(snapshot())
   const originPath = route.path
   try {
-    await contentEducationApi.updateVersion(moduleSlug, version, { ...form.value, lessons: lessons.value.filter(rowPopulated) })
-    initialSnapshot.value = submitted
-    // The author may have left while the PUT was in flight; only redirect when this
-    // editor is still the current route and this instance is still mounted.
+    await contentEducationApi.updateVersion(moduleSlug.value, version.value, { ...form.value, lessons: lessons.value.filter(rowPopulated) })
+    // The author may have left while the PUT was in flight; only stamp the snapshot and redirect
+    // when this editor is still the current route and this instance is still mounted, so a stale
+    // completion cannot mark the new version's form clean with the old version's submitted state.
     if (unmounted || route.path !== originPath) return
-    await router.push(`/clinical/content/${moduleSlug}/${version}`)
+    initialSnapshot.value = submitted
+    await router.push(`/clinical/content/${moduleSlug.value}/${version.value}`)
   } catch (e) {
     // Only a state-change 400 (no field errors) means the version left the editable state; bail
     // to the detail page, which shows the current status and valid actions. Validation 400s carry
@@ -112,7 +123,7 @@ async function save() {
     if (e instanceof ApiError && e.status === 400 && !e.fields) {
       // A departed editor must not yank the author back; the push IS the bail-out departure.
       if (unmounted || route.path !== originPath) return
-      await router.push(`/clinical/content/${moduleSlug}/${version}`)
+      await router.push(`/clinical/content/${moduleSlug.value}/${version.value}`)
       if (unmounted || route.path !== originPath) return
       // The dirty guard vetoed the forced exit (Vue Router aborts without throwing). The
       // version can no longer be saved, so lock the editor and surface the state change
@@ -131,6 +142,12 @@ async function save() {
 onBeforeRouteLeave(() => {
   if (dirty.value && !window.confirm(t('clinical.content.editor.unsaved'))) return false
   return true
+})
+
+watch(() => [route.params.moduleSlug, route.params.version], ([slug]) => {
+  // Leaving the edit route leaves the params empty; nothing to reload.
+  if (!slug) return
+  void load()
 })
 
 onMounted(load)
