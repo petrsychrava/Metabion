@@ -867,4 +867,52 @@ describe('ClinicalContentEditView', () => {
     expect(putUrl).toBe('/api/content/education/modules/ibd-basics/versions/3')
     expect(putBody).toEqual({ ...v3Form, englishTitle: 'IBD Basics v3 edited' })
   })
+
+  it('asks before reloading a dirty editor on route parameter changes', async () => {
+    let v3Loads = 0
+    const v3Form = {
+      ...form(),
+      englishTitle: 'IBD Basics v3',
+    }
+    server.use(
+      http.get('/api/content/education/modules/ibd-basics/versions/3', () =>
+        HttpResponse.json({ ...managementDetail(), version: 3 })),
+      http.get('/api/content/education/modules/ibd-basics/versions/3/form', () => {
+        v3Loads += 1
+        return HttpResponse.json(v3Form)
+      }),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/clinical',
+          component: { template: '<router-view />' },
+          children: [
+            { path: 'content/:moduleSlug/:version/edit', component: ClinicalContentEditView, props: true },
+            { path: 'content/:moduleSlug/:version', component: { template: '<div />' } },
+          ],
+        },
+      ],
+    })
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    await router.isReady()
+    const wrapper = mount({ template: '<router-view />' }, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('input[data-testid="english-title"]').setValue('Unsaved title')
+    await router.push('/clinical/content/ibd-basics/3/edit')
+    await flushPromises()
+
+    try {
+      expect(confirmSpy).toHaveBeenCalled()
+      expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
+      expect(v3Loads).toBe(0)
+      expect((wrapper.find('input[data-testid="english-title"]').element as HTMLInputElement).value)
+        .toBe('Unsaved title')
+    } finally {
+      confirmSpy.mockRestore()
+    }
+  })
 })

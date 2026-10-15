@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import { contentEducationApi } from '@/api/contentEducation'
@@ -147,6 +147,13 @@ async function save() {
 
 onBeforeRouteLeave(() => {
   if (dirty.value && !window.confirm(t('clinical.content.editor.unsaved'))) return false
+  return true
+})
+
+onBeforeRouteUpdate((to) => {
+  const parametersChanged = to.params.moduleSlug !== route.params.moduleSlug
+    || to.params.version !== route.params.version
+  if (parametersChanged && dirty.value && !window.confirm(t('clinical.content.editor.unsaved'))) return false
   return true
 })
 
