@@ -290,6 +290,47 @@ class EducationContentServiceLifecycleTest {
                 .isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
+    @Test
+    void updateDraftRejectsTopicMismatchWithBadRequest() {
+        var staff = user(1L, "staff@example.com", RoleName.NUTRITION_SPECIALIST);
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        var module = new EducationModule("ibd-basics", "IBD", 10);
+        var version = new EducationModuleVersion(module, 1, staff);
+        when(versions.findByModuleSlugAndVersion("ibd-basics", 1)).thenReturn(Optional.of(version));
+
+        var form = new EducationContentForm();
+        form.setSlug("ibd-basics");
+        form.setTopic("Nutrition");
+        form.setEnglishTitle("Title");
+        form.setEnglishSummary("Summary");
+
+        assertThatThrownBy(() -> service.updateDraft(auth("staff@example.com"), "ibd-basics", 1, form))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void updateDraftRejectsSortOrderMismatchWithBadRequest() {
+        var staff = user(1L, "staff@example.com", RoleName.NUTRITION_SPECIALIST);
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        var module = new EducationModule("ibd-basics", "IBD", 10);
+        var version = new EducationModuleVersion(module, 1, staff);
+        when(versions.findByModuleSlugAndVersion("ibd-basics", 1)).thenReturn(Optional.of(version));
+
+        var form = new EducationContentForm();
+        form.setSlug("ibd-basics");
+        form.setTopic("IBD");
+        form.setSortOrder(30);
+        form.setEnglishTitle("Title");
+        form.setEnglishSummary("Summary");
+
+        assertThatThrownBy(() -> service.updateDraft(auth("staff@example.com"), "ibd-basics", 1, form))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
     private EducationModuleRequest moduleRequest(String slug) {
         return new EducationModuleRequest(slug, "IBD", 10, "Title", "Summary", null, null);
     }
@@ -334,8 +375,8 @@ class EducationContentServiceLifecycleTest {
     private EducationContentForm editForm() {
         var form = new EducationContentForm();
         form.setSlug("editable-module");
-        form.setTopic("Nutrition");
-        form.setSortOrder(30);
+        form.setTopic("IBD");
+        form.setSortOrder(10);
         form.setEnglishTitle("Updated module");
         form.setEnglishSummary("Updated summary");
         form.setCzechTitle("Upraveny modul");

@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.util.ArrayList;
@@ -39,7 +40,7 @@ public class EducationContentForm {
     private String czechSummary;
 
     @Valid
-    private List<LessonRow> lessons = new ArrayList<>();
+    private List<@NotNull LessonRow> lessons = new ArrayList<>();
 
     public EducationModuleRequest toModuleRequest() {
         return new EducationModuleRequest(
@@ -54,7 +55,7 @@ public class EducationContentForm {
 
     public List<EducationLessonUpsertRequest> toLessonRequests() {
         return lessonsOrEmpty().stream()
-                .filter(row -> !row.isBlank())
+                .filter(row -> row != null && !row.isBlank())
                 .map(LessonRow::toRequest)
                 .toList();
     }
@@ -77,7 +78,7 @@ public class EducationContentForm {
     public boolean isLessonSlugsUnique() {
         var seen = new HashSet<String>();
         for (var row : lessonsOrEmpty()) {
-            if (row.isBlank() || blank(row.getSlug())) {
+            if (row == null || row.isBlank() || blank(row.getSlug())) {
                 continue;
             }
             var slug = normalizeSlugForUniqueness(row.getSlug());
@@ -92,7 +93,7 @@ public class EducationContentForm {
     public boolean isLessonSortOrdersUnique() {
         var seen = new HashSet<Integer>();
         for (var row : lessonsOrEmpty()) {
-            if (row.isBlank() || row.getSortOrder() < 1) {
+            if (row == null || row.isBlank() || row.getSortOrder() < 1) {
                 continue;
             }
             if (!seen.add(row.getSortOrder())) {

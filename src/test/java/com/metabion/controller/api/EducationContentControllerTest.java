@@ -31,6 +31,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -289,6 +291,25 @@ class EducationContentControllerTest {
                 .andExpect(jsonPath("$.error").value("validation_failed"))
                 .andExpect(jsonPath("$.fields['lessons[0].slugNormalizable']")
                         .value("lesson slug must contain at least one letter or digit"));
+
+        verify(educationContentService, never())
+                .updateDraft(any(), eq("ibd-basics"), eq(2), any(EducationContentForm.class));
+    }
+
+    @Test
+    void updateDraftRejectsNullLessonElementWithFieldError() throws Exception {
+        var form = baseForm();
+        form.setLessons(new java.util.ArrayList<>(
+                java.util.Collections.singletonList((EducationContentForm.LessonRow) null)));
+
+        mvc.perform(put("/api/content/education/modules/ibd-basics/versions/2")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(form)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("validation_failed"))
+                .andExpect(jsonPath("$.fields.keys()").value(hasItem(containsString("lessons[0]"))));
 
         verify(educationContentService, never())
                 .updateDraft(any(), eq("ibd-basics"), eq(2), any(EducationContentForm.class));

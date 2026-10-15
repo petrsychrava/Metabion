@@ -267,6 +267,10 @@ public class EducationContentService {
         if (!version.getModule().getSlug().equals(normalizeSlug(form.getSlug()))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Module slug does not match the request path");
         }
+        if (!version.getModule().getTopic().equals(form.getTopic())
+                || version.getModule().getSortOrder() != form.getSortOrder()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Module topic and sort order cannot be changed");
+        }
 
         replaceModuleLocalizations(version, form);
         replaceLessons(version, form);

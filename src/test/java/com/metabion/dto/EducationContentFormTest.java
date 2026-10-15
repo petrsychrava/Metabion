@@ -69,6 +69,26 @@ class EducationContentFormTest {
         }
     }
 
+    @Test
+    void nullLessonRowsFailFormValidationWithFieldError() {
+        var form = new EducationContentForm();
+        form.setSlug("hydration");
+        form.setTopic("IBD");
+        form.setEnglishTitle("Hydration");
+        form.setEnglishSummary("Hydration basics");
+        form.setLessons(new java.util.ArrayList<>(
+                java.util.Collections.singletonList((EducationContentForm.LessonRow) null)));
+
+        try (var validatorFactory = Validation.buildDefaultValidatorFactory()) {
+            var violations = validatorFactory.getValidator().validate(form);
+
+            assertThat(violations)
+                    .extracting(violation -> violation.getPropertyPath().toString())
+                    .anySatisfy(path -> assertThat(path).contains("lessons[0]"));
+        }
+        assertThat(form.toLessonRequests()).isEmpty();
+    }
+
     private EducationContentForm.LessonRow completeLesson(String slug, int sortOrder) {
         var lesson = new EducationContentForm.LessonRow();
         lesson.setSlug(slug);
