@@ -88,6 +88,12 @@ async function load() {
   loading.value = true
   stateConflict.value = false
   try {
+    const detail = await contentEducationApi.getVersion(slug, ver)
+    if (seq !== loadSeq || unmounted) return
+    if (detail.status !== 'DRAFT' && detail.status !== 'REJECTED') {
+      await router.replace(`/clinical/content/${slug}/${ver}`)
+      return
+    }
     const data = await contentEducationApi.getVersionForm(slug, ver)
     if (seq !== loadSeq || unmounted) return
     form.value = data

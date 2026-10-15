@@ -30,6 +30,30 @@ function form() {
   }
 }
 
+function managementDetail(status = 'DRAFT') {
+  return {
+    moduleSlug: 'ibd-basics',
+    topic: 'IBD',
+    sortOrder: 10,
+    version: 2,
+    status,
+    reviewNotes: null,
+    reviewBypassed: false,
+    englishTitle: 'IBD Basics',
+    englishSummary: 'Overview.',
+    czechTitle: 'Základy',
+    czechSummary: 'Přehled.',
+    authorEmail: 'author@example.com',
+    reviewedByEmail: null,
+    publishedByEmail: null,
+    createdAt: '2026-09-11T20:36:42Z',
+    submittedAt: null,
+    reviewedAt: null,
+    publishedAt: null,
+    lessons: [],
+  }
+}
+
 function makeRouter() {
   return createRouter({
     history: createMemoryHistory(),
@@ -44,8 +68,29 @@ describe('ClinicalContentEditView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     server.use(
+      http.get('/api/content/education/modules/ibd-basics/versions/2', () =>
+        HttpResponse.json(managementDetail())),
       http.get('/api/content/education/modules/ibd-basics/versions/2/form', () => HttpResponse.json(form())),
     )
+  })
+
+  it('redirects before loading a non-editable version form', async () => {
+    let formLoads = 0
+    server.use(
+      http.get('/api/content/education/modules/ibd-basics/versions/2', () =>
+        HttpResponse.json(managementDetail('IN_REVIEW'))),
+      http.get('/api/content/education/modules/ibd-basics/versions/2/form', () => {
+        formLoads += 1
+        return HttpResponse.json(form())
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
+    expect(formLoads).toBe(0)
   })
 
   it('loads the form and saves the full draft', async () => {
@@ -768,6 +813,8 @@ describe('ClinicalContentEditView', () => {
         v2Loads += 1
         return HttpResponse.json(form())
       }),
+      http.get('/api/content/education/modules/ibd-basics/versions/3', () =>
+        HttpResponse.json({ ...managementDetail(), version: 3 })),
       http.get('/api/content/education/modules/ibd-basics/versions/3/form', () => {
         v3Loads += 1
         return HttpResponse.json(v3Form)
