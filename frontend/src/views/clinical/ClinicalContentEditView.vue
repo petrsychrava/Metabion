@@ -86,6 +86,7 @@ async function load() {
   form.value = null
   clear()
   loading.value = true
+  saving.value = false
   stateConflict.value = false
   try {
     const detail = await contentEducationApi.getVersion(slug, ver)
@@ -106,6 +107,10 @@ async function load() {
   }
 }
 
+function saveIsCurrent(generation: number, originPath: string): boolean {
+  return !unmounted && generation === loadSeq && route.path === originPath
+}
+
 async function save() {
   if (!form.value || saveDisabled.value || stateConflict.value) return
   saving.value = true
@@ -114,12 +119,13 @@ async function save() {
   // flight must stay dirty so the leave guard prompts instead of silently discarding them.
   const submitted = JSON.stringify(snapshot())
   const originPath = route.path
+  const saveGeneration = loadSeq
   try {
     await contentEducationApi.updateVersion(moduleSlug.value, version.value, { ...form.value, lessons: lessons.value.filter(rowPopulated) })
     // The author may have left while the PUT was in flight; only stamp the snapshot and redirect
     // when this editor is still the current route and this instance is still mounted, so a stale
     // completion cannot mark the new version's form clean with the old version's submitted state.
-    if (unmounted || route.path !== originPath) return
+    if (!saveIsCurrent(saveGeneration, originPath)) return
     initialSnapshot.value = submitted
     await router.push(`/clinical/content/${moduleSlug.value}/${version.value}`)
   } catch (e) {
@@ -128,9 +134,9 @@ async function save() {
     // a fields map: keep the author's edits intact and just show the banner.
     if (e instanceof ApiError && e.status === 400 && !e.fields) {
       // A departed editor must not yank the author back; the push IS the bail-out departure.
-      if (unmounted || route.path !== originPath) return
+      if (!saveIsCurrent(saveGeneration, originPath)) return
       await router.push(`/clinical/content/${moduleSlug.value}/${version.value}`)
-      if (unmounted || route.path !== originPath) return
+      if (!saveIsCurrent(saveGeneration, originPath)) return
       // The dirty guard vetoed the forced exit (Vue Router aborts without throwing). The
       // version can no longer be saved, so lock the editor and surface the state change
       // instead of leaving a dead, enabled form whose every save fails silently.
@@ -139,11 +145,11 @@ async function save() {
       message.value = t('clinical.content.editor.stateConflict')
     } else {
       // A stale save must not surface its error on a newer editor route or instance.
-      if (unmounted || route.path !== originPath) return
+      if (!saveIsCurrent(saveGeneration, originPath)) return
       capture(e)
     }
   } finally {
-    saving.value = false
+    if (saveGeneration === loadSeq) saving.value = false
   }
 }
 
