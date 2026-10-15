@@ -424,6 +424,61 @@ describe('ClinicalContentDetailView', () => {
     expect(wrapper.text()).not.toContain('Something went wrong')
   })
 
+  it('ignores a stale transition result after revisiting the same detail route', async () => {
+    const pendingGets: Array<{ version: number; respond: (title: string) => void }> = []
+    const postResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) => {
+        const requested = Number(params.version)
+        return new Promise((resolve) => {
+          pendingGets.push({
+            version: requested,
+            respond: (title) => resolve(HttpResponse.json(
+              detail({ version: requested, englishTitle: title }))),
+          })
+        })
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/submit-review', () =>
+        new Promise((resolve) => {
+          postResolvers.push(() => resolve(HttpResponse.json(
+            detail({ status: 'IN_REVIEW', englishTitle: 'Stale transition response' }))))
+        })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+    expect(pendingGets.map((pending) => pending.version)).toEqual([2])
+    pendingGets[0].respond('Initial second version')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Initial second version')
+
+    await wrapper.find('[data-testid="submit-review"]').trigger('click')
+    await flushPromises()
+    expect(postResolvers.length).toBe(1)
+
+    await router.push('/clinical/content/ibd-basics/3')
+    await flushPromises()
+    await router.push('/clinical/content/ibd-basics/2')
+    await flushPromises()
+    expect(pendingGets.map((pending) => pending.version)).toEqual([2, 3, 2])
+
+    // The revisited v2 load establishes the current page generation before the old POST settles.
+    pendingGets[2].respond('Freshly revisited second version')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Freshly revisited second version')
+
+    postResolvers[0]()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Freshly revisited second version')
+    expect(wrapper.find('[data-testid="module-english"]').text()).not.toContain('Stale transition response')
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
+  })
+
   it('ignores a superseded transition failure when navigation lands before the POST settles', async () => {
     const pendingGets: Array<{ version: number; respond: () => void }> = []
     const postResolvers: Array<() => void> = []

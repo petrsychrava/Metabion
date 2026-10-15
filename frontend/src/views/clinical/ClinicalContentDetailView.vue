@@ -45,7 +45,7 @@ onUnmounted(() => {
   unmounted = true
 })
 
-async function load() {
+async function load(): Promise<number> {
   // Clear first so a failed reload never leaves the previous version rendered under a new URL.
   // The sequence guard keeps an older, slower response from clobbering a newer load: only the
   // latest load touches detail/loading, and only its failure surfaces.
@@ -57,7 +57,7 @@ async function load() {
   loading.value = true
   try {
     const data = await contentEducationApi.getVersion(slug, ver)
-    if (seq !== loadSeq) return
+    if (seq !== loadSeq) return seq
     detail.value = data
     openLesson.value ??= data.lessons[0]?.lessonSlug ?? null
   } catch (e) {
@@ -65,6 +65,7 @@ async function load() {
   } finally {
     if (seq === loadSeq) loading.value = false
   }
+  return seq
 }
 
 async function transition(call: () => Promise<EducationManagementDetail>) {
@@ -75,25 +76,30 @@ async function transition(call: () => Promise<EducationManagementDetail>) {
   clear()
   const slug = moduleSlug.value
   const ver = version.value
+  const generation = loadSeq
+  const isCurrent = () => !unmounted
+    && generation === loadSeq
+    && slug === moduleSlug.value
+    && ver === version.value
   try {
     const data = await call()
     // Navigation supersedes the mutation: the watcher's load governs the page; assigning here
     // would render the old version under the new URL. The unmount token covers leaving and
     // returning, which remounts a fresh page that must not be clobbered by this handler.
-    if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
+    if (!isCurrent()) return
     detail.value = data
     reviewOpen.value = false
     notes.value = ''
   } catch (e) {
     // Superseded failures belong to the page the user left; the new route's in-flight load
     // governs state and must not be clobbered by this error.
-    if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
+    if (!isCurrent()) return
     // Another manager may have changed the state; resync the action bar instead of going stale,
     // then surface the error (load() clears any previous message first).
-    await load()
+    const resyncGeneration = await load()
     // The route can change while the resync GET is in flight; only surface the error on the
     // version that actually failed.
-    if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
+    if (unmounted || resyncGeneration !== loadSeq || slug !== moduleSlug.value || ver !== version.value) return
     // The resync may have moved the version out of a reviewable state; close an open review
     // panel so its confirm buttons cannot submit stale notes against the new status. A
     // field-validation 400 keeps the panel open: the failure does not change the state, and the
