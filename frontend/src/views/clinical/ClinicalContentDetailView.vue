@@ -124,18 +124,23 @@ async function copy() {
   clear()
   const slug = moduleSlug.value
   const ver = version.value
+  const generation = loadSeq
+  const isCurrent = () => !unmounted
+    && generation === loadSeq
+    && slug === moduleSlug.value
+    && ver === version.value
   try {
     const draft = await contentEducationApi.copyVersion(slug, ver)
     // Navigation away supersedes the copy: only redirect when the source route is still
     // current and this instance is still mounted.
-    if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
+    if (!isCurrent()) return
     await router.push(`/clinical/content/${draft.moduleSlug}/${draft.version}`)
   } catch (e) {
-    if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
-    await load()
+    if (!isCurrent()) return
+    const resyncGeneration = await load()
     // The route can change while the resync GET is in flight; only surface the error on the
     // version that actually failed.
-    if (unmounted || slug !== moduleSlug.value || ver !== version.value) return
+    if (unmounted || resyncGeneration !== loadSeq || slug !== moduleSlug.value || ver !== version.value) return
     capture(e)
   } finally {
     transitioning.value = false

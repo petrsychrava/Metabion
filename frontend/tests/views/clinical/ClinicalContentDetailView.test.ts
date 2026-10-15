@@ -775,6 +775,117 @@ describe('ClinicalContentDetailView', () => {
     expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
   })
 
+  it('ignores a stale copy result after revisiting the same detail route', async () => {
+    const pendingGets: Array<{ version: number; respond: () => void }> = []
+    const postResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) => {
+        const requested = Number(params.version)
+        return new Promise((resolve) => {
+          pendingGets.push({
+            version: requested,
+            respond: () => resolve(HttpResponse.json(
+              detail({
+                version: requested,
+                englishTitle: requested === 2 ? 'Freshly revisited version' : 'Other version',
+              }))),
+          })
+        })
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () =>
+        new Promise((resolve) => {
+          postResolvers.push(() => resolve(HttpResponse.json(
+            detail({ version: 3, englishTitle: 'Stale copy result' }))))
+        })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+    pendingGets[0].respond()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Freshly revisited version')
+
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await flushPromises()
+    expect(postResolvers.length).toBe(1)
+
+    await router.push('/clinical/content/ibd-basics/3')
+    await flushPromises()
+    await router.push('/clinical/content/ibd-basics/2')
+    await flushPromises()
+    expect(pendingGets.map((pending) => pending.version)).toEqual([2, 3, 2])
+
+    pendingGets[2].respond()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Freshly revisited version')
+
+    postResolvers[0]()
+    await flushPromises()
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Freshly revisited version')
+    expect(wrapper.text()).not.toContain('Stale copy result')
+  })
+
+  it('ignores a stale copy failure after revisiting the same detail route', async () => {
+    const pendingGets: Array<{ version: number; respond: () => void }> = []
+    const postResolvers: Array<() => void> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) => {
+        const requested = Number(params.version)
+        return new Promise((resolve) => {
+          pendingGets.push({
+            version: requested,
+            respond: () => resolve(HttpResponse.json(
+              detail({
+                version: requested,
+                englishTitle: requested === 2 ? 'Freshly revisited version' : 'Other version',
+              }))),
+          })
+        })
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () =>
+        new Promise((resolve) => {
+          postResolvers.push(() => resolve(HttpResponse.json(
+            { error: 'request_failed' }, { status: 500 })))
+        })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+    pendingGets[0].respond()
+    await flushPromises()
+
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await flushPromises()
+    expect(postResolvers.length).toBe(1)
+
+    await router.push('/clinical/content/ibd-basics/3')
+    await flushPromises()
+    await router.push('/clinical/content/ibd-basics/2')
+    await flushPromises()
+    expect(pendingGets.map((pending) => pending.version)).toEqual([2, 3, 2])
+
+    pendingGets[2].respond()
+    await flushPromises()
+    postResolvers[0]()
+    await flushPromises()
+
+    expect(pendingGets.map((pending) => pending.version)).toEqual([2, 3, 2])
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Freshly revisited version')
+    expect(wrapper.text()).not.toContain('Something went wrong')
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
+  })
+
   it('ignores a rejected copy resync after leaving and returning to the source route', async () => {
     let getCalls = 0
     const postResolvers: Array<() => void> = []
