@@ -915,4 +915,64 @@ describe('ClinicalContentEditView', () => {
       confirmSpy.mockRestore()
     }
   })
+
+  it('ignores failed saves after switching editor routes', async () => {
+    const putRejectors: Array<() => void> = []
+    const v3Form = {
+      ...form(),
+      englishTitle: 'IBD Basics v3',
+    }
+    server.use(
+      http.get('/api/content/education/modules/ibd-basics/versions/3', () =>
+        HttpResponse.json({ ...managementDetail(), version: 3 })),
+      http.get('/api/content/education/modules/ibd-basics/versions/3/form', () =>
+        HttpResponse.json(v3Form)),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', () =>
+        new Promise((resolve) => {
+          putRejectors.push(() => resolve(HttpResponse.json(
+            { error: 'validation_failed', fields: { englishTitle: 'old save failed' } },
+            { status: 400 },
+          )))
+        })),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/clinical',
+          component: { template: '<router-view />' },
+          children: [
+            { path: 'content/:moduleSlug/:version/edit', component: ClinicalContentEditView, props: true },
+            { path: 'content/:moduleSlug/:version', component: { template: '<div />' } },
+          ],
+        },
+      ],
+    })
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    await router.isReady()
+    const wrapper = mount({ template: '<router-view />' }, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('input[data-testid="english-title"]').setValue('Edited v2')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(putRejectors).toHaveLength(1)
+
+    await router.push('/clinical/content/ibd-basics/3/edit')
+    await flushPromises()
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3/edit')
+    expect((wrapper.find('input[data-testid="english-title"]').element as HTMLInputElement).value)
+      .toBe('IBD Basics v3')
+
+    putRejectors[0]()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="field-errors"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Please check the highlighted fields.')
+    expect(wrapper.text()).not.toContain('old save failed')
+    confirmSpy.mockRestore()
+  })
 })

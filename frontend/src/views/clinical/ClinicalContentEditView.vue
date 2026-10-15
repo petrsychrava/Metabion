@@ -138,6 +138,8 @@ async function save() {
       capture(e)
       message.value = t('clinical.content.editor.stateConflict')
     } else {
+      // A stale save must not surface its error on a newer editor route or instance.
+      if (unmounted || route.path !== originPath) return
       capture(e)
     }
   } finally {
