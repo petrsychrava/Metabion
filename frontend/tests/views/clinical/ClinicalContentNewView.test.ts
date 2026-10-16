@@ -179,6 +179,26 @@ describe('ClinicalContentNewView', () => {
     expect(wrapper.text()).toContain('must be unique')
   })
 
+  it('shows a specific message when the module slug is already used', async () => {
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.post('/api/content/education/modules', () =>
+        HttpResponse.json({ error: 'education_module_slug_taken' }, { status: 400 })),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/new')
+    const wrapper = mount(ClinicalContentNewView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="slug"]').setValue('ibd-basics')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('A module with this slug already exists. Choose a different slug.')
+    expect((wrapper.find('[data-testid="slug"]').element as HTMLInputElement).value).toBe('ibd-basics')
+    expect(router.currentRoute.value.path).toBe('/clinical/content/new')
+  })
+
   it('maps a slugNormalizable rejection onto the slug field', async () => {
     server.use(
       http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),

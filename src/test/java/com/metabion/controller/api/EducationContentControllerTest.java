@@ -6,6 +6,7 @@ import com.metabion.dto.EducationContentForm;
 import com.metabion.dto.EducationMarkdownPreviewRequest;
 import com.metabion.dto.EducationModuleRequest;
 import com.metabion.dto.EducationReviewRequest;
+import com.metabion.exception.EducationModuleSlugAlreadyExistsException;
 import com.metabion.service.EducationContentService;
 import com.metabion.service.SecurityService;
 import com.metabion.service.UserService;
@@ -90,6 +91,20 @@ class EducationContentControllerTest {
                 .andExpect(status().isOk());
 
         verify(educationContentService).createDraft(any(), any(EducationModuleRequest.class));
+    }
+
+    @Test
+    void duplicateModuleSlugReturnsStableErrorCode() throws Exception {
+        doThrow(new EducationModuleSlugAlreadyExistsException())
+                .when(educationContentService).createDraft(any(), any(EducationModuleRequest.class));
+
+        mvc.perform(post("/api/content/education/modules")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validModuleRequest())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("education_module_slug_taken"));
     }
 
     @Test

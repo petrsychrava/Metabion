@@ -27,6 +27,7 @@
     "invalid_credentials": "Neplatný e-mail nebo heslo.",
     "invalid_token": "Tento odkaz je neplatný nebo vypršel.",
     "validation_failed": "Zkontrolujte zvýrazněná pole.",
+    "education_module_slug_taken": "Modul s tímto slugem již existuje. Zvolte jiný slug.",
     "unauthorized": "Přihlaste se znovu.",
     "forbidden": "K tomuto nemáte přístup.",
     "not_found": "Nenalezeno.",

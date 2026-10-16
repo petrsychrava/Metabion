@@ -27,6 +27,7 @@
     "invalid_credentials": "Invalid email or password.",
     "invalid_token": "This link is invalid or has expired.",
     "validation_failed": "Please check the highlighted fields.",
+    "education_module_slug_taken": "A module with this slug already exists. Choose a different slug.",
     "unauthorized": "Please log in again.",
     "forbidden": "You do not have access to this.",
     "not_found": "Not found.",

@@ -22,6 +22,7 @@ import com.metabion.dto.EducationMarkdownPreviewResponse;
 import com.metabion.dto.EducationModuleDetailResponse;
 import com.metabion.dto.EducationModuleRequest;
 import com.metabion.dto.EducationModuleSummaryResponse;
+import com.metabion.exception.EducationModuleSlugAlreadyExistsException;
 import com.metabion.repository.EducationLessonCompletionInsertPort;
 import com.metabion.repository.EducationLessonCompletionRepository;
 import com.metabion.repository.EducationLessonRepository;
@@ -82,7 +83,7 @@ public class EducationContentService {
 
         var slug = normalizeSlug(request.slug());
         if (modules.existsBySlug(slug)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Education module slug already exists");
+            throw new EducationModuleSlugAlreadyExistsException();
         }
 
         var module = modules.save(new EducationModule(slug, trim(request.topic()), request.sortOrder()));
