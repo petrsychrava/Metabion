@@ -159,6 +159,31 @@ describe('ClinicalContentDetailView', () => {
     // The resynced detail and action bar stay visible alongside the error banner.
     expect(wrapper.find('[data-testid="status-badge"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="submit-review"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="submit-review"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-testid="copy"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('releases the mutation lock when a failed copy is resynced', async () => {
+    let getCalls = 0
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/2', () => {
+        getCalls += 1
+        return HttpResponse.json(detail())
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/2/copy', () =>
+        HttpResponse.json({ error: 'request_failed' }, { status: 400 })),
+    )
+    const wrapper = await mountAt(undefined, 'viewer@example.com', ['PHYSICIAN'])
+    await flushPromises()
+
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await flushPromises()
+
+    expect(getCalls).toBe(2)
+    expect(wrapper.text()).toContain('Something went wrong')
+    expect(wrapper.find('[data-testid="copy"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-testid="submit-review"]').attributes('disabled')).toBeUndefined()
   })
 
   it('reloads the detail after copy navigates to a new version on the same route', async () => {

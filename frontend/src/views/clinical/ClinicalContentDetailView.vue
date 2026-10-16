@@ -77,6 +77,7 @@ async function transition(call: () => Promise<EducationManagementDetail>) {
   const slug = moduleSlug.value
   const ver = version.value
   const generation = loadSeq
+  let completionGeneration = generation
   const isCurrent = () => !unmounted
     && generation === loadSeq
     && slug === moduleSlug.value
@@ -97,6 +98,7 @@ async function transition(call: () => Promise<EducationManagementDetail>) {
     // Another manager may have changed the state; resync the action bar instead of going stale,
     // then surface the error (load() clears any previous message first).
     const resyncGeneration = await load()
+    completionGeneration = resyncGeneration
     // The route can change while the resync GET is in flight; only surface the error on the
     // version that actually failed.
     if (unmounted || resyncGeneration !== loadSeq || slug !== moduleSlug.value || ver !== version.value) return
@@ -110,7 +112,7 @@ async function transition(call: () => Promise<EducationManagementDetail>) {
     }
     capture(e)
   } finally {
-    if (generation === loadSeq) transitioning.value = false
+    if (completionGeneration === loadSeq) transitioning.value = false
   }
 }
 
@@ -125,6 +127,7 @@ async function copy() {
   const slug = moduleSlug.value
   const ver = version.value
   const generation = loadSeq
+  let completionGeneration = generation
   const isCurrent = () => !unmounted
     && generation === loadSeq
     && slug === moduleSlug.value
@@ -138,12 +141,13 @@ async function copy() {
   } catch (e) {
     if (!isCurrent()) return
     const resyncGeneration = await load()
+    completionGeneration = resyncGeneration
     // The route can change while the resync GET is in flight; only surface the error on the
     // version that actually failed.
     if (unmounted || resyncGeneration !== loadSeq || slug !== moduleSlug.value || ver !== version.value) return
     capture(e)
   } finally {
-    if (generation === loadSeq) transitioning.value = false
+    if (completionGeneration === loadSeq) transitioning.value = false
   }
 }
 
