@@ -686,6 +686,7 @@ public class EducationContentService {
     }
 
     EducationManagementMutationResponse managementMutation(EducationModuleVersion version) {
+        flushOrConflict();
         var module = version.getModule();
         return new EducationManagementMutationResponse(
                 module.getSlug(),

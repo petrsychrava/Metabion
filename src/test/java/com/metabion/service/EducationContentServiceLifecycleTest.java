@@ -153,6 +153,22 @@ class EducationContentServiceLifecycleTest {
     }
 
     @Test
+    void rejectionFlushesBeforeReturningMutationRevision() {
+        var author = user(12L, "author@example.com", RoleName.NUTRITION_SPECIALIST);
+        var reviewer = user(13L, "reviewer@example.com", RoleName.PHYSICIAN);
+        var version = draft("rejected-module", author);
+        addPublishableLesson(version);
+        version.submitForReview();
+        when(users.findByEmail("reviewer@example.com")).thenReturn(Optional.of(reviewer));
+        when(versions.findByModuleSlugAndVersion("rejected-module", 1)).thenReturn(Optional.of(version));
+
+        var response = service.reject(auth("reviewer@example.com"), "rejected-module", 1, "Needs changes");
+
+        assertThat(response.status()).isEqualTo(EducationContentStatus.REJECTED);
+        verify(versions).flush();
+    }
+
+    @Test
     void submitReviewRequiresPublishableContent() {
         var staff = user(6L, "staff@example.com", RoleName.COORDINATOR);
         var version = draft("empty-module", staff);
