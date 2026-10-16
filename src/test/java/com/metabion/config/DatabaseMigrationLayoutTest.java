@@ -39,7 +39,8 @@ class DatabaseMigrationLayoutTest {
             Map.entry(19, "laboratory_biomarker_tracking"),
             Map.entry(20, "cohort_assignment_management"),
             Map.entry(21, "red_flag_detection_foundation"),
-            Map.entry(22, "clinical_mcp_token_storage"));
+            Map.entry(22, "clinical_mcp_token_storage"),
+            Map.entry(23, "education_content_optimistic_locking"));
 
     private final PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
 
@@ -83,7 +84,7 @@ class DatabaseMigrationLayoutTest {
                 .sorted(Map.Entry.comparingByKey())
                 .toList();
 
-        assertThat(parsed).hasSize(22);
+        assertThat(parsed).hasSize(23);
         assertThat(parsed.stream().map(Map.Entry::getKey).toList())
                 .containsExactlyElementsOf(EXPECTED_DESCRIPTIONS.keySet().stream().sorted().toList());
         parsed.forEach(entry -> assertThat(entry.getValue())

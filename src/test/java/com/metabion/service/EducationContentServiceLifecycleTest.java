@@ -197,6 +197,7 @@ class EducationContentServiceLifecycleTest {
 
         var form = service.getManagedVersionForm(auth("staff@example.com"), "localized-module", 1);
 
+        assertThat(form.getRevision()).isZero();
         assertThat(form.getEnglishTitle()).isEqualTo("Title");
         assertThat(form.getCzechTitle()).isEqualTo("Cesky modul");
         assertThat(form.getLessons()).hasSize(1);
@@ -284,6 +285,25 @@ class EducationContentServiceLifecycleTest {
     }
 
     @Test
+    void updateDraftRequiresRevisionForConcurrentUpdateProtection() {
+        var staff = user(9L, "staff@example.com", RoleName.COORDINATOR);
+        var version = draft("editable-module", staff);
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        when(versions.findByModuleSlugAndVersion("editable-module", 1)).thenReturn(Optional.of(version));
+
+        var form = new EducationContentForm();
+        form.setSlug("editable-module");
+        form.setTopic("IBD");
+        form.setSortOrder(10);
+        form.setEnglishTitle("Updated module");
+        form.setEnglishSummary("Updated summary");
+
+        assertThatThrownBy(() -> service.updateDraft(auth("staff@example.com"), "editable-module", 1, form))
+                .isInstanceOfSatisfying(ResponseStatusException.class, ex ->
+                        assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    @Test
     void updateDraftRejectsSlugMismatchWithBadRequest() {
         var staff = user(1L, "staff@example.com", RoleName.NUTRITION_SPECIALIST);
         when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
@@ -292,6 +312,7 @@ class EducationContentServiceLifecycleTest {
         when(versions.findByModuleSlugAndVersion("ibd-basics", 1)).thenReturn(Optional.of(version));
 
         var form = new EducationContentForm();
+        form.setRevision(0L);
         form.setSlug("other-module");
         form.setTopic("IBD");
         form.setEnglishTitle("Title");
@@ -304,6 +325,27 @@ class EducationContentServiceLifecycleTest {
     }
 
     @Test
+    void updateDraftRejectsStaleRevisionWithConflict() {
+        var staff = user(1L, "staff@example.com", RoleName.NUTRITION_SPECIALIST);
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        var module = new EducationModule("ibd-basics", "IBD", 10);
+        var version = new EducationModuleVersion(module, 1, staff);
+        when(versions.findByModuleSlugAndVersion("ibd-basics", 1)).thenReturn(Optional.of(version));
+
+        var form = new EducationContentForm();
+        form.setRevision(1L);
+        form.setSlug("ibd-basics");
+        form.setTopic("IBD");
+        form.setSortOrder(10);
+        form.setEnglishTitle("Title");
+        form.setEnglishSummary("Summary");
+
+        assertThatThrownBy(() -> service.updateDraft(auth("staff@example.com"), "ibd-basics", 1, form))
+                .isInstanceOfSatisfying(ResponseStatusException.class, ex ->
+                        assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    @Test
     void updateDraftRejectsTopicMismatchWithBadRequest() {
         var staff = user(1L, "staff@example.com", RoleName.NUTRITION_SPECIALIST);
         when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
@@ -312,6 +354,7 @@ class EducationContentServiceLifecycleTest {
         when(versions.findByModuleSlugAndVersion("ibd-basics", 1)).thenReturn(Optional.of(version));
 
         var form = new EducationContentForm();
+        form.setRevision(0L);
         form.setSlug("ibd-basics");
         form.setTopic("Nutrition");
         form.setEnglishTitle("Title");
@@ -332,6 +375,7 @@ class EducationContentServiceLifecycleTest {
         when(versions.findByModuleSlugAndVersion("ibd-basics", 1)).thenReturn(Optional.of(version));
 
         var form = new EducationContentForm();
+        form.setRevision(0L);
         form.setSlug("ibd-basics");
         form.setTopic("IBD");
         form.setSortOrder(30);
@@ -387,6 +431,7 @@ class EducationContentServiceLifecycleTest {
 
     private EducationContentForm editForm() {
         var form = new EducationContentForm();
+        form.setRevision(0L);
         form.setSlug("editable-module");
         form.setTopic("IBD");
         form.setSortOrder(10);

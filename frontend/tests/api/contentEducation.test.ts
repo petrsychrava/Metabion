@@ -10,7 +10,7 @@ describe('contentEducationApi', () => {
       http.get('/api/content/education/modules/ibd-basics/versions/2/form', ({ request }) => {
         seenUrl = request.url
         return HttpResponse.json({
-          slug: 'ibd-basics', topic: 'IBD', sortOrder: 10,
+          revision: 0, slug: 'ibd-basics', topic: 'IBD', sortOrder: 10,
           englishTitle: 'T', englishSummary: 'S', czechTitle: '', czechSummary: '', lessons: [],
         })
       }),
@@ -22,7 +22,7 @@ describe('contentEducationApi', () => {
   it('puts the full draft form', async () => {
     let received: unknown
     const form = {
-      slug: 'ibd-basics', topic: 'IBD', sortOrder: 10,
+      revision: 0, slug: 'ibd-basics', topic: 'IBD', sortOrder: 10,
       englishTitle: 'T', englishSummary: 'S', czechTitle: '', czechSummary: '',
       lessons: [{
         slug: 'intro', sortOrder: 10, englishTitle: 'I', englishSummary: 'IS', englishBodyMarkdown: 'B',

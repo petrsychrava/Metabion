@@ -14,6 +14,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -33,6 +34,10 @@ public class EducationModuleVersion {
 
     @Column(nullable = false)
     private int version;
+
+    @Version
+    @Column(nullable = false)
+    private long revision;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 40)
@@ -195,6 +200,10 @@ public class EducationModuleVersion {
 
     public int getVersion() {
         return version;
+    }
+
+    public long getRevision() {
+        return revision;
     }
 
     public EducationContentStatus getStatus() {

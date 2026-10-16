@@ -29,7 +29,9 @@ import com.metabion.repository.EducationModuleRepository;
 import com.metabion.repository.EducationModuleVersionRepository;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.transaction.Transactional;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -255,7 +257,9 @@ public class EducationContentService {
         var version = versionOrNotFound(moduleSlug, versionNumber);
         requireEditable(version);
         fetchPublishedVersionGraph(List.of(version));
-        return form(version);
+        var form = form(version);
+        form.setRevision(version.getRevision());
+        return form;
     }
 
     public EducationManagementMutationResponse updateDraft(
@@ -268,6 +272,7 @@ public class EducationContentService {
         var version = versionOrNotFound(moduleSlug, versionNumber);
         fetchPublishedVersionGraph(List.of(version));
         requireEditable(version);
+        requireRevision(version, form.getRevision());
         if (!version.getModule().getSlug().equals(normalizeSlug(form.getSlug()))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Module slug does not match the request path");
         }
@@ -279,7 +284,9 @@ public class EducationContentService {
         replaceModuleLocalizations(version, form);
         replaceLessons(version, form);
 
-        return managementMutation(versions.save(version));
+        var saved = versions.save(version);
+        flushOrConflict();
+        return managementMutation(saved);
     }
 
     public EducationMarkdownPreviewResponse previewMarkdown(Authentication authentication, String source) {
@@ -444,6 +451,23 @@ public class EducationContentService {
     void requireEditable(EducationModuleVersion version) {
         if (!version.isEditable()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Education module version is not editable");
+        }
+    }
+
+    void requireRevision(EducationModuleVersion version, Long expectedRevision) {
+        if (expectedRevision == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "revision is required");
+        }
+        if (version.getRevision() != expectedRevision) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Education module version has changed");
+        }
+    }
+
+    void flushOrConflict() {
+        try {
+            versions.flush();
+        } catch (OptimisticLockingFailureException | OptimisticLockException exception) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Education module version has changed", exception);
         }
     }
 

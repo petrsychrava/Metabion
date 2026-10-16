@@ -14,6 +14,8 @@ import java.util.Locale;
 
 public class EducationContentForm {
 
+    private Long revision;
+
     @NotBlank
     @Size(max = 120)
     private String slug;
@@ -111,6 +113,14 @@ public class EducationContentForm {
 
     public String getSlug() {
         return slug;
+    }
+
+    public Long getRevision() {
+        return revision;
+    }
+
+    public void setRevision(Long revision) {
+        this.revision = revision;
     }
 
     public void setSlug(String slug) {

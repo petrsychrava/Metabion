@@ -431,6 +431,7 @@ export interface EducationContentLessonRow {
 }
 
 export interface EducationContentFormData {
+  revision: number
   slug: string
   topic: string
   sortOrder: number

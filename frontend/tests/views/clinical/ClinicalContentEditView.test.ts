@@ -14,6 +14,7 @@ const i18n = createI18n({ legacy: false, locale: 'en', messages: { en, cs } })
 
 function form() {
   return {
+    revision: 0,
     slug: 'ibd-basics',
     topic: 'IBD',
     sortOrder: 10,
@@ -116,6 +117,7 @@ describe('ClinicalContentEditView', () => {
     await flushPromises()
 
     expect(putBody).toEqual({
+      revision: 0,
       slug: 'ibd-basics',
       topic: 'IBD',
       sortOrder: 10,

@@ -139,7 +139,7 @@ class OracleMigrationContentTest {
 
     private void assertNoMigrationContains(Pattern prohibitedSyntax, String description) throws IOException {
         Resource[] migrations = resolver.getResources("classpath*:db/migration/oracle/V*.sql");
-        assertThat(migrations).as("Oracle migration resources").hasSize(22);
+        assertThat(migrations).as("Oracle migration resources").hasSize(23);
 
         Arrays.stream(migrations).forEach(migration -> {
             String sql;

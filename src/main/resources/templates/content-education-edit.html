@@ -16,6 +16,7 @@
           th:action="${mode == 'new'} ? @{/app/content/education} : @{/app/content/education/{moduleSlug}/versions/{versionNumber}(moduleSlug=${version.moduleSlug()},versionNumber=${version.version()})}"
           method="post">
         <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <input type="hidden" th:if="${mode != 'new'}" th:field="*{revision}">
 
         <section class="panel app-panel" th:if="${#fields.hasAnyErrors()}">
             <h2 th:text="#{validation.summaryTitle}">Please fix the highlighted fields</h2>
