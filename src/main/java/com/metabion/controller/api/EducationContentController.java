@@ -1,8 +1,12 @@
 package com.metabion.controller.api;
 
+import com.metabion.dto.EducationContentForm;
 import com.metabion.dto.EducationLessonUpsertRequest;
 import com.metabion.dto.EducationManagementDetailResponse;
+import com.metabion.dto.EducationManagementMutationResponse;
 import com.metabion.dto.EducationManagementSummaryResponse;
+import com.metabion.dto.EducationMarkdownPreviewRequest;
+import com.metabion.dto.EducationMarkdownPreviewResponse;
 import com.metabion.dto.EducationModuleRequest;
 import com.metabion.dto.EducationReviewRequest;
 import com.metabion.service.EducationContentService;
@@ -11,6 +15,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -31,53 +36,81 @@ public class EducationContentController {
     }
 
     @PostMapping("/api/content/education/modules")
-    public EducationManagementDetailResponse createDraft(@Valid @RequestBody EducationModuleRequest request,
-                                                         Authentication authentication) {
+    public EducationManagementMutationResponse createDraft(@Valid @RequestBody EducationModuleRequest request,
+                                                           Authentication authentication) {
         return educationContentService.createDraft(authentication, request);
     }
 
+    @GetMapping("/api/content/education/modules/{moduleSlug}/versions/{version}")
+    public EducationManagementDetailResponse getManagedVersion(@PathVariable String moduleSlug,
+                                                               @PathVariable int version,
+                                                               Authentication authentication) {
+        return educationContentService.getManagedVersion(authentication, moduleSlug, version);
+    }
+
+    @GetMapping("/api/content/education/modules/{moduleSlug}/versions/{version}/form")
+    public EducationContentForm getManagedVersionForm(@PathVariable String moduleSlug,
+                                                      @PathVariable int version,
+                                                      Authentication authentication) {
+        return educationContentService.getManagedVersionForm(authentication, moduleSlug, version);
+    }
+
+    @PutMapping("/api/content/education/modules/{moduleSlug}/versions/{version}")
+    public EducationManagementMutationResponse updateDraft(@PathVariable String moduleSlug,
+                                                           @PathVariable int version,
+                                                           @Valid @RequestBody EducationContentForm form,
+                                                           Authentication authentication) {
+        return educationContentService.updateDraft(authentication, moduleSlug, version, form);
+    }
+
+    @PostMapping("/api/content/education/markdown-preview")
+    public EducationMarkdownPreviewResponse previewMarkdown(@Valid @RequestBody EducationMarkdownPreviewRequest request,
+                                                            Authentication authentication) {
+        return educationContentService.previewMarkdown(authentication, request.markdown());
+    }
+
     @PostMapping("/api/content/education/modules/{moduleSlug}/versions/{version}/lessons")
-    public EducationManagementDetailResponse upsertLesson(@PathVariable String moduleSlug,
-                                                          @PathVariable int version,
-                                                          @Valid @RequestBody EducationLessonUpsertRequest request,
-                                                          Authentication authentication) {
+    public EducationManagementMutationResponse upsertLesson(@PathVariable String moduleSlug,
+                                                            @PathVariable int version,
+                                                            @Valid @RequestBody EducationLessonUpsertRequest request,
+                                                            Authentication authentication) {
         return educationContentService.upsertLesson(authentication, moduleSlug, version, request);
     }
 
     @PostMapping("/api/content/education/modules/{moduleSlug}/versions/{version}/submit-review")
-    public EducationManagementDetailResponse submitReview(@PathVariable String moduleSlug,
-                                                          @PathVariable int version,
-                                                          Authentication authentication) {
+    public EducationManagementMutationResponse submitReview(@PathVariable String moduleSlug,
+                                                            @PathVariable int version,
+                                                            Authentication authentication) {
         return educationContentService.submitReview(authentication, moduleSlug, version);
     }
 
     @PostMapping("/api/content/education/modules/{moduleSlug}/versions/{version}/approve")
-    public EducationManagementDetailResponse approve(@PathVariable String moduleSlug,
-                                                     @PathVariable int version,
-                                                     @Valid @RequestBody EducationReviewRequest request,
-                                                     Authentication authentication) {
+    public EducationManagementMutationResponse approve(@PathVariable String moduleSlug,
+                                                       @PathVariable int version,
+                                                       @Valid @RequestBody EducationReviewRequest request,
+                                                       Authentication authentication) {
         return educationContentService.approve(authentication, moduleSlug, version, request.notes());
     }
 
     @PostMapping("/api/content/education/modules/{moduleSlug}/versions/{version}/reject")
-    public EducationManagementDetailResponse reject(@PathVariable String moduleSlug,
-                                                    @PathVariable int version,
-                                                    @Valid @RequestBody EducationReviewRequest request,
-                                                    Authentication authentication) {
+    public EducationManagementMutationResponse reject(@PathVariable String moduleSlug,
+                                                      @PathVariable int version,
+                                                      @Valid @RequestBody EducationReviewRequest request,
+                                                      Authentication authentication) {
         return educationContentService.reject(authentication, moduleSlug, version, request.notes());
     }
 
     @PostMapping("/api/content/education/modules/{moduleSlug}/versions/{version}/publish")
-    public EducationManagementDetailResponse publish(@PathVariable String moduleSlug,
-                                                     @PathVariable int version,
-                                                     Authentication authentication) {
+    public EducationManagementMutationResponse publish(@PathVariable String moduleSlug,
+                                                       @PathVariable int version,
+                                                       Authentication authentication) {
         return educationContentService.publish(authentication, moduleSlug, version);
     }
 
     @PostMapping("/api/content/education/modules/{moduleSlug}/versions/{version}/copy")
-    public EducationManagementDetailResponse copyVersion(@PathVariable String moduleSlug,
-                                                         @PathVariable int version,
-                                                         Authentication authentication) {
+    public EducationManagementMutationResponse copyVersion(@PathVariable String moduleSlug,
+                                                           @PathVariable int version,
+                                                           Authentication authentication) {
         return educationContentService.copyVersion(authentication, moduleSlug, version);
     }
 }

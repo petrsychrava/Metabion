@@ -1,6 +1,7 @@
 package com.metabion.controller.api;
 
 import com.metabion.dto.oauth.OAuthErrorResponse;
+import com.metabion.exception.EducationModuleSlugAlreadyExistsException;
 import com.metabion.exception.InvalidTokenException;
 import com.metabion.exception.InsufficientScopeException;
 import com.metabion.exception.RedFlagSnapshotException;
@@ -77,6 +78,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ValidationException.class)
     public ResponseEntity<Map<String, String>> validation(ValidationException e) {
         return ResponseEntity.badRequest().body(Map.of("error", "validation_failed"));
+    }
+
+    @ExceptionHandler(EducationModuleSlugAlreadyExistsException.class)
+    public ResponseEntity<Map<String, String>> educationModuleSlugAlreadyExists(
+            EducationModuleSlugAlreadyExistsException e) {
+        return ResponseEntity.badRequest().body(Map.of("error", "education_module_slug_taken"));
     }
 
     @ExceptionHandler({

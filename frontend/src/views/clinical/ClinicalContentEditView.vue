@@ -1,0 +1,329 @@
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, toRaw, watch } from 'vue'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import { contentEducationApi } from '@/api/contentEducation'
+import { ApiError } from '@/api/http'
+import { useApiError } from '@/composables/useApiError'
+import type { EducationContentFormData, EducationContentLessonRow } from '@/types/api'
+
+const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
+const { message, fieldErrors, capture, clear } = useApiError()
+
+const moduleSlug = computed(() => route.params.moduleSlug as string)
+const version = computed(() => Number(route.params.version))
+
+const form = ref<EducationContentFormData | null>(null)
+const lessons = ref<EducationContentLessonRow[]>([])
+const loading = ref(true)
+const saving = ref(false)
+const initialSnapshot = ref('')
+const stateConflict = ref(false)
+const existingLessonRows = new WeakSet<EducationContentLessonRow>()
+
+let loadSeq = 0
+let unmounted = false
+onUnmounted(() => {
+  unmounted = true
+})
+
+function snapshot(): unknown {
+  return form.value ? { ...form.value, lessons: lessons.value } : null
+}
+
+const dirty = computed(() => form.value !== null && JSON.stringify(snapshot()) !== initialSnapshot.value)
+
+function rowPopulated(row: EducationContentLessonRow): boolean {
+  return existingLessonRows.has(toRaw(row)) || !!(row.slug || row.englishTitle || row.englishSummary || row.englishBodyMarkdown
+    || row.czechTitle || row.czechSummary || row.czechBodyMarkdown)
+}
+
+function rowIncomplete(row: EducationContentLessonRow): boolean {
+  return rowPopulated(row)
+    && (!row.slug.trim() || row.sortOrder < 1 || !row.englishTitle.trim()
+        || !row.englishSummary.trim() || !row.englishBodyMarkdown.trim())
+}
+
+// The server persists a Czech localization only when all three values are present
+// (addOptionalLessonLocalization / addOptionalModuleLocalization), so partial Czech input
+// would otherwise be silently dropped on save.
+function czechLessonIncomplete(row: EducationContentLessonRow): boolean {
+  const filled = [row.czechTitle, row.czechSummary, row.czechBodyMarkdown]
+    .filter((value) => !!value?.trim()).length
+  return filled > 0 && filled < 3
+}
+
+const hasIncompleteRows = computed(() => lessons.value.some(rowIncomplete))
+const hasCzechLessonGaps = computed(() => lessons.value.some(czechLessonIncomplete))
+const czechModuleIncomplete = computed(() => {
+  const filled = [form.value?.czechTitle, form.value?.czechSummary]
+    .filter((value) => !!value?.trim()).length
+  return filled === 1
+})
+const saveDisabled = computed(() =>
+  hasIncompleteRows.value || hasCzechLessonGaps.value || czechModuleIncomplete.value)
+
+function nextSortOrder(): number {
+  return lessons.value.reduce((max, row) => Math.max(max, row.sortOrder), 0) + 10
+}
+
+function addLesson() {
+  lessons.value.push({
+    slug: '', sortOrder: nextSortOrder(), englishTitle: '', englishSummary: '', englishBodyMarkdown: '',
+    czechTitle: '', czechSummary: '', czechBodyMarkdown: '',
+  })
+}
+
+async function load() {
+  // Clear first so a failed reload never leaves the previous version's form rendered under a new
+  // URL. The sequence guard keeps an older, slower response from clobbering a newer load: only the
+  // latest load touches form/lessons/loading, and only its failure surfaces.
+  const seq = ++loadSeq
+  const slug = moduleSlug.value
+  const ver = version.value
+  form.value = null
+  clear()
+  loading.value = true
+  saving.value = false
+  stateConflict.value = false
+  try {
+    const detail = await contentEducationApi.getVersion(slug, ver)
+    if (seq !== loadSeq || unmounted) return
+    if (detail.status !== 'DRAFT' && detail.status !== 'REJECTED') {
+      await router.replace(`/clinical/content/${slug}/${ver}`)
+      return
+    }
+    const data = await contentEducationApi.getVersionForm(slug, ver)
+    if (seq !== loadSeq || unmounted) return
+    const loadedLessons = data.lessons.map((row) => ({ ...row }))
+    loadedLessons.forEach((row) => existingLessonRows.add(row))
+    form.value = data
+    lessons.value = loadedLessons
+    initialSnapshot.value = JSON.stringify(snapshot())
+  } catch (e) {
+    if (seq === loadSeq && !unmounted) capture(e)
+  } finally {
+    if (seq === loadSeq) loading.value = false
+  }
+}
+
+async function reload() {
+  await load()
+}
+
+function saveIsCurrent(generation: number, originPath: string): boolean {
+  return !unmounted && generation === loadSeq && route.path === originPath
+}
+
+async function save() {
+  if (!form.value || saveDisabled.value || stateConflict.value) return
+  saving.value = true
+  clear()
+  // Freeze the snapshot of exactly what is being submitted; edits made while the PUT is in
+  // flight must stay dirty so the leave guard prompts instead of silently discarding them.
+  const submitted = JSON.stringify(snapshot())
+  const submittedLessonRows = lessons.value.filter(rowPopulated)
+  // Clone the payload before apiFetch can await CSRF; otherwise lesson rows remain live references
+  // and edits made while the request is preparing can change the data that gets serialized.
+  const payload = JSON.parse(JSON.stringify({
+    ...form.value,
+    lessons: submittedLessonRows,
+  })) as EducationContentFormData
+  const originPath = route.path
+  const saveGeneration = loadSeq
+  try {
+    const response = await contentEducationApi.updateVersion(moduleSlug.value, version.value, payload)
+    // The author may have left while the PUT was in flight; only stamp the snapshot and redirect
+    // when this editor is still the current route and this instance is still mounted, so a stale
+    // completion cannot mark the new version's form clean with the old version's submitted state.
+    if (!saveIsCurrent(saveGeneration, originPath)) return
+    submittedLessonRows.forEach((row) => existingLessonRows.add(toRaw(row)))
+    form.value.revision = response.revision
+    const savedSnapshot = JSON.parse(submitted) as EducationContentFormData
+    savedSnapshot.revision = response.revision
+    initialSnapshot.value = JSON.stringify(savedSnapshot)
+    await router.push(`/clinical/content/${moduleSlug.value}/${version.value}`)
+  } catch (e) {
+    // Only a state-change 400 (no field errors) means the version left the editable state; bail
+    // to the detail page, which shows the current status and valid actions. Validation 400s carry
+    // a fields map: keep the author's edits intact and just show the banner.
+    if (e instanceof ApiError && e.status === 400 && !e.fields) {
+      // A departed editor must not yank the author back; the push IS the bail-out departure.
+      if (!saveIsCurrent(saveGeneration, originPath)) return
+      await router.push(`/clinical/content/${moduleSlug.value}/${version.value}`)
+      if (!saveIsCurrent(saveGeneration, originPath)) return
+      // The dirty guard vetoed the forced exit (Vue Router aborts without throwing). The
+      // version can no longer be saved, so lock the editor and surface the state change
+      // instead of leaving a dead, enabled form whose every save fails silently.
+      stateConflict.value = true
+      capture(e)
+      message.value = t('clinical.content.editor.stateConflict')
+    } else if (e instanceof ApiError && e.status === 409) {
+      // The revision is stale; prevent repeated saves with it and let the author reload the
+      // current form before deciding how to reconcile their edits.
+      if (!saveIsCurrent(saveGeneration, originPath)) return
+      stateConflict.value = true
+      capture(e)
+    } else {
+      // A stale save must not surface its error on a newer editor route or instance.
+      if (!saveIsCurrent(saveGeneration, originPath)) return
+      capture(e)
+    }
+  } finally {
+    if (saveGeneration === loadSeq) saving.value = false
+  }
+}
+
+onBeforeRouteLeave(() => {
+  if (dirty.value && !window.confirm(t('clinical.content.editor.unsaved'))) return false
+  return true
+})
+
+onBeforeRouteUpdate((to) => {
+  const parametersChanged = to.params.moduleSlug !== route.params.moduleSlug
+    || to.params.version !== route.params.version
+  if (parametersChanged && dirty.value && !window.confirm(t('clinical.content.editor.unsaved'))) return false
+  return true
+})
+
+watch(() => [route.params.moduleSlug, route.params.version], ([slug]) => {
+  // Leaving the edit route leaves the params empty; nothing to reload.
+  if (!slug) return
+  void load()
+})
+
+onMounted(load)
+</script>
+
+<template>
+  <section class="max-w-3xl">
+    <router-link :to="`/clinical/content/${moduleSlug}/${version}`" class="text-sm text-blue-600 dark:text-blue-400">
+      ← {{ t('common.back') }}
+    </router-link>
+    <h1 class="mt-2 text-2xl font-semibold">{{ t('clinical.content.editor.title') }}</h1>
+    <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ form?.slug }} v{{ version }}</p>
+
+    <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
+    <button v-if="stateConflict" type="button" data-testid="reload" class="mt-2 rounded border px-3 py-1 text-sm"
+            @click="reload">
+      {{ t('labs.reload') }}
+    </button>
+    <ul v-if="Object.keys(fieldErrors).length > 0" data-testid="field-errors"
+        class="mt-2 list-inside list-disc rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+      <li v-for="(fieldMessage, field) in fieldErrors" :key="field">
+        <code>{{ field }}</code>: {{ fieldMessage }}
+      </li>
+    </ul>
+    <p v-if="loading" class="mt-4">{{ t('common.loading') }}</p>
+
+    <form v-else-if="form" class="mt-4 space-y-4" @submit.prevent="save">
+      <div class="grid gap-3 sm:grid-cols-2">
+        <label class="text-sm">{{ t('clinical.content.fields.topic') }}
+          <input v-model="form.topic" data-testid="topic" type="text" disabled
+                 class="mt-1 w-full rounded border border-gray-300 px-2 py-1 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800" />
+        </label>
+        <label class="text-sm">{{ t('clinical.content.fields.sortOrder') }}
+          <input v-model.number="form.sortOrder" data-testid="sort-order" type="number" min="1" disabled
+                 class="mt-1 w-full rounded border border-gray-300 px-2 py-1 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800" />
+        </label>
+        <label class="text-sm">{{ t('clinical.content.fields.englishTitle') }}
+          <input v-model="form.englishTitle" data-testid="english-title" type="text" :disabled="stateConflict"
+                 class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+        </label>
+        <label class="text-sm">{{ t('clinical.content.fields.czechTitle') }}
+          <input v-model="form.czechTitle" data-testid="czech-title" type="text" :disabled="stateConflict"
+                 class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+        </label>
+        <label class="text-sm sm:col-span-2">{{ t('clinical.content.fields.englishSummary') }}
+          <textarea v-model="form.englishSummary" data-testid="english-summary" rows="2" :disabled="stateConflict"
+                    class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"></textarea>
+        </label>
+        <label class="text-sm sm:col-span-2">{{ t('clinical.content.fields.czechSummary') }}
+          <textarea v-model="form.czechSummary" data-testid="czech-summary" rows="2" :disabled="stateConflict"
+                    class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"></textarea>
+        </label>
+        <p v-if="czechModuleIncomplete" data-testid="czech-module-incomplete"
+           class="text-sm text-red-600 sm:col-span-2 dark:text-red-400">
+          {{ t('clinical.content.editor.czechModuleIncomplete') }}
+        </p>
+      </div>
+
+      <h2 class="font-medium">{{ t('clinical.content.editor.lessons') }}</h2>
+      <div v-for="(lesson, index) in lessons" :key="index" data-testid="lesson-row"
+           class="space-y-3 rounded border p-3">
+        <div class="flex items-end justify-between gap-3">
+          <label class="flex-1 text-sm">{{ t('clinical.content.editor.lessonSlug') }}
+            <input v-model="lesson.slug" :data-testid="`lesson-slug-${index}`" type="text" :disabled="stateConflict"
+                   class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+          </label>
+          <label class="w-28 text-sm">{{ t('clinical.content.fields.sortOrder') }}
+            <input v-model.number="lesson.sortOrder" :data-testid="`lesson-sort-${index}`" type="number" min="1"
+                   :disabled="stateConflict"
+                   class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+          </label>
+          <button type="button" :data-testid="`remove-lesson-${index}`" :disabled="stateConflict"
+                  class="rounded border px-2 py-1 text-sm" @click="lessons.splice(index, 1)">
+            {{ t('common.remove') }}
+          </button>
+        </div>
+        <p v-if="rowIncomplete(lesson)" class="text-sm text-red-600 dark:text-red-400">
+          {{ t('clinical.content.editor.lessonIncomplete') }}
+        </p>
+        <p v-if="czechLessonIncomplete(lesson)" class="text-sm text-red-600 dark:text-red-400">
+          {{ t('clinical.content.editor.czechIncomplete') }}
+        </p>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label class="text-sm">{{ t('clinical.content.fields.englishTitle') }}
+              <input v-model="lesson.englishTitle" :data-testid="`english-title-${index}`" type="text"
+                     :disabled="stateConflict"
+                     class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+            </label>
+            <label class="mt-2 block text-sm">{{ t('clinical.content.fields.englishSummary') }}
+              <textarea v-model="lesson.englishSummary" :data-testid="`english-summary-${index}`" rows="2"
+                        :disabled="stateConflict"
+                        class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"></textarea>
+            </label>
+            <div class="mt-2">
+              <p class="text-sm">{{ t('clinical.content.fields.englishBody') }}</p>
+              <MarkdownEditor v-model="lesson.englishBodyMarkdown" :disabled="stateConflict" />
+            </div>
+          </div>
+          <div>
+            <label class="text-sm">{{ t('clinical.content.fields.czechTitle') }}
+              <input v-model="lesson.czechTitle" :data-testid="`czech-title-${index}`" type="text"
+                     :disabled="stateConflict"
+                     class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800" />
+            </label>
+            <label class="mt-2 block text-sm">{{ t('clinical.content.fields.czechSummary') }}
+              <textarea v-model="lesson.czechSummary" :data-testid="`czech-summary-${index}`" rows="2"
+                        :disabled="stateConflict"
+                        class="mt-1 w-full rounded border border-gray-300 px-2 py-1 dark:border-gray-600 dark:bg-gray-800"></textarea>
+            </label>
+            <div class="mt-2">
+              <p class="text-sm">{{ t('clinical.content.fields.czechBody') }}</p>
+              <MarkdownEditor v-model="lesson.czechBodyMarkdown" :disabled="stateConflict" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" data-testid="add-lesson" class="rounded border px-3 py-1 text-sm"
+              :disabled="stateConflict" @click="addLesson">
+        {{ t('clinical.content.editor.addLesson') }}
+      </button>
+
+      <div class="flex gap-2">
+        <button type="submit" data-testid="save" :disabled="saving || saveDisabled || stateConflict"
+                class="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50">
+          {{ t('common.save') }}
+        </button>
+        <router-link :to="`/clinical/content/${moduleSlug}/${version}`"
+                     class="rounded border px-3 py-1 text-sm">{{ t('common.cancel') }}</router-link>
+      </div>
+    </form>
+  </section>
+</template>

@@ -13,6 +13,10 @@ public record EducationManagementDetailResponse(
         EducationContentStatus status,
         String reviewNotes,
         boolean reviewBypassed,
+        String englishTitle,
+        String englishSummary,
+        String czechTitle,
+        String czechSummary,
         String authorEmail,
         String reviewedByEmail,
         String publishedByEmail,
@@ -20,6 +24,6 @@ public record EducationManagementDetailResponse(
         Instant submittedAt,
         Instant reviewedAt,
         Instant publishedAt,
-        List<EducationLessonResponse> lessons
+        List<EducationManagedLessonResponse> lessons
 ) {
 }

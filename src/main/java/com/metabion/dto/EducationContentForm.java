@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.util.ArrayList;
@@ -12,6 +13,8 @@ import java.util.List;
 import java.util.Locale;
 
 public class EducationContentForm {
+
+    private Long revision;
 
     @NotBlank
     @Size(max = 120)
@@ -39,7 +42,7 @@ public class EducationContentForm {
     private String czechSummary;
 
     @Valid
-    private List<LessonRow> lessons = new ArrayList<>();
+    private List<@NotNull LessonRow> lessons = new ArrayList<>();
 
     public EducationModuleRequest toModuleRequest() {
         return new EducationModuleRequest(
@@ -54,7 +57,7 @@ public class EducationContentForm {
 
     public List<EducationLessonUpsertRequest> toLessonRequests() {
         return lessonsOrEmpty().stream()
-                .filter(row -> !row.isBlank())
+                .filter(row -> row != null && !row.isBlank())
                 .map(LessonRow::toRequest)
                 .toList();
     }
@@ -68,11 +71,16 @@ public class EducationContentForm {
         }
     }
 
+    @AssertTrue(message = "module slug must contain at least one letter or digit")
+    public boolean isSlugNormalizable() {
+        return blank(slug) || !normalizeSlugForUniqueness(slug).isBlank();
+    }
+
     @AssertTrue(message = "lesson slugs must be unique")
     public boolean isLessonSlugsUnique() {
         var seen = new HashSet<String>();
         for (var row : lessonsOrEmpty()) {
-            if (row.isBlank() || blank(row.getSlug())) {
+            if (row == null || row.isBlank() || blank(row.getSlug())) {
                 continue;
             }
             var slug = normalizeSlugForUniqueness(row.getSlug());
@@ -87,7 +95,7 @@ public class EducationContentForm {
     public boolean isLessonSortOrdersUnique() {
         var seen = new HashSet<Integer>();
         for (var row : lessonsOrEmpty()) {
-            if (row.isBlank() || row.getSortOrder() < 1) {
+            if (row == null || row.isBlank() || row.getSortOrder() < 1) {
                 continue;
             }
             if (!seen.add(row.getSortOrder())) {
@@ -97,8 +105,22 @@ public class EducationContentForm {
         return true;
     }
 
+    @AssertTrue(message = "czechTitle and czechSummary must both be provided or both be omitted")
+    public boolean isCzechModuleLocalizationComplete() {
+        var provided = (blank(czechTitle) ? 0 : 1) + (blank(czechSummary) ? 0 : 1);
+        return provided == 0 || provided == 2;
+    }
+
     public String getSlug() {
         return slug;
+    }
+
+    public Long getRevision() {
+        return revision;
+    }
+
+    public void setRevision(Long revision) {
+        this.revision = revision;
     }
 
     public void setSlug(String slug) {
@@ -232,6 +254,19 @@ public class EducationContentForm {
                     && !blank(englishTitle)
                     && !blank(englishSummary)
                     && !blank(englishBodyMarkdown));
+        }
+
+        @AssertTrue(message = "lesson slug must contain at least one letter or digit")
+        public boolean isSlugNormalizable() {
+            return blank(slug) || !normalizeSlugForUniqueness(slug).isBlank();
+        }
+
+        @AssertTrue(message = "czechTitle, czechSummary, and czechBodyMarkdown must all be provided or all be omitted")
+        public boolean isCzechLessonLocalizationComplete() {
+            var provided = (blank(czechTitle) ? 0 : 1)
+                    + (blank(czechSummary) ? 0 : 1)
+                    + (blank(czechBodyMarkdown) ? 0 : 1);
+            return provided == 0 || provided == 3;
         }
 
         public String getSlug() {

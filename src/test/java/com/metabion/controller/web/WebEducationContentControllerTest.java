@@ -5,7 +5,9 @@ import com.metabion.domain.EducationLanguage;
 import com.metabion.domain.RoleName;
 import com.metabion.dto.EducationContentForm;
 import com.metabion.dto.EducationLessonResponse;
+import com.metabion.dto.EducationManagedLessonResponse;
 import com.metabion.dto.EducationManagementDetailResponse;
+import com.metabion.dto.EducationManagementMutationResponse;
 import com.metabion.dto.EducationManagementSummaryResponse;
 import com.metabion.service.EducationContentService;
 import com.metabion.service.SecurityService;
@@ -35,9 +37,11 @@ import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentCaptor.forClass;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.http.HttpStatus.CONFLICT;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -108,7 +112,7 @@ class WebEducationContentControllerTest {
 
     @Test
     void staffCanCreateModuleWithValidLessonRows() throws Exception {
-        when(educationContentService.createDraft(any(), any(EducationContentForm.class))).thenReturn(detailResponse());
+        when(educationContentService.createDraft(any(), any(EducationContentForm.class))).thenReturn(mutationResponse());
 
         mvc.perform(post("/app/content/education")
                         .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
@@ -276,6 +280,35 @@ class WebEducationContentControllerTest {
     }
 
     @Test
+    void staleEducationUpdateUsesContentManagementConflictFallback() throws Exception {
+        doThrow(new ResponseStatusException(CONFLICT))
+                .when(educationContentService).updateDraft(any(), eq("ibd-basics"), eq(1), any(EducationContentForm.class));
+
+        mvc.perform(post("/app/content/education/ibd-basics/versions/1")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .param("slug", "ibd-basics")
+                        .param("topic", "IBD")
+                        .param("sortOrder", "20")
+                        .param("englishTitle", "IBD basics updated")
+                        .param("englishSummary", "Updated summary")
+                        .param("czechTitle", "Zaklady IBD")
+                        .param("czechSummary", "Cesky souhrn")
+                        .param("lessons[0].slug", "what-is-ibd")
+                        .param("lessons[0].sortOrder", "1")
+                        .param("lessons[0].englishTitle", "What is IBD?")
+                        .param("lessons[0].englishSummary", "A short introduction.")
+                        .param("lessons[0].englishBodyMarkdown", "**IBD**")
+                        .param("lessons[0].czechTitle", "Co je IBD?")
+                        .param("lessons[0].czechSummary", "Kratky uvod.")
+                        .param("lessons[0].czechBodyMarkdown", "Cesky text lekce"))
+                .andExpect(status().isConflict())
+                .andExpect(view().name("result"))
+                .andExpect(model().attribute("message", "This education content was changed elsewhere. Reload before trying again."))
+                .andExpect(model().attribute("href", "/app/content/education"));
+    }
+
+    @Test
     void staffCanSubmitReviewActionWithCsrf() throws Exception {
         mvc.perform(post("/app/content/education/ibd-basics/versions/1/submit-review")
                         .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
@@ -328,6 +361,30 @@ class WebEducationContentControllerTest {
                 EducationContentStatus.DRAFT,
                 null,
                 false,
+                "IBD basics",
+                "A short overview.",
+                "Zaklady IBD",
+                "Cesky souhrn",
+                "author@example.com",
+                null,
+                null,
+                Instant.parse("2026-06-10T10:00:00Z"),
+                null,
+                null,
+                null,
+                List.of(managedLesson()));
+    }
+
+    private EducationManagementMutationResponse mutationResponse() {
+        return new EducationManagementMutationResponse(
+                "ibd-basics",
+                "IBD",
+                10,
+                1,
+                0,
+                EducationContentStatus.DRAFT,
+                null,
+                false,
                 "author@example.com",
                 null,
                 null,
@@ -356,6 +413,10 @@ class WebEducationContentControllerTest {
                 EducationContentStatus.IN_REVIEW,
                 null,
                 false,
+                "IBD basics",
+                "A short overview.",
+                "Zaklady IBD",
+                "Cesky souhrn",
                 "author@example.com",
                 null,
                 null,
@@ -363,16 +424,7 @@ class WebEducationContentControllerTest {
                 Instant.parse("2026-06-11T10:00:00Z"),
                 null,
                 null,
-                List.of(new EducationLessonResponse(
-                        "what-is-ibd",
-                        1,
-                        EducationLanguage.EN,
-                        EducationLanguage.EN,
-                        "What is IBD?",
-                        "A short introduction.",
-                        "**IBD**",
-                        "<p><strong>IBD</strong></p>",
-                        null)));
+                List.of(managedLesson()));
     }
 
     private EducationManagementDetailResponse approvedDetailResponse() {
@@ -384,6 +436,10 @@ class WebEducationContentControllerTest {
                 EducationContentStatus.APPROVED,
                 "approved",
                 false,
+                "IBD basics",
+                "A short overview.",
+                "Zaklady IBD",
+                "Cesky souhrn",
                 "author@example.com",
                 "reviewer@example.com",
                 null,
@@ -391,16 +447,21 @@ class WebEducationContentControllerTest {
                 Instant.parse("2026-06-11T10:00:00Z"),
                 Instant.parse("2026-06-12T10:00:00Z"),
                 null,
-                List.of(new EducationLessonResponse(
-                        "what-is-ibd",
-                        1,
-                        EducationLanguage.EN,
-                        EducationLanguage.EN,
-                        "What is IBD?",
-                        "A short introduction.",
-                        "**IBD**",
-                        "<p><strong>IBD</strong></p>",
-                        null)));
+                List.of(managedLesson()));
+    }
+
+    private EducationManagedLessonResponse managedLesson() {
+        return new EducationManagedLessonResponse(
+                "what-is-ibd",
+                1,
+                "What is IBD?",
+                "A short introduction.",
+                "**IBD**",
+                "<p><strong>IBD</strong></p>",
+                "Co je IBD?",
+                "Kratky uvod.",
+                "Cesky text lekce",
+                "<p>Cesky text lekce</p>");
     }
 
     private EducationContentForm fullForm() {

@@ -153,6 +153,22 @@ class EducationContentServiceLifecycleTest {
     }
 
     @Test
+    void rejectionFlushesBeforeReturningMutationRevision() {
+        var author = user(12L, "author@example.com", RoleName.NUTRITION_SPECIALIST);
+        var reviewer = user(13L, "reviewer@example.com", RoleName.PHYSICIAN);
+        var version = draft("rejected-module", author);
+        addPublishableLesson(version);
+        version.submitForReview();
+        when(users.findByEmail("reviewer@example.com")).thenReturn(Optional.of(reviewer));
+        when(versions.findByModuleSlugAndVersion("rejected-module", 1)).thenReturn(Optional.of(version));
+
+        var response = service.reject(auth("reviewer@example.com"), "rejected-module", 1, "Needs changes");
+
+        assertThat(response.status()).isEqualTo(EducationContentStatus.REJECTED);
+        verify(versions).flush();
+    }
+
+    @Test
     void submitReviewRequiresPublishableContent() {
         var staff = user(6L, "staff@example.com", RoleName.COORDINATOR);
         var version = draft("empty-module", staff);
@@ -197,12 +213,56 @@ class EducationContentServiceLifecycleTest {
 
         var form = service.getManagedVersionForm(auth("staff@example.com"), "localized-module", 1);
 
+        assertThat(form.getRevision()).isZero();
         assertThat(form.getEnglishTitle()).isEqualTo("Title");
         assertThat(form.getCzechTitle()).isEqualTo("Cesky modul");
         assertThat(form.getLessons()).hasSize(1);
         assertThat(form.getLessons().getFirst().getEnglishTitle()).isEqualTo("Lesson title");
         assertThat(form.getLessons().getFirst().getCzechTitle()).isEqualTo("Cesky nazev lekce");
         assertThat(form.getLessons().getFirst().getCzechBodyMarkdown()).isEqualTo("Cesky text lekce");
+    }
+
+    @Test
+    void managedVersionFormRejectsNonEditableVersion() {
+        var staff = user(11L, "staff@example.com", RoleName.PHYSICIAN);
+        var version = draft("submitted-module", staff);
+        version.submitForReview();
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        when(versions.findByModuleSlugAndVersion("submitted-module", 1)).thenReturn(Optional.of(version));
+
+        assertThatThrownBy(() -> service.getManagedVersionForm(auth("staff@example.com"), "submitted-module", 1))
+                .isInstanceOfSatisfying(ResponseStatusException.class, ex ->
+                        assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    @Test
+    void managedVersionDetailExposesBothLocalizations() {
+        var staff = user(10L, "staff@example.com", RoleName.PHYSICIAN);
+        var version = draft("localized-module", staff);
+        version.addLocalization(new EducationModuleLocalization(
+                version,
+                EducationLanguage.CS,
+                "Cesky modul",
+                "Cesky souhrn"));
+        addLocalizedLesson(version);
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        when(versions.findByModuleSlugAndVersion("localized-module", 1)).thenReturn(Optional.of(version));
+        when(markdown.render(any())).thenAnswer(invocation -> "<p>" + invocation.getArgument(0) + "</p>");
+
+        var response = service.getManagedVersion(auth("staff@example.com"), "localized-module", 1);
+
+        assertThat(response.englishTitle()).isEqualTo("Title");
+        assertThat(response.englishSummary()).isEqualTo("Summary");
+        assertThat(response.czechTitle()).isEqualTo("Cesky modul");
+        assertThat(response.czechSummary()).isEqualTo("Cesky souhrn");
+        assertThat(response.lessons()).hasSize(1);
+        var lesson = response.lessons().getFirst();
+        assertThat(lesson.title()).isEqualTo("Lesson title");
+        assertThat(lesson.czechTitle()).isEqualTo("Cesky nazev lekce");
+        assertThat(lesson.czechSummary()).isEqualTo("Cesky souhrn lekce");
+        assertThat(lesson.czechBodyMarkdown()).isEqualTo("Cesky text lekce");
+        assertThat(lesson.czechBodyHtml()).isEqualTo("<p>Cesky text lekce</p>");
+        assertThat(lesson.bodyHtml()).isEqualTo("<p>Lesson body</p>");
     }
 
     @Test
@@ -219,6 +279,7 @@ class EducationContentServiceLifecycleTest {
         var response = service.updateDraft(auth("staff@example.com"), "editable-module", 1, editForm());
 
         assertThat(response.moduleSlug()).isEqualTo("editable-module");
+        assertThat(response.revision()).isEqualTo(version.getRevision());
         assertThat(version.getModule().getTopic()).isEqualTo("IBD");
         assertThat(version.getModule().getSortOrder()).isEqualTo(10);
         assertThat(version.getLocalizations())
@@ -238,6 +299,110 @@ class EducationContentServiceLifecycleTest {
                 .singleElement()
                 .extracting(EducationLessonLocalization::getBodyMarkdown)
                 .isEqualTo("Upraveny cesky text");
+    }
+
+    @Test
+    void updateDraftRequiresRevisionForConcurrentUpdateProtection() {
+        var staff = user(9L, "staff@example.com", RoleName.COORDINATOR);
+        var version = draft("editable-module", staff);
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        when(versions.findByModuleSlugAndVersion("editable-module", 1)).thenReturn(Optional.of(version));
+
+        var form = new EducationContentForm();
+        form.setSlug("editable-module");
+        form.setTopic("IBD");
+        form.setSortOrder(10);
+        form.setEnglishTitle("Updated module");
+        form.setEnglishSummary("Updated summary");
+
+        assertThatThrownBy(() -> service.updateDraft(auth("staff@example.com"), "editable-module", 1, form))
+                .isInstanceOfSatisfying(ResponseStatusException.class, ex ->
+                        assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    @Test
+    void updateDraftRejectsSlugMismatchWithBadRequest() {
+        var staff = user(1L, "staff@example.com", RoleName.NUTRITION_SPECIALIST);
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        var module = new EducationModule("ibd-basics", "IBD", 10);
+        var version = new EducationModuleVersion(module, 1, staff);
+        when(versions.findByModuleSlugAndVersion("ibd-basics", 1)).thenReturn(Optional.of(version));
+
+        var form = new EducationContentForm();
+        form.setRevision(0L);
+        form.setSlug("other-module");
+        form.setTopic("IBD");
+        form.setEnglishTitle("Title");
+        form.setEnglishSummary("Summary");
+
+        assertThatThrownBy(() -> service.updateDraft(auth("staff@example.com"), "ibd-basics", 1, form))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void updateDraftRejectsStaleRevisionWithConflict() {
+        var staff = user(1L, "staff@example.com", RoleName.NUTRITION_SPECIALIST);
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        var module = new EducationModule("ibd-basics", "IBD", 10);
+        var version = new EducationModuleVersion(module, 1, staff);
+        when(versions.findByModuleSlugAndVersion("ibd-basics", 1)).thenReturn(Optional.of(version));
+
+        var form = new EducationContentForm();
+        form.setRevision(1L);
+        form.setSlug("ibd-basics");
+        form.setTopic("IBD");
+        form.setSortOrder(10);
+        form.setEnglishTitle("Title");
+        form.setEnglishSummary("Summary");
+
+        assertThatThrownBy(() -> service.updateDraft(auth("staff@example.com"), "ibd-basics", 1, form))
+                .isInstanceOfSatisfying(ResponseStatusException.class, ex ->
+                        assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    @Test
+    void updateDraftRejectsTopicMismatchWithBadRequest() {
+        var staff = user(1L, "staff@example.com", RoleName.NUTRITION_SPECIALIST);
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        var module = new EducationModule("ibd-basics", "IBD", 10);
+        var version = new EducationModuleVersion(module, 1, staff);
+        when(versions.findByModuleSlugAndVersion("ibd-basics", 1)).thenReturn(Optional.of(version));
+
+        var form = new EducationContentForm();
+        form.setRevision(0L);
+        form.setSlug("ibd-basics");
+        form.setTopic("Nutrition");
+        form.setEnglishTitle("Title");
+        form.setEnglishSummary("Summary");
+
+        assertThatThrownBy(() -> service.updateDraft(auth("staff@example.com"), "ibd-basics", 1, form))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void updateDraftRejectsSortOrderMismatchWithBadRequest() {
+        var staff = user(1L, "staff@example.com", RoleName.NUTRITION_SPECIALIST);
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        var module = new EducationModule("ibd-basics", "IBD", 10);
+        var version = new EducationModuleVersion(module, 1, staff);
+        when(versions.findByModuleSlugAndVersion("ibd-basics", 1)).thenReturn(Optional.of(version));
+
+        var form = new EducationContentForm();
+        form.setRevision(0L);
+        form.setSlug("ibd-basics");
+        form.setTopic("IBD");
+        form.setSortOrder(30);
+        form.setEnglishTitle("Title");
+        form.setEnglishSummary("Summary");
+
+        assertThatThrownBy(() -> service.updateDraft(auth("staff@example.com"), "ibd-basics", 1, form))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
     private EducationModuleRequest moduleRequest(String slug) {
@@ -283,9 +448,10 @@ class EducationContentServiceLifecycleTest {
 
     private EducationContentForm editForm() {
         var form = new EducationContentForm();
+        form.setRevision(0L);
         form.setSlug("editable-module");
-        form.setTopic("Nutrition");
-        form.setSortOrder(30);
+        form.setTopic("IBD");
+        form.setSortOrder(10);
         form.setEnglishTitle("Updated module");
         form.setEnglishSummary("Updated summary");
         form.setCzechTitle("Upraveny modul");

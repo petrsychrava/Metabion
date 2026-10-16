@@ -34,6 +34,10 @@ import ClinicalPatientRedFlagsView from '@/views/clinical/ClinicalPatientRedFlag
 import ClinicalOnboardingQueueView from '@/views/clinical/ClinicalOnboardingQueueView.vue'
 import ClinicalOnboardingReviewView from '@/views/clinical/ClinicalOnboardingReviewView.vue'
 import ClinicalPatientOnboardingView from '@/views/clinical/ClinicalPatientOnboardingView.vue'
+import ClinicalContentListView from '@/views/clinical/ClinicalContentListView.vue'
+import ClinicalContentNewView from '@/views/clinical/ClinicalContentNewView.vue'
+import ClinicalContentDetailView from '@/views/clinical/ClinicalContentDetailView.vue'
+import ClinicalContentEditView from '@/views/clinical/ClinicalContentEditView.vue'
 
 export const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView },
@@ -70,6 +74,10 @@ export const routes: RouteRecordRaw[] = [
     component: ClinicalShell,
     meta: { requiresAuth: true, roles: CLINICAL_ROLES },
     children: [
+      { path: 'content', component: ClinicalContentListView },
+      { path: 'content/new', component: ClinicalContentNewView },
+      { path: 'content/:moduleSlug/:version', component: ClinicalContentDetailView },
+      { path: 'content/:moduleSlug/:version/edit', component: ClinicalContentEditView },
       { path: '', component: ClinicalOverviewView },
       { path: 'onboarding', component: ClinicalOnboardingQueueView },
       { path: 'onboarding/:submissionId', component: ClinicalOnboardingReviewView },

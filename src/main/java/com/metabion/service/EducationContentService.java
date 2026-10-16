@@ -14,11 +14,15 @@ import com.metabion.domain.User;
 import com.metabion.dto.EducationContentForm;
 import com.metabion.dto.EducationLessonResponse;
 import com.metabion.dto.EducationLessonUpsertRequest;
+import com.metabion.dto.EducationManagedLessonResponse;
 import com.metabion.dto.EducationManagementDetailResponse;
+import com.metabion.dto.EducationManagementMutationResponse;
 import com.metabion.dto.EducationManagementSummaryResponse;
+import com.metabion.dto.EducationMarkdownPreviewResponse;
 import com.metabion.dto.EducationModuleDetailResponse;
 import com.metabion.dto.EducationModuleRequest;
 import com.metabion.dto.EducationModuleSummaryResponse;
+import com.metabion.exception.EducationModuleSlugAlreadyExistsException;
 import com.metabion.repository.EducationLessonCompletionInsertPort;
 import com.metabion.repository.EducationLessonCompletionRepository;
 import com.metabion.repository.EducationLessonRepository;
@@ -26,7 +30,9 @@ import com.metabion.repository.EducationModuleRepository;
 import com.metabion.repository.EducationModuleVersionRepository;
 import com.metabion.repository.PatientProfileRepository;
 import com.metabion.repository.UserRepository;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.transaction.Transactional;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -71,13 +77,13 @@ public class EducationContentService {
         this.markdown = markdown;
     }
 
-    public EducationManagementDetailResponse createDraft(Authentication authentication, EducationModuleRequest request) {
+    public EducationManagementMutationResponse createDraft(Authentication authentication, EducationModuleRequest request) {
         var author = currentUser(authentication);
         requireContentManager(author);
 
         var slug = normalizeSlug(request.slug());
         if (modules.existsBySlug(slug)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Education module slug already exists");
+            throw new EducationModuleSlugAlreadyExistsException();
         }
 
         var module = modules.save(new EducationModule(slug, trim(request.topic()), request.sortOrder()));
@@ -90,20 +96,22 @@ public class EducationContentService {
         addOptionalModuleLocalization(version, EducationLanguage.CS, request.czechTitle(), request.czechSummary());
         versions.save(version);
 
-        return managementDetail(version);
+        return managementMutation(version);
     }
 
-    public EducationManagementDetailResponse createDraft(Authentication authentication, EducationContentForm form) {
+    public EducationManagementMutationResponse createDraft(Authentication authentication, EducationContentForm form) {
         var draft = createDraft(authentication, form.toModuleRequest());
         form.toLessonRequests().forEach(lesson -> upsertLesson(
                 authentication,
                 draft.moduleSlug(),
                 draft.version(),
                 lesson));
-        return getManagedVersion(authentication, draft.moduleSlug(), draft.version());
+        var version = versionOrNotFound(draft.moduleSlug(), draft.version());
+        fetchPublishedVersionGraph(List.of(version));
+        return managementMutation(version);
     }
 
-    public EducationManagementDetailResponse submitReview(Authentication authentication, String moduleSlug, int versionNumber) {
+    public EducationManagementMutationResponse submitReview(Authentication authentication, String moduleSlug, int versionNumber) {
         var user = currentUser(authentication);
         requireContentManager(user);
         var version = versionOrNotFound(moduleSlug, versionNumber);
@@ -113,10 +121,10 @@ public class EducationContentService {
         } catch (IllegalArgumentException ex) {
             throw badRequest(ex);
         }
-        return managementDetail(version);
+        return managementMutation(version);
     }
 
-    public EducationManagementDetailResponse approve(
+    public EducationManagementMutationResponse approve(
             Authentication authentication,
             String moduleSlug,
             int versionNumber,
@@ -129,10 +137,10 @@ public class EducationContentService {
         } catch (IllegalArgumentException ex) {
             throw badRequest(ex);
         }
-        return managementDetail(version);
+        return managementMutation(version);
     }
 
-    public EducationManagementDetailResponse reject(
+    public EducationManagementMutationResponse reject(
             Authentication authentication,
             String moduleSlug,
             int versionNumber,
@@ -145,10 +153,10 @@ public class EducationContentService {
         } catch (IllegalArgumentException ex) {
             throw badRequest(ex);
         }
-        return managementDetail(version);
+        return managementMutation(version);
     }
 
-    public EducationManagementDetailResponse publish(Authentication authentication, String moduleSlug, int versionNumber) {
+    public EducationManagementMutationResponse publish(Authentication authentication, String moduleSlug, int versionNumber) {
         var publisher = currentUser(authentication);
         requireContentManager(publisher);
         var version = versionOrNotFound(moduleSlug, versionNumber);
@@ -174,10 +182,10 @@ public class EducationContentService {
             throw badRequest(ex);
         }
 
-        return managementDetail(version);
+        return managementMutation(version);
     }
 
-    public EducationManagementDetailResponse upsertLesson(
+    public EducationManagementMutationResponse upsertLesson(
             Authentication authentication,
             String moduleSlug,
             int versionNumber,
@@ -203,7 +211,7 @@ public class EducationContentService {
         addOptionalLessonLocalization(lessonVersion, request.czechTitle(), request.czechSummary(), request.czechBodyMarkdown());
         version.addLesson(lessonVersion);
 
-        return managementDetail(versions.save(version));
+        return managementMutation(versions.save(version));
     }
 
     public List<EducationModuleSummaryResponse> listPublishedModules(Authentication authentication) {
@@ -248,11 +256,14 @@ public class EducationContentService {
         var user = currentUser(authentication);
         requireContentManager(user);
         var version = versionOrNotFound(moduleSlug, versionNumber);
+        requireEditable(version);
         fetchPublishedVersionGraph(List.of(version));
-        return form(version);
+        var form = form(version);
+        form.setRevision(version.getRevision());
+        return form;
     }
 
-    public EducationManagementDetailResponse updateDraft(
+    public EducationManagementMutationResponse updateDraft(
             Authentication authentication,
             String moduleSlug,
             int versionNumber,
@@ -262,11 +273,27 @@ public class EducationContentService {
         var version = versionOrNotFound(moduleSlug, versionNumber);
         fetchPublishedVersionGraph(List.of(version));
         requireEditable(version);
+        requireRevision(version, form.getRevision());
+        if (!version.getModule().getSlug().equals(normalizeSlug(form.getSlug()))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Module slug does not match the request path");
+        }
+        if (!version.getModule().getTopic().equals(form.getTopic())
+                || version.getModule().getSortOrder() != form.getSortOrder()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Module topic and sort order cannot be changed");
+        }
 
         replaceModuleLocalizations(version, form);
         replaceLessons(version, form);
 
-        return managementDetail(versions.save(version));
+        var saved = versions.save(version);
+        flushOrConflict();
+        return managementMutation(saved);
+    }
+
+    public EducationMarkdownPreviewResponse previewMarkdown(Authentication authentication, String source) {
+        var user = currentUser(authentication);
+        requireContentManager(user);
+        return new EducationMarkdownPreviewResponse(markdown.render(trim(source)));
     }
 
     public EducationModuleDetailResponse getPublishedModule(Authentication authentication, String moduleSlug) {
@@ -295,7 +322,7 @@ public class EducationContentService {
         completions.deleteByPatientProfileIdAndLessonVersionId(patient.getId(), lessonVersion.getId());
     }
 
-    public EducationManagementDetailResponse copyVersion(Authentication authentication, String moduleSlug, int versionNumber) {
+    public EducationManagementMutationResponse copyVersion(Authentication authentication, String moduleSlug, int versionNumber) {
         var author = currentUser(authentication);
         requireContentManager(author);
         var source = versionOrNotFound(moduleSlug, versionNumber);
@@ -318,7 +345,7 @@ public class EducationContentService {
             copy.addLesson(lessonCopy);
         });
 
-        return managementDetail(versions.save(copy));
+        return managementMutation(versions.save(copy));
     }
 
     User currentUser(Authentication authentication) {
@@ -425,6 +452,23 @@ public class EducationContentService {
     void requireEditable(EducationModuleVersion version) {
         if (!version.isEditable()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Education module version is not editable");
+        }
+    }
+
+    void requireRevision(EducationModuleVersion version, Long expectedRevision) {
+        if (expectedRevision == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "revision is required");
+        }
+        if (version.getRevision() != expectedRevision) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Education module version has changed");
+        }
+    }
+
+    void flushOrConflict() {
+        try {
+            versions.flush();
+        } catch (OptimisticLockingFailureException | OptimisticLockException exception) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Education module version has changed", exception);
         }
     }
 
@@ -616,11 +660,41 @@ public class EducationContentService {
 
     EducationManagementDetailResponse managementDetail(EducationModuleVersion version) {
         var module = version.getModule();
+        var english = localization(version, EducationLanguage.EN);
+        var czech = localization(version, EducationLanguage.CS);
         return new EducationManagementDetailResponse(
                 module.getSlug(),
                 module.getTopic(),
                 module.getSortOrder(),
                 version.getVersion(),
+                version.getStatus(),
+                version.getReviewNotes(),
+                version.isReviewBypassed(),
+                english == null ? null : english.getTitle(),
+                english == null ? null : english.getSummary(),
+                czech == null ? null : czech.getTitle(),
+                czech == null ? null : czech.getSummary(),
+                email(version.getAuthor()),
+                email(version.getReviewedBy()),
+                email(version.getPublishedBy()),
+                version.getCreatedAt(),
+                version.getSubmittedAt(),
+                version.getReviewedAt(),
+                version.getPublishedAt(),
+                orderedLessons(version).stream()
+                        .map(this::managedLessonResponse)
+                        .toList());
+    }
+
+    EducationManagementMutationResponse managementMutation(EducationModuleVersion version) {
+        flushOrConflict();
+        var module = version.getModule();
+        return new EducationManagementMutationResponse(
+                module.getSlug(),
+                module.getTopic(),
+                module.getSortOrder(),
+                version.getVersion(),
+                version.getRevision(),
                 version.getStatus(),
                 version.getReviewNotes(),
                 version.isReviewBypassed(),
@@ -660,6 +734,22 @@ public class EducationContentService {
 
     EducationLessonResponse lessonResponse(EducationLessonVersion lesson) {
         return lessonResponse(lesson, EducationLanguage.EN, null);
+    }
+
+    private EducationManagedLessonResponse managedLessonResponse(EducationLessonVersion lesson) {
+        var english = localization(lesson, EducationLanguage.EN);
+        var czech = localization(lesson, EducationLanguage.CS);
+        return new EducationManagedLessonResponse(
+                lesson.getLesson().getSlug(),
+                lesson.getSortOrder(),
+                english == null ? null : english.getTitle(),
+                english == null ? null : english.getSummary(),
+                english == null ? null : english.getBodyMarkdown(),
+                english == null ? null : markdown.render(english.getBodyMarkdown()),
+                czech == null ? null : czech.getTitle(),
+                czech == null ? null : czech.getSummary(),
+                czech == null ? null : czech.getBodyMarkdown(),
+                czech == null ? null : markdown.render(czech.getBodyMarkdown()));
     }
 
     EducationLessonResponse lessonResponse(
