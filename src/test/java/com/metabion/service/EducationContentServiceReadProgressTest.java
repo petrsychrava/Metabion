@@ -12,6 +12,7 @@ import com.metabion.domain.LanguagePreference;
 import com.metabion.domain.PatientProfile;
 import com.metabion.domain.RoleName;
 import com.metabion.domain.User;
+import com.metabion.dto.EducationLessonResponse;
 import com.metabion.dto.EducationLessonUpsertRequest;
 import com.metabion.repository.EducationLessonCompletionInsertPort;
 import com.metabion.repository.EducationLessonCompletionRepository;
@@ -181,8 +182,12 @@ class EducationContentServiceReadProgressTest {
                 .containsExactlyInAnyOrder(EducationLanguage.EN, EducationLanguage.CS);
         assertThat(response.lessons()).singleElement().satisfies(lessonResponse -> {
             assertThat(lessonResponse.lessonSlug()).isEqualTo("intro");
+            assertThat(lessonResponse).isInstanceOf(EducationLessonResponse.class);
+            assertThat(lessonResponse.requestedLanguage()).isEqualTo(EducationLanguage.EN);
+            assertThat(lessonResponse.contentLanguage()).isEqualTo(EducationLanguage.EN);
             assertThat(lessonResponse.title()).isEqualTo("New title");
             assertThat(lessonResponse.bodyMarkdown()).isEqualTo("New body");
+            assertThat(lessonResponse.completed()).isNull();
         });
     }
 

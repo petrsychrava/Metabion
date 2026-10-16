@@ -16,6 +16,7 @@ import com.metabion.dto.EducationLessonResponse;
 import com.metabion.dto.EducationLessonUpsertRequest;
 import com.metabion.dto.EducationManagedLessonResponse;
 import com.metabion.dto.EducationManagementDetailResponse;
+import com.metabion.dto.EducationManagementMutationResponse;
 import com.metabion.dto.EducationManagementSummaryResponse;
 import com.metabion.dto.EducationMarkdownPreviewResponse;
 import com.metabion.dto.EducationModuleDetailResponse;
@@ -73,7 +74,7 @@ public class EducationContentService {
         this.markdown = markdown;
     }
 
-    public EducationManagementDetailResponse createDraft(Authentication authentication, EducationModuleRequest request) {
+    public EducationManagementMutationResponse createDraft(Authentication authentication, EducationModuleRequest request) {
         var author = currentUser(authentication);
         requireContentManager(author);
 
@@ -92,20 +93,22 @@ public class EducationContentService {
         addOptionalModuleLocalization(version, EducationLanguage.CS, request.czechTitle(), request.czechSummary());
         versions.save(version);
 
-        return managementDetail(version);
+        return managementMutation(version);
     }
 
-    public EducationManagementDetailResponse createDraft(Authentication authentication, EducationContentForm form) {
+    public EducationManagementMutationResponse createDraft(Authentication authentication, EducationContentForm form) {
         var draft = createDraft(authentication, form.toModuleRequest());
         form.toLessonRequests().forEach(lesson -> upsertLesson(
                 authentication,
                 draft.moduleSlug(),
                 draft.version(),
                 lesson));
-        return getManagedVersion(authentication, draft.moduleSlug(), draft.version());
+        var version = versionOrNotFound(draft.moduleSlug(), draft.version());
+        fetchPublishedVersionGraph(List.of(version));
+        return managementMutation(version);
     }
 
-    public EducationManagementDetailResponse submitReview(Authentication authentication, String moduleSlug, int versionNumber) {
+    public EducationManagementMutationResponse submitReview(Authentication authentication, String moduleSlug, int versionNumber) {
         var user = currentUser(authentication);
         requireContentManager(user);
         var version = versionOrNotFound(moduleSlug, versionNumber);
@@ -115,10 +118,10 @@ public class EducationContentService {
         } catch (IllegalArgumentException ex) {
             throw badRequest(ex);
         }
-        return managementDetail(version);
+        return managementMutation(version);
     }
 
-    public EducationManagementDetailResponse approve(
+    public EducationManagementMutationResponse approve(
             Authentication authentication,
             String moduleSlug,
             int versionNumber,
@@ -131,10 +134,10 @@ public class EducationContentService {
         } catch (IllegalArgumentException ex) {
             throw badRequest(ex);
         }
-        return managementDetail(version);
+        return managementMutation(version);
     }
 
-    public EducationManagementDetailResponse reject(
+    public EducationManagementMutationResponse reject(
             Authentication authentication,
             String moduleSlug,
             int versionNumber,
@@ -147,10 +150,10 @@ public class EducationContentService {
         } catch (IllegalArgumentException ex) {
             throw badRequest(ex);
         }
-        return managementDetail(version);
+        return managementMutation(version);
     }
 
-    public EducationManagementDetailResponse publish(Authentication authentication, String moduleSlug, int versionNumber) {
+    public EducationManagementMutationResponse publish(Authentication authentication, String moduleSlug, int versionNumber) {
         var publisher = currentUser(authentication);
         requireContentManager(publisher);
         var version = versionOrNotFound(moduleSlug, versionNumber);
@@ -176,10 +179,10 @@ public class EducationContentService {
             throw badRequest(ex);
         }
 
-        return managementDetail(version);
+        return managementMutation(version);
     }
 
-    public EducationManagementDetailResponse upsertLesson(
+    public EducationManagementMutationResponse upsertLesson(
             Authentication authentication,
             String moduleSlug,
             int versionNumber,
@@ -205,7 +208,7 @@ public class EducationContentService {
         addOptionalLessonLocalization(lessonVersion, request.czechTitle(), request.czechSummary(), request.czechBodyMarkdown());
         version.addLesson(lessonVersion);
 
-        return managementDetail(versions.save(version));
+        return managementMutation(versions.save(version));
     }
 
     public List<EducationModuleSummaryResponse> listPublishedModules(Authentication authentication) {
@@ -255,7 +258,7 @@ public class EducationContentService {
         return form(version);
     }
 
-    public EducationManagementDetailResponse updateDraft(
+    public EducationManagementMutationResponse updateDraft(
             Authentication authentication,
             String moduleSlug,
             int versionNumber,
@@ -276,7 +279,7 @@ public class EducationContentService {
         replaceModuleLocalizations(version, form);
         replaceLessons(version, form);
 
-        return managementDetail(versions.save(version));
+        return managementMutation(versions.save(version));
     }
 
     public EducationMarkdownPreviewResponse previewMarkdown(Authentication authentication, String source) {
@@ -311,7 +314,7 @@ public class EducationContentService {
         completions.deleteByPatientProfileIdAndLessonVersionId(patient.getId(), lessonVersion.getId());
     }
 
-    public EducationManagementDetailResponse copyVersion(Authentication authentication, String moduleSlug, int versionNumber) {
+    public EducationManagementMutationResponse copyVersion(Authentication authentication, String moduleSlug, int versionNumber) {
         var author = currentUser(authentication);
         requireContentManager(author);
         var source = versionOrNotFound(moduleSlug, versionNumber);
@@ -334,7 +337,7 @@ public class EducationContentService {
             copy.addLesson(lessonCopy);
         });
 
-        return managementDetail(versions.save(copy));
+        return managementMutation(versions.save(copy));
     }
 
     User currentUser(Authentication authentication) {
@@ -655,6 +658,28 @@ public class EducationContentService {
                 version.getPublishedAt(),
                 orderedLessons(version).stream()
                         .map(this::managedLessonResponse)
+                        .toList());
+    }
+
+    EducationManagementMutationResponse managementMutation(EducationModuleVersion version) {
+        var module = version.getModule();
+        return new EducationManagementMutationResponse(
+                module.getSlug(),
+                module.getTopic(),
+                module.getSortOrder(),
+                version.getVersion(),
+                version.getStatus(),
+                version.getReviewNotes(),
+                version.isReviewBypassed(),
+                email(version.getAuthor()),
+                email(version.getReviewedBy()),
+                email(version.getPublishedBy()),
+                version.getCreatedAt(),
+                version.getSubmittedAt(),
+                version.getReviewedAt(),
+                version.getPublishedAt(),
+                version.getLessons().stream()
+                        .map(this::lessonResponse)
                         .toList());
     }
 

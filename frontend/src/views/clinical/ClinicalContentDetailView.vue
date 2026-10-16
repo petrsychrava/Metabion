@@ -8,7 +8,7 @@ import { ApiError } from '@/api/http'
 import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime } from '@/utils/dateTime'
-import type { EducationManagementDetail } from '@/types/api'
+import type { EducationManagementDetail, EducationManagementMutation } from '@/types/api'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -68,7 +68,7 @@ async function load(): Promise<number> {
   return seq
 }
 
-async function transition(call: () => Promise<EducationManagementDetail>) {
+async function transition(call: () => Promise<EducationManagementMutation>) {
   // Serialize lifecycle decisions: rapid clicks must not issue concurrent POSTs whose commit
   // order would decide the final status. The flag stays set through the error-path resync.
   if (transitioning.value) return
@@ -88,7 +88,12 @@ async function transition(call: () => Promise<EducationManagementDetail>) {
     // would render the old version under the new URL. The unmount token covers leaving and
     // returning, which remounts a fresh page that must not be clobbered by this handler.
     if (!isCurrent()) return
-    detail.value = data
+    if (detail.value) {
+      // Mutation endpoints intentionally keep their legacy response contract, so retain the
+      // bilingual detail fields already loaded for this page while applying the new lifecycle
+      // metadata.
+      detail.value = { ...detail.value, ...data, lessons: detail.value.lessons }
+    }
     reviewOpen.value = false
     notes.value = ''
   } catch (e) {

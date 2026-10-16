@@ -401,6 +401,24 @@ export interface EducationManagementDetail {
   lessons: EducationManagedLesson[]
 }
 
+export interface EducationManagementMutation {
+  moduleSlug: string
+  topic: string
+  sortOrder: number
+  version: number
+  status: EducationContentStatus
+  reviewNotes: string | null
+  reviewBypassed: boolean
+  authorEmail: string | null
+  reviewedByEmail: string | null
+  publishedByEmail: string | null
+  createdAt: string
+  submittedAt: string | null
+  reviewedAt: string | null
+  publishedAt: string | null
+  lessons: EducationLesson[]
+}
+
 export interface EducationContentLessonRow {
   slug: string
   sortOrder: number

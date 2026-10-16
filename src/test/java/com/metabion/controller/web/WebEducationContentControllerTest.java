@@ -1,10 +1,13 @@
 package com.metabion.controller.web;
 
 import com.metabion.domain.EducationContentStatus;
+import com.metabion.domain.EducationLanguage;
 import com.metabion.domain.RoleName;
 import com.metabion.dto.EducationContentForm;
+import com.metabion.dto.EducationLessonResponse;
 import com.metabion.dto.EducationManagedLessonResponse;
 import com.metabion.dto.EducationManagementDetailResponse;
+import com.metabion.dto.EducationManagementMutationResponse;
 import com.metabion.dto.EducationManagementSummaryResponse;
 import com.metabion.service.EducationContentService;
 import com.metabion.service.SecurityService;
@@ -107,7 +110,7 @@ class WebEducationContentControllerTest {
 
     @Test
     void staffCanCreateModuleWithValidLessonRows() throws Exception {
-        when(educationContentService.createDraft(any(), any(EducationContentForm.class))).thenReturn(detailResponse());
+        when(educationContentService.createDraft(any(), any(EducationContentForm.class))).thenReturn(mutationResponse());
 
         mvc.perform(post("/app/content/education")
                         .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
@@ -339,6 +342,34 @@ class WebEducationContentControllerTest {
                 null,
                 null,
                 List.of(managedLesson()));
+    }
+
+    private EducationManagementMutationResponse mutationResponse() {
+        return new EducationManagementMutationResponse(
+                "ibd-basics",
+                "IBD",
+                10,
+                1,
+                EducationContentStatus.DRAFT,
+                null,
+                false,
+                "author@example.com",
+                null,
+                null,
+                Instant.parse("2026-06-10T10:00:00Z"),
+                null,
+                null,
+                null,
+                List.of(new EducationLessonResponse(
+                        "what-is-ibd",
+                        1,
+                        EducationLanguage.EN,
+                        EducationLanguage.EN,
+                        "What is IBD?",
+                        "A short introduction.",
+                        "**IBD**",
+                        "<p><strong>IBD</strong></p>",
+                        null)));
     }
 
     private EducationManagementDetailResponse inReviewDetailResponse() {
