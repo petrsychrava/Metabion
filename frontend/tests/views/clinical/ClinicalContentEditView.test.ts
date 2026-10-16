@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { server } from '../../msw/server'
+import { resetCsrfToken } from '@/api/http'
 import ClinicalContentEditView from '@/views/clinical/ClinicalContentEditView.vue'
 import en from '@/i18n/en.json'
 import cs from '@/i18n/cs.json'
@@ -131,6 +132,35 @@ describe('ClinicalContentEditView', () => {
       ],
     })
     expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
+  })
+
+  it('freezes lesson edits before waiting for the CSRF token', async () => {
+    let resolveCsrf!: (response: Response) => void
+    let putBody: unknown
+    resetCsrfToken()
+    server.use(
+      http.get('/api/csrf', () => new Promise((resolve) => {
+        resolveCsrf = resolve
+      })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', async ({ request }) => {
+        putBody = await request.json()
+        return HttpResponse.json({})
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(putBody).toBeUndefined()
+
+    await wrapper.find('input[data-testid="lesson-slug-0"]').setValue('intro-edited')
+    resolveCsrf(HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' }))
+    await flushPromises()
+
+    expect((putBody as { lessons: { slug: string }[] }).lessons[0].slug).toBe('intro')
   })
 
   it('renders the server-rendered preview tab', async () => {
