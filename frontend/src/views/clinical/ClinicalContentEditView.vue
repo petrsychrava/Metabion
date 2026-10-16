@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, toRaw, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
@@ -22,6 +22,7 @@ const loading = ref(true)
 const saving = ref(false)
 const initialSnapshot = ref('')
 const stateConflict = ref(false)
+const existingLessonRows = new WeakSet<EducationContentLessonRow>()
 
 let loadSeq = 0
 let unmounted = false
@@ -36,7 +37,7 @@ function snapshot(): unknown {
 const dirty = computed(() => form.value !== null && JSON.stringify(snapshot()) !== initialSnapshot.value)
 
 function rowPopulated(row: EducationContentLessonRow): boolean {
-  return !!(row.slug || row.englishTitle || row.englishSummary || row.englishBodyMarkdown
+  return existingLessonRows.has(toRaw(row)) || !!(row.slug || row.englishTitle || row.englishSummary || row.englishBodyMarkdown
     || row.czechTitle || row.czechSummary || row.czechBodyMarkdown)
 }
 
@@ -97,8 +98,10 @@ async function load() {
     }
     const data = await contentEducationApi.getVersionForm(slug, ver)
     if (seq !== loadSeq || unmounted) return
+    const loadedLessons = data.lessons.map((row) => ({ ...row }))
+    loadedLessons.forEach((row) => existingLessonRows.add(row))
     form.value = data
-    lessons.value = data.lessons.map((row) => ({ ...row }))
+    lessons.value = loadedLessons
     initialSnapshot.value = JSON.stringify(snapshot())
   } catch (e) {
     if (seq === loadSeq && !unmounted) capture(e)
