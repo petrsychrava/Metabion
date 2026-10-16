@@ -125,11 +125,12 @@ async function save() {
   // Freeze the snapshot of exactly what is being submitted; edits made while the PUT is in
   // flight must stay dirty so the leave guard prompts instead of silently discarding them.
   const submitted = JSON.stringify(snapshot())
+  const submittedLessonRows = lessons.value.filter(rowPopulated)
   // Clone the payload before apiFetch can await CSRF; otherwise lesson rows remain live references
   // and edits made while the request is preparing can change the data that gets serialized.
   const payload = JSON.parse(JSON.stringify({
     ...form.value,
-    lessons: lessons.value.filter(rowPopulated),
+    lessons: submittedLessonRows,
   })) as EducationContentFormData
   const originPath = route.path
   const saveGeneration = loadSeq
@@ -139,6 +140,7 @@ async function save() {
     // when this editor is still the current route and this instance is still mounted, so a stale
     // completion cannot mark the new version's form clean with the old version's submitted state.
     if (!saveIsCurrent(saveGeneration, originPath)) return
+    submittedLessonRows.forEach((row) => existingLessonRows.add(toRaw(row)))
     form.value.revision = response.revision
     const savedSnapshot = JSON.parse(submitted) as EducationContentFormData
     savedSnapshot.revision = response.revision

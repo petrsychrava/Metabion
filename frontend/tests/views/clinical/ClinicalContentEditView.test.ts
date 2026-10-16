@@ -1131,6 +1131,66 @@ describe('ClinicalContentEditView', () => {
     confirmSpy.mockRestore()
   })
 
+  it('marks a newly saved lesson as existing when post-save navigation is vetoed', async () => {
+    resetCsrfToken()
+    let resolvePut!: (response: Response) => void
+    let putCount = 0
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', async ({ request }) => {
+        await request.json()
+        putCount += 1
+        return new Promise((resolve) => {
+          resolvePut = resolve
+        })
+      }),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/clinical',
+          component: { template: '<router-view />' },
+          children: [
+            { path: 'content/:moduleSlug/:version/edit', component: ClinicalContentEditView, props: true },
+            { path: 'content/:moduleSlug/:version', component: { template: '<div />' } },
+          ],
+        },
+      ],
+    })
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    await router.isReady()
+    const wrapper = mount({ template: '<router-view />' }, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="add-lesson"]').trigger('click')
+    await wrapper.find('input[data-testid="lesson-slug-1"]').setValue('new-lesson')
+    await wrapper.find('input[data-testid="english-title-1"]').setValue('New lesson')
+    await wrapper.find('textarea[data-testid="english-summary-1"]').setValue('New summary')
+    await wrapper.findAll('textarea[data-testid="markdown-source"]')[2].setValue('# New lesson')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(putCount).toBe(1)
+
+    await wrapper.find('input[data-testid="english-title"]').setValue('Edited while saving')
+    resolvePut(HttpResponse.json({ revision: 1 }))
+    await flushPromises()
+    await flushPromises()
+
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
+
+    await wrapper.find('input[data-testid="lesson-slug-1"]').setValue('')
+    await wrapper.find('input[data-testid="english-title-1"]').setValue('')
+    await wrapper.find('textarea[data-testid="english-summary-1"]').setValue('')
+    await wrapper.findAll('textarea[data-testid="markdown-source"]')[2].setValue('')
+
+    expect(wrapper.find('[data-testid="save"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('Populated lessons need')
+    confirmSpy.mockRestore()
+  })
+
   it('ignores failed saves after switching editor routes', async () => {
     const putRejectors: Array<() => void> = []
     const v3Form = {
