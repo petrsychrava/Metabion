@@ -107,6 +107,10 @@ async function load() {
   }
 }
 
+async function reload() {
+  await load()
+}
+
 function saveIsCurrent(generation: number, originPath: string): boolean {
   return !unmounted && generation === loadSeq && route.path === originPath
 }
@@ -149,6 +153,12 @@ async function save() {
       stateConflict.value = true
       capture(e)
       message.value = t('clinical.content.editor.stateConflict')
+    } else if (e instanceof ApiError && e.status === 409) {
+      // The revision is stale; prevent repeated saves with it and let the author reload the
+      // current form before deciding how to reconcile their edits.
+      if (!saveIsCurrent(saveGeneration, originPath)) return
+      stateConflict.value = true
+      capture(e)
     } else {
       // A stale save must not surface its error on a newer editor route or instance.
       if (!saveIsCurrent(saveGeneration, originPath)) return
@@ -189,6 +199,10 @@ onMounted(load)
     <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ form?.slug }} v{{ version }}</p>
 
     <p v-if="message" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ message }}</p>
+    <button v-if="stateConflict" type="button" data-testid="reload" class="mt-2 rounded border px-3 py-1 text-sm"
+            @click="reload">
+      {{ t('labs.reload') }}
+    </button>
     <ul v-if="Object.keys(fieldErrors).length > 0" data-testid="field-errors"
         class="mt-2 list-inside list-disc rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
       <li v-for="(fieldMessage, field) in fieldErrors" :key="field">

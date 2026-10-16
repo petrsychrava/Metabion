@@ -877,6 +877,53 @@ describe('ClinicalContentEditView', () => {
     expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
   })
 
+  it('offers a reload after an optimistic save conflict', async () => {
+    let formLoads = 0
+    const putRevisions: number[] = []
+    server.use(
+      http.get('/api/content/education/modules/ibd-basics/versions/2/form', () => {
+        formLoads += 1
+        return HttpResponse.json(formLoads === 1 ? form() : { ...form(), revision: 1, englishTitle: 'Current title' })
+      }),
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', async ({ request }) => {
+        const body = await request.json() as { revision: number }
+        putRevisions.push(body.revision)
+        if (putRevisions.length === 1) return HttpResponse.json({ error: 'conflict' }, { status: 409 })
+        return HttpResponse.json({})
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('input[data-testid="english-title"]').setValue('Stale title')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(putRevisions).toEqual([0])
+    expect(wrapper.text()).toContain(en.errors.conflict)
+    expect(wrapper.find('[data-testid="reload"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="save"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.find('[data-testid="reload"]').trigger('click')
+    await flushPromises()
+    await flushPromises()
+
+    expect(formLoads).toBe(2)
+    expect(wrapper.find('[data-testid="reload"]').exists()).toBe(false)
+    expect((wrapper.find('input[data-testid="english-title"]').element as HTMLInputElement).value)
+      .toBe('Current title')
+    expect(wrapper.find('[data-testid="save"]').attributes('disabled')).toBeUndefined()
+
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(putRevisions).toEqual([0, 1])
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2')
+  })
+
   it('keeps module topic and sort order read-only', async () => {
     const router = makeRouter()
     await router.push('/clinical/content/ibd-basics/2/edit')
