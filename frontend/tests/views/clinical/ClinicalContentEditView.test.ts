@@ -623,6 +623,24 @@ describe('ClinicalContentEditView', () => {
     expect(wrapper.text()).toContain('Populated lessons need')
   })
 
+  it('disables saving when an existing lesson is cleared instead of removing it implicitly', async () => {
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    const wrapper = mount(ClinicalContentEditView, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('input[data-testid="lesson-slug-0"]').setValue('')
+    await wrapper.find('input[data-testid="english-title-0"]').setValue('')
+    await wrapper.find('textarea[data-testid="english-summary-0"]').setValue('')
+    await wrapper.findAll('textarea[data-testid="markdown-source"]')[0].setValue('')
+    await wrapper.find('input[data-testid="czech-title-0"]').setValue('')
+    await wrapper.find('textarea[data-testid="czech-summary-0"]').setValue('')
+    await wrapper.findAll('textarea[data-testid="markdown-source"]')[1].setValue('')
+
+    expect(wrapper.find('[data-testid="save"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('Populated lessons need')
+  })
+
   it('keeps author edits and shows a banner on a validation 400 with field errors', async () => {
     let formLoads = 0
     server.use(
