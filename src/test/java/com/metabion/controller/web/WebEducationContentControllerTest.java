@@ -37,9 +37,11 @@ import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentCaptor.forClass;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.http.HttpStatus.CONFLICT;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -275,6 +277,35 @@ class WebEducationContentControllerTest {
         assertThat(formCaptor.getValue().getEnglishTitle()).isEqualTo("IBD basics updated");
         assertThat(formCaptor.getValue().getCzechTitle()).isEqualTo("Zaklady IBD");
         assertThat(formCaptor.getValue().getLessons().getFirst().getCzechTitle()).isEqualTo("Co je IBD?");
+    }
+
+    @Test
+    void staleEducationUpdateUsesContentManagementConflictFallback() throws Exception {
+        doThrow(new ResponseStatusException(CONFLICT))
+                .when(educationContentService).updateDraft(any(), eq("ibd-basics"), eq(1), any(EducationContentForm.class));
+
+        mvc.perform(post("/app/content/education/ibd-basics/versions/1")
+                        .with(user("physician@example.com").roles(RoleName.PHYSICIAN.name()))
+                        .with(csrf())
+                        .param("slug", "ibd-basics")
+                        .param("topic", "IBD")
+                        .param("sortOrder", "20")
+                        .param("englishTitle", "IBD basics updated")
+                        .param("englishSummary", "Updated summary")
+                        .param("czechTitle", "Zaklady IBD")
+                        .param("czechSummary", "Cesky souhrn")
+                        .param("lessons[0].slug", "what-is-ibd")
+                        .param("lessons[0].sortOrder", "1")
+                        .param("lessons[0].englishTitle", "What is IBD?")
+                        .param("lessons[0].englishSummary", "A short introduction.")
+                        .param("lessons[0].englishBodyMarkdown", "**IBD**")
+                        .param("lessons[0].czechTitle", "Co je IBD?")
+                        .param("lessons[0].czechSummary", "Kratky uvod.")
+                        .param("lessons[0].czechBodyMarkdown", "Cesky text lekce"))
+                .andExpect(status().isConflict())
+                .andExpect(view().name("result"))
+                .andExpect(model().attribute("message", "This education content was changed elsewhere. Reload before trying again."))
+                .andExpect(model().attribute("href", "/app/content/education"));
     }
 
     @Test
