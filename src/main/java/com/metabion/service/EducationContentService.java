@@ -692,6 +692,7 @@ public class EducationContentService {
                 module.getTopic(),
                 module.getSortOrder(),
                 version.getVersion(),
+                version.getRevision(),
                 version.getStatus(),
                 version.getReviewNotes(),
                 version.isReviewBypassed(),

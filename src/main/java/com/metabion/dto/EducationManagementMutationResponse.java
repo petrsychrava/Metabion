@@ -10,6 +10,7 @@ public record EducationManagementMutationResponse(
         String topic,
         int sortOrder,
         int version,
+        long revision,
         EducationContentStatus status,
         String reviewNotes,
         boolean reviewBypassed,

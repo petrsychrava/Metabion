@@ -33,11 +33,12 @@ describe('contentEducationApi', () => {
       http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
       http.put('/api/content/education/modules/ibd-basics/versions/2', async ({ request }) => {
         received = await request.json()
-        return HttpResponse.json({})
+        return HttpResponse.json({ revision: 1 })
       }),
     )
-    await contentEducationApi.updateVersion('ibd-basics', 2, form)
+    const response = await contentEducationApi.updateVersion('ibd-basics', 2, form)
     expect(received).toEqual(form)
+    expect(response.revision).toBe(1)
   })
 
   it('posts review decisions and markdown previews', async () => {

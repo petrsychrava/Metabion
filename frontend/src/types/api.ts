@@ -406,6 +406,7 @@ export interface EducationManagementMutation {
   topic: string
   sortOrder: number
   version: number
+  revision: number
   status: EducationContentStatus
   reviewNotes: string | null
   reviewBypassed: boolean

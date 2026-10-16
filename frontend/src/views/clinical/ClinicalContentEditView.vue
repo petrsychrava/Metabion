@@ -131,12 +131,15 @@ async function save() {
   const originPath = route.path
   const saveGeneration = loadSeq
   try {
-    await contentEducationApi.updateVersion(moduleSlug.value, version.value, payload)
+    const response = await contentEducationApi.updateVersion(moduleSlug.value, version.value, payload)
     // The author may have left while the PUT was in flight; only stamp the snapshot and redirect
     // when this editor is still the current route and this instance is still mounted, so a stale
     // completion cannot mark the new version's form clean with the old version's submitted state.
     if (!saveIsCurrent(saveGeneration, originPath)) return
-    initialSnapshot.value = submitted
+    form.value.revision = response.revision
+    const savedSnapshot = JSON.parse(submitted) as EducationContentFormData
+    savedSnapshot.revision = response.revision
+    initialSnapshot.value = JSON.stringify(savedSnapshot)
     await router.push(`/clinical/content/${moduleSlug.value}/${version.value}`)
   } catch (e) {
     // Only a state-change 400 (no field errors) means the version left the editable state; bail

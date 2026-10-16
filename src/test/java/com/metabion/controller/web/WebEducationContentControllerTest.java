@@ -381,6 +381,7 @@ class WebEducationContentControllerTest {
                 "IBD",
                 10,
                 1,
+                0,
                 EducationContentStatus.DRAFT,
                 null,
                 false,

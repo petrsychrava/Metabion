@@ -1056,6 +1056,63 @@ describe('ClinicalContentEditView', () => {
     }
   })
 
+  it('applies the returned revision when a post-save navigation is vetoed', async () => {
+    resetCsrfToken()
+    const putBodies: Array<{ revision: number }> = []
+    let resolveFirstPut!: (response: Response) => void
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.put('/api/content/education/modules/ibd-basics/versions/2', async ({ request }) => {
+        putBodies.push(await request.json() as { revision: number })
+        if (putBodies.length === 1) {
+          return new Promise((resolve) => {
+            resolveFirstPut = resolve
+          })
+        }
+        return HttpResponse.json({ revision: 2 })
+      }),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/clinical',
+          component: { template: '<router-view />' },
+          children: [
+            { path: 'content/:moduleSlug/:version/edit', component: ClinicalContentEditView, props: true },
+            { path: 'content/:moduleSlug/:version', component: { template: '<div />' } },
+          ],
+        },
+      ],
+    })
+    await router.push('/clinical/content/ibd-basics/2/edit')
+    await router.isReady()
+    const wrapper = mount({ template: '<router-view />' }, { global: { plugins: [createPinia(), i18n, router] } })
+    await flushPromises()
+
+    await wrapper.find('input[data-testid="english-title"]').setValue('Submitted title')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(putBodies).toHaveLength(1)
+
+    await wrapper.find('input[data-testid="english-title"]').setValue('Kept edits')
+    resolveFirstPut(HttpResponse.json({ revision: 1 }))
+    await flushPromises()
+    await flushPromises()
+
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/2/edit')
+    expect((wrapper.find('input[data-testid="english-title"]').element as HTMLInputElement).value)
+      .toBe('Kept edits')
+
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(putBodies.map((body) => body.revision)).toEqual([0, 1])
+    confirmSpy.mockRestore()
+  })
+
   it('ignores failed saves after switching editor routes', async () => {
     const putRejectors: Array<() => void> = []
     const v3Form = {

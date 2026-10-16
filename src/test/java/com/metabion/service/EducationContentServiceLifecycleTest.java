@@ -263,6 +263,7 @@ class EducationContentServiceLifecycleTest {
         var response = service.updateDraft(auth("staff@example.com"), "editable-module", 1, editForm());
 
         assertThat(response.moduleSlug()).isEqualTo("editable-module");
+        assertThat(response.revision()).isEqualTo(version.getRevision());
         assertThat(version.getModule().getTopic()).isEqualTo("IBD");
         assertThat(version.getModule().getSortOrder()).isEqualTo(10);
         assertThat(version.getLocalizations())
