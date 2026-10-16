@@ -250,6 +250,7 @@ public class EducationContentService {
         var user = currentUser(authentication);
         requireContentManager(user);
         var version = versionOrNotFound(moduleSlug, versionNumber);
+        requireEditable(version);
         fetchPublishedVersionGraph(List.of(version));
         return form(version);
     }

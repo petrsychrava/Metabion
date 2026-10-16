@@ -206,6 +206,19 @@ class EducationContentServiceLifecycleTest {
     }
 
     @Test
+    void managedVersionFormRejectsNonEditableVersion() {
+        var staff = user(11L, "staff@example.com", RoleName.PHYSICIAN);
+        var version = draft("submitted-module", staff);
+        version.submitForReview();
+        when(users.findByEmail("staff@example.com")).thenReturn(Optional.of(staff));
+        when(versions.findByModuleSlugAndVersion("submitted-module", 1)).thenReturn(Optional.of(version));
+
+        assertThatThrownBy(() -> service.getManagedVersionForm(auth("staff@example.com"), "submitted-module", 1))
+                .isInstanceOfSatisfying(ResponseStatusException.class, ex ->
+                        assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    @Test
     void managedVersionDetailExposesBothLocalizations() {
         var staff = user(10L, "staff@example.com", RoleName.PHYSICIAN);
         var version = draft("localized-module", staff);
