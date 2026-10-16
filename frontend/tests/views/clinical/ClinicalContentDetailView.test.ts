@@ -658,6 +658,57 @@ describe('ClinicalContentDetailView', () => {
     expect(wrapper.text()).toContain('Approved')
   })
 
+  it('scopes mutation pending state to the current detail route', async () => {
+    const pendingCopies: Array<{ version: number; respond: () => void }> = []
+    server.use(
+      http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),
+      http.get('/api/content/education/modules/ibd-basics/versions/:version', ({ params }) => {
+        const version = Number(params.version)
+        return HttpResponse.json(detail({ version, englishTitle: `Version ${version}` }))
+      }),
+      http.post('/api/content/education/modules/ibd-basics/versions/:version/copy', ({ params }) => {
+        const version = Number(params.version)
+        return new Promise((resolve) => {
+          pendingCopies.push({
+            version,
+            respond: () => resolve(HttpResponse.json(detail({ version: version + 1 }))),
+          })
+        })
+      }),
+    )
+    const router = makeRouter()
+    await router.push('/clinical/content/ibd-basics/2')
+    const pinia = createPinia()
+    const wrapper = mount(ClinicalContentDetailView, { global: { plugins: [pinia, i18n, router] } })
+    useAuthStore(pinia).$patch({ email: 'viewer@example.com', roles: ['PHYSICIAN'], status: 'authenticated' })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await flushPromises()
+    expect(pendingCopies.map((pending) => pending.version)).toEqual([2])
+
+    await router.push('/clinical/content/ibd-basics/3')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="module-english"]').text()).toContain('Version 3')
+    expect(wrapper.find('[data-testid="copy"]').attributes('disabled')).toBeUndefined()
+
+    await wrapper.find('[data-testid="copy"]').trigger('click')
+    await flushPromises()
+    expect(pendingCopies.map((pending) => pending.version)).toEqual([2, 3])
+    expect(wrapper.find('[data-testid="copy"]').attributes('disabled')).toBeDefined()
+
+    // The stale v2 completion must not release the v3 mutation's pending state.
+    pendingCopies[0].respond()
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/3')
+    expect(wrapper.find('[data-testid="copy"]').attributes('disabled')).toBeDefined()
+
+    pendingCopies[1].respond()
+    await flushPromises()
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/clinical/content/ibd-basics/4')
+  })
+
   it('resets the open review panel when copy navigates to the new draft', async () => {
     server.use(
       http.get('/api/csrf', () => HttpResponse.json({ token: 't', headerName: 'X-XSRF-TOKEN' })),

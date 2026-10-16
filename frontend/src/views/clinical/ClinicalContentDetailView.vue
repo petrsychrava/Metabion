@@ -110,7 +110,7 @@ async function transition(call: () => Promise<EducationManagementDetail>) {
     }
     capture(e)
   } finally {
-    transitioning.value = false
+    if (generation === loadSeq) transitioning.value = false
   }
 }
 
@@ -143,13 +143,17 @@ async function copy() {
     if (unmounted || resyncGeneration !== loadSeq || slug !== moduleSlug.value || ver !== version.value) return
     capture(e)
   } finally {
-    transitioning.value = false
+    if (generation === loadSeq) transitioning.value = false
   }
 }
 
 watch(() => [route.params.moduleSlug, route.params.version], ([slug]) => {
   // Leaving the detail route (e.g. back to the list) leaves the params empty; nothing to reload.
   if (!slug) return
+  // Parameter-only navigation reuses this component. Release the old route's mutation lock so
+  // the newly loaded detail can act, while generation guards keep stale completions from clearing
+  // a mutation started on the new route.
+  transitioning.value = false
   openLesson.value = null
   reviewOpen.value = false
   notes.value = ''
